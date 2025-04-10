@@ -24,48 +24,118 @@ Follow below steps to integrate your Amazon SES account with SuprSend:
         * Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
 
         An AWS SES resource resides in a particular region. Make a note of which aws-region you are going to use for sending emails. In this guide, we'll assume aws-region :`ap-south-1` for all illustrative purposes.
-      </Accordion>
+    </Accordion>
     </AccordionGroup>
 
     <AccordionGroup>
     <Accordion title="IAM Role" defaultOpen={false}>
         If you opt for Role-based Authentication, start by creating a role that uses [trust policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html).
         
-        **Here's how you Create Policy:**
-          <Note>
-            If you're using IAM-role authentication at multiple places inside SuprSend,
-            you can put all the permission statements used across various AWS-resources within the same policy,
-            and add this single policy to the trust IAM role.
-          </Note>
+        **1. Create Policy:**
+              <Note>
+                If you're using IAM-role authentication at multiple places inside SuprSend,
+                you can put all the permission statements used across various AWS-resources within the same policy,
+                and add this single policy to the trust IAM role.
+              </Note>
+              <Steps>
+                <Step title= "Go to IAM console">  
+                  and then select `Policies` tab.
+                </Step>
+                <Step title="Click on Create Policy">
+                  Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["ses:SendEmail", "ses:SendRawEmail"]``.
+                  For simplicity, choose "JSON editor" and replace the existing content with below JSON.
+                  <CodeGroup>
+                    ```json IAM Role Policy
+                    {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                          {
+                            "Sid": "AllowSesSendActions",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ses:SendEmail",
+                                "ses:SendBulkEmail",
+                                "ses:SendRawEmail"
+                            ],
+                            "Resource": "*"
+                          }
+                        ]
+                      }
+                    ```
+                  </CodeGroup>
+                </Step>
+                <Step title="Click on Next">
+                  Enter a Policy Name (e.g. suprsend_trust_role_policy) and optional Description.
+                </Step>
+                <Step title="Click on Create Policy">
+                  This will create a new policy with the above permissions.
+                </Step>
+              </Steps>
+        **2. Create IAM Role:** 
+          Once Resource Policy has been created, we can now proceed with Creating an trust based IAM role    
+            <Steps>
+                <Step title= "Go to IAM console">  
+                  and then select `Roles` tab.
+                </Step>
+                <Step title="Click on Create Role">
+                  Select `Trusted entity type: AWS account`. In the `An AWS account` section:
+                  - Select "Another AWS account" and put SuprSend Account ID: 924219879248
+                  - In "Options" subsection, check "Require external ID"
+                  - generate a unique string (either UUID or some other random string of sufficient length), and paste that unique string here.
+                </Step>
+                <Step title="Click on Next">
+                  In `Add permission Policies`, select the Policy that you created in previous step (e.g. suprsend_trust_role_policy). Now Click `Next`.                
+                </Step>
+                <Step title="Enter a Name for this role">
+                  For e.g: `suprsend_trust_role` and optional description. Then click `Create Role`.
+                </Step>
+            </Steps>
+        **3. Verify the Role permissions:**
+            <Steps>
+                <Step title= " Go to IAM Console -> Roles">  
+                  Click on the role you created in previous step
+                </Step>
+                <Step title= "Go to the Trust Relationships tab">
+                You should see a JSON very similar to this.
+                  <CodeGroup>
+                    ```json IAM Role Policy
+                    {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                  "AWS": "arn:aws:iam::924219879248:root"
+                              },
+                              "Action": "sts:AssumeRole",
+                              "Condition": {
+                                  "StringEquals": {
+                                      "sts:ExternalId": "<uniq-id-entered-by-user>"
+                                  }
+                              }
+                          }
+                      ]
+                    }
+                    ```
+                  </CodeGroup>
+                  Thing to note is:
+                  * Principal must be SuprSend's aws-account-id: "924219879248"
+                  * ExternalId should be the unique external-id entered during Role creation.
+                </Step>
+                <Step title= "On this role page, you'll see other information">
+                  This could either be ARN, or Maximum-Session-Duration etc.
+                </Step>
+                <Step title= "Copy / Make a note of these">
+                  as these info will be needed while setting up the vendor on SuprSend. Hence,
 
-        1. Go to ``IAM console -> Policies``.
-        2. Click on `Create Policy` button.
-        3. Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["ses:SendEmail", "ses:SendRawEmail"]``.
-           For simplicity, choose "JSON editor" and replace the existing content with below JSON.
-        <CodeGroup>
-          ```json IAM Role Policy
-          {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Sid": "AllowSesSendActions",
-                  "Effect": "Allow",
-                  "Action": [
-                      "ses:SendEmail",
-                      "ses:SendBulkEmail",
-                      "ses:SendRawEmail"
-                  ],
-                  "Resource": "*"
-                }
-              ]
-            }
-          ```
-        </CodeGroup>
-        4. Click on `Next` button.
-        5. Enter a Policy Name (e.g. suprsend_trust_role_policy) and optional Description.
-        6. Click on `Create Policy` button.
+                    * Copy the ARN of this role.
 
-      </Accordion>
+                    * Copy the external-id.
+
+                    * Make a note of "Maximum session duration".
+                </Step>
+            </Steps>
+    </Accordion>
     </AccordionGroup>
 
 
