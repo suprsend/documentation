@@ -10,17 +10,66 @@ This guide assumes you have access to AWS console and have necessary permissions
 Follow below steps to integrate your Amazon SES account with SuprSend:
 
 <Steps>
-  <Step title="Create AWS IAM user">
-    To send email through SES, you need an IAM user (Access-Key-ID and Secret-Access-Key) with necessary permission. To create an IAM user, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
+  <Step title="Select the Authentication Scheme">
+    To send email through SES, you can opt for either of the two schemes: **IAM User**, or **IAM Role**.
+    
+    <AccordionGroup>
+    <Accordion title="IAM User" defaultOpen={false}>
+        You'll need an IAM user (Access-Key-ID and Secret-Access-Key) with necessary permission. To create an IAM user, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
 
-    * Create an IAM user (with Programmatic access).
+        * Create an IAM user (with Programmatic access).
 
-    * Attach Policy`AmazonSESFullAccess `to this user.
+        * Attach Policy`AmazonSESFullAccess `to this user.
 
-    * Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
+        * Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
 
-    An AWS SES resource resides in a particular region. Make a note of which aws-region you are going to use for sending emails. In this guide, we'll assume aws-region :`ap-south-1` for all illustrative purposes.
-  </Step>
+        An AWS SES resource resides in a particular region. Make a note of which aws-region you are going to use for sending emails. In this guide, we'll assume aws-region :`ap-south-1` for all illustrative purposes.
+      </Accordion>
+    </AccordionGroup>
+
+    <AccordionGroup>
+    <Accordion title="IAM Role" defaultOpen={false}>
+        If you opt for Role-based Authentication, start by creating a role that uses [trust policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html).
+        
+        **Here's how you Create Policy:**
+          <Note>
+            If you're using IAM-role authentication at multiple places inside SuprSend,
+            you can put all the permission statements used across various AWS-resources within the same policy,
+            and add this single policy to the trust IAM role.
+          </Note>
+
+        1. Go to ``IAM console -> Policies``.
+        2. Click on `Create Policy` button.
+        3. Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["ses:SendEmail", "ses:SendRawEmail"]``.
+           For simplicity, choose "JSON editor" and replace the existing content with below JSON.
+        <CodeGroup>
+          ```json IAM Role Policy
+          {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AllowSesSendActions",
+                  "Effect": "Allow",
+                  "Action": [
+                      "ses:SendEmail",
+                      "ses:SendBulkEmail",
+                      "ses:SendRawEmail"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          ```
+        </CodeGroup>
+        4. Click on `Next` button.
+        5. Enter a Policy Name (e.g. suprsend_trust_role_policy) and optional Description.
+        6. Click on `Create Policy` button.
+
+      </Accordion>
+    </AccordionGroup>
+
+
+    </Step>
 
   <Step title="Create SES Verified Identity">
     Open AWS SES console. Go to `Verified Identities` tab. You can add an email-address or a domain/subdomain as an identity. Follow this [documentation](https://docs.aws.amazon.com/ses/latest/dg/creating-identities.html) to understand what an identity is and how to create and verify one.
@@ -206,7 +255,12 @@ Follow below steps to integrate your Amazon SES account with SuprSend:
 
 One of the platform advantage of using SuprSend as a central communication system is that it shows notification analytics for all channels in your SuprSend account together. For enabling event tracking at SuprSend (such as delivery, opened, blocked, spam etc.), you'll have to `sns:Subscribe`action to SuprSend.
 
-Once you've given `sns:Subscribe` Action permission (to SuprSend AWS Account) on your SNS-topic, suprsend will attempt to create a subscription on that topic. Once subscription succeeds, you should see successfully "Subscribed" to topic when you visit the Vendor settings page. Email Tracking should start working.
+Once you’ve filled in the required fields and saved your changes on the vendor configuration page in the SuprSend platform, you’ll need to manually click the `Subscribe` button to initiate the subscription to your specified SNS Topic ARN. This step is necessary to enable Email Tracking and ensure that notification delivery and failure logs are properly tracked.
+
+If any changes are made to the SNS configuration after a successful subscription, you can click the `Resubscribe` button to re-establish the subscription using the latest configuration. This ensures your email tracking setup stays consistent and up to date.
+
+Successfully Subscription as:
+  ![](/images/docs/subscribe-amazon-ses.png)
 
 ## How to add Unsubscription link in email
 
