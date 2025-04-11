@@ -9,40 +9,27 @@ This guide assumes you have access to AWS console and have necessary permissions
 
 Follow below steps to integrate your Amazon SES account with SuprSend:
 
-<Steps>
-  <Step title="Select the Authentication Scheme">
-    To send email through SES, you can opt for either of the two schemes: **IAM User**, or **IAM Role**.
-    
-    <AccordionGroup>
-    <Accordion title="IAM User" defaultOpen={false}>
-        You'll need an IAM user (Access-Key-ID and Secret-Access-Key) with necessary permission. To create an IAM user, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
 
-        * Create an IAM user (with Programmatic access).
+### Select the Authentication Scheme
+  To send email through SES, you can opt for either of the two schemes: **IAM User**, or **IAM Role**. If you opt for Role-based Authentication, start by creating a role that uses [trust policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html).
 
-        * Attach Policy`AmazonSESFullAccess `to this user.
-
-        * Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
-
-        An AWS SES resource resides in a particular region. Make a note of which aws-region you are going to use for sending emails. In this guide, we'll assume aws-region :`ap-south-1` for all illustrative purposes.
-    </Accordion>
-    </AccordionGroup>
+    * **IAM Role:** A permission set that you can assign to trusted entities (like AWS services or external accounts) to grant temporary and scoped access without needing long-term credentials.
+    * **IAM User:** A specific identity in AWS with long-term credentials (like access keys) used to access AWS services.
 
     <AccordionGroup>
-    <Accordion title="IAM Role" defaultOpen={false}>
-        If you opt for Role-based Authentication, start by creating a role that uses [trust policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html).
+    <Accordion title="IAM Role (recommended)" defaultOpen={false}>
         
-        **1. Create Policy:**
+        <Steps>
+          <Step title="Create Policy:">
               <Note>
                 If you're using IAM-role authentication at multiple places inside SuprSend,
                 you can put all the permission statements used across various AWS-resources within the same policy,
                 and add this single policy to the trust IAM role.
               </Note>
-              <Steps>
-                <Step title= "Go to IAM console">  
-                  and then select `Policies` tab.
-                </Step>
-                <Step title="Click on Create Policy">
-                  Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["ses:SendEmail", "ses:SendRawEmail"]``.
+
+              * Go to IAM console.
+
+              * In the `Policies` tab, click on `Create Policy`: Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["ses:SendEmail", "ses:SendRawEmail"]``.
                   For simplicity, choose "JSON editor" and replace the existing content with below JSON.
                   <CodeGroup>
                     ```json IAM Role Policy
@@ -63,41 +50,32 @@ Follow below steps to integrate your Amazon SES account with SuprSend:
                       }
                     ```
                   </CodeGroup>
-                </Step>
-                <Step title="Click on Next">
-                  Enter a Policy Name (e.g. suprsend_trust_role_policy) and optional Description.
-                </Step>
-                <Step title="Click on Create Policy">
-                  This will create a new policy with the above permissions.
-                </Step>
-              </Steps>
-        **2. Create IAM Role:** 
-          Once Resource Policy has been created, we can now proceed with Creating an trust based IAM role    
-            <Steps>
-                <Step title= "Go to IAM console">  
-                  and then select `Roles` tab.
-                </Step>
-                <Step title="Click on Create Role">
-                  Select `Trusted entity type: AWS account`. In the `An AWS account` section:
-                  - Select "Another AWS account" and put SuprSend Account ID: 924219879248
-                  - In "Options" subsection, check "Require external ID"
-                  - generate a unique string (either UUID or some other random string of sufficient length), and paste that unique string here.
-                </Step>
-                <Step title="Click on Next">
-                  In `Add permission Policies`, select the Policy that you created in previous step (e.g. suprsend_trust_role_policy). Now Click `Next`.                
-                </Step>
-                <Step title="Enter a Name for this role">
-                  For e.g: `suprsend_trust_role` and optional description. Then click `Create Role`.
-                </Step>
-            </Steps>
-        **3. Verify the Role permissions:**
-            <Steps>
-                <Step title= " Go to IAM Console -> Roles">  
-                  Click on the role you created in previous step
-                </Step>
-                <Step title= "Go to the Trust Relationships tab">
-                You should see a JSON very similar to this.
-                  <CodeGroup>
+
+              * After click on `Next`, and enter a Policy Name (e.g. suprsend_trust_role_policy), & other optional Description.
+
+              * Finally, clicking on the `Create Policy` button, will create a new policy with the above permissions.
+          </Step>
+          <Step title="Create IAM Role:">        
+              * Go to IAM console & slect the `Roles` tab.
+
+              * Click on `Create Role` button, and select `Another AWS Account` as the trusted entity.
+
+              * Enter `924219879248` as the SuprSend's AWS account ID.
+
+              * Click `Next` and them select the Policy you created in previous step (e.g. suprsend_trust_role_policy) and select it.
+              
+              * Further, clicking `Next`, enter the role name (e.g. suprsend_trust_role).
+
+              * This will create a new role with the above permissions.
+          </Step>
+          <Step title="Verify the Role permissions:">
+
+              * Go to IAM console and select the `Roles` tab.
+
+              * Click on the role you created in previous step (e.g. suprsend_trust_role).
+
+              * Go to the Trust Relationships tab, and you'd find a similar JSON to this:
+                <CodeGroup>
                     ```json IAM Role Policy
                     {
                       "Version": "2012-10-17",
@@ -118,29 +96,42 @@ Follow below steps to integrate your Amazon SES account with SuprSend:
                     }
                     ```
                   </CodeGroup>
+                
+                <Note> 
                   Thing to note is:
-                  * Principal must be SuprSend's aws-account-id: "924219879248"
-                  * ExternalId should be the unique external-id entered during Role creation.
-                </Step>
-                <Step title= "On this role page, you'll see other information">
-                  This could either be ARN, or Maximum-Session-Duration etc.
-                </Step>
-                <Step title= "Copy / Make a note of these">
-                  as these info will be needed while setting up the vendor on SuprSend. Hence,
+                    * Principal must be SuprSend's aws-account-id: "924219879248"
+                    * ExternalId should be the unique external-id entered during Role creation.
+                </Note>
+                
+                * Within this role page, you can also see other information such as ARN, Maximum-Session-Duration etc.
 
-                    * Copy the ARN of this role.
+                * Copy / Make a note of these as these info will be needed while setting up the vendor on SuprSend. Hence,
+                  * Copy the ARN of this role.
+                  * Copy the external-id.
+                  * Make a note of "Maximum session duration".
 
-                    * Copy the external-id.
-
-                    * Make a note of "Maximum session duration".
-                </Step>
-            </Steps>
+          </Step>
+        </Steps>
     </Accordion>
     </AccordionGroup>
 
+    <AccordionGroup>
+    <Accordion title="IAM User" defaultOpen={false}>
+        You'll need an IAM user (Access-Key-ID and Secret-Access-Key) with necessary permission. To create an IAM user, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
 
-    </Step>
+        * Create an IAM user (with Programmatic access).
 
+        * Attach Policy`AmazonSESFullAccess `to this user.
+
+        * Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
+
+        An AWS SES resource resides in a particular region. Make a note of which aws-region you are going to use for sending emails. In this guide, we'll assume aws-region :`ap-south-1` for all illustrative purposes.
+    </Accordion>
+    </AccordionGroup>
+
+After getting started with the Authentication theme, you can proceed with the following next steps to set up your Amazon SES account with SuprSend:
+
+<Steps>
   <Step title="Create SES Verified Identity">
     Open AWS SES console. Go to `Verified Identities` tab. You can add an email-address or a domain/subdomain as an identity. Follow this [documentation](https://docs.aws.amazon.com/ses/latest/dg/creating-identities.html) to understand what an identity is and how to create and verify one.
   </Step>
@@ -292,11 +283,11 @@ Follow below steps to integrate your Amazon SES account with SuprSend:
         </CodeGroup>
         
       </Step>
-      <Step title="Click Save">
-        </Step>
-
+      Now, click on `Save`
     </Steps>
   </Step>
+</Steps>
+<Steps>
 
   <Step title="Fill Vendor settings page on Suprsend" stepNumber="6">
     On the SuprSend dashboard, go to vendor page from side panel and click Email -> Amazon SES from the list of Vendors. This will open vendor details page as shown below:
