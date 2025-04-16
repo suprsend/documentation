@@ -27,7 +27,7 @@ This integration exports individual [parquet](https://parquet.apache.org/) files
 
     2. This will open a form. Enter a relevant bucket name, something like:**`suprsend-notification`.**
 
-    3. Select the region and Set Object Ownership to**ACLs disabled. (recommended).**
+    3. Select the region and Set Object Ownership to **ACLs disabled. (recommended).**
 
        ![](/images/docs/9e66556-image.png)
 
@@ -68,32 +68,137 @@ This integration exports individual [parquet](https://parquet.apache.org/) files
     </CodeGroup>
   </Step>
 
-  <Step title="Create a user with access to the bucket" stepNumber="3">
-    This user will be needed to get the `access key id` and `secret`. To create user permission policy, On your [Amazon AWS IAM Management Console](https://console.aws.amazon.com/iam/) , select `Users Page`from the side bar. If you want to use an existing user, just assign the [permission created in step 2](/docs/amazon_s3#step-2-set-permission-policy-for-the-bucket) to your existing user.
+  <Step title="Select the Authentication Scheme" stepNumber="3">
+    For the next step, you can opt for either of the two schemes: **IAM Role**, or **IAM User** with access to the bucket.
+    * **IAM Role:** A permission set that you can assign to trusted entities (like AWS services or external accounts) to grant temporary and scoped access without needing long-term credentials.
+    * **IAM User:** A specific identity in AWS with long-term credentials (like access keys) used to access AWS services.
 
+    <AccordionGroup>
+    <Accordion title="Creating IAM Role (recommended)" defaultOpen={false}>
+        
+        <Steps>
+          <Step title="Create Policy:">
+              <Note>
+                If you're using IAM-role authentication at multiple places inside SuprSend,
+                you can put all the permission statements used across various AWS-resources within the same policy,
+                and add this single policy to the trust IAM role.
+              </Note>
 
+              * Go to IAM console.
 
-    **You can create a new user by these steps:**
+              * In the `Policies` tab, click on `Create Policy`: Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["s3:PutObject"]``.
+                  For simplicity, choose "JSON editor" and replace the existing content with below JSON.
+                  <Note>
+                    Replace the s3-bucket in `Resource` with your own bucket
+                  </Note>
+                  <CodeGroup>
+                    ```json IAM Role Policy
+                    {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                        {
+                          "Sid": "S3ObjectActions",
+                          "Effect": "Allow",
+                          "Action": [
+                                "s3:PutObject"
+                          ],
+                          "Resource": [
+                                "arn:aws:s3:::ss-test-s3-sync/*"
+                          ]
+                        }
+                      ]
+                    }
+                    ```
+                  </CodeGroup>
 
-    1. On the user page, click o&#x6E;**"Add users"**
+              * After click on `Next`, and enter a Policy Name (e.g. suprsend_trust_role_policy), & other optional Description.
 
-    2. Add relevant user name, you can use this name for example:`s3-bucket-suprsend`
+              * Finally, clicking on the `Create Policy` button, will create a new policy with the above permissions.
+          </Step>
+          <Step title="Create IAM Role:">        
+              * Go to IAM console & slect the `Roles` tab.
 
-    3. Leave provide user access to the AWS Management Console unchecked and click o&#x6E;**"Next: Permissions"**
+              * Click on `Create Role` button, and select `Another AWS Account` as the trusted entity.
 
-    4. Select Attach existing policies directly.
+              * Enter `924219879248` as the SuprSend's AWS account ID.
 
-    5. Search for the policy created in step 2 and select it.
+              * Click `Next` and them select the Policy you created in previous step (e.g. suprsend_trust_role_policy) and select it.
+              
+              * Further, clicking `Next`, enter the role name (e.g. suprsend_trust_role).
 
-    6. Click **"Next: Tags"** -> **"Next:Review"** -> **"Create User"** buttons.
+              * This will create a new role with the above permissions.
+          </Step>
+          <Step title="Verify the Role permissions:">
 
-    7. Continue to step 4 before closing the browser.
+              * Go to IAM console and select the `Roles` tab.
+
+              * Click on the role you created in previous step (e.g. suprsend_trust_role).
+
+              * Go to the Trust Relationships tab, and you'd find a similar JSON to this:
+                <CodeGroup>
+                    ```json IAM Role Policy
+                    {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                  "AWS": "arn:aws:iam::924219879248:root"
+                              },
+                              "Action": "sts:AssumeRole",
+                              "Condition": {
+                                  "StringEquals": {
+                                      "sts:ExternalId": "<uniq-id-entered-by-user>"
+                                  }
+                              }
+                          }
+                      ]
+                    }
+                    ```
+                  </CodeGroup>
+                
+                <Note> 
+                  Thing to note is:
+                    * Principal must be SuprSend's aws-account-id: "924219879248"
+                    * ExternalId should be the unique external-id entered during Role creation.
+                </Note>
+                
+                * Within this role page, you can also see other information such as ARN, Maximum-Session-Duration etc.
+
+                * Copy / Make a note of these as these info will be needed while setting up the vendor on SuprSend. Hence,
+                  * Copy the ARN of this role.
+                  * Copy the external-id.
+                  * Make a note of "Maximum session duration".
+
+          </Step>
+        </Steps>
+    </Accordion>
+    </AccordionGroup>
+
+    <AccordionGroup>
+    <Accordion title="Creating IAM User" defaultOpen={false}>
+        You'll need an IAM user (`Access-Key-ID` and `Secret-Access-Key`) with necessary permission. To create an IAM user, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
+
+        * Create an IAM user (with Programmatic access). Now, add relevant user name, for example: `s3-bucket-suprsend`.
+
+        * Select Attach existing policies directly, and search for the policy created in step 2 and select it.
+
+        * Click **“Next: Tags” -> “Next:Review” -> “Create User”** buttons.
+        
+        * Continue to step 4 before closing the browser.
+
+        Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
+
+    </Accordion>
+    </AccordionGroup>
   </Step>
 
   <Step title="Get access key ID and secret for the above user" stepNumber="4">
-    This information will be required in the connector integration form on SuprSend. Follow below steps to get access key ID and secret for the [user created in step 3](/docs/amazon_s3#step-3-create-a-user-with-access-to-the-bucket):
+    This information will be required in the connector integration form on SuprSend. 
+    
+    Follow below steps to get access key ID and secret for the user created in step-3:
 
-    1. On users page, choose the IAM user name created in step 3
+    1. On users page, choose the IAM user name created in step-3.
 
     2. Open the Security credentials tab, and create **access key**.
 
@@ -105,7 +210,7 @@ This integration exports individual [parquet](https://parquet.apache.org/) files
 
     5. **Copy the access key and secret** and store it somewhere safe. You'll not be able to retrieve this information later once you leave this modal. Add this information in SuprSend S3 connector form.
 
-    6. Once copied, click on `Done`
+    6. Once copied, click on `Done`.
   </Step>
 </Steps>
 
@@ -119,9 +224,9 @@ This integration exports individual [parquet](https://parquet.apache.org/) files
     | Form Field            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                           |
     | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
     | Connector name        | This name is identify the connector and is for your reference                                                                                                                                                                                                                                                                                                                                                                                         |
-    | AWS Key               | This is the access key ID linked to the IAM user. [Refer step 4](/docs/amazon_s3#step-4-get-access-key-id-and-secret-for-the-above-user) for steps to create access key                                                                                                                                                                                                                                                                               |
-    | AWS Secret            | This is the secret access linked to the IAM user. [Refer step 4](/docs/amazon_s3#step-4-get-access-key-id-and-secret-for-the-above-user) for steps to get secret access                                                                                                                                                                                                                                                                               |
-    | Export bucket         | Name of the S3 bucket where the parquet files should be exported. [Refer step 1](/docs/amazon_s3#step-1-create-s3-bucket) to create an export bucket                                                                                                                                                                                                                                                                                                  |
+    | AWS Key               | This is the access key ID linked to the IAM user. Refer step 4 for steps to create access key                                                                                                                                                                                                                                                                               |
+    | AWS Secret            | This is the secret access linked to the IAM user. Refer step 4 for steps to get secret access                                                                                                                                                                                                                                                                               |
+    | Export bucket         | Name of the S3 bucket where the parquet files should be exported. Refer step 1 to create an export bucket                                                                                                                                                                                                                                                                                                  |
     | Data points to export | Here you can choose what all information should be exported to your S3 bucket: **Notifications Status** - To sync details to the each notification - users, tenants, vendor, channel, DLR status of the notification (delivery, seen, click etc.), and failure reasons for failed notifications **Template** - To sync all templates created in SuprSend in your S3 bucket. Template sync will happen every time you are making change in the template |
 
     Your S3 setup is now complete. Click on **`Enable sync`** to start data export. You can pause and resume your sync anytime you want. To Pause sync for certain data points, deselect the ones not needed from "Data Points to export" and save the changes.
