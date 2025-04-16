@@ -1,0 +1,223 @@
+---
+title: "Integration"
+description: "A step-by-step guide to integrate drop-in inbox / feed in applications like Angular, Vuejs, VanillaJS etc."
+---
+
+There are 2 ways in which you can implement inbox functionality:
+
+- **Drop-in components:** Pre-built UI with many customizable options which require minimal effort to build.
+- **Headless implementation:** For more advanced usecases where you want to build UI/UX from scratch.
+
+This guide help you integrate drop-in components in your non-react frameworks (angular, vuejs, vanillajs etc). If you want to build your own UI (headless) instead of using drop-in components please refer [docs](https://docs.suprsend.com/docs/js-inapp-feed).
+
+## Integration
+
+### Integrate using script tag
+
+This integration is used in Vanillajs, Django, Laravel, ruby etc where npm is not used.
+
+```html
+<!-- for dropin inbox with bell -->
+<div id="suprsend-inbox"></div>
+
+<!-- for feed without bell as a fullscreen notification etc -->
+<div id="suprsend-notification-feed"></div>
+
+<script>
+  window.suprsendConfig = {
+    distinctId: "YOUR_DISTINCT_ID",
+    publicApiKey: "YOUR_PUBLIC_API_KEY",
+    userAuthenticationHandler: ({ response }) => {
+      console.log("User Authentication Response", response);
+    },
+  };
+
+  let scriptElem = document.createElement("script");
+  scriptElem.async = 1;
+  scriptElem.src = "https://web-components.suprsend.com/v0.0.1/bundle.umd.js";
+  scriptElem.onload = () => {
+    console.log("SuprSend SDK loaded", window.suprsend);
+  };
+  document.body.appendChild(scriptElem);
+</script>
+```
+
+### Integrate as npm Package
+
+This integration is used in framework based applications like angular, vuejs etc.
+
+```bash
+npm install @suprsend/web-components@latest
+```
+
+```javascript
+import { initSuprSend, clearSuprSend } from "@suprsend/web-components";
+
+// for dropin inbox with bell
+<div id="suprsend-inbox"></div>
+
+// for feed without bell as a fullscreen notification etc
+<div id="suprsend-notification-feed"></div>
+
+const suprsendConfig = {
+  distinctId: "YOUR_DISTINCT_ID",
+  publicApiKey: "YOUR_PUBLIC_API_KEY",
+  userAuthenticationHandler: ({ response }) => {
+    console.log("User Authentication Response", response);
+  },
+};
+
+initSuprSend(suprsendConfig) // for creating instance and rendering component
+console.log("Instance created but user authentication pending", window.suprsend)
+```
+
+## Removing Instance
+
+Components will be removed automatically if you navigate away from the page (on unmounting). If you want to remove them manually, you can use below methods.
+
+<CodeGroup>
+```javascript Using script tag
+window.suprsend.clearSuprSend(); // clears instance and remove all components
+window.suprsend.clearSuprSendInbox(); // unmount only inbox component
+window.suprsend.clearSuprSendFeed(); // unmount only feed component
+```
+
+```javascript Using npm package
+import {
+  clearSuprSend,
+  clearSuprSendInbox,
+  clearSuprSendFeed,
+} from "@suprsend/web-components";
+
+clearSuprSend(); // clears instance and remove all components
+clearSuprSendInbox(); // unmount only inbox component
+clearSuprSendFeed(); // unmount only feed component
+```
+
+</CodeGroup>
+
+## Update config options
+
+```javascript
+window.suprsend.updateInboxConfig(config: IInbox);
+window.suprsend.updateFeedConfig(config: IFeed);
+window.suprsend.updateToastConfig(config: IToastNotificationProps);
+```
+
+## Refreshing expired JWT user token
+
+If your JWT token has TTL (expires) you can call your backend api to get refreshed token and update existing token with new one.
+
+```javascript
+window.suprsend.refreshUserToken(token); // pass new jwt usertoken string
+```
+
+## Accessing other instance methods
+
+SDK internally calls `new SuprSend()` when you call `initSuprSend()` then you can access instance using `window.suprsend.client`. This instance has methods like [preferences](https://docs.suprsend.com/docs/js-preferences), [webpush](https://docs.suprsend.com/docs/js-webpush), [event and user updates](https://docs.suprsend.com/docs/js-events-and-user-methods).
+
+```javascript
+// example methods
+window.suprsend.client.isIdentified();
+window.suprsend.client.user.addEmail(email: string);
+window.suprsend.client.track(event: string, properties?: Dictionary)
+window.suprsend.client.webpush.registerPush();
+window.suprsend.client.user.preferences.getPreferences(args?: {tenantId?: string});
+```
+
+## Config Options
+
+To customise SuprSend components you can pass config object.
+
+<CodeGroup>
+```typescript Config Options
+interface ConfigProps {
+  publicApiKey: string;
+  distinctId ? : unknown;
+  userToken ? : string;
+  host ? : string;
+  initOnLoad ? : boolean; // pass false if you dont want to initialise instance just after loading script
+  refreshUserToken ? : (oldUserToken: string, tokenPayload: Dictionary) => Promise < string > ;
+  vapidKey ? : string;
+  swFileName ? : string;
+  userAuthenticationHandler ? : ({
+    response: ApiResponse
+  }) => void;
+  inbox ? : IInbox; // inbox config options
+  feed ? : IFeed; // feed config options
+  toast ? : IToastNotificationProps; // toast config options
+}
+```
+
+```typescript Inbox Config Options
+interface IInbox {
+  tenantId?: string;
+  stores?: IStore[] | null;
+  host?: {
+    socketHost?: string;
+    apiHost?: string;
+  };
+  pageSize?: number;
+  pagination?: boolean;
+  theme?: ITheme;
+  themeType?: ThemeType;
+  popperPosition?: Placement;
+  hideAvatar?: boolean;
+  showUnreadCountOnTabs?: boolean; // hiding unread count in multi tab setup
+  hideToast?: boolean; // by default toast is shown on new notification. To stop it pass false
+  headerIconUrl?: string; // icon url to be shown on right side of mark all as read button on header
+  headerIconClickHandler?: () => void; // on the click of above mentioned icon this callback is called
+  notificationClickHandler?: (notification: IRemoteNotification) => void;
+  primaryActionClickHandler?: (notification: IRemoteNotification) => void;
+  secondaryActionClickHandler?: (notification: IRemoteNotification) => void;
+}
+```
+
+```typescript Feed Config Options
+interface IFeed {
+  tenantId?: string;
+  pageSize?: number;
+  stores?: IStore[] | null;
+  host?: {
+    socketHost?: string;
+    apiHost?: string;
+  };
+  pagination?: boolean;
+  showUnreadCountOnTabs?: boolean; // hiding unread count in multi tab setup
+  hideAvatar?: boolean;
+  themeType?: ThemeType;
+  theme?: INotificationFeedTheme;
+  hideToast?: boolean; // by default toast is shown on new notification. To stop it pass false
+  hideFeed?: boolean; // useful if you dont want to show feed but only show toast notif on new notification
+  headerIconUrl?: string; // icon url to be shown on right side of mark all as read button on header
+  headerIconClickHandler?: () => void; // on the click of above mentioned icon, this callback is called
+  notificationClickHandler?: (notification: IRemoteNotification) => void;
+  primaryActionClickHandler?: (notification: IRemoteNotification) => void;
+  secondaryActionClickHandler?: (notification: IRemoteNotification) => void;
+}
+```
+
+```typescript Toast Config Options
+interface IToastNotificationProps {
+  position?: ToastPosition; // "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right"
+  duration?: number; // milliseconds toast should be shown default to 3sec
+  hideAvatar?: boolean; // hide avatar on toast notification
+  themeType?: ThemeType; // dark or light mode
+  theme?: ToastNotificationCardTheme; // to customise css of toast notification
+}
+```
+
+</CodeGroup>
+
+| Parameter                                                         | Description                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| publicApiKey                                                      | public api key is mandatory field without which error will be thrown by SuprSendProvider. You can get this from [SuprSend Dashboard](https://app.suprsend.com/en/staging/developers/api-keys).                                         |
+| distinctId                                                        | Unique identifier to identify a user across platform. If a value is passed SDK will create user and authenticate user. If null value is passed authenticated user's instance data will be cleared in your application, kind of logout. |
+| [userToken](https://docs.suprsend.com/docs/client-authentication) | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](https://docs.suprsend.com/docs/client-authentication) to create userToken.                                            |
+| refreshUserToken                                                  | This function is called by SDK internally to get new userToken before existing token is expired. The returned JWT token string is used as the new userToken.                                                                           |
+| userAuthenticationHandler                                         | This callback will be called after authenticating user internally when you pass distinctId field to give you back the response of user creation api call.                                                                              |
+| host                                                              | Customise the host url.                                                                                                                                                                                                                |
+| vapidKey                                                          | This key is needed only if you are implementing WebPush notifications. You can get it in SuprSend Dashboard --> Vendors --> WebPush                                                                                                    |
+| swFileName                                                        | This key is needed only if you are implementing WebPush notifications and want to customise default `serviceworker.js` file name with your own service worker file name.                                                               |
+
+For further component specific customisations please refer to the [docs](https://docs.suprsend.com/docs/web-components-integration#config-options).
