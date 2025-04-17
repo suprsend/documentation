@@ -3,131 +3,229 @@ title: "Amazon S3"
 description: "Export notification data from Suprsend to your S3 bucket"
 ---
 
-There are 2 types of connectors in SuprSend: **Source** and **Destination**. Source is used to connect event and user data from a third party platform into SuprSend to power notifications. Destination is used to sync data like message templates and notification metrics that we track in SuprSend back to your data warehouse for reporting and analysis.
+## Overview
 
-Amazon S3 is a destination used to ingest data from SuprSend into your S3 bucket type. You can directly query on this data using Athena or import it to data warehouses like Redshift, Snowflake, Clickhouse etc. for analysis.
+  SuprSend offers two types of connectors:
+    - **Source**: Connects event and user data from third-party platforms into SuprSend
+    - **Destination**: Syncs data (message templates, notification metrics) from SuprSend to your data warehouse
+
+  Amazon S3 is a destination used to ingest data from SuprSend into your S3 bucket. You can directly query on this data using Athena or import it to data warehouses like Redshift, Snowflake, Clickhouse etc. for analysis.
 
 ## How it works?
 
-This integration exports individual [parquet](https://parquet.apache.org/) files for **message templates** and **notification data** to your S3 bucket at a regular interval. You can select what all data you want to sync to your S3 bucket. The sync happens every 3-5 minutes, ensuring that you always have the latest data in your S3 bucket. There'll be a separate parquet file for each day.
+  This integration exports individual [parquet](https://parquet.apache.org/) files for **notification data**, and JSON files for **message templates** to your S3 bucket at a regular interval. You can select what all `data points` you want to sync to your S3 bucket. 
 
-<Note>
-  This integration only publishes parquet files to your storage bucket. You can either use Athena to query this data or ingest this data into a data warehouse for analysis.
-</Note>
+  ![Data Points Parameter on SuprSend Paltform](/images/data-points-amazon-s3.png)
 
-## Setting up Amazon S3 connector
+  The sync happens every 3-5 minutes, ensuring that you always have the latest data in your S3 bucket. For notifications, there will be a separate parquet file for each day.
 
-<Steps>
-  <Step title="Create S3 bucket" stepNumber="1">
-    This will be the location of data export. Skip this step If you want to sync to an existing bucket or you can create a new bucket by following below steps:
+  <Note>
+    This integration only publishes parquet files for notifications to your storage bucket. You can either use Athena to query this data or ingest this data into a data warehouse for analysis.
+  </Note>
 
-    1. Sign into the [Amazon AWS S3 Management Console](https://eu-west-2.signin.aws.amazon.com/oauth?response_type=code\&client_id=arn%3Aaws%3Aiam%3A%3A015428540659%3Auser%2Fs3\&redirect_uri=https%3A%2F%2Fs3.console.aws.amazon.com%2Fs3%2F%3Fstate%3DhashArgs%2523%26isauthcode%3Dtrue\&forceMobileLayout=0\&forceMobileApp=0\&code_challenge=e9KtrxOOGcXg2wHjDELaAHe3tE2kBKR2yklpkrrms-g\&code_challenge_method=SHA-256) and Click on Create Bucket button.
+## Prerequisites
 
-       ![](/images/docs/c37cc40-image.png)
+  Before you begin, ensure you have:
+  - An AWS account with administrative access
+  - Necessary permissions to create S3 buckets and IAM roles/users
+  - Access to AWS Console
 
-    2. This will open a form. Enter a relevant bucket name, something like:**`suprsend-notification`.**
+## Setup Steps
 
-    3. Select the region and Set Object Ownership to**ACLs disabled. (recommended).**
+  <Steps>
+    <Step title="Create S3 Bucket">
+      Skip this step if you want to use an existing bucket. Otherwise, follow these steps:
 
-       ![](/images/docs/9e66556-image.png)
+      1. Sign in to [AWS S3 Console](https://s3.console.aws.amazon.com/)
+      2. Click "Create bucket"
 
-    4. Next, Selec&#x74;**`Block all public access`**&#x61;n&#x64;**`disable`**&#x62;ucket versioning.
+      ![](/images/docs/c37cc40-image.png)
+      
+      3. Configure bucket settings:
+        - Bucket name: e.g., `suprsend-notification`
+        - Region: Choose your preferred region
+        - Object Ownership: **ACLs disabled** (recommended)
+        - Block all public access: **Enabled**
+        - Bucket versioning: **Disabled**
+        - Default encryption: Server-side encryption with Amazon S3 managed keys (SSE-S3)
+        - Bucket Key: **Enabled**
+      4. Click "Create bucket"
 
-    5. Do not add any Tags.
+        ![](/images/docs/4a07acb-Screenshot_2023-08-09_at_9.29.19_PM.png)
+    </Step>
 
-    6. Leave Default encryption at defaults:`Encryption key type = Server-side encryption`with Amazon S3 managed keys (SSE-S3) and`Bucket Key = Enable.`
+    <Step title="2. Set Bucket Permission Policy">
+      We'll need permission to `PutObject` for data ingestion in your bucket. To set permission policy,
 
-    7. Do not change any Advanced settings and click on th&#x65;**`Create bucket`**&#x62;utton.
+      1. Go to [IAM Console](https://console.aws.amazon.com/iam/)
+      2. Select Policies → Create Policy
+      3. Use JSON editor and paste this policy (replace `suprsend-notification` with your bucket name). Set a relevant name to the policy, something like - **`SingleBucketWriteAccess`**.
 
-       ![](/images/docs/4a07acb-Screenshot_2023-08-09_at_9.29.19_PM.png)
-  </Step>
-
-  <Step title="Set permission policy for the bucket" stepNumber="2">
-    We'll need permission to `PutObject` for data ingestion in your bucket. To set permission policy, On your [Amazon AWS IAM Management Console](https://console.aws.amazon.com/iam/) , select Policies Page from the side bar. Click on **`Create Policy`** and on the JSON tab, copy paste the below code.
-
-    Replace **`suprsend-notification`** with the bucket name you've created. Create a relevant name to the policy, something like - **`SingleBucketWriteAccess`**.
-
-    <CodeGroup>
-      ```json Amazon AWS IAM Management Console
-      {
-          "Version": "2012-10-17",
-          "Statement": [
+      <CodeGroup>
+        ```json Amazon AWS IAM Management Console
+        {
+          "Version":"2012-10-17",
+          "Statement":[
               {
-                  "Sid": "AllObjectActions",
-                  "Effect": "Allow",
-                  "Action": [
-                      "s3:PutObject"
-                  ],
-                  "Resource": [
-                      "arn:aws:s3:::suprsend-notification/*" //replace with your bucket name
-                  ]
+                "Sid":"AllObjectActions",
+                "Effect":"Allow",
+                "Action":[
+                    "s3:PutObject"
+                ],
+                "Resource":[
+                    "arn:aws:s3:::suprsend-notification/*"
+                ]
               }
           ]
-      }
-      ```
-    </CodeGroup>
-  </Step>
+        }
+        ```
+      </CodeGroup>
+    </Step>
 
-  <Step title="Create a user with access to the bucket" stepNumber="3">
-    This user will be needed to get the `access key id` and `secret`. To create user permission policy, On your [Amazon AWS IAM Management Console](https://console.aws.amazon.com/iam/) , select `Users Page`from the side bar. If you want to use an existing user, just assign the [permission created in step 2](/docs/amazon_s3#step-2-set-permission-policy-for-the-bucket) to your existing user.
+    <Step title="Select the Authentication Scheme">
+      Choose between IAM Role (recommended) or IAM User authentication. IAM Role-based authentication is the recommended approach as it:
+        - Provides temporary, scoped access
+        - Eliminates the need for long-term credentials
+        - Follows security best practices
 
+      <AccordionGroup>
+      <Accordion title="IAM Role (Recommended)" defaultOpen={true}>
+        <Steps>
+          <Note>
+            If you're using IAM-role authentication at multiple places inside SuprSend, you can consolidate all permission statements within a single policy.
+          </Note>
+          <Step title="Create Policy">
+            * Go to IAM console → Policies
+            * Click "Create Policy"
+            * Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["s3:PutObject"]``.
+            For simplity, choose "JSON editor" and replace the existing content with below JSON.
+              <Note>
+                Replace the s3-bucket in `Resource` with your own bucket
+              </Note>
+              <CodeGroup>
+                ```json IAM Role Policy
+                {
+                  "Version":"2012-10-17",
+                  "Statement":[
+                      {
+                        "Sid":"S3ObjectActions",
+                        "Effect":"Allow",
+                        "Action":[
+                            "s3:PutObject"
+                        ],
+                        "Resource":[
+                            "arn:aws:s3:::suprsend-notification/*"
+                        ]
+                      }
+                  ]
+                }
+                ```
+              </CodeGroup>
 
+            * Click on `Next`, and enter a Policy Name (e.g. suprsend_trust_role_policy), & other optional Description.
 
-    **You can create a new user by these steps:**
+            * Finally, clicking on the `Create Policy` button, it will create a new policy with the above permissions.
+          </Step>
+          <Step title="Create IAM Role">
+              * Go to IAM console → Roles. To create an IAM Role, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html).
+              * Click on `Create Role` button, and select `Another AWS Account` as the trusted entity.
+              * Enter SuprSend's AWS account ID: `924219879248`
+              * Next, Select the policy created above
+              * Enter role name (e.g., `suprsend_trust_role`) and create the role.
+          </Step>
+          <Step title="Verify Role Permissions">
+            * Select the role created above from IAM console → Roles tab
+            * In Trust Relationships tab, verify this trust policy:
+              <CodeGroup>
+                  ```json IAM Role Policy
+                  {
+                    "Version":"2012-10-17",
+                    "Statement":[
+                        {
+                          "Effect":"Allow",
+                          "Principal": {
+                              "AWS":"arn:aws:iam::924219879248:root"
+                          },
+                          "Action":"sts:AssumeRole",
+                          "Condition":{
+                              "StringEquals":{
+                                "sts:ExternalId":"<uniq-id-entered-by-user>"
+                              }
+                          }
+                        }
+                    ]
+                  }
+                  ```
+              </CodeGroup>
+              
+              <Note> 
+                Important:
+                - Principal must be SuprSend's AWS account ID: "924219879248"
+                - ExternalId should match the unique ID entered during role creation
+              </Note>
+              
+            * Save these details for SuprSend setup:
+              - Role ARN
+              - External ID
+              - Maximum session duration
+          </Step>
+        </Steps>
+      </Accordion>
+      <Accordion title="IAM User" defaultOpen={false}>
+          Follow these steps to create an IAM user:
 
-    1. On the user page, click o&#x6E;**"Add users"**
+          1. Create an IAM user with Programmatic access
+            - Add relevant user Name: e.g., `s3-bucket-suprsend`
+            - Attach the policy created in step 2
+          2. Complete the user creation process
+          3. Continue to step 4 before closing the browser.
+          4. Save the access credentials securely
+            <Steps>
+              <Step title="Get Access Credentials">
+                This is required to be added in the connector integration form on SuprSend.
+                For IAM User authentication:
 
-    2. Add relevant user name, you can use this name for example:`s3-bucket-suprsend`
+                1. Go to IAM Users → Select your user
+                2. Security credentials tab → Create access key
+                3. Choose "Third party service"
+                4. Add optional description
+                5. **IMPORTANT**: Copy and save both access key and secret
+                6. Click "Done"
 
-    3. Leave provide user access to the AWS Management Console unchecked and click o&#x6E;**"Next: Permissions"**
+                ![](/images/docs/795e47f-image.png)
+              </Step>
+            </Steps>
+      </Accordion>
+      </AccordionGroup>     
+    </Step>
+  </Steps>
 
-    4. Select Attach existing policies directly.
+    ## Configure S3 connector in SuprSend
 
-    5. Search for the policy created in step 2 and select it.
+      ![](/images/docs/3fdddd0-image.png)
 
-    6. Click **"Next: Tags"** -> **"Next:Review"** -> **"Create User"** buttons.
+      Go to **Settings → Connectors → Amazon S3** and fill in required information.
+        
+        * **In case of IAM Role:** 
+        ![](/images/iam-role-amazon-s3.png)
 
-    7. Continue to step 4 before closing the browser.
-  </Step>
+        * **In case of IAM User:**
+        ![](/images/iam-user-amazon-s3.png)
 
-  <Step title="Get access key ID and secret for the above user" stepNumber="4">
-    This information will be required in the connector integration form on SuprSend. Follow below steps to get access key ID and secret for the [user created in step 3](/docs/amazon_s3#step-3-create-a-user-with-access-to-the-bucket):
+      | Form Field            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+      | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+      | **Connector name***        | This name is identify the connector and is for your reference                                                                                                                                                                                                                                                                                                                                                                                         |
+      | **Authentication Scheme*** | Select whether to use IAM Role or IAM User for authentication.|
+      | **AWS Region*** | Choose the AWS Region where your S3 bucket is hosted (for eg: `us-east-1`, `ap-south-1`, or `eu-west-2`) |
+      | **Role ARN*** | The Amazon Resource Name (ARN) of the IAM Role that grants access to the S3 bucket.  |
+      | **External ID*** | The unique External ID you configured in the IAM Role’s trust policy for SuprSend. This provides an extra layer of security when SuprSend assumes the role. |
+      | **Duration Seconds** | The amount of time (in seconds) SuprSend can assume the IAM Role for each session (for example, 3600 = one hour). Leave it at the default unless you have specific session duration requirements. |
+      | **Access Key ID***               | This is the access key ID linked to the IAM user. Refer step 4 for steps to create access key                                                                                                                                                                                                                                                                               |
+      | **Secret Access Key***           | This is the secret access linked to the IAM user. Refer step 4 for steps to get secret access                                                                                                                                                                                                                                                                               |
+      | **Export Bucket***         | Name of the S3 bucket where the parquet files should be exported. Refer step 1 to create an export bucket                                                                                                                                                                                                                                                                                                  |
+      | **Data Points to export*** | Here you can choose what all information should be exported to your S3 bucket: **Notifications Status** - To sync details to the each notification - users, tenants, vendor, channel, DLR status of the notification (delivery, seen, click etc.), and failure reasons for failed notifications **Template** - To sync all templates created in SuprSend in your S3 bucket. Template sync will happen every time you are making change in the template |
 
-    1. On users page, choose the IAM user name created in step 3
+      Your S3 setup is now complete. Click on **`Enable sync`** to start data export. You can pause and resume your sync anytime you want. To Pause sync for certain data points, deselect the ones not needed from "Data Points to export" and save the changes.
 
-    2. Open the Security credentials tab, and create **access key**.
-
-       ![](/images/docs/795e47f-image.png)
-
-    3. Choose **`third party service`** and click `next`.
-
-    4. Next, you can add description for your reference or leave it blank. Click on the **`create access key`**
-
-    5. **Copy the access key and secret** and store it somewhere safe. You'll not be able to retrieve this information later once you leave this modal. Add this information in SuprSend S3 connector form.
-
-    6. Once copied, click on `Done`
-  </Step>
-</Steps>
-
-  ## Add your S3 connector details on SuprSend
-    On SuprSend dashboard, go to **Settings -> Connectors -> Amazon S3** and fill in the required information:
-
-    ![](/images/docs/3fdddd0-image.png)
-
-    Here's a description on what each of these form fields describe:
-
-    | Form Field            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-    | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | Connector name        | This name is identify the connector and is for your reference                                                                                                                                                                                                                                                                                                                                                                                         |
-    | AWS Key               | This is the access key ID linked to the IAM user. [Refer step 4](/docs/amazon_s3#step-4-get-access-key-id-and-secret-for-the-above-user) for steps to create access key                                                                                                                                                                                                                                                                               |
-    | AWS Secret            | This is the secret access linked to the IAM user. [Refer step 4](/docs/amazon_s3#step-4-get-access-key-id-and-secret-for-the-above-user) for steps to get secret access                                                                                                                                                                                                                                                                               |
-    | Export bucket         | Name of the S3 bucket where the parquet files should be exported. [Refer step 1](/docs/amazon_s3#step-1-create-s3-bucket) to create an export bucket                                                                                                                                                                                                                                                                                                  |
-    | Data points to export | Here you can choose what all information should be exported to your S3 bucket: **Notifications Status** - To sync details to the each notification - users, tenants, vendor, channel, DLR status of the notification (delivery, seen, click etc.), and failure reasons for failed notifications **Template** - To sync all templates created in SuprSend in your S3 bucket. Template sync will happen every time you are making change in the template |
-
-    Your S3 setup is now complete. Click on **`Enable sync`** to start data export. You can pause and resume your sync anytime you want. To Pause sync for certain data points, deselect the ones not needed from "Data Points to export" and save the changes.
-
-    You can also disable your entire sync by disabling the `Enable sync` button, in which case we’ll stop the export. When you enable your sync again, we send all of your historical data as if you’re starting a new integration.
-
-
-
+      You can also disable your entire sync by disabling the `Enable sync` button, in which case we’ll stop the export. When you enable your sync again, we send all of your historical data as if you’re starting a new integration.
 ***

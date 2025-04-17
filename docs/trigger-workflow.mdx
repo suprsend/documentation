@@ -56,6 +56,7 @@ w1 = WorkflowTriggerRequest(
     "actor": {
       "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
       "name":"actor_1"
+      "$skip_create": true
     },
     "recipients": [
       # notify user 
@@ -65,11 +66,13 @@ w1 = WorkflowTriggerRequest(
         "name":"recipient_1",
         "$preferred_language": "en",
 				"$timezone": "America/New_York"
+        "$skip_create": true
       },
       # notify object 
       {
         "object_type": "teams",
         "id":"finance"
+        "$skip_create": true
       }
     ],
     "data":{
@@ -89,42 +92,48 @@ print(response)
 
 
 ```javascript Node
-const {Suprsend, WorkflowTriggerRequest} = require("@suprsend/node-sdk");
+const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
 const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
 
 // Prepare workflow payload
 const body = {
-    "workflow": "_workflow_slug_",
-    "actor": {
-      "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-      "name":"actor_1"
+  "workflow": "_workflow_slug_",
+  "actor": {
+    "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+    "name": "actor_1",
+    "$skip_create": true
+  },
+  "recipients": [
+    // notify user 
+    {
+      "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
+      "$email": ["abc@example.com"],
+      "name": "recipient_1",
+      "$preferred_language": "en",
+      "$timezone": "America/New_York",
+      "$skip_create": true
     },
-    "recipients": [
-      // notify user 
-      {
-        "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-        "$email":["abc@example.com"],
-        "name":"recipient_1",
-        "$preferred_language": "en",
-				"$timezone": "America/New_York"
-      },
-      // notify object 
-      {
-        "object_type": "teams",
-        "id":"finance"
-      }
-    ],
-    "data":{
-      "first_name": "User",
-      "invoice_amount": "$5000",
-      "invoice_id":"Invoice-1234"
+    // notify object 
+    {
+      "object_type": "teams",
+      "id": "finance",
+      "$skip_create": true
     }
-}
-const w1 = new WorkflowTriggerRequest(body, {tenant_id: "tenant_id1",
-    idempotency_key: "_unique_identifier_of_the_request_"})
+  ],
+  "data": {
+    "first_name": "User",
+    "invoice_amount": "$5000",
+    "invoice_id": "Invoice-1234"
+  }
+};
+
+const w1 = new WorkflowTriggerRequest(body, {
+  tenant_id: "tenant_id1",
+  idempotency_key: "_unique_identifier_of_the_request_"
+});
 
 // Trigger workflow
-const response = supr_client.workflows.trigger(w1);    
+const response = supr_client.workflows.trigger(w1);
 response.then(res => console.log("response", res));
 ```
 
@@ -133,64 +142,67 @@ response.then(res => console.log("response", res));
 package main
 
 import (
-  "log"
-  suprsend "github.com/suprsend/suprsend-go"
+	"log"
+	suprsend "github.com/suprsend/suprsend-go"
 )
 
 // Initialize SDK
 func main() {
-  suprClient, err := suprsend.NewClient("_workspace_key_", "_workspace_key_")
-  if err != nil {
-    log.Println(err)
-  }
-  _ = suprClient
-  triggerWorkflowAPI(suprClient)
+	suprClient, err := suprsend.NewClient("_workspace_key_", "_workspace_secret_")
+	if err != nil {
+		log.Println(err)
+	}
+	_ = suprClient
+	triggerWorkflowAPI(suprClient)
 }
 
 func triggerWorkflowAPI(suprClient *suprsend.Client) {
 
-  // Create WorkflowRequest body
-  wfReqBody := map[string]interface{}{
-    "workflow": "_workflow_slug_",
-    "actor": map[string]interface{}{
-      "distinct_id":  "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-      "name":          "actor_1",
-    },
-    "recipients": []map[string]interface{}{
-      // notify user 
-      {
-        "distinct_id":  "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-        "$email": []string{"abc@example.com"},
-        "name":"recipient_1",
-        "$preferred_language": "en",
-				"$timezone": "America/New_York"
-      },
-      // notify object 
-      {
-        "object_type": "teams",
-        "id":"finance"
-      }
-    },
-    // # data can be any json / serializable python-dictionary
-    "data": map[string]interface{}{
-      "first_name":    "User",
-      "invoice_amount": "$5000",
-      "invoice_id":"Invoice-1234",
-      "spend_amount":  "$10",
-    },
-  }
+	// Create WorkflowRequest body
+	wfReqBody := map[string]interface{}{
+		"workflow": "_workflow_slug_",
+		"actor": map[string]interface{}{
+			"distinct_id":  "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+			"name":         "actor_1",
+			"$skip_create": true,
+		},
+		"recipients": []map[string]interface{}{
+			// notify user
+			{
+				"distinct_id":         "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
+				"$email":              []string{"abc@example.com"},
+				"name":                "recipient_1",
+				"$preferred_language": "en",
+				"$timezone":           "America/New_York",
+				"$skip_create":        true,
+			},
+			// notify object
+			{
+				"object_type":  "teams",
+				"id":           "finance",
+				"$skip_create": true,
+			},
+		},
+		// data can be any json/serializable map structure
+		"data": map[string]interface{}{
+			"first_name":    "User",
+			"invoice_amount": "$5000",
+			"invoice_id":    "Invoice-1234",
+			"spend_amount":  "$10",
+		},
+	}
 
-  w1 := &suprsend.WorkflowTriggerRequest{
-    Body: wfReqBody,
-    TenantId: "tenant_id1",
-    IdempotencyKey: "_unique_identifier_of_the_request_",
-  }
-  // Call Workflows.Trigger to send request to Suprsend
-  resp, err := suprClient.Workflows.Trigger(w1)
-  if err != nil {
-    log.Fatalln(err)
-  }
-  log.Println(resp)
+	w1 := &suprsend.WorkflowTriggerRequest{
+		Body:           wfReqBody,
+		TenantId:       "tenant_id1",
+		IdempotencyKey: "_unique_identifier_of_the_request_",
+	}
+	// Call Workflows.Trigger to send request to Suprsend
+	resp, err := suprClient.Workflows.Trigger(w1)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Println(resp)
 }
 ```
 
@@ -233,20 +245,23 @@ public class Workflow {
       .put("actor", new JSONObject()
            .put("distinct_id", "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08")
            .put("name", "actor_1")
+           .put("$skip_create", true)
           )
       .put("recipients", new JSONArray()
-           //notify user
+           // notify user
            .put(new JSONObject()
                 .put("distinct_id", "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09")
                 .put("$email", Arrays.asList("abc@example.com"))
                 .put("name", "recipient_1")
                 .put("$preferred_language", "en")
-				        .put("$timezone", "America/New_York")
+                .put("$timezone", "America/New_York")
+                .put("$skip_create", true)
                )
-					 //notify object
+           // notify object
            .put(new JSONObject()
                 .put("object_type", "teams")
                 .put("id", "finance")
+                .put("$skip_create", true)
                )
           )
       .put("data", new JSONObject()
@@ -271,32 +286,41 @@ curl --request POST \
 {
   "workflow": "_workflow_slug_",
   "actor": {
-      "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-      "name":"actor_1"
+    "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+    "name": "actor_1",
+    "$skip_create": true
+  },
+  "recipients": [
+    {
+      "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
+      "$email": ["abc@example.com"],
+      "name": "recipient_1",
+      "$preferred_language": "en",
+      "$timezone": "America/New_York",
+      "$skip_create": true
     },
-    "recipients": [
-      {
-        "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-        "$email":["abc@example.com"],
-        "name":"recipient_1",
-        "$preferred_language": "en",
-				"$timezone": "America/New_York"
-      },
-      {
-        "object_type": "teams",
-        "id":"finance"
-      }
-    ],
-    "data":{
-      "first_name": "User",
-      "invoice_amount": "$5000",
-      "invoice_id":"Invoice-1234"
+    {
+      "object_type": "teams",
+      "id": "finance",
+      "$skip_create": true
     }
- }
+  ],
+  "data": {
+    "first_name": "User",
+    "invoice_amount": "$5000",
+    "invoice_id": "Invoice-1234"
+  }
+}
 '
 ```
 
 </CodeGroup>
+
+  <Note>
+    To prevent automatic creation of an actor, or recipient (user/object) in SuprSend (the case where they already exist in your system), you can use the `"$skip_create": true` flag.
+
+This can be applied inside the actor, individual user recipient objects, or object recipient objects.
+  </Note>
 
 **Payload Schema**
 
@@ -310,6 +334,7 @@ curl --request POST \
 | `idempotency_key`                  | string                             | unique identifier of the request. We'll be returning idempotency_key in our [outbound webhook response](/docs/outbound-webhook). You can use it to map notification statuses and replies in your system.                                                                                                                                                                             |
 | `recipients[].$timezone`           | string                             | to set recipient's timezone. Used to send notification in user's local timezone. You can pass timezone in [IANA (TZ identifier)](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List) format.                                                                                                                                                                          |
 | `recipients[].$preferred_language` | string                             | to set recipient's preferred language. This is to support localization in notification content. You can pass the language in `ISO 639-1 2-letter` format. [Refer all language codes here](https://github.com/suprsend/suprsend-py-sdk/blob/main/src/suprsend/language_codes.py).                                                                                                     |
+| `$skip_create` | boolean | Optional flag that can be used inside `actor`, or recipient payloads including both `user`, or `object`. When set to `true`, SuprSend will **not create the user or object** if it doesn’t already exist in the system. |
 
 ### Identifying recipients inline
 

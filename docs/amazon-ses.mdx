@@ -3,216 +3,294 @@ title: "Amazon SES"
 description: "This section is a step by step guide to select Amazon SES as your email service provider. "
 ---
 
-This guide assumes you have access to AWS console and have necessary permissions. If you don't have an AWS account, then you can [create here](https://aws.amazon.com/resources/create-account/).
+## Prerequisites
 
-## Amazon SES integration on SuprSend account
+Before you begin, ensure you have:
+- An AWS account with administrative access
+- Necessary permissions to create IAM roles/users and SES resources
+- Access to AWS Console
 
-Follow below steps to integrate your Amazon SES account with SuprSend:
+If you don't have an AWS account, you can [create one here](https://aws.amazon.com/resources/create-account/).
 
-<Steps>
-  <Step title="Create AWS IAM user">
-    To send email through SES, you need an IAM user (Access-Key-ID and Secret-Access-Key) with necessary permission. To create an IAM user, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
+## Authentication Options
 
-    * Create an IAM user (with Programmatic access).
+SuprSend supports two authentication methods for Amazon SES integration:
 
-    * Attach Policy`AmazonSESFullAccess `to this user.
+### IAM Role (Recommended)
 
-    * Copy and save the `Access-key-ID`and`Secret-Access-Key`securely. You'll need to add this information on SuprSend vendor integration page
+  IAM Role-based authentication is the recommended approach as it:
+    - Provides temporary, scoped access
+    - Eliminates the need for long-term credentials
+    - Follows security best practices
 
-    An AWS SES resource resides in a particular region. Make a note of which aws-region you are going to use for sending emails. In this guide, we'll assume aws-region :`ap-south-1` for all illustrative purposes.
-  </Step>
-
-  <Step title="Create SES Verified Identity">
-    Open AWS SES console. Go to `Verified Identities` tab. You can add an email-address or a domain/subdomain as an identity. Follow this [documentation](https://docs.aws.amazon.com/ses/latest/dg/creating-identities.html) to understand what an identity is and how to create and verify one.
-  </Step>
-
-  <Step title="Create Configuration Set">
-    Configuration-set is a ruleset applied to send-email. In configuration-set you can specify to track events (e.g. send, delivery, open, click, bounce, complaint etc.) and send these to an event destination. Refer to the documentation on how to [create configuration sets](https://docs.aws.amazon.com/ses/latest/dg/creating-configuration-sets.html).
-
-    In SES console, go to `Configuration sets`
-
-    1. Click`create set`button to create a new configuration-set
-
-    2. Give it a name (e.g.`ses_suprsend_configset`)
-
-    3. Select your Sending IP-pool (you can leave`default`if you don't have a dedicated-IP-pool).
-
-    4. Click`Create Set`button.
-  </Step>
-
-  <Step title="Manange Event destinations">
-    After creating configuration-set, you'll see a tab "Event Destinations". Email-sending events (send, delivery, open, click, bounce, complaint etc.) will end up in the events destination. Reference documentations:
-
-    * [**Creating Amazon SES event destinations**](https://docs.aws.amazon.com/ses/latest/dg/event-destinations-manage.html)
-
-    * [Setup SNS event destination for event Publishing](https://docs.aws.amazon.com/ses/latest/dg/event-publishing-add-event-destination-sns.html)
-
-    **Steps to follow for setting up Event Destination and enable Event Tracking:**
-
-    <Steps>
-      <Step title="Select the Event Types">
-        Go to`Event Destinations`tab and click`Add destination`In "Select event types" step, click`Select all`button to received all the events to destination. Click on Next.
-      </Step>
-
-      <Step title="Go to &#x22;Specify Destination&#x22;">
-        In "`Specify destination`" step.
-
-        1. Select Destination Type:`Amazon SNS`.
-
-        2. Enter a destination Name (e.g`ses_suprsend_configset_destination`)
-
-        3. Make sure`Event publishing`is marked`Enabled`.
-
-        4. Select an SNS topic from the dropdown (or create a new topic) for events destination.
-
-        5. To create a topic, click` Create SNS topic`. In the popup, put `Topic Name` and `Display Name`
-
-        6. Click `Create`.
-
-        7. Now from the dropdown, select the topic you just created.
+    <AccordionGroup>
+    <Accordion title="Creating IAM Role" defaultOpen={true}>
         
-        8. Click on Next
-      </Step>
+      <Steps>
+        <Step title="Create Policy">
+          <Note>
+            If you're using IAM-role authentication at multiple places inside SuprSend, you can consolidate all permission statements within a single policy.
+          </Note>
 
-      <Step title="Verify information">
-       In the `Review` step, verify the info. Click Add destination
-      </Step>
+            * Navigate to IAM console.
+            * Select `Policies` tab.
+            * Click `Create Policy`.
+            * Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["ses:SendEmail", "ses:SendRawEmail"]``.
+              For simplicity, choose "JSON editor" and replace the existing content with below JSON.
+                <CodeGroup>
+                  ```json IAM Role Policy
+                  {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                        {
+                          "Sid": "AllowSesSendActions",
+                          "Effect": "Allow",
+                          "Action": [
+                              "ses:SendEmail",
+                              "ses:SendBulkEmail",
+                              "ses:SendRawEmail"
+                          ],
+                          "Resource": "*"
+                        }
+                      ]
+                    }
+                  ```
+                </CodeGroup>
 
-    </Steps>
-
-    Now that you've created a configuration-set to send emails and have specified to receive its events to an SNS-topic, next step is to give SuprSend permission to subscribe to this SNS-topic.
-
-    AWS provides functionality where a different AWS account (in this case SuprSend) can subscribe to an SNS-topic in your account. For more details, [checkout here](https://docs.aws.amazon.com/sns/latest/dg/sns-send-message-to-sqs-cross-account.html).
-  </Step>
-
-  <Step title="Give SuprSend permission to Subscribe to SNS topic." stepNumber="5">
-    Go to AWS SNS Console and open Topics list. Click on the topic that you created in the earlier step.
-
-    <Steps>
-      <Step title="Click on`Edit`">
-        On the edit page, expand the`Access Policy`section. The policy looks something like below. You'll notice that the current policy gives`sns:Publish`permission to your SES account.
-
-        <CodeGroup>
-          ```json Amazon SNS Console
-           	 {
-          	  "Version": "2008-10-17",
-          	  "Statement": [
-          	    {
-          	      "Sid": "stmt1651045546197",
-          	      "Effect": "Allow",
-          	      "Principal": {
-          	        "Service": "ses.amazonaws.com"
-          	      },
-          	      "Action": "sns:Publish",
-          	      "Resource": "arn:aws:sns:topic_region:111122223333:topic_name",
-          	      "Condition": {
-          	      	"StringEquals": {
-          	          "AWS:SourceAccount": "111122223333"
-          	        },
-          	        "StringLike": {
-          	          "AWS:SourceArn": "arn:aws:ses:*"
-          	        }
-          	      }
-          	    }
-          	  ]
-          	}
-          ```
-        </CodeGroup>
-      </Step>
-
-      <Step title="Add policy to give`sns:Subscribe`permission">
-        Next you need to add a policy to give`sns:Subscribe`permission to SuprSend (Account: 924219879248). Add below json inside the`Statement`list: (replace the "`Resource`" value with your "Resource" value)
-
-        <CodeGroup>
-          ```json Amazon SNS Console
-          {
-              "Effect":"Allow",
-              "Principal":{
-                  "AWS":"924219879248"
-              },
-              "Action":"sns:Subscribe",
-              "Resource":"arn:aws:sns:topic_region:111122223333:topic_name"
-          }
-          ```
-        </CodeGroup>
-
-        So in effect, the whole policy would look like:
-        <CodeGroup>
-          ```json Amazon SNS Console
-          	{
-          	  "Version": "2008-10-17",
-          	  "Statement": [
-          	    {
-          	      "Sid": "stmt1651045546197",
-          	      "Effect": "Allow",
-          	      "Principal": {
-          	        "Service": "ses.amazonaws.com"
-          	      },
-          	      "Action": "sns:Publish",
-          	      "Resource": "arn:aws:sns:topic_region:111122223333:topic_name",
-          	      "Condition": {
-          	      	"StringEquals": {
-          	          "AWS:SourceAccount": "111122223333"
-          	        },
-          	        "StringLike": {
-          	          "AWS:SourceArn": "arn:aws:ses:*"
-          	        }
-          	      }
-          	    },
-          	    {
-          		    "Effect":"Allow",
-          		    "Principal":{
-          		      "AWS":"924219879248"
-          		    },
-          		    "Action":"sns:Subscribe",
-          		    "Resource":"arn:aws:sns:topic_region:111122223333:topic_name"
-          		}
-          	  ]
-          	}
-          ```
-        </CodeGroup>
-        
-      </Step>
-      <Step title="Click Save">
+            * Name your policy (e.g., `suprsend_trust_role_policy`).
+            * Add an optional description.
+            * Click `Create Policy`. This will create a policy with the above permissions.
         </Step>
+        <Step title="Create IAM Role">
+            * Go to IAM console → `Roles` tab
+            * Click `Create Role`
+            * Select `Another AWS Account` as trusted entity
+            * Enter SuprSend's AWS account ID: `924219879248`
+            * Select the policy created in step 1
+            * Name your role (e.g., `suprsend_trust_role`)
+            * Review and create the role
+        </Step>
+        <Step title="Verify Role Configuration">
+            * Navigate to your created role
+            * Check Trust Relationships tab
+            * Verify the trust policy matches:
+              <CodeGroup>
+              ```json
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "arn:aws:iam::924219879248:root"
+                        },
+                        "Action": "sts:AssumeRole",
+                        "Condition": {
+                            "StringEquals": {
+                                "sts:ExternalId": "<uniq-id-entered-by-user>"
+                            }
+                        }
+                    }
+                ]
+              }
+              ```
+              </CodeGroup>
+          <Note> 
+            Important: 
+            - Principal must be SuprSend's AWS account ID: "924219879248"
+            - ExternalId should match the unique ID entered during role creation
+          </Note>
+        
+            * Save the following information for SuprSend setup:
+            - Role ARN
+            - External ID
+            - Maximum session duration
+        </Step>
+      </Steps>
+    </Accordion>
+    </AccordionGroup>
 
-    </Steps>
-  </Step>
+    <AccordionGroup>
+    <Accordion title="Creating IAM User" defaultOpen={false}>
+      Follow these steps to create an IAM user with programmatic access:
 
-  <Step title="Fill Vendor settings page on Suprsend" stepNumber="6">
-    On the SuprSend dashboard, go to vendor page from side panel and click Email -> Amazon SES from the list of Vendors. This will open vendor details page as shown below:
+        1. Create an [IAM user with Programmatic access](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html)
+        2. Attach `AmazonSESFullAccess` policy
+        3. Save the `Access-key-ID` and `Secret-Access-Key` securely
 
-    ![](/images/docs/82ef816-Screenshot_2022-08-25_at_6.28.31_PM.png)
+        <Note>
+          Make note of your AWS region (e.g., `ap-south-1`) as it will be needed for configuration.
+        </Note>
+    </Accordion>
+    </AccordionGroup>
 
-    Here's a description on what each of these form fields describe:
-    | Form Field             | Description                                                                                                                                                                                                                                                                                                                   |
-    | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | Nickname               | You can give any name which may help you to identify this account easily. For example - *AWS SES \[Production]*                                                                                                                                                                                                               |
-    | From Email             | Default 'From Email ID' that email will go from. You can override this in the individual template.\*eg. [support@suprsend.com](mailto:support@suprsend.com)                                                                                                                                                                   |
-    | From Name              | Default 'From Name' that email will go from. You can override this in the individual template.*eg. SuprSend*                                                                                                                                                                                                                  |
-    | Reply Address          | Default 'Reply To Email id' on which replies are received. You can override this in the individual template.\*eg. [support@suprsend.com](mailto:support@suprsend.com)                                                                                                                                                         |
-    | AWS region             | aws-region you are going to use for sending emails.                                                                                                                                                                                                                                                                           |
-    | Access Key ID          | Access key ID of the IAM user with full access. [Refer step](/docs/amazon-ses#step-1-create-aws-iam-user) to create a new IAM user and generate access key.                                                                                                                                                                   |
-    | Secret Access Key      | `Secret-Access-Key` of the IAM user with full access. [Refer step](/docs/amazon-ses#step-1-create-aws-iam-user) to create a new IAM user and generate access key.                                                                                                                                                             |
-    | Configuration Set      | Configuration-set is used to track email events (e.g. send, delivery, open, click, bounce, complaint etc.). [Refer Step](/docs/amazon-ses#step-3-create-configuration-set) to define configuration set.                                                                                                                       |
-    | SNS Topic ARN          | This is the destination where the tracked events will be sent. Configuration set defines what events to be tracked and setting the topic allows SuprSend to receive these events. [Follow step 4 & 5](/docs/amazon-ses#step-4-manange-event-destinations) to setup SNS topic and give SuprSend permission to subscribe to it. |
-    | Price per notification | This is the amount you pay per email notification to AWS. It helps us to calculate, estimate and optimise your cost spent on notifications.                                                                                                                                                                                   |
+## Integration Steps to connect AWS SES with SuprSend
 
-  </Step>
-</Steps>
+  <Steps>
+    <Step title="Create SES Verified Identity">
+      * Open AWS SES console
+      * Navigate to `Verified Identities` tab
+      * Add and verify either:
+        - An email address
+        - A domain/subdomain
+      * Follow [AWS documentation](https://docs.aws.amazon.com/ses/latest/dg/creating-identities.html) for detailed steps
+    </Step>
+    <Step title="Create Configuration Set">
+      Configuration-set is a ruleset applied to send-email. In configuration-set you can specify to track events (e.g. send, delivery, open, click, bounce, complaint etc.) and send these to an event destination. Refer to the documentation on how to [create configuration sets](https://docs.aws.amazon.com/ses/latest/dg/creating-configuration-sets.html).
+
+      * Go to SES console → `Configuration sets`
+      * Click `Create set`
+      * Configure:
+        - Name: `ses_suprsend_configset`
+        - IP Pool: Select your pool or use `default`
+      * Click `Create Set`
+    </Step>
+
+    <Step title="Manage Event Destinations">
+      Event destinations are used to send email delivery events to SuprSend for tracking notification status (send, delivery, open, click, bounce, complaint etc.) for logs and analytics. To setup event destination,
+        * Select your configuration set
+        * Go to `Event Destinations` tab
+        * Click `Add destination`
+        * Configure:
+          - Event Types: Select all
+          - Destination Type: Amazon SNS
+          - Enter a destination Name. eg: `ses_suprsend_configset_destination`
+          - Make sure`Event publishing`is marked`Enabled`.
+          - Select an SNS topic from the dropdown (or create a new topic) for events destination.
+        * Review and add destination
+    </Step>
+
+    <Step title="Configure SNS Topic Permissions">
+      After setting up the configuration set and SNS topic for email events, you'll need to grant SuprSend permission to subscribe to your SNS topic. This is done through AWS's cross-account SNS subscription feature, which allows external AWS accounts (like SuprSend's) to receive notifications from your SNS topics. For detailed information about cross-account SNS subscriptions, see the [AWS documentation](https://docs.aws.amazon.com/sns/latest/dg/sns-send-message-to-sqs-cross-account.html).
+
+        * Go to SNS Console → Topics
+        * Select the topic created in previous step
+        * Edit Access Policy
+        * On the edit page, expand the`Access Policy`section. The policy looks something like below. You'll notice that the current policy gives`sns:Publish`permission to your SES account.
+
+      <CodeGroup>
+        ```json Amazon SNS Console
+            {
+            "Version": "2008-10-17",
+            "Statement": [
+              {
+                "Sid": "stmt1651045546197",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ses.amazonaws.com"
+                },
+                "Action": "sns:Publish",
+                "Resource": "arn:aws:sns:topic_region:111122223333:topic_name",
+                "Condition": {
+                  "StringEquals": {
+                    "AWS:SourceAccount": "111122223333"
+                  },
+                  "StringLike": {
+                    "AWS:SourceArn": "arn:aws:ses:*"
+                  }
+                }
+              }
+            ]
+          }
+        ```
+      </CodeGroup>
+    </Step>
+
+    <Step title="Add policy to give`sns:Subscribe`permission">
+      Next you need to add a policy to give`sns:Subscribe`permission to SuprSend (Account: 924219879248). Add below json inside the`Statement`list: (replace the "`Resource`" value with your "Resource" value)
+
+      <CodeGroup>
+        ```json Amazon SNS Console
+        {
+            "Effect":"Allow",
+            "Principal":{
+                "AWS":"924219879248"
+            },
+            "Action":"sns:Subscribe",
+            "Resource":"arn:aws:sns:topic_region:111122223333:topic_name"
+        }
+        ```
+      </CodeGroup>
+
+      So in effect, the whole policy would look like this. Verify the policy and click on `Save`.
+      <CodeGroup>
+        ```json Amazon SNS Console
+          {
+            "Version": "2008-10-17",
+            "Statement": [
+              {
+                "Sid": "stmt1651045546197",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ses.amazonaws.com"
+                },
+                "Action": "sns:Publish",
+                "Resource": "arn:aws:sns:topic_region:111122223333:topic_name",
+                "Condition": {
+                  "StringEquals": {
+                    "AWS:SourceAccount": "111122223333"
+                  },
+                  "StringLike": {
+                    "AWS:SourceArn": "arn:aws:ses:*"
+                  }
+                }
+              },
+              {
+                "Effect":"Allow",
+                "Principal":{
+                  "AWS":"924219879248"
+                },
+                "Action":"sns:Subscribe",
+                "Resource":"arn:aws:sns:topic_region:111122223333:topic_name"
+            }
+            ]
+          }
+        ```
+      </CodeGroup>
+      
+    </Step>
+  </Steps>
+
+  <Steps>
+
+    <Step title="Fill Vendor settings page on Suprsend" stepNumber="6">
+      On the SuprSend dashboard, go to vendor page from side panel and click Email -> Amazon SES from the list of Vendors. This will open vendor details page as shown below:
+
+      ![](/images/docs/82ef816-Screenshot_2022-08-25_at_6.28.31_PM.png)
+
+      Here's a description on what each of these form fields describe:
+      | Form Field             | Description                                                                                                                                                                                                                                                                                                                   |
+      | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+      | Nickname               | You can give any name which may help you to identify this account easily. For example - *AWS SES \[Production]*                                                                                                                                                                                                               |
+      | From Email             | Default 'From Email ID' that email will go from. You can override this in the individual template.\*eg. [support@suprsend.com](mailto:support@suprsend.com)                                                                                                                                                                   |
+      | From Name              | Default 'From Name' that email will go from. You can override this in the individual template.*eg. SuprSend*                                                                                                                                                                                                                  |
+      | Reply Address          | Default 'Reply To Email id' on which replies are received. You can override this in the individual template.\*eg. [support@suprsend.com](mailto:support@suprsend.com)                                                                                                                                                         |
+      | AWS region             | aws-region you are going to use for sending emails.                                                                                                                                                                                                                                                                           |
+      | Access Key ID          | Access key ID of the IAM user with full access. [Refer step](/docs/amazon-ses#step-1-create-aws-iam-user) to create a new IAM user and generate access key.                                                                                                                                                                   |
+      | Secret Access Key      | `Secret-Access-Key` of the IAM user with full access. [Refer step](/docs/amazon-ses#step-1-create-aws-iam-user) to create a new IAM user and generate access key.                                                                                                                                                             |
+      | Configuration Set      | Configuration-set is used to track email events (e.g. send, delivery, open, click, bounce, complaint etc.). [Refer Step](/docs/amazon-ses#step-3-create-configuration-set) to define configuration set.                                                                                                                       |
+      | SNS Topic ARN          | This is the destination where the tracked events will be sent. Configuration set defines what events to be tracked and setting the topic allows SuprSend to receive these events. [Follow step 4 & 5](/docs/amazon-ses#step-4-manange-event-destinations) to setup SNS topic and give SuprSend permission to subscribe to it. |
+      | Price per notification | This is the amount you pay per email notification to AWS. It helps us to calculate, estimate and optimise your cost spent on notifications.                                                                                                                                                                                   |
+
+    </Step>
+  </Steps>
 
 
 ## Setting Amazon SES event tracking
 
-One of the platform advantage of using SuprSend as a central communication system is that it shows notification analytics for all channels in your SuprSend account together. For enabling event tracking at SuprSend (such as delivery, opened, blocked, spam etc.), you'll have to `sns:Subscribe`action to SuprSend.
+  One of the platform advantage of using SuprSend as a central communication system is that it shows notification analytics for all channels in your SuprSend account together. For enabling event tracking at SuprSend (such as delivery, opened, blocked, spam etc.), you'll have to `sns:Subscribe`action to SuprSend.
 
-Once you've given `sns:Subscribe` Action permission (to SuprSend AWS Account) on your SNS-topic, suprsend will attempt to create a subscription on that topic. Once subscription succeeds, you should see successfully "Subscribed" to topic when you visit the Vendor settings page. Email Tracking should start working.
+  Once you’ve filled in the required fields and saved your changes on the vendor configuration page in the SuprSend platform, you’ll need to manually click the `Subscribe` button to initiate the subscription to your specified SNS Topic ARN. This step is necessary to enable Email Tracking and ensure that notification delivery and failure logs are properly tracked.
+
+  If any changes are made to the SNS configuration after a successful subscription, you can click the `Resubscribe` button to re-establish the subscription using the latest configuration. This ensures your email tracking setup stays consistent and up to date.
+
+  Successfully Subscription as:
+  ![](/images/docs/subscribe-amazon-ses.png)
 
 ## How to add Unsubscription link in email
 
-It's recommended to allow recipients to unsubscribe from emails. You can use SuprSend’s [hosted preference page](/docs/user-preferences#hosted-preference-page) for giving granular control to your users, allowing them to manage preferences per category while also reducing unnecessary vendor API calls for opt-outs.
+  It's recommended to allow recipients to unsubscribe from emails. You can use SuprSend’s [hosted preference page](/docs/user-preferences#hosted-preference-page) for giving granular control to your users, allowing them to manage preferences per category while also reducing unnecessary vendor API calls for opt-outs.
 
-**Why it's important to give unsubscribe option in email?**
+  **Why it's important to give unsubscribe option in email?**
 
-First, it is required by the [CAN-Spam Act](https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business). Second, if you don’t give them this option, they are more likely to click on the spam complaint button, which will cause more harm than allowing them to unsubscribe. Finally, many ESPs look for unsubscribe links and are more likely to filter your email if they don’t have them.
-
+  First, it is required by the [CAN-Spam Act](https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business). Second, if you don’t give them this option, they are more likely to click on the spam complaint button, which will cause more harm than allowing them to unsubscribe. Finally, many ESPs look for unsubscribe links and are more likely to filter your email if they don’t have them.
