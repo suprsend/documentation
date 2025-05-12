@@ -69,9 +69,9 @@ If the user hasn't set preferences in a category, the system sends notifications
 
 You can set following default preferences at category level:
 
-1. \*\*On \*\*: opt-in on all channels
-2. \*\*Off \*\*: opt-out on all channels
-3. \*\*Can't Unsubscribe\*\*: Use this to prevent users from opting out of critical notification categories, such as anomaly alerts or important transactions (e.g., completed trades, payments). The `opt-out` channel doesn't block notifications from mandatory channels in this category.
+1. **On** : opt-in on all channels
+2. **Off** : opt-out on all channels
+3. **Can't Unsubscribe** : Use this to prevent users from completely opting out of critical notification categories, such as anomaly alerts or important transactions (e.g., completed trades, payments). Channel `opt-out` of does not block notifications from mandatory channels in this category.
 
 ### Map category to notifications
 
@@ -132,27 +132,57 @@ Additionally to the preference center within SuprSend, communication channels pr
 
 ### **Controlling what categories to show on UI**
 
-In a multi-tenant system, tenants manage which notifications are visible to their end users. e.g., a company administrator might want to set notification preferences for their team, ensuring that team members see only categories relevant to them or those they're opted into by the administrator. Set `visible_to_subscriber` to `false` in the default tenant preferences to control this behavior.
+It is always a good practice to show only the categories that are relevant to the user. There are 2 ways to achieve this:
+1. **Turning off category visibility for all users of a tenant**: In a multi-tenant setup, if tenants or admins decide what categories their users should see, you can control this via the `visible_to_subscriber: false` flag in default [tenant preferences](/reference/update-tenant-default-preference).
 
-You can control the same for your tenants by turning off category preference from the SuprSend console. For instance, if you operate a SaaS platform where customers access different services or products based on their pricing plans, you can ensure that users see only the categories available to them.
+2. **Setting custom preference UI for each user**: Use tags to show categories based on user roles, departments, or teams. These tags can then be used to filter categories in preference center.
 
-## Preference evaluation
+<Steps>
+<Step title="Setting Preference tags">
+Tags can be added to categories and sections directly from the SuprSend Console → Preference Page. When a tag is assigned at the section level, it automatically applies to all categories under that section—so filtering by a section tag also filters its child categories.
+![Tags Within Preference Categories](/images/preference-tag-changelog.png)
+
+</Step>
+
+<Step title="Filter Categories with Tags">
+You can filter categories using the tags query parameter in the API. This can be a simple tag match (e.g. `tags=tag1`) or a more advanced filter using logical operators.
+
+Supported operators:
+
+| Operator | Operand Datatype | Description | Example |
+----- | ------ | ------- | ------- |
+|`exists` | boolean | Returns categories where any tag is set | `tags={"exists":true}` |
+|`not` | string | Excludes categories that have the specified tag | `tags={"not":"admin"}` |
+|`or` | array | return categories that have any of the mentioned tags | `tags={"or":["sales","marketing"]}` |
+|`and` | array | return categories that have all the mentioned tags| `tags={"and":["sales","manager"]}` |
+
+You can combine these operators for nested filtering like `tags={"or":[{"and":["sales","manager"]},{"and":["marketing","associate"]}]}`.
+
+</Step>
+</Steps>
+
+## Preference evaluation at runtime
 
 When a workflow triggers, SuprSend evaluates preferences for each recipient before each delivery node.
 
-### Evaluating Recipient Preferences
+<Steps>
+  <Step title="Evaluating Recipient preferences">
 
 If recipient preferences aren't set, the system picks the default preference setting. Once the user sets a preference in a category, changes to the default preference of existing categories won't affect recipient preferences.
 
-### Factoring in tenant preferences
+  </Step>
+  <Step title="Factoring in tenant preferences">
 
-If you're triggering notification for a tenant, tenant default preference setting takes precedence over default preference set at category level.
+If you are triggering notification for a tenant, [tenant default preference](/docs/tenant-preference) setting takes precedence over default preference set at category level.
 
-### Resolving preference conflicts
+  </Step>
+  <Step title="Resolving preference conflicts">
 
-The order of precedence always states as: user > tenant > org (set in notification category settings). If you turn off notifications in a category from the [tenant page](https://app.suprsend.com/en/demo/tenants), users won't receive notifications in that category.
+The order of precedence is always `user > tenant > org` (set in notification category settings). However, if you turn off notifications in a category from the [tenant page](https://app.suprsend.com/en/demo/tenants), users will not receive notifications in that category.
 
-### Debugging preference evaluation in workflow runs
+  </Step>
+
+  <Step title="Debugging preference evaluation in workflow runs">
 
 User preferences can change over time, and when checking a workflow run, you need to know what user preferences were at that time. You can view this using the step-by-step debugger in [workflow executions](https://app.suprsend.com/en/demo/logs/executions/?last_n_minutes=1440).
 
@@ -160,13 +190,12 @@ User preferences can change over time, and when checking a workflow run, you nee
 
 You can also track when user updated their preference by filtering on `Subscriber preference update` in [request logs](https://app.suprsend.com/en/demo/logs/api/?last_n_minutes=1440).
 
-## Tenant Preference
-
-In multi-tenant B2B and B2B2C products, you can use [tenant preference](/docs/tenant-preference) to allow company admins setting preference for their internal team / departments or your enterprise customers setting preference for their end users.
+  </Step>
+</Steps>
 
 ---
 
-### Frequently asked questions
+## Frequently asked questions
 
 <AccordionGroup>
   <Accordion title="How to setup digest schedule in my preferences?">
