@@ -28,27 +28,45 @@ description: "This document guides you to integrate apns push notification in re
     ![](/images/docs/75c5310-Screenshot_2022-09-27_at_1.48.11_PM.png)
   </Step>
 
-  <Step title="AppDelegate.h file changes in iOS folder">
-    Add the below code in AppDelegate.h file inside iOS folder
+  <Step title="Register for push notifications">
+    Call *registerForPushNotifications* method below the SuprSend SDK initialised code which will register the iOS device for push service.
+    
+     If you have AppDelegate.m file then make follow code changes given in AppDelegate.h and AppDelegate.m file. If you have AppDelegate.swift file then make follow code changes given in AppDelegate.swift file.
 
     <CodeGroup>
-      ```objectivec AppDelegate.h
+    ```objectivec AppDelegate.h
       #import <UserNotifications/UserNotifications.h> // Add this
         
       @interface AppDelegate : UIResponder <UIApplicationDelegate, RCTBridgeDelegate, UNUserNotificationCenterDelegate> // Add UNUserNotificationCenterDelegate in the already existing line
       ```
+
+      ```objectivec AppDelegate.m
+      #import <UserNotifications/UserNotifications.h> // Add this
+
+      // ... existing code ...
+
+      [SuprSend.shared configureWithConfiguration:configuration launchOptions:launchOptions]; // init code which is already added at time of initialisation
+
+      UNAuthorizationOptions options = UNAuthorizationOptionAlert+UNAuthorizationOptionBadge+UNAuthorizationOptionSound;  // Add this
+      [SuprSend.shared registerForPushNotificationsWithOptions:options]; // Add this
+      ```
+
+      ```swift AppDelegate.swift
+      import UserNotifications // Add this
+
+      // extend AppDelegate with UNUserNotificationCenterDelegate
+      class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate { 
+          override func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+
+           // ... existing code ...
+
+           SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
+           var options: UNAuthorizationOptions = [.badge, .alert, .sound] // Add this
+           SuprSend.shared.registerForPushNotifications(options: options) // Add this
+          }
+      }
+      ```
     </CodeGroup>
-  </Step>
-
-  <Step title="Register for push notification in AppDelegate.m file">
-    Call *registerForPushNotifications* method below the SuprSend SDK initialised code which will register the iOS device for push service.
-
-    ```objectivec AppDelegate.m
-    [SuprSend.shared configureWithConfiguration:configuration launchOptions:launchOptions]; // init code which is already added at time of initialisation
-
-    UNAuthorizationOptions options = UNAuthorizationOptionAlert+UNAuthorizationOptionBadge+UNAuthorizationOptionSound;  // Add this
-    [SuprSend.shared registerForPushNotificationsWithOptions:options]; // Add this
-    ```
   </Step>
   
   <Step title="Asking User to send push notifications">
@@ -70,7 +88,7 @@ description: "This document guides you to integrate apns push notification in re
 
       ![](/images/docs/0367021-provisional.png)
 
-      Add below code in `AppDelegate.m` file for provisional authorization.
+      Add below code in `AppDelegate` file for provisional authorization.
 
       <CodeGroup>
         ```objectivec AppDelegate.m
@@ -82,12 +100,24 @@ description: "This document guides you to integrate apns push notification in re
         }
         [SuprSend.shared registerForPushNotificationsWithOptions:options]; // Add this
         ```
+
+        ```swift AppDelegate.swift
+       SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
+
+       var options: UNAuthorizationOptions = [.badge, .alert, .sound]
+
+       // If you want to use provisional authorization
+       if #available(iOS 12.0, *) {
+         options = [.badge, .alert, .sound, .provisional]
+       }
+       SuprSend.shared.registerForPushNotifications(options: options)
+        ```
       </CodeGroup>
     </Accordion>
   </Step>
 
   <Step title="Enable sending and tracking of push notifications">
-    To enable sending iOS APNS token to SuprSend backend, delivery and tracking of push notification delivery/clicks/dismiss events, add below code snippet at the end of **AppDelegate.m file** before *@end* at last line
+    To enable sending iOS APNS token to SuprSend backend, delivery and tracking of push notification delivery/clicks/dismiss events, add below 4 methods in **AppDelegate file** after last existing method.
 
     <CodeGroup>
       ```objectivec AppDelegate.m
@@ -105,16 +135,16 @@ description: "This document guides you to integrate apns push notification in re
       }
 
       - (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)notification withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler{
-            if (@available(iOS 14.0, *)) {
-              completionHandler(UNAuthorizationOptionSound | UNNotificationPresentationOptionBanner | UNAuthorizationOptionBadge);
-            } else {
-              completionHandler(UNAuthorizationOptionSound | UNAuthorizationOptionAlert | UNAuthorizationOptionBadge);
-            }
+          if (@available(iOS 14.0, *)) {
+            completionHandler(UNAuthorizationOptionSound | UNNotificationPresentationOptionBanner | UNAuthorizationOptionBadge);
+          } else {
+            completionHandler(UNAuthorizationOptionSound | UNAuthorizationOptionAlert | UNAuthorizationOptionBadge);
+          }
       }
 
       - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult result))completionHandler API_AVAILABLE(ios(7.0)){
-            [SuprSend.shared application:application didReceiveRemoteNotification:userInfo];
-        		completionHandler(UIBackgroundFetchResultNewData);
+          [SuprSend.shared application:application didReceiveRemoteNotification:userInfo];
+          completionHandler(UIBackgroundFetchResultNewData);
       }
 
       - (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(UNNotificationResponse *)response withCompletionHandler:(void(^)(void))completionHandler{
@@ -122,6 +152,41 @@ description: "This document guides you to integrate apns push notification in re
          [SuprSend.shared userNotificationCenter:center didReceive:response];
        }
        completionHandler();
+      }
+
+      @end // before this line
+      ```
+
+      ```swift AppDelegate.swift
+      override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
+        let  token = tokenParts.joined()
+        SuprSend.shared.setPushNotificationToken(token: token)  // Send APNS Token to SuprSend
+      }
+
+      @available(iOS 10.0, *)
+      func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+      ) {
+        if response.isSuprSendNotification() {
+          SuprSend.shared.userNotificationCenter(center, didReceive: response)
+        }
+        completionHandler()
+    }
+      
+      override func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]){
+        SuprSend.shared.application(application, didReceiveRemoteNotification: userInfo)
+      }
+          
+      @available(iOS 10.0, *)
+      func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        if #available(iOS 14.0, *) {
+          completionHandler([.banner, .badge, .sound])
+        } else {
+          completionHandler([.alert, .badge, .sound])
+        }
       }
       ```
     </CodeGroup>
