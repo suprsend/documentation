@@ -5,62 +5,61 @@ Available at https://docs.suprsend.com
 
 ### Mapping all the API-Endpoints to tags:
 
-| Endpoint (summary snippet)                    | Suggested Tag(s)     |
-| --------------------------------------------- | -------------------- |
-| Trigger an Event                              | Events               |
-| Create / Update Tenants                       | Tenants              |
-| Get Tenant data                               | Tenants              |
-| Delete Tenant                                 | Tenants              |
-| Get Tenant List                               | Tenants              |
-| Remove Subscribers from List                  | Lists                |
-| Get all Lists                                 | Lists                |
-| Create a List                                 | Lists                |
-| Dynamic Workflow Trigger                      | Workflows            |
-| All Categories (user preference)              | Preferences          |
-| Add Users to List                             | Lists                |
-| Get List configuration                        | Lists                |
-| Trigger Broadcast                             | Workflows            |
-| All Channels (user preference)                | Preferences          |
-| Overall Channel level (patch)                 | Preferences          |
-| Category and Channel within Category (patch)  | Preferences          |
-| Update Tenant Default Preference (patch)      | Preferences, Tenants |
-| Delete List (patch)                           | Lists                |
-| Single Category (get)                         | Preferences          |
-| Get Tenant Default Preference (get)           | Preferences, Tenants |
-| Add Users to Draft List                       | Lists                |
-| Delete Draft List (patch)                     | Lists                |
-| Fetch Template details                        | Templates            |
-| Finish Sync (patch)                           | Lists                |
-| Remove Subscribers from Draft List            | Lists                |
-| Start Sync                                    | Lists                |
-| Fetch Template content for a channel          | Templates            |
-| Fetch Template List                           | Templates            |
-| Trigger Workflow                              | Workflows            |
-| Bulk Update (subscriber preference)           | Preferences          |
-| Reset (subscriber preference)                 | Preferences          |
-| Full Preference (user)                        | Preferences          |
-| Get list subscribers                          | Lists                |
-| Create / Update Objects                       | Objects              |
-| Fetch Object by id                            | Objects              |
-| Delete an Object                              | Objects              |
-| Edit Object Profile                           | Objects              |
-| Add Subscription                              | Objects              |
-| List Object Subscriptions                     | Objects              |
-| Remove Object Subscriptions                   | Objects              |
-| List Objects by type                          | Objects              |
-| Category and Channel within Category (object) | Preferences, Objects |
-| Overall Channel level (object)                | Preferences, Objects |
-| All Channels (object)                         | Preferences, Objects |
-| Full Preference (object)                      | Preferences, Objects |
-| All Categories (object)                       | Preferences, Objects |
-| Single Category (object)                      | Preferences, Objects |
-| Create / Update Users                         | Users                |
-| Fetch User by id                              | Users                |
-| Delete user                                   | Users                |
-| Edit User Profile                             | Users                |
-| List Users                                    | Users                |
-| Merge User Profiles                           | Users                |
-| Fetch User object subscriptions               | Users, Objects       |
-| Fetch User list subscriptions                 | Users, Lists         |
-| Fetch Object subscriptions                    | Objects              |
-
+| Endpoint                                                                      | Tag Name        |
+| ----------------------------------------------------------------------------- | --------------- |
+| `/event/` (POST)                                                              | Events          |
+| `/v1/tenant/{tenant_id}` (POST)                                               | Tenants         |
+| `/v1/tenant/{tenant_id}` (GET)                                                | Tenants         |
+| `/v1/tenant/{tenant_id}` (DELETE)                                             | Tenants         |
+| `/v1/tenant/` (GET)                                                           | Tenants         |
+| `/v1/subscriber_list/{list_id}/subscriber/remove` (POST)                      | Lists           |
+| `/v1/subscriber_list/` (GET)                                                  | Lists           |
+| `/v1/subscriber_list/` (POST)                                                 | Lists           |
+| `/{workspace_key}/trigger/` (POST)                                            | Workflows       |
+| `/v1/user/{distinct_id}/preference/category/` (GET)                           | Preferences     |
+| `/v1/subscriber_list/{list_id}/subscriber/add` (POST)                         | Lists           |
+| `/v1/subscriber_list/{list_id}/` (GET)                                        | Lists           |
+| `/{workspace_key}/broadcast` (POST)                                           | Broadcasts      |
+| `/v1/user/{distinct_id}/preference/channel_preference/` (GET)                 | Preferences     |
+| `/v1/user/{distinct_id}/preference/channel_preference/` (PATCH)               | Preferences     |
+| `/v1/user/{distinct_id}/preference/category/{category_slug}/` (PATCH)         | Preferences     |
+| `/v1/tenant/{tenant_id}/category/{category_slug}/` (PATCH)                    | Tenants         |
+| `/v1/subscriber_list/{list_id}/delete` (PATCH)                                | Lists           |
+| `/v1/user/{distinct_id}/preference/category/{category_slug}` (GET)            | Preferences     |
+| `/v1/tenant/{tenant_id}/category/` (GET)                                      | Tenants         |
+| `/v1/subscriber_list/{list_id}/version/{version_id}/subscriber/add` (POST)    | Drafts          |
+| `/v1/subscriber_list/{list_id}/version/{version_id}/delete` (PATCH)           | Drafts          |
+| `/v1/template/{template_slug}` (GET)                                          | Templates       |
+| `/v1/subscriber_list/{list_id}/version/{version_id}/finish_sync` (PATCH)      | Drafts          |
+| `/v1/subscriber_list/{list_id}/version/{version_id}/subscriber/remove` (POST) | Drafts          |
+| `/v1/subscriber_list/{list_id}/start_sync` (POST)                             | Drafts          |
+| `/v1/template/{template_slug}/channel/{channel_slug}` (GET)                   | Templates       |
+| `/v1/template` (GET)                                                          | Templates       |
+| `/trigger/` (POST)                                                            | Workflows       |
+| `/v1/bulk/subscriber/preference/` (PATCH)                                     | Bulk Operations |
+| `/v1/bulk/subscriber/preference/reset/` (PATCH)                               | Bulk Operations |
+| `/v1/user/{distinct_id}/preference/` (GET)                                    | Preferences     |
+| `/v1/subscriber_list/{list_id}/subscriber/` (GET)                             | Lists           |
+| `/v1/object/{object_type}/{id}/` (POST)                                       | Objects         |
+| `/v1/object/{object_type}/{id}/` (GET)                                        | Objects         |
+| `/v1/object/{object_type}/{id}/` (DELETE)                                     | Objects         |
+| `/v1/object/{object_type}/{id}/` (PATCH)                                      | Objects         |
+| `/v1/object/{object_type}/{id}/subscription/` (POST)                          | Subscriptions   |
+| `/v1/object/{object_type}/{id}/subscription/` (GET)                           | Subscriptions   |
+| `/v1/object/{object_type}/{id}/subscription/` (DELETE)                        | Subscriptions   |
+| `/v1/object/{object_type}/` (GET)                                             | Objects         |
+| `/v1/object/{object_type}/{id}/preference/category/{category_slug}/` (PATCH)  | Preferences     |
+| `/v1/object/{object_type}/{id}/preference/channel_preference/` (PATCH)        | Preferences     |
+| `/v1/object/{object_type}/{id}/preference/channel_preference/` (GET)          | Preferences     |
+| `/v1/object/{object_type}/{id}/preference/` (GET)                             | Preferences     |
+| `/v1/object/{object_type}/{id}/preference/category/` (GET)                    | Preferences     |
+| `/v1/object/{object_type}/{id}/preference/category/{category_slug}` (GET)     | Preferences     |
+| `/v1/user/{distinct_id}/` (POST)                                              | Users           |
+| `/v1/user/{distinct_id}/` (GET)                                               | Users           |
+| `/v1/user/{distinct_id}/` (DELETE)                                            | Users           |
+| `/v1/user/{distinct_id}/` (PATCH)                                             | Users           |
+| `/v1/user/` (GET)                                                             | Users           |
+| `/v1/user/{distinct_id}/merge/` (POST)                                        | Users           |
+| `/v1/user/{distinct_id}/subscribed_to/object/` (GET)                          | Subscriptions   |
+| `/v1/user/{distinct_id}/subscribed_to/list/` (GET)                            | Subscriptions   |
+| `/v1/object/{object_type}/{id}/subscribed_to/object/` (GET)                   | Subscriptions   |
