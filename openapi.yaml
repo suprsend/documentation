@@ -3791,10 +3791,12 @@ paths:
                   type: boolean
                   description: setting this to true will set all channel preference to default setting.
                   default: true
+                  example: true
                 reset_categories:
                   type: boolean
                   description: setting this to true will set all category preferences to default tenant preference.
                   default: true
+                  example: true
       responses:
         '202':
           description: '202'
@@ -3912,6 +3914,20 @@ paths:
                 properties:
                   sections:
                     type: array
+                    example:
+                      - subcategories:
+                          - name: "Newsletter"
+                            category: "newsletter"
+                            description: "Send me updates on new product updates"
+                            preference: "opt_in"
+                            is_editable: true
+                            channels:
+                              - channel: "androidpush"
+                                preference: "opt_in"
+                                is_editable: true
+                              - channel: "email"
+                                preference: "opt_in"
+                                is_editable: true
                     items:
                       type: object
                       properties:
@@ -3953,6 +3969,11 @@ paths:
                                       description: "false when category default preference is set to can't unsubscribe"
                   channel_preferences:
                     type: array
+                    example:
+                      - channel: "email"
+                        is_restricted: false
+                      - channel: "androidpush"
+                        is_restricted: true
                     items:
                       type: object
                       properties:
@@ -4054,6 +4075,13 @@ paths:
                 properties:
                   meta:
                     type: object
+                    example:
+                      limit: 2
+                      count: 10
+                      before: "01HAZ8CZ111111"
+                      after: "01H9S626C33222222"
+                      has_prev: true
+                      has_next: true
                     properties:
                       limit:
                         type: integer
@@ -4078,6 +4106,13 @@ paths:
                         description: Indicates if there is a next page.
                   results:
                     type: array
+                    example:
+                      - id: "01HENBBNXXXXXXXXXX"
+                        distinct_id: "distinct_id_1"
+                        created_at: "2023-11-07T16:55:23.736016+00:00"
+                      - id: "01HENBYYYYYYYYYY"
+                        distinct_id: "distinct_id2"
+                        created_at: "2023-11-07T16:55:23.751078+00:00"
                     items:
                       type: object
                       properties:
@@ -4138,26 +4173,18 @@ paths:
             type: string
           required: true
       requestBody:
-        content:
-          application/json:
-            example:
-              $email: ["jsmith@example.com"]
-              $sms: ["+1234567890"]
-              $whatsapp: ["+1234567890"]
-              $inbox: ["4nlPk4XXLcDxxxHQ70xx2Cx24"]
-              $webpush: ["webpush_token_abc123"]
-              $androidpush: ["android_push_token_xyz987"]
-              $iospush: ["ios_push_token_lmn456"]
-              $slack: ["U01ABCDE2F3"]
-              $ms_teams: ["teams_user_id_12345"]
-              $timezone: America/New_York
-              $preferred_language: en
-              custom_key: custom_value
-            schema:
-              properties:
-                $email:
-                  type: array
-                  items:
+          content:
+            application/json:
+              schema:
+                properties:
+                  $email:
+                    type: array
+                    description: List of email addresses. You can add other channels in the same format by replacing $email with respective channel keys. Available channel keys - `$email`, `$sms`, `$inbox`, `$webpush`, `$androidpush`, `$iospush`, `$slack`, `$ms_teams`.
+                    items:
+                      type: string
+                      format: email
+                    example: ["user1@example.com", "user2@example.com"]
+                  $timezone:
                     type: string
                     format: email
                   description: List of email addresses. You can add other channels in the same format by replacing `$email` with the respective channel keys. Supported keys- `$email`, `$sms`, `$whatsapp`, `$inbox`, `$webpush`, `$androidpush`, `$iospush`, `$slack`, `$ms_teams`.
@@ -4170,45 +4197,15 @@ paths:
                   type: array
                   items:
                     type: string
-                  description: List of phone numbers for WhatsApp
-                $inbox:
-                  type: array
-                  items:
-                    type: string
-                  description: List of inbox identifiers
-                $webpush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of web push tokens
-                $androidpush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of Android push tokens
-                $iospush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of iOS push tokens
-                $slack:
-                  type: array
-                  items:
-                    type: string
-                  description: List of Slack user IDs
-                $ms_teams:
-                  type: array
-                  items:
-                    type: string
-                  description: List of Microsoft Teams user IDs
-                $timezone:
-                  type: string
-                  description: User's timezone in [IANA format](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List)
-                  example: America/New_York
-                $preferred_language:
-                  type: string
-                  description: Preferred language in [ISO 639-1 Alpha-2 format](https://gist.github.com/jrnk/8eb57b065ea0b098d571)
-                  example: en
+                    description: add any additional property in key-value pair
+                    example: val
+              example:
+                {
+                  "$email": ["user1@example.com", "user2@example.com"],
+                  "$timezone": "America/New_York",
+                  "$preferred_language": "en",
+                  "department": "Engineering"
+                }
       responses:
           '201':
             description: '201 - Created'
@@ -4248,10 +4245,13 @@ paths:
                     subscriptions_count:
                       type: integer
                       description: number of users/child objects subscribed to the object
-                      example: departments
+                      example: 0
                     properties:
                       type: object
                       description: all user properties in key-value pair. SuprSend reserved properties start with $
+                      example:
+                        "$preferred_language": "en"
+                        "department": "Engineering"
                     created_at:
                       type: string
                       format: date-time
@@ -4274,6 +4274,10 @@ paths:
                           perma_status:
                             type: string
                             description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+                      example:
+                        - value: "user@example.com"
+                          status: "active"
+                          perma_status: "active"
       deprecated: false
     get:
       summary: Fetch Object by id
@@ -4333,10 +4337,12 @@ paths:
                   subscriptions_count:
                     type: integer
                     description: number of users/child objects subscribed to the object
-                    example: departments
+                    example: 0
                   properties:
                     type: object
                     description: all user properties in key-value pair. SuprSend reserved properties start with $
+                    example:
+                      $preferred_language: en
                   created_at:
                     type: string
                     format: date-time
@@ -4359,6 +4365,10 @@ paths:
                         perma_status:
                           type: string
                           description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+                    example:
+                      - value: user@example.com
+                        status: active
+                        perma_status: active
         '404':
           description: '404 - Not Found'
           content:
@@ -4378,6 +4388,7 @@ paths:
                     message:
                       type: string
                       description: "Error message describing the missing resource."
+                      example: "object 'obj_type/obj_id' not found"
       deprecated: false
     delete:
       summary: Delete an Object
@@ -4420,6 +4431,7 @@ paths:
                   message:
                     type: string
                     description: "Error message indicating object_id and type combination is not found"
+                    example: "object 'object_type/object_id' not found"
       deprecated: false
     patch:
       summary: Edit Object Profile
@@ -4502,6 +4514,17 @@ paths:
                           Example: `{"login_count":1}`
                         additionalProperties:
                           type: string
+                  example:
+                    - $set:
+                        team: "Engineering"
+                        $preferred_language: "hi"
+                        $timezone: "America/New_York"
+            example:
+              operations:
+                - $set:
+                    team: "Engineering"
+                    $preferred_language: "hi"
+                    $timezone: "America/New_York"
       responses:
         '200':
           description: '200 - OK'
@@ -4541,10 +4564,12 @@ paths:
                   subscriptions_count:
                     type: integer
                     description: number of users/child objects subscribed to the object
-                    example: departments
+                    example: 0
                   properties:
                     type: object
                     description: all user properties in key-value pair. SuprSend reserved properties start with $
+                    example:
+                      $preferred_language: "en"
                   created_at:
                     type: string
                     format: date-time
@@ -4555,18 +4580,25 @@ paths:
                     example: 2025-04-04T09:55:12.422388+00:00
                   $<channel>:
                     type: array
+                    description: List of active channel values under each communication medium like $email, $sms, $whatsapp, etc.
                     items:
                       type: object
                       properties:
                         value:
                           type: string
                           description: channel value
+                          example: user@company.com
                         status:
                           type: string
                           example: active
                         perma_status:
                           type: string
                           description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+                          example: active
+                    example:
+                      - value: devs@company.com
+                        status: active
+                        perma_status: active
         '400':
           description: '400 - Bad Request'
           content:
@@ -4607,6 +4639,13 @@ paths:
                 recipients:
                   type: array
                   description: List of recipients to be notified. You can either add recipient as array of distinct_ids or array of recipient objects. You can add up to 100 recipients in a single API.
+                  example:
+                    - distinct_id: "user_123"
+                      $email: ["user@example.com"]
+                      $preferred_language: "en"
+                      $timezone: "America/New_York"
+                    - id: "frontend"
+                      object_type: "teams"
                   items:
                     oneOf:
                       - type: object
@@ -4648,6 +4687,16 @@ paths:
                   type: object
                   description: properties defining the relation between object and its subscribers. Can be referenced as `recipient.subscription.<key>` in workflow and template.
                   example: {"role":"developer"}
+            example:
+              recipients:
+                - distinct_id: "user_123"
+                  $email: ["user@example.com"]
+                  $preferred_language: "en"
+                  $timezone: "America/New_York"
+                - id: "frontend"
+                  object_type: "teams"
+              properties:
+                role: "developer"
       responses:
         '200':
           description: '200'
@@ -4713,6 +4762,8 @@ paths:
                   properties:
                     type: object
                     description: object subscription properties, referred as `$recipient.subscription.<key>` in template or workflow.
+                    example:
+                      role: "developer"
                   created_at:
                     type: string
                     format: date-time
@@ -4740,6 +4791,7 @@ paths:
                   message:
                     type: string
                     description: "Error message indicating object_id and type combination is not found"
+                    example: "object 'object_type/id' not found"
       deprecated: false
     get:
       summary: List Object Subscriptions
@@ -4831,6 +4883,7 @@ paths:
                         description: "Cursor for the next page, if applicable."
                   results:
                     type: array
+                    description: "List of object subscriptions"
                     items:
                       type: object
                       properties:
@@ -4860,6 +4913,7 @@ paths:
                               subscriptions_count:
                                 type: integer
                                 description: number of users/child objects subscribed to this object
+                                example: 2
                               updated_at:
                                 type: string
                                 format: date-time
@@ -4876,6 +4930,16 @@ paths:
                           type: string
                           format: date-time
                           example: 2025-04-04T09:55:12.422388+00:00
+                    example:
+                      - properties: {}
+                        user: null
+                        object:
+                          id: "devs"
+                          object_type: "teams"
+                          subscriptions_count: 1
+                          updated_at: "2025-04-06T11:00:24.257046+00:00"
+                        created_at: "2025-04-06T11:00:24.260496+00:00"
+                        updated_at: "2025-04-06T11:00:24.260496+00:00"
         '404':
           description: '404 - Not Found'
           content:
@@ -4892,9 +4956,11 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status code indicating the error."
+                    example: 404
                   message:
                     type: string
                     description: "Error message indicating object_id and type combination is not found"
+                    example: "object 'obj_type/obj_id' not found"
       deprecated: false
     delete:
       summary: Remove Object Subscriptions
@@ -4934,6 +5000,7 @@ paths:
                     oneOf:
                       - type: string
                         description: Pass user distinct_ids in array as `["id1","id2"]`
+                        example: "id1"
                       - type: object
                         description: Pass object to be deleted in json
                         required: [id,object_type]
@@ -4944,6 +5011,10 @@ paths:
                             example: frontend
                           object_type:
                             type: string
+                            example: users
+                  example: ["id1", "id2"]
+            example:
+              recipients: ["id1", "id2"]
       responses:
         '204':
           description: '204 - No Content'
@@ -4963,9 +5034,11 @@ paths:
                   code:
                     type: integer
                     description: "Error code indicating a bad request."
+                    example: 404
                   message:
                     type: string
                     description: "Detailed error message explaining the issue."
+                    example: "object 'object_type/id' not found"
       deprecated: false
 
   /v1/object/{object_type}/:
@@ -5094,6 +5167,18 @@ paths:
                               perma_status:
                                 type: string
                                 example: active
+                    example:
+                      - object_type: teams
+                        id: devs
+                        subscriptions_count: 1
+                        properties: {}
+                        created_at: "2024-11-04T09:30:05.141405+00:00"
+                        updated_at: "2025-04-06T11:00:24.257046+00:00"
+                        $inbox:
+                          - value: mwjNxXS-z5IvY6VwyXweG0mqc14WL-z9ctBlJ-4wx60
+                            id_provider: suprsend
+                            status: active
+                            perma_status: active
       deprecated: false
   /v1/object/{object_type}/{id}/preference/category/{category_slug}/:
     patch:
@@ -5135,12 +5220,18 @@ paths:
                 preference:
                   type: string
                   description: 'choose one of the options: `opt_in` if the user has allowed notification in this category and `opt_out` if user wants to discontinue notification in this category'
+                  enum: [opt_in, opt_out]
+                  example: opt_out
                   default: opt_in
                 opt_out_channels:
                   type: array
                   description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
+                  example: ["email", "sms"]
+            example:
+              preference: opt_out
+              opt_out_channels: ["email", "sms"]
       responses:
         '202':
           description: '202'
@@ -5200,9 +5291,19 @@ paths:
                   is_editable:
                     type: boolean
                     description: "false for categories where default preference is set to can't unsubscribe"
-                    example: false
+                    example: true
                   channels:
                     type: array
+                    example:
+                      - channel: "email"
+                        preference: "opt_in"
+                        is_editable: true
+                      - channel: "ms_teams"
+                        preference: "opt_in"
+                        is_editable: true
+                      - channel: "slack"
+                        preference: "opt_in"
+                        is_editable: true
                     items:
                       type: object
                       properties:
@@ -5264,16 +5365,29 @@ paths:
                   type: array
                   description: Use this to update channel level user preferences. Set `is_restricted - true` if the channel is opted_out by the user. This will only send critical notifications to the user which can't be opted out
                   items:
+                    type: object
                     properties:
                       channel:
                         type: string
                         description: Add channel as `email`, `inbox`, `sms`, `whatsapp`, `androidpush`, `slack`, `iospush`, `webpush`
                         default: email
+                        example: "email"
                       is_restricted:
                         type: boolean
                         description: set `is_restricted = true` if user wants to receive notification in mandatory categories on this channel. Mandatory categories are `can't unsubscribe` categories and the above channel is added as `mandatory channel` in that category
                         default: false
-                    type: object
+                        example: true
+                  example:
+                    - channel: "email"
+                      is_restricted: true
+                    - channel: "inbox"
+                      is_restricted: false
+              example:
+                channel_preferences:
+                  - channel: "email"
+                    is_restricted: true
+                  - channel: "inbox"
+                    is_restricted: false
       responses:
         '202':
           description: '202'
@@ -5307,6 +5421,11 @@ paths:
                         is_restricted:
                           type: boolean
                           example: "true"
+                    example:
+                      - channel: "email"
+                        is_restricted: true
+                      - channel: "inbox"
+                        is_restricted: false
         '404':
           description: '404'
           content:
@@ -5384,6 +5503,12 @@ paths:
                         is_restricted:
                           type: boolean
                           description: True means notification will be sent in categories where this channel is marked as mandatory channel. False means opt_in on channel.
+                          example: false
+                    example:
+                      - channel: "androidpush"
+                        is_restricted: false
+                      - channel: "email"
+                        is_restricted: false
         '404':
           description: '404 - Not Found'
           content:
@@ -5529,6 +5654,20 @@ paths:
                                     is_editable:
                                       type: boolean
                                       description: "false when category default preference is set to can't unsubscribe"
+                    example:
+                      - subcategories:
+                          - name: "Newsletter"
+                            category: "newsletter"
+                            description: "Send me updates on new product updates"
+                            preference: "opt_in"
+                            is_editable: true
+                            channels:
+                              - channel: "androidpush"
+                                preference: "opt_in"
+                                is_editable: true
+                              - channel: "email"
+                                preference: "opt_in"
+                                is_editable: true
                   channel_preferences:
                     type: array
                     items:
@@ -5540,6 +5679,11 @@ paths:
                         is_restricted:
                           type: boolean
                           description: "True means notification will be sent in categories where this channel is marked as mandatory channel. False means opt_in on channel."
+                    example:
+                      - channel: "email"
+                        is_restricted: false
+                      - channel: "androidpush"
+                        is_restricted: false
         '404':
           description: '404'
           content:
@@ -5665,6 +5809,20 @@ paths:
                         example: 0
                   results:
                     type: array
+                    example:
+                      - name: "Newsletter"
+                        category: "newsletter"
+                        description: "Send me updates on new product updates"
+                        original_preference: null
+                        preference: "opt_in"
+                        is_editable: false
+                        channels:
+                          - channel: "email"
+                            preference: "opt_in"
+                            is_editable: false
+                          - channel: "ms_teams"
+                            preference: "opt_in"
+                            is_editable: false
                     items:
                       type: object
                       properties:
@@ -5704,6 +5862,25 @@ paths:
                               is_editable:
                                 type: boolean
                                 example: false
+                example:
+                  meta:
+                    count: 12
+                    limit: 10
+                    offset: 0
+                  results:
+                    - name: "Newsletter"
+                      category: "newsletter"
+                      description: "Send me updates on new product updates"
+                      original_preference: null
+                      preference: "opt_in"
+                      is_editable: false
+                      channels:
+                        - channel: "email"
+                          preference: "opt_in"
+                          is_editable: false
+                        - channel: "ms_teams"
+                          preference: "opt_in"
+                          is_editable: false
         '404':
           description: '404 - Not Found'
           content:
@@ -5826,6 +6003,7 @@ paths:
                     type: string
                     enum: ["opt_in", "opt_out"]
                     description: "updated user preference of the category"
+                    example: opt_in
                   is_editable:
                     type: boolean
                     description: "false when category default preference is set to `can't unsubscribe`"
@@ -5845,6 +6023,13 @@ paths:
                         is_editable:
                           type: boolean
                           example: false
+                    example:
+                      - channel: email
+                        preference: opt_in
+                        is_editable: false
+                      - channel: ms_teams
+                        preference: opt_in
+                        is_editable: false
         '404':
           description: '404 - Not Found'
           content:
@@ -5883,15 +6068,7 @@ paths:
         content:
           application/json:
             example:
-              $email: ["jsmith@example.com"]
-              $sms: ["+1234567890"]
-              $whatsapp: ["+1234567890"]
-              $inbox: ["4nlPk4XXLcDxxxHQ70xx2Cx24"]
-              $webpush: ["webpush_token_abc123"]
-              $androidpush: ["android_push_token_xyz987"]
-              $iospush: ["ios_push_token_lmn456"]
-              $slack: ["U01ABCDE2F3"]
-              $ms_teams: ["teams_user_id_12345"]
+              $email: ["john@example.com", "jane@example.com"]
               $timezone: America/New_York
               $preferred_language: en
               custom_key: custom_value
@@ -5903,47 +6080,8 @@ paths:
                   items:
                     type: string
                     format: email
-                  description: List of email addresses. You can add other channels in the same format by replacing `$email` with the respective channel keys. Supported keys- `$email`, `$sms`, `$whatsapp`, `$inbox`, `$webpush`, `$androidpush`, `$iospush`, `$slack`, `$ms_teams`.
-                $sms:
-                  type: array
-                  items:
-                    type: string
-                  description: List of phone numbers for SMS
-                $whatsapp:
-                  type: array
-                  items:
-                    type: string
-                  description: List of phone numbers for WhatsApp
-                $inbox:
-                  type: array
-                  items:
-                    type: string
-                  description: List of inbox identifiers
-                $webpush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of web push tokens
-                $androidpush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of Android push tokens
-                $iospush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of iOS push tokens
-                $slack:
-                  type: array
-                  items:
-                    type: string
-                  description: List of Slack user IDs
-                $ms_teams:
-                  type: array
-                  items:
-                    type: string
-                  description: List of Microsoft Teams user IDs
+                  description: List of email addresses. You can add other channels in the same format by replacing $email with respective channel keys. Available channel keys - `$email`, `$sms`, `$inbox`, `$webpush`, `$androidpush`, `$iospush`, `$slack`, `$ms_teams`.
+                  example: ["john@example.com", "jane@example.com"]
                 $timezone:
                   type: string
                   description: User's timezone in [IANA format](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List)
@@ -6038,6 +6176,10 @@ paths:
                   properties:
                     type: object
                     description: all user properties in key-value pair. SuprSend reserved properties start with $
+                    example:
+                      $preferred_language: en
+                      $timezone: America/New_York
+                      custom_key: custom_value
                   created_at:
                     type: string
                     format: date-time
@@ -6054,12 +6196,18 @@ paths:
                         value:
                           type: string
                           description: channel value
+                          example: john@example.com
                         status:
                           type: string
                           example: active
                         perma_status:
                           type: string
                           description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+                          example: active
+                    example:
+                      - value: "john@example.com"
+                        status: "active"
+                        perma_status: "active"
         '400':
           description: '400'
           content:
@@ -6076,9 +6224,11 @@ paths:
                   code:
                     type: integer
                     description: HTTP status code indicating the error.
+                    example: 400
                   message:
                     type: string
                     description: Description of the error type.
+                    example: invalid_request_error
       deprecated: false
     get:
       summary: Fetch User by id
@@ -6133,6 +6283,9 @@ paths:
                   properties:
                     type: object
                     description: all user properties in key-value pair. SuprSend reserved properties start with $
+                    example:
+                      $preferred_language: "en"
+                      $timezone: "America/New_York"
                   created_at:
                     type: string
                     format: date-time
@@ -6149,12 +6302,17 @@ paths:
                         value:
                           type: string
                           description: channel value
+                          example: john@example.com
                         status:
                           type: string
                           example: active
                         perma_status:
                           type: string
                           description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+                    example:
+                      - value: john@example.com
+                        status: active
+                        perma_status: active
         '400':
           description: '400'
           content:
@@ -6171,9 +6329,11 @@ paths:
                   code:
                     type: integer
                     description: HTTP status code indicating the error.
+                    example: 400
                   message:
                     type: string
                     description: Description of the error type.
+                    example: invalid_request_error
       deprecated: false
     delete:
       summary: Delete user
@@ -6238,6 +6398,13 @@ paths:
       requestBody:
         content:
           application/json:
+            example:
+              operations:
+                - $set:
+                    name: "Marge Simpson"
+                    $preferred_language: "en"
+                    $timezone: "America/New_York"
+                - $unset: ["$sms", "old_property"]
             schema:
               type: object
               properties:
@@ -6261,6 +6428,11 @@ paths:
                           Example: `{"name":"Marge Simpson","$preferred_language":"hi","$timezone":"America/New_York"}`
                         additionalProperties:
                           type: string
+                  example:
+                    - $set:
+                        name: "Marge Simpson"
+                        $preferred_language: "en"
+                        $timezone: "America/New_York"
                       $unset:
                         type: array
                         description: |
@@ -6338,6 +6510,10 @@ paths:
                   properties:
                     type: object
                     description: all user properties in key-value pair. SuprSend reserved properties start with $
+                    example:
+                      name: "Marge Simpson"
+                      $preferred_language: "en"
+                      $timezone: "America/New_York"
                   created_at:
                     type: string
                     format: date-time
@@ -6361,6 +6537,13 @@ paths:
                         perma_status:
                           type: string
                           description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+                    example:
+                      - value: "john@example.com"
+                        status: "active"
+                        perma_status: "active"
+                      - value: "some_other_value"
+                        status: "active"
+                        perma_status: "active"
       deprecated: false
   /v1/user/:
     get:
@@ -6476,6 +6659,17 @@ paths:
                               perma_status:
                                 type: string
                                 example: active
+                    example:
+                      - distinct_id: "_distinct_id_"
+                        properties:
+                          name: "Marge Simpson"
+                        created_at: "2025-04-04T21:37:36.712496+00:00"
+                        updated_at: "2025-04-04T21:37:36.743167+00:00"
+                        $inbox:
+                          - value: "4nlPk4t4kurG5kChOELB8Q1LcDI9DHzHQ70st2E2C24"
+                            id_provider: "suprsend"
+                            status: "active"
+                            perma_status: "active"
       deprecated: false
   /v1/user/{distinct_id}/merge/:
     post:
@@ -6500,6 +6694,11 @@ paths:
                 from_user_id:
                   type: string
                   description: Unique identifier of secondary user whose profile needs to be merged into primary user.
+                  example: "secondary_user_123"
+            examples:
+              MergeRequest:
+                value:
+                  from_user_id: "secondary_user_123"
       responses:
         '201':
           description: '201 - Created'
@@ -6636,6 +6835,17 @@ paths:
                   results:
                     type: array
                     description: List of retrieved results.
+                    example:
+                      - properties:
+                          role: "manager"
+                        object:
+                          id: "frontend"
+                          object_type: "department"
+                          properties: {}
+                          subscriptions_count: 10
+                          updated_at: "2025-01-28T16:49:23.695448+00:00"
+                        created_at: "2025-01-23T16:34:56.093683+00:00"
+                        updated_at: "2025-01-23T16:34:56.093683+00:00"
                     items:
                       type: object
                       properties:
@@ -6827,6 +7037,16 @@ paths:
                           format: date-time
                           description: Timestamp when the user was added to the list.
                           example: "2024-09-26T10:20:33.636698+00:00"
+                    example:
+                      - list:
+                          list_id: "product_update"
+                          list_name: "Newsletter subscriber users"
+                          description: "List of users to send newsletter to"
+                          list_type: "static_list"
+                          source: "csv_upload"
+                          subscribers_count: 2
+                          updated_at: "2024-09-26T10:20:33.636698+00:00"
+                        created_at: "2024-09-26T10:20:33.636698+00:00"
         '404':
                   description: '404 - Not Found'
                   content:
@@ -6963,6 +7183,18 @@ paths:
                           format: date-time
                           example: "2024-11-10T21:40:02.169501+00:00"
                           description: "Timestamp when the record was last updated."
+                    example:
+                      - properties: {}
+                        object:
+                          id: "frontend"
+                          object_type: "developer"
+                          properties:
+                            name: "frontend"
+                            technology: "react"
+                          subscriptions_count: 3
+                          updated_at: "2024-11-10T21:41:02.673661+00:00"
+                        created_at: "2025-04-06T11:00:24.260496+00:00"
+                        updated_at: "2025-04-06T11:00:24.260496+00:00"
         '404':
           description: '404 - Not Found'
           content:
@@ -6979,9 +7211,11 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status code indicating the error."
+                    example: 404
                   message:
                     type: string
                     description: "Error message indicating object_id and type combination is not found"
+                    example: "object 'obj_type/obj_id' not found"
       deprecated: false
 
 x-readme:
