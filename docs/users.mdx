@@ -135,14 +135,52 @@ Whenever a user is created/ synced on the SuprSend Platform, it's represented by
 
   There are 4 ways by which you can send and trigger notifications to users, after syncing and creating them to SuprSend:
     
-    1. **Sync Users Upfront:***
+### 1. Sync Users Upfront:
 
-      In this case, you'd only need to pass the `distinct_id` of the user to the trigger the notification. SuprSend will automatically fetch the user profile from trigger.
+  In this case, you'd only need to pass the `distinct_id` of the user to the trigger the notification. SuprSend will automatically fetch the user profile from trigger.
       
-    2. **Inline Identification for Recipients:**
-      - Create/update user profiles during workflow trigger
-      - Useful for dynamic user information
+### 2. Inline Identification for Recipients:
 
+  In this way of triggering notification, you need to send the entire recipient's payload to workflow trigger.
+  Therefore, a user profile is created/ updated during the trigger. [Know how this is done](/docs/trigger-workflow#identifying-recipients-inline)
+  
+    **Note:** This is useful for dynamic user information.
+    
+### 3. Anonymous Notifications to the Users:
+      
+  By implementing this, only the bare minimum user data would be required for delivery (like email or phone number). Hence, user profile won't be created on the SuprSend platform, and the delivery information is only used transiently for only the current notification.
+  
+  Here's how you can achieve this in your trigger:
+    - In the **recipient** object, add `"is_transient": true`.
+    - You can also use this for **actors** by setting `"is_transient": true` in the actor object.
+  
+  **Example Payload:**
+  ```json
+    {
+      "workflow": "your_workflow_slug",
+      "actor": {
+        "is_transient": true,
+        "name": "actor_1"
+      },
+      "recipients": [
+        {
+          "is_transient": true,
+          "$email": ["abc@example.com"],
+          "name": "recipient_1"
+        }
+      ],
+      "data": {
+        // your notification data
+      }
+    }
+  ```
+  This approach works across all SDK implementations ([Python](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Node.js](/docs/node-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Java](/docs/java-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Go](/docs/go-trigger-workflow-from-api#sending-notification-to-anonymous-user)) with slight syntax variations. Also, no user profile synchronization. 
+
+### 4. Cross-User Communication:
+
+  In this case, you'd need to pass the `distinct_id` of the actor and the recipient to the trigger.
+  This is useful when you want to notify a user based on the action performed by another user.
+  [Know how this is done](/docs/cross-user-notifications)
 
 
 
@@ -158,18 +196,6 @@ Whenever a user is created/ synced on the SuprSend Platform, it's represented by
 
 #### Notification Triggering Methods
 
-You can trigger notifications to users in several ways:
-
-1. **Pre-synced Users**
-   - Sync users upfront
-   - Reference them by distinct_id in triggers
-2. **Inline Identification**
-   - Create/update user profiles during workflow trigger
-   - Useful for dynamic user information
-3. **Anonymous Notifications**
-   - Use `is_transient=true`
-   - No user profile synchronization
-   - Recipient data used only for current workflow
 4. **Cross-user Communication**
    - Involve multiple users (actors and recipients)
    - Reference user properties in notification templates
