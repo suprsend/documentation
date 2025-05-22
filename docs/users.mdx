@@ -1,120 +1,181 @@
 ---
 title: "Users"
-description: "Understand the concept of users in SuprSend. Why user sync is important and methods to manage users, set their preferences and trigger notifications."
+description: "Understand the concept of users in SuprSend, manage profile, synch users, and trigger notifications to them"
 ---
 
-User represents a person who will receive notifications. Each user is uniquely identified by an immutable `distinct_id`. All channel information (email, phone, push tokens, etc.) and custom properties are attached to the user profile, enabling multi-channel, personalized communication.
+## Overview
 
-### Syncing Users in SuprSend
-Users should be synced to SuprSend to send them notification or to reference their profile information in notification templates. Though if you have a usecase where you can't sync users due to PII restrictions, you can also send notifications to users anonymously.
-Users can be synced separately using User management methods in SDK or API or they can be identified inline in workflows.
+A User in SuprSend represents the recipient of your notifications. They are used to recieve notifications, or in complex use cases, act on the notifications as well before recieving them.
 
-### User types
-There are 2 types of users:
-1. Recipient: User who will receive the notification.
-2. Actor: Who performs the action. Generally used to sending cross-user notifications where user performing the action is different from recipiet and you want to use actor properties in templates, like `@user1 mentioned you in a comment`.
+## Types of Users
 
-### Creating Users
-Once you sync a user in SuprSend, the user payload returned will look like this:
-1. Object Payload
+There are 2 types of users, based on the type of notification trigger you'd like to use:
 
-```json
-{
-  "distinct_id": "user_123",
-  "properties": {
-    "name": "John Doe",
-    "email": ["john@example.com"],
-    "$preferred_language": "en",
-    "$timezone": "America/New_York"
-  },
-  "$email": ["john@example.com"],
-  "$sms": ["+1234567890"]
-}
-```
-Required fields:
-- `distinct_id`: Unique identifier for the user. You cannot change a user's id later, so we recommend you use a non-transient `id` like a primary key rather than a phone number or email address.
+1. **Recipient:** User who will receive the notification, and get notifed.
+2. **Actor:** (optional) Who performs action on notifications, based on which recipient will be notified. This happens in case of cross-user notifications.
 
-2. User Creation methods
+<Note>
+  In case of cross-user notifications, actor is required. This happens in case the actual reciepient of the notification is different from the one who'd perform the action to it.
+  For instance, in a comment section, the recipient is the person who'd receive the notification, and the actor is the one who'd performed the action (commented).
 
-```python
-user = supr_client.users.get_edit_instance("user_123")
-user.set("name", "John Doe")
-user.add_email("john@example.com")
-supr_client.users.async_edit(user)
-```
+  **Important:** You can pass the actor only in case of cross-user notifications!
+</Note>
 
-```javascript
-const user = await suprClient.users.create({
-  distinct_id: "user_123",
-  properties: {
-    name: "John Doe",
+## What's included in a User Profile?
 
+A user profile in SuprSend includes the following:
 
-3. **Availabled User Profile Variables:**
-  
-    SuprSend identifies it's user's profile with the help of the following variables: 
-  
-    1. `distinct_id` - A unique identifier for each user.
+- `distinct_id`: Unique identifier for every user.
+- **Channel Information**: Contact details, and tokens required for delivering notifications across different channels: Email, Phone numbers, Slack, Device tokens, etc.
+- **Properties**: Custom attributes for each user including: name, age, location etc.
+- **Preferences**: User's notification preferences for different channels, set by them on your UI.
+- **Workflow Conditions**: Conditions that determine workflow triggers for that user.
+- **Lists**: Groups/segments the user belongs to (in-case of bulk import, or bulk sync)
 
-    2. Channel information attached to user profiles:
+<Icon icon="message-question" iconType="solid" size={17} />  [What does SuprSend do with your Data?](/docs/privacy-with-suprsend)
 
-      - Email ID: `$email`
-      - Phone number: `$sms`, `$whatsapp`
-      - Push tokens: `$androidpush`, `$iospush`, `$webpush`, 
-      - User Identifiers: `$slack`, `$ms_teams`
+## Syncing Users in SuprSend
 
-4. **Notify the User sequentially with** [Smart Delivery](/docs/smart-delivery)
+Syncing user data with SuprSend, means adding your user data to SuprSend platform. It's the first step to creating a user profile in SuprSend.
 
-   Rather than sending your notifications to a user on all channels, you can notify the user sequentially on the best channel (which could be different for each user), till the time user interacts with a notification, and do not send subsequent notification.
+This could essentially be done between your application and SuprSend's platform, easily in a number of ways, based on how the user-data is being stored.
 
-### Creating User Profile on SuprSend
+<Accordion title="Why Sync Users?">
+  1. Maintains consistent user data across your application and SuprSend.
+  2. Eliminates the need to pass complete user information in every workflow trigger
+  2. Keeps user notification preferences updated with that on your platform.
+</Accordion>
+<Accordion title= "When do you need to sync users with SuprSend?">
+  You must synch users to the SuprSend platform whenever:
 
-You can create user profile on SuprSend platform via SDKs or 3rd party connectors like segment. one of our Backend or Front SDKs:
+    1. a new user signs up on your platform.
+    2. a user update their profile on your platform.
+    3. any user update their notification preferences on your platform.
+</Accordion>
 
-#### Via SDK
+You can sync users in following different ways, based on the type of data storage you posses:
 
-You can either use [HTTP API](docs/update-user-profile) or our backend SDKs to create user profile from your backend systems or use Client side SDK to directly sync users from your mobile or web applications.
+1. **Via your Frontend Application System**
 
-**Available Backend SDK:**
+   This is when the any end-user lands and signs up on your platform, or updates their profile there.
+   Use our [Frontend SDKs](/sdk/overview#frontend-sdks-client-side) to sync the user data to SuprSend.
+   
+   <CardGroup cols={3}>
+     <Card title="JavaScript SDK" icon="js" iconType="solid">
+       
+     </Card>
+     <Card title="Android SDK" icon="android" iconType="solid">
+       
+     </Card>
+     <Card title="iOS SDK" icon="apple" iconType="solid">
+       
+     </Card>
+     <Card title="React Native SDK" icon="sparkles">
+       
+     </Card>
+     <Card title="Flutter SDK" icon="flutter" iconType="solid">
+       
+     </Card>
+     <Card title="React SDK" icon="react" iconType="solid">
+       
+     </Card>
+   </CardGroup>
+2. **Via Backend System**
 
-<CardGroup cols="4">
-  <Card title="Python SDK" icon="python" iconType="solid" href="/docs/python-create-user-profile">
+   This is when you have a system that is responsible for storing user data, and you want to sync it to SuprSend.
+   You can either use [HTTP API](/reference/create-update-users) or our [Backend SDKs](/sdk/overview#backend-sdks-server-side) to create user profile from your backend systems.
+   In this way, you can sync the user data to SuprSend.
+
+   <CardGroup cols={4}>
+     <Card title="Python SDK" icon="python" iconType="solid">
+       
+     </Card>
+     <Card title="Node SDK" icon="js" iconType="solid">
+       
+     </Card>
+     <Card title="Java SDK" icon="java" iconType="solid">
+       
+     </Card>
+     <Card title="Go SDK" icon="golang" iconType="solid">
+       
+     </Card>
+   </CardGroup>
+   
+3. **Via CDP (Connectors & Integrations)**
+
+   This is when you have a CDP (Customer Data Platform) that is responsible for storing user data, and you'd like to sync data from there.
+   If you'd like to integrate via connectors, you can do so by going to the [Connectors](/docs/connectors) page. Hence, your user, and events - will start getting synced to SuprSend.
+   
+4. **Via Database**
+
+   This method can only be chosen for Broadcasting, or for Syncing Lists (in order to Broadcast notifications).
+   In this methods, you'd need to manually export the user data from your database, and import it to SuprSend.
+   Syncing users via database is not recommended for large datasets, due to it's limited use case. It could be time-consuming and resource-intensive.
+
+5. **Via SuprSend console:** (For testing purposes)
+
+   This is for testing and manual operations. You can create/ update users manually in the SuprSend console.
+   It could be achieved by accessing the [SuprSend dashboard](https://app.suprsend.com), and creating user(s) manually, or updating profile or related information.
+
+<Note>
+Whenever a user is created/ synced on the SuprSend Platform, it's represented by a unique identifier called as `distinct_id`. 
+
+#### Guidelines on how to choose a `distinct_id`
+
+1. It should be unique for every user.
+2. Character limit allowed: 255 characters.
+3. Must include only strings values.
+4. Case Sensitivity: (It's recommended to use lower-case strings)
+5. Couldn't be changed once set, hence immutable.
+6. In case of a user with internal primay ID on your platform database, SuprSend allows one-to-one mapping of User data.
+
+</Note>
+
+## Triggering Notifications to Users
+
+  There are 4 ways by which you can send and trigger notifications to users, after syncing and creating them to SuprSend:
     
-  </Card>
-  <Card title="Node SDK" icon="JS" iconType="solid" href="/docs/node-create-user-profile">
-    
-  </Card>
-  <Card title="Java SDK" icon="Java" iconType="solid" href="/docs/java-create-user-profile">
-    
-  </Card>
-  <Card title="Go SDK" icon="golang" iconType="solid" href="/docs/go-create-user-profile">
-    
-  </Card>
-</CardGroup>
+    1. **Sync Users Upfront:***
 
-**Available Client side SDK:**
+      In this case, you'd only need to pass the `distinct_id` of the user to the trigger the notification. SuprSend will automatically fetch the user profile from trigger.
+      
+    2. **Inline Identification for Recipients:**
+      - Create/update user profiles during workflow trigger
+      - Useful for dynamic user information
 
-<CardGroup cols="4">
-  <Card title="Javascript SDK" icon="JS" iconType="solid" href="/docs/java-create-user-profile">
-    1. (for web applications)
-  </Card>
-  <Card title="Android SDK" icon="Android" iconType="solid" href="/docs/android-create-user">
-    1. (for mobile applications)
-  </Card>
-  <Card title="React Native SDK" icon="mobile-button" iconType="solid" href="/docs/react-native-create-user">
-    1. (for mobile )
-  </Card>
-  <Card title="Flutter SDK" icon="Flutter" iconType="solid" href="/docs/flutter-create-user">
-    1. (for mobile applications)
-  </Card>
-</CardGroup>
 
-#### Via 3rd party connectors
 
-You can use connectors to directly sync users from your 3rd party data tracking platforms.
 
-<Card title="Segment" icon="User" iconType="solid" href="/docs/segment">
-  
-</Card>
 
----
+
+
+
+
+
+
+
+
+
+#### Notification Triggering Methods
+
+You can trigger notifications to users in several ways:
+
+1. **Pre-synced Users**
+   - Sync users upfront
+   - Reference them by distinct_id in triggers
+2. **Inline Identification**
+   - Create/update user profiles during workflow trigger
+   - Useful for dynamic user information
+3. **Anonymous Notifications**
+   - Use `is_transient=true`
+   - No user profile synchronization
+   - Recipient data used only for current workflow
+4. **Cross-user Communication**
+   - Involve multiple users (actors and recipients)
+   - Reference user properties in notification templates
+
+For detailed implementation guides, refer to:
+
+- [User Profile Management](/docs/update-user-profile)
+- [Workflow Triggers](/docs/workflow-triggers)
+- [Cross-user Notifications](/docs/cross-user-notifications)
