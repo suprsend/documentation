@@ -3,8 +3,6 @@ title: "Users"
 description: "Understand the concept of users in SuprSend, manage profile, synch users, and trigger notifications to them"
 ---
 
-## Overview
-
 A User in SuprSend represents the recipient of your notifications. They are used to recieve notifications, or in complex use cases, act on the notifications as well before recieving them.
 
 ## Types of Users
@@ -16,7 +14,8 @@ There are 2 types of users, based on the type of notification trigger you'd like
 
 <Note>
   In case of cross-user notifications, actor is required. This happens in case the actual reciepient of the notification is different from the one who'd perform the action to it.
-  For instance, in a comment section, the recipient is the person who'd receive the notification, and the actor is the one who'd performed the action (commented).
+  
+  E.g. in a comment section, the recipient is the person who'd receive the notification, and the actor is the one who'd performed the action (commented).
 
   **Important:** You can pass the actor only in case of cross-user notifications!
 </Note>
@@ -48,12 +47,12 @@ This could essentially be done between your application and SuprSend's platform,
 <Accordion title= "When do you need to sync users with SuprSend?">
   You must synch users to the SuprSend platform whenever:
 
-    1. a new user signs up on your platform.
-    2. a user update their profile on your platform.
+    1. new user signs up on your platform.
+    2. user updates their profile on your platform.
     3. any user update their notification preferences on your platform.
 </Accordion>
 
-You can sync users in following different ways, based on the type of data storage you posses:
+You can sync users in following different ways, based on the type of data storage you possess:
 
 1. **Via your Frontend Application System**
 
@@ -83,6 +82,7 @@ You can sync users in following different ways, based on the type of data storag
 2. **Via Backend System**
 
    This is when you have a system that is responsible for storing user data, and you want to sync it to SuprSend.
+   
    You can either use [HTTP API](/reference/create-update-users) or our [Backend SDKs](/sdk/overview#backend-sdks-server-side) to create user profile from your backend systems.
    In this way, you can sync the user data to SuprSend.
 
@@ -104,7 +104,10 @@ You can sync users in following different ways, based on the type of data storag
 3. **Via CDP (Connectors & Integrations)**
 
    This is when you have a CDP (Customer Data Platform) that is responsible for storing user data, and you'd like to sync data from there.
-   If you'd like to integrate via connectors, you can do so by going to the [Connectors](/docs/connectors) page. Hence, your user, and events - will start getting synced to SuprSend.
+   
+   For integrating via connectors, learn more in our [connectors guide](/docs/connectors).
+   
+   Hence, via this method, your user & events will start getting synced to SuprSend.
    
 4. **Via Database**
 
@@ -174,34 +177,77 @@ Whenever a user is created/ synced on the SuprSend Platform, it's represented by
       }
     }
   ```
-  This approach works across all SDK implementations ([Python](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Node.js](/docs/node-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Java](/docs/java-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Go](/docs/go-trigger-workflow-from-api#sending-notification-to-anonymous-user)) with slight syntax variations. Also, no user profile synchronization. 
+  This approach works across all SDK implementations ([Python](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Node.js](/docs/node-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Java](/docs/java-trigger-workflow-from-api#sending-notification-to-anonymous-user), [Go](/docs/go-trigger-workflow-from-api#sending-notification-to-anonymous-user)) with slight syntax variations.
 
 ### 4. Cross-User Communication:
 
-  In this case, you'd need to pass the `distinct_id` of the actor and the recipient to the trigger.
-  This is useful when you want to notify a user based on the action performed by another user.
-  [Know how this is done](/docs/cross-user-notifications)
+  You can send notifications to users based on another user's actions, with the help of the method called Cross-User Communication. In this, you need to pass the information of the actor and the recipient (both) in the workflow trigger. 
+  
+  SuprSend will automatically fetch the user profile of the actor and the recipient.
 
+  This is a helpful use case for scenarios like:
 
+    - Notifying document owners when someone comments.
+    - Sending alerts when one user mentions another.
+    - Group chat notifications, etc.
 
+  Here's how this works:
+    <Steps>
+      <Step title="Specify an Actor" stepNumber={1} titleSize="p">
+        Actor is the one who triggers the action. Hence, we use `$actor` properties in notification templates to reference the information of acting user.
 
+        You need to pass the `distinct_id` of the actor in the actor object.
 
+        For instance,
 
+        ```json
+        "actor" : {
+          "distinct_id" : "actor_1",
+          "name" : "Actor 1",
+          // Other info if required
+        }
+        ```
+      </Step>
+      <Step title="Define the Recipient">
+        Recipient is the one who recieves the notification finally. Pass the `distinct_id` of the recipient in the recipient object.
 
+        Example:
 
+        ```json
+        "recipient" : {
+          "distinct_id" : "recipient_1",
+          "name" : "Recipient 1",
+          "$email" : [
+              "recipient_1@example.com"
+          ]
+        }
+        ```
+      </Step>
+    </Steps>
 
-
-
-
-
-#### Notification Triggering Methods
-
-4. **Cross-user Communication**
-   - Involve multiple users (actors and recipients)
-   - Reference user properties in notification templates
-
-For detailed implementation guides, refer to:
-
-- [User Profile Management](/docs/update-user-profile)
-- [Workflow Triggers](/docs/workflow-triggers)
-- [Cross-user Notifications](/docs/cross-user-notifications)
+  A sample skeleton structure of the implementation could be:
+  ```json
+    {
+        "workflow": "sample_notif",
+        "actor": {
+            "distinct_id": "sample_actor",
+            "name": "John Doe",
+            // other actor properties
+        },
+        "recipients": [
+            {
+              "distinct_id": "sample_recipient",
+              "$email": ["document.owner@example.com"],
+              "name": "Jane Doe"
+            }
+        ],
+        "data": {
+            "first_name": "User",
+            "invoice_amount": "$5000",
+            "invoice_id":"Invoice-1234",
+            "spend_amount":  "$10",
+            // sample notification data
+        }
+    }
+  ```
+Hence, in this method, you essentially involve multiple users (actor and recipient) in the trigger.
