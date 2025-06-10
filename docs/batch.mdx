@@ -3,7 +3,7 @@ title: "Batch"
 description: "Learn about batch node in workflow and how to use it to group similar notifications into a single notification."
 ---
 
-Batch node aggregates multiple triggers into a single batch output to send one consolidated notification rather than sending notification for every user activity. Batching events are useful when a user needs to be notified about a lot of events happening at once but doesn't need a notification for every single event within the batch. For example, if you have a product where users can interact with each other's content and post 5 comments in 10 minutes. In this case, rather than sending 5 notifications, you can batch the events for 10 minutes and send one notification about the 5 comments that the user received.
+Batch node aggregates multiple triggers into a single batch output to send one consolidated notification rather than sending notification for every user activity. Batching events are useful when a user needs to be notified about a lot of events happening at once but doesn't need a notification for every single event within the batch. e.g., if you have a product where users can interact with each other's content and post 5 comments in 10 minutes. In this case, rather than sending 5 notifications, you can batch the events for 10 minutes and send one notification about the 5 comments that the user received.
 
 ## How batching works
 
@@ -23,7 +23,7 @@ Batch node aggregates multiple triggers into a single batch output to send one c
 
 Batch window is the time for which batch should be open for. After receiving the first event, batch window opens and all the events coming in this interval will be accumulated. The next node is executed after the batch window is closed. There is a setting `Flush first item immediately` which bypasses batch window and sends the first trigger immediately and accumulates the rest.
 
-There are 3 types of window type: **Fixed** (fixed for all users), **Dynamic** (Passed in trigger payload), Relative (relative to a future timestamp, eg. 10 mins before task due time).
+There are 3 types of window type: **Fixed** (fixed for all users), **Dynamic** (Passed in trigger payload), Relative (relative to a future timestamp, e.g. 10 minutes before task due time).
 
 <AccordionGroup>
   <Accordion title="Fixed">
@@ -44,9 +44,9 @@ There are 3 types of window type: **Fixed** (fixed for all users), **Dynamic** (
     <CodeGroup>
 
     ```json json
-    properties = {													  
-      "preferencs": {  
-        "alert_frequency": "1h",  
+    properties = {
+      "preferencs": {
+        "alert_frequency": "1h",
         "channels": ["email","inbox"]
       }
     ```
@@ -61,7 +61,7 @@ There are 3 types of window type: **Fixed** (fixed for all users), **Dynamic** (
     - An ISO-8601 timestamp (e.g. 2024-03-02T20:34:07Z) which must be a datetime in the future, or
     - A relative duration unit, which can be
       - an integer like`50`, which will be considered as duration in seconds
-      - an interval string defined as`\\\\\\\*\\\\\\\*d \\\\\\\*\\\\\\\*h \\\\\\\*\\\\\\\*m \\\\\\\*\\\\\\\*s`, where d = day, h = hour, m = minutes and s = seconds
+      - an interval string defined as`*\\\\\\\*d \\\\\\\*\\\\\\\*h \\\\\\\*\\\\\\\*m \\\\\\\*\\\\\\\*s`, where d = day, h = hour, m = minutes and s = seconds
 
     <Note>
       **Batch window is not modified by subsequent workflows once the window is open**
@@ -70,17 +70,17 @@ There are 3 types of window type: **Fixed** (fixed for all users), **Dynamic** (
     </Note>
   </Accordion>
   <Accordion title="Relative">
-    Relative batch window is calculated based on a future timestamp. For example, sending a batched list of all pending tasks 1 hour before workday end time, where workday_end_time is a key in the trigger payload. It consists of three key components:
+    Relative batch window is calculated based on a future timestamp. e.g., sending a batched list of all pending tasks 1 hour before workday end time, where workday_end_time is a key in the trigger payload. It consists of three key components:
 
-    1. **Interval**: The delay from the future timestamp, formatted as xxdxxhxxmxxs (e.g., 30m for 30 minutes). This can be: Fixed (e.g., always 1 hour minutes before). Dynamic, where the value is retrieved from the payload (e.g., in Google Calendar, users can set reminders for 10 or 20 minutes before an event).
+    1. **Interval**: The delay from the future timestamp, formatted as xxdxxhxxmxxs (e.g. 30m for 30 minutes). This can be: Fixed (e.g. always 1 hour minutes before). Dynamic, where the value is retrieved from the payload (e.g. in Google Calendar, users can set reminders for 10 or 20 minutes before an event).
     2. **Before/After**: Determines whether the interval is subtracted (before) or added (after) to the timestamp.
-    3. **Timestamp**: An ISO-8601 format datetime (e.g., 2024-03-02T20:34:07Z), which must be in the future. Dynamic Interval & Timestamp must be passed as a JQ-expression. Examples: Timestamp at the parent level: `.timestamp`. If the dynamic interval is set as recipient property: `."$recipient".interval`
+    3. **Timestamp**: An ISO-8601 format datetime (e.g. 2024-03-02T20:34:07Z), which must be in the future. Dynamic Interval & Timestamp must be passed as a JQ-expression. Examples: Timestamp at the parent level: `.timestamp`. If the dynamic interval is set as recipient property: `."$recipient".interval`
   </Accordion>
 </AccordionGroup>
 
 ## Batch Key
 
-This is the property in your `track event` call used for defining uniques batches of the events. By default, event will be batched per user. You can use batch key to create multiple batches per user. Batches are created for each unique `distinct_id` and `batch_key` combination. For instance, you can add `post_id` as your batch key if you want to send separate notifications for comments on different linkedin posts.
+This is the property in your `track event` call used for defining unique batches of the events. By default, event will be batched per user. You can use batch key to create multiple batches per user. Batches are created for each unique `distinct_id` and `batch_key` combination. For instance, you can add `post_id` as your batch key if you want to send separate notifications for comments on different LinkedIn posts.
 
 ![](/images/docs/f7de8ef-image.png)
 
@@ -99,16 +99,16 @@ Here, the batch is opened on receiving the first item irrespective of the flush 
 The output structure of the first notification matches the batch structure, with `$batched_events_count = 1`. You can use this count in your workflow or templates to customize content based on whether the notification is sent immediately or as part of a batch.
 
 **Example Use Case:**
-Send anomaly alert with first notification sent at the occurrence of first error and next alert sent after 30 mins if there are further errors. These could be the template content for single vs batched trigger:
+Send anomaly alert with first notification sent at the occurrence of first error and next alert sent after 30 minutes if there are further errors. These could be the template content for single vs batched trigger:
 
-- First notification (sent immediately):`A new error encountered in your account- {{$batched_events.\[0\].error_message}}`
-- Batched notification (sent after grouping all errors from 2nd error onwards):`{{$batched_events_count}} errors occurred in your account in the last 30 mins- {{#each $batched_events}}{{error_message}}{{/each}}`
+- First notification (sent immediately):`A new error encountered in your account - {{$batched_events.\\\\\\\[0\\\\\\\].error_message}}`
+- Batched notification (sent after grouping all errors from second error onwards):`{{$batched_events_count}} errors occurred in your account in the last 30 mins - {{#each $batched_events}}{{error_message}}{{/each}}`
 
 ## Using Batch variables in templates
 
 Batch output variable has 2 type of variables:
 
-1. `$batched_events`array: All the event properties corresponding to a batched event is appended to this array and can be used in the template in the array format. The number of event properties returned here is limited by retaining batch events.
+1. `$batched_events`array : All the event properties corresponding to a batched event is appended to this array and can be used in the template in the array format. The number of event properties returned here is limited by retaining batch events.
 2. `$batched_event_count`: This count represents the number of events in a batch and is utilized to render the batch count in a template. For instance, you might send a message like,`Joe left 5 comments in the last 1 hour`where 5 corresponds to $batched_event_count.
 
 <Note>
@@ -134,37 +134,37 @@ Here is a list of events triggered in the batched window:
 ```javascript javascript
 //Event 1
 
-const event_name = "new_comment" 
+const event_name = "new_comment"
 
-const properties = {													
+const properties = {
   "name": "Steve",
   "card_id": "SS-12",
   "comment": "Hey, added the test cases added for PRD-12"
-}  
+}
 
 const event = new Event(distinct_id, event_name, properties)
 
 //Event 2
 
-const event_name = "new_comment" 
+const event_name = "new_comment"
 
-const properties = {													
+const properties = {
   "name": "Olivia",
   "card_id": "SS-12",
   "comment": "Hey, done with the testing. Check the bugs"
-}  
+}
 
 const event = new Event(distinct_id, event_name, properties)
 
 //Event 3
 
-const event_name = "new_comment" 
+const event_name = "new_comment"
 
-const properties = {													
+const properties = {
   "name": "Joe",
   "card_id": "SS-12",
   "comment": "3 bugs are resolved, 4 are still pending"
-}  
+}
 
 const event = new Event(distinct_id, event_name, properties)
 ```
@@ -232,7 +232,7 @@ You can also test this behaviour via `Enable batching` option in [Mock data](/do
 
 ## Transforming Batch Variable Output
 
-There can be cases where you need to split the batch output variables into multiple arrays based on keys in your input data. For example, to send a message like `You have got 5 comments and 3 likes on your post in the past 1 hour` where post and likes are interaction_type in your input payload. You can use [data transform node](/docs/data-transform) and generate relevant variables using **JSONNET editor** to handle this usecase.
+There can be cases where you need to split the batch output variables into multiple arrays based on keys in your input data. e.g., to send a message like `You have got 5 comments and 3 likes on your post in the past 1 hour` where post and likes are interaction_type in your input payload. You can use [data transform node](/docs/data-transform) and generate relevant variables using **JSONNET editor** to handle this use case.
 
 ![](/images/docs/f54d0b5-image.png)
 
@@ -243,39 +243,39 @@ Let's take below example. There are 3 post interactions, 2 comments and 1 like a
 ```node node
 //Event 1
 
-const event_name = "new_post_interaction" 
+const event_name = "new_post_interaction"
 
-const properties = {													
+const properties = {
   "name": "Steve",
   "post_id": "PS-12",
   "interaction_type":"comment",
   "comment": "Well written! looking for more such posts"
-}  
+}
 
 const event = new Event(distinct_id, event_name, properties)
 
 //Event 2
 
-const event_name = "new_post_interaction" 
+const event_name = "new_post_interaction"
 
-const properties = {													
+const properties = {
   "name": "Olivia",
   "card_id": "PS-12",
   "interaction_type":"like"
-}  
+}
 
 const event = new Event(distinct_id, event_name, properties)
 
 //Event 3
 
-const event_name = "new_post_interaction" 
+const event_name = "new_post_interaction"
 
-const properties = {													
+const properties = {
   "name": "Joe",
   "post_id": "PS-12",
   "interaction_type":"comment",
   "comment": "Every leader should read this"
-}  
+}
 
 const event = new Event(distinct_id, event_name, properties)
 ```
@@ -289,23 +289,23 @@ Without transformation, batch output will look like this:
 ```json json
 {
   "$batched_events":[
-    {												
+    {
   "name": "Steve",
   "post_id": "PS-12",
   "interaction_type":"comment",
   "comment": "Well written! looking for more such posts"
     },
-   {													
+   {
   "name": "Olivia",
   "card_id": "PS-12",
   "interaction_type":"like"
 } ,
- {													
+ {
   "name": "Joe",
   "post_id": "PS-12",
   "interaction_type":"comment",
   "comment": "Every leader should read this"
-}   
+}
   ],
  "$batched_events_count":3
 }
@@ -345,23 +345,23 @@ After data transform node, output variables will contain 3 additional keys gener
   "like_count":"1",
   "all_comments":["Well written! looking for more such posts","Every leader should read this"],
   "$batched_events":[
-    {												
+    {
   "name": "Steve",
   "post_id": "PS-12",
   "interaction_type":"comment",
   "comment": "Well written! looking for more such posts"
     },
-   {													
+   {
   "name": "Olivia",
   "card_id": "PS-12",
   "interaction_type":"like"
 } ,
- {													
+ {
   "name": "Joe",
   "post_id": "PS-12",
   "interaction_type":"comment",
   "comment": "Every leader should read this"
-}   
+}
   ],
  "$batched_events_count":3
 }
