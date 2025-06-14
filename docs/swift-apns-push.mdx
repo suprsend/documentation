@@ -202,3 +202,103 @@ class AppDelegate: NSObject, UNUserNotificationCenterDelegate, SuprSendDeepLinkD
 
 ```
 </CodeGroup>
+
+## Final AppDelegate.swift file
+Example of `AppDelegate.swift` file with all the above code.
+
+<CodeGroup>
+
+```swift AppDelegate.swift 
+import Foundation
+import SuprSend
+import UIKit
+
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate,
+  SuprSendDeepLinkDelegate
+{
+
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    SuprSend.shared.enableLogging()
+    SuprSend.shared.configure(publicKey: "Testing")
+    SuprSend.shared.setDeepLinkDelegate(self)
+    registerForPush()
+    return true
+  }
+
+  func registerForPush() {
+    UNUserNotificationCenter.current().delegate = self
+
+    UNUserNotificationCenter.current().requestAuthorization(
+      options: [.sound, .badge, .alert],
+      completionHandler: { granted, error in
+        if granted {
+          DispatchQueue.main.async {
+            UIApplication.shared.registerForRemoteNotifications()
+          }
+        }
+      })
+  }
+
+  func application(
+    _ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
+    let token = tokenParts.joined()
+
+    Task {
+      await SuprSend.shared.user.addiOSPush(token)
+    }
+  }
+
+  func application(
+    _ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+  ) {
+
+    SuprSend.shared.push.application(
+      application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler
+    )
+
+    completionHandler(.newData)
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+
+    SuprSend.shared.push.userNotificationCenter(
+      center, didReceive: response, withCompletionHandler: completionHandler)
+
+    completionHandler()
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+
+    SuprSend.shared.push.userNotificationCenter(
+      center, willPresent: notification, withCompletionHandler: completionHandler)
+
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .badge, .sound])
+    } else {
+      // Fallback on earlier versions
+      completionHandler([.alert, .badge, .sound])
+    }
+  }
+
+  func shouldHandleSuprSendDeepLink(_ url: URL) -> Bool {
+    print("Handling URL: \(url)")
+    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    return false
+  }
+
+}
+
+```
+</CodeGroup>
