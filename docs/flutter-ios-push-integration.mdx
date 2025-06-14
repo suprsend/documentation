@@ -1,6 +1,6 @@
 ---
-title: "iOS Push Integration"
-description: "This document guides you to integrate apns push notification in flutter iOS application."
+title: "iOS Push Setup"
+description: "Step-by-step guide to setup APNS iOSpush notifications in your flutter app."
 ---
 
 <Warning>
@@ -8,11 +8,11 @@ description: "This document guides you to integrate apns push notification in fl
 
   If you are using an iOS version older than v1.0.0 and upgrading to the new version. Please ensure to use the latest integration steps, especially for below methods:
 
-  1. [Adding Background mode capability (point 3 of capabilities)](/docs/flutter-apns-push#step-1-add-capabilities-in-ios-application)
+  1. [Adding Background mode capability (point 3 of capabilities)](/docs/flutter-ios-push-integration#step-1-add-capabilities-in-ios-application)
 
-  2. [Calling registerPush method](/docs/flutter-apns-push#step-2-register-for-push-notification-in-appdelegateswift-file)
+  2. [Calling registerPush method](/docs/flutter-ios-push-integration#step-2-register-for-push-notification-in-appdelegateswift-file)
 
-  3. [Tracking delivery methods](/docs/flutter-apns-push#step-4-enable-sending-and-tracking-of-push-notifications)
+  3. [Tracking delivery methods](/docs/flutter-ios-push-integration#step-4-enable-sending-and-tracking-of-push-notifications)
 </Warning>
 
 <Tip>
@@ -102,11 +102,11 @@ description: "This document guides you to integrate apns push notification in fl
         }
         completionHandler()
       }
-          
+
       override func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]){
         SuprSend.shared.application(application, didReceiveRemoteNotification: userInfo)
       }
-          
+
       @available(iOS 10.0, *)
       override func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         if #available(iOS 14.0, *) {
@@ -150,10 +150,10 @@ description: "This document guides you to integrate apns push notification in fl
           ```yaml PodFile
           target '<your notification service name>' do
             use_frameworks!
-            
+
             pod 'SuprsendCore'
             pod 'SuprSendSdk'
-            
+
           end
           ```
         </CodeGroup>
@@ -173,14 +173,14 @@ description: "This document guides you to integrate apns push notification in fl
           class NotificationService: UNNotificationServiceExtension {
           var contentHandler: ((UNNotificationContent) -> Void)?
           var modifiedNotificationContent: UNMutableNotificationContent?
-            
+
           private func track(request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-                  
+
                   let suprSendConfiguration = SuprSendSDKConfiguration(
                       withKey: "your workspace key",
                       secret: "your workspace secret"
                   )
-                  
+
                   SuprSend.shared.configureWith(configuration: suprSendConfiguration , launchOptions: [:])
                   SuprSend.shared.didReceive(request, withContentHandler: contentHandler)
               }
@@ -188,9 +188,9 @@ description: "This document guides you to integrate apns push notification in fl
           override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
               self.contentHandler = contentHandler
               modifiedNotificationContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
-              
+
                track(request: request, withContentHandler: contentHandler)
-            
+
               if let modifiedNotificationContent = modifiedNotificationContent {
                   // Modify the notification content here...
                   // 1
@@ -199,7 +199,7 @@ description: "This document guides you to integrate apns push notification in fl
                       contentHandler(modifiedNotificationContent)
                       return
                   }
-                  
+
                   getMediaAttachment(for: imageURLString) { [weak self] image in
                       guard let self = self, let image = image, let fileURL = self.saveImageAttachment(
                           image: image,
@@ -208,16 +208,16 @@ description: "This document guides you to integrate apns push notification in fl
                           contentHandler(modifiedNotificationContent)
                           return
                       }
-                      
+
                       let imageAttachment = try? UNNotificationAttachment(
                           identifier: "image",
                           url: fileURL,
                           options: nil)
-                      
+
                       if let imageAttachment = imageAttachment {
                           modifiedNotificationContent.attachments = [imageAttachment]
                       }
-                      
+
                       contentHandler(modifiedNotificationContent)
                   }
               }
@@ -229,7 +229,7 @@ description: "This document guides you to integrate apns push notification in fl
               if let contentHandler = contentHandler, let bestAttemptContent =  modifiedNotificationContent {
                   contentHandler(bestAttemptContent)
               }
-              
+
           }
 
           }
@@ -269,18 +269,18 @@ description: "This document guides you to integrate apns push notification in fl
                   completion(nil)
                   return
               }
-              
+
               let task = URLSession.shared.dataTask(with: url) { data, response, error in
                   if error != nil {
                       completion(nil)
                       return
                   }
-                  
+
                   guard let data = data else {
                       completion(nil)
                       return
                   }
-                  
+
                   guard let image = UIImage(data: data) else {
                       completion(nil)
                       return
