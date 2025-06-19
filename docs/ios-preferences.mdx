@@ -1,0 +1,587 @@
+---
+title: "Preferences"
+description: "Preferences in your iOS application"
+---
+
+### Pre-Requisites
+
+- Integration of [iOS SDK](/docs/ios-integration)
+
+- [Configure notification categories](/docs/user-preferences#create-notification-category) on SuprSend dashboard
+
+## Understanding preference structure
+
+Preference Page contains 2 sections:
+
+1. Category-level preference settings (Sections)
+
+   - [Sections](/docs/js-preferences#11-sections)
+
+   - [Categories](/docs/js-preferences#12-categories-sections---sub-categories)
+
+   - [Category Channel](/docs/js-preferences#13-category-channels-sections---sub-categories---channels)
+
+     <img
+       src="/images/docs/ios-sections-preferences.png"
+       alt="Description"
+       style={{
+         width: "100%",
+         height: "350px",
+         objectFit: "contain",
+       }}
+     />
+
+2. [Overall Channel-level preference](/docs/js-preferences#2-overall-channel-preferences)
+
+<img
+  src="/images/docs/ios-channel-preferences.png"
+  alt="Description"
+  style={{
+    width: "100%",
+    height: "350px",
+    objectFit: "contain",
+  }}
+/>
+
+### Preferences data structure
+
+<CodeGroup>
+  ```swift Preferences Types
+
+struct PreferenceData: Codable {
+   var sections: [Section]?
+   var channelPreferences: [ChannelPreference]?
+
+    enum CodingKeys: String, CodingKey {
+      case sections
+      case channelPreferences = "channel_preferences"
+    }
+}
+
+struct ChannelPreference: Codable {
+   var channel: String
+   var isRestricted: Bool
+
+    enum CodingKeys: String, CodingKey {
+      case channel
+      case isRestricted = "is_restricted"
+    }
+
+}
+
+struct Section: Codable {
+   var name: String?
+   var description: String?
+   var subcategories: [Category]?
+}
+
+struct Category: Codable {
+   var name: String
+   var category: String
+   var description: String?
+   var preference: PreferenceOptions
+   var isEditable: Bool
+   var channels: [CategoryChannel]?
+
+    enum CodingKeys: String, CodingKey {
+      case name
+      case category
+      case description
+      case preference
+      case isEditable = "is_editable"
+      case channels
+    }
+
+}
+
+struct CategoryChannel: Codable {
+   var channel: String
+   var preference: PreferenceOptions
+   var isEditable: Bool
+
+    enum CodingKeys: String, CodingKey {
+      case channel
+      case preference
+      case isEditable = "is_editable"
+    }
+
+}
+
+enum PreferenceOptions: String, Codable {
+   case optIn = "opt_in"
+   case optOut = "opt_out"
+}
+
+enum ChannelLevelPreferenceOptions: String, Codable {
+   case all = "all"
+   case required = "required"
+}
+
+````
+
+```swift Example
+{
+  "sections": [
+    {
+      "name": null,
+      "subcategories": [
+        {
+          "name": "Payment and History",
+          "category": "payment-and-history",
+          "description": "Send updates related to my payment history.",
+          "preference": "opt_in",
+          "is_editable": false,
+          "channels": [
+            {
+              "channel": "androidpush",
+              "preference": "opt_in",
+              "is_editable": true
+            },
+            {
+              "channel": "email",
+              "preference": "opt_in",
+              "is_editable": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Product Updates",
+      "description": "Non-marketing notifications related to authentication, activity updates, reminders etc.",
+      "subcategories": [
+        {
+          "name": "Newsletter",
+          "category": "newsletter",
+          "description": "Send updates on new feature in the product",
+          "preference": "opt_in",
+          "is_editable": true,
+          "channels": [
+            {
+              "channel": "androidpush",
+              "preference": "opt_in",
+              "is_editable": true
+            },
+            {
+              "channel": "email",
+              "preference": "opt_out",
+              "is_editable": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "channel_preferences": [
+    {
+      "channel": "androidpush",
+      "is_restricted": false
+    },
+    {
+      "channel": "email",
+      "is_restricted": true
+    }
+  ]
+}
+````
+
+</CodeGroup>
+
+### 1.1 Sections
+
+This contains the name, description, and subcategories. We have to loop through the sections list and for every section item if there is a name and description present, then show the heading, and if a subcategories list is present, loop through that subcategories list and show all subcategories under that section heading.
+
+Subcategories can exist without sections as the section is an optional field. In that case, the section's name will not be available. For sections where the name is not present, you can directly show its subcategories list without showing Heading for the section in UI.
+
+![](/images/docs/e65f303-section.png)
+
+<CodeGroup>
+  ```swift syntax
+  struct Section: Codable {
+   var name: String?
+   var description: String?
+   var subcategories: [Category]?
+}
+
+  ```
+</CodeGroup>
+
+| Property      | Description                                               |
+| ------------- | --------------------------------------------------------- |
+| name          | name of the section                                       |
+| description   | description of the section                                |
+| subcategories | data of all sub-categories to be shown inside the section |
+
+### 1.2 Categories (sections -> sub-categories)
+
+This is the place where the user sets his category-level preferences. While looping through the subcategories list for every subcategory item, show the name and description in UI.
+
+![](/images/docs/2317beb-subcategories.png)
+
+<CodeGroup>
+  ```swift syntax
+struct Category: Codable {
+   var name: String
+   var category: String
+   var description: String?
+   var preference: PreferenceOptions
+   var isEditable: Bool
+   var channels: [CategoryChannel]?
+
+    enum CodingKeys: String, CodingKey {
+      case name
+      case category
+      case description
+      case preference
+      case isEditable = "is_editable"
+      case channels
+    }
+}
+  ```
+</CodeGroup>
+
+| Property    | Description                                                                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| category    | This key is the id of the category which is used while updating the preference.                                                                   |
+| name        | name of the category to be shown on the UI                                                                                                        |
+| description | description of the category to be shown on the UI                                                                                                 |
+| preference  | This key indicates if the category's preference switch is on or off. Get **OPT_IN** when the switch is on and **OPT_OUT** when the switch is off  |
+| is_editable | Indicates if the preference switch button is disabled or not. If its value is false then the preference setting for that category can't be edited |
+| channels    | data of all category channels to be shown below the sub-category. Loop through it to show checkboxes under every subcategory item.                |
+
+### 1.3 Category channels (sections -> sub-categories -> channels)
+
+This contains a list of channels, channel preference status and whether it's editable or not. While looping through the subcategory list for every subcategory item we have to loop through its channels list and for every channel to show channel level checkbox.
+
+![](/images/docs/74de834-channelCategory.png)
+
+<CodeGroup>
+  ```swift syntax
+  struct CategoryChannel: Codable {
+   var channel: String
+   var preference: PreferenceOptions
+   var isEditable: Bool
+
+    enum CodingKeys: String, CodingKey {
+      case channel
+      case preference
+      case isEditable = "is_editable"
+    }
+}
+  ```
+</CodeGroup>
+
+| Property    | Description                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel     | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                        |
+| preference  | This key indicates if the channel's preference switch is on or off. Get OPT_IN when the switch is on and OPT_OUT when the switch is off     |
+| is_editable | Indicates if the preference checkbox is disabled or not. If its value is false then the preference setting for that channel can't be edited |
+
+### 2. Overall channel preferences
+
+It's a list of all channel-level preferences. We have to loop through the list and for each item, show the UI as given in the below image.
+
+![](/images/docs/7ffb4c5-overallChannelPref.png)
+
+<CodeGroup>
+  ```swift syntax
+  struct ChannelPreference: Codable {
+    var channel: String
+    var isRestricted: Bool
+
+    enum CodingKeys: String, CodingKey {
+      case channel
+      case isRestricted = "is_restricted"
+    }
+
+}
+  ```
+</CodeGroup>
+
+| Property      | Description                                                                                                                                                                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel       | name of the channel to be shown on UI. The same key will be used as id of the channel while updating the preference.                                                                                                                                                                           |
+| is_restricted | This key indicates the restriction level of channel. If restricted, notification will only be sent in the category where this channel is added as mandatory in notification category settings. **True** means Required radio button is selected. **False** means All radio button is selected. |
+
+## Integration
+
+### Get preferences data
+
+Use this method to get preferences data and create the preferences UI by following the above sections. This method should be called first before any update preference methods.
+
+<CodeGroup>
+  ```swift syntax
+   await SuprSend.shared.preferences.getPreferences(args: Preferences.Args(tenantId: ""))
+  ```
+</CodeGroup>
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+### Update category preference
+
+Calling this method will opt-in/opt-out user from that category. When the category is editable and the switch is toggled you can call this method.
+
+<CodeGroup>
+  ```swift syntax
+  await SuprSend.shared.preferences.updateCategoryPreference(category: "category_value", preference: PreferenceOptions)
+
+enum PreferenceOptions: String, Codable {
+   case optIn = "opt_in"
+   case optOut = "opt_out"
+}
+````
+</CodeGroup>
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+![](/images/docs/90acce7-update1.png)
+
+### Update channel preference in category
+
+Calling this method will opt-in/opt-out users from that category-level channel. When the category's channel checkbox is editable and the user clicks on the checkbox you can call this method.
+
+<CodeGroup>
+```swift syntax
+await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
+  channel: "channel",
+  preference: PreferenceOptions,
+  category: "category"
+)
+
+enum PreferenceOptions: String, Codable {
+   case optIn = "opt_in"
+   case optOut = "opt_out"
+}
+````
+
+</CodeGroup>
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+![](/images/docs/068dbe0-update2.png)
+
+### Update overall channel preference
+
+This method updated the channel-level preference of the user.
+
+<CodeGroup>
+  ```swift syntax
+await SuprSend.shared.preferences.updateOverallChannelPreference(
+    channel: "channel",
+    preference: ChannelLevelPreferenceOptions
+)
+
+enum ChannelLevelPreferenceOptions: String, Codable {
+   case all = "all"
+   case required = "required"
+} 
+
+````
+</CodeGroup>
+
+**Returns:** `async -> PreferenceAPIResponse`
+
+![](/images/docs/a3249bd-update3.png)
+
+### Event listeners
+
+All preferences update api's are optimistic updates. Actual API call will happen in background with 1 second debounce. Since its a background task SDK provides event listeners to get updated preference data based on API call status. Listen to this event listeners and update the UI accordingly.
+
+<CodeGroup>
+```swift syntax
+SuprSend.shared.emitter.on(.preferencesUpdated) { data in
+  // update local store so that UI is updated with latest data
+} 
+
+SuprSend.shared.emitter.on(.preferencesError) { error in
+  // show error toast to user
+}
+```
+
+</CodeGroup>
+
+## Example
+
+```swift Example.swift
+import Combine
+import SuprSend
+import SwiftUI
+
+class PreferenceViewModel: ObservableObject {
+  @Published var isLoading: Bool
+  private var preferenceData: PreferenceData? {
+    didSet {
+      categories = preferenceData?.sections?.first?.subcategories ?? []
+      channels = preferenceData?.channelPreferences ?? []
+    }
+  }
+  @Published var categories: [SuprSend.Category] = []
+  @Published var channels: [SuprSend.ChannelPreference] = []
+
+  init() {
+    isLoading = true
+    fetchAll()
+
+    SuprSend.shared.emitter.on(.preferencesUpdated) { data in
+      DispatchQueue.main.async {
+        self.preferenceData = data?.body
+      }
+    }
+  }
+}
+
+extension PreferenceViewModel {
+
+  func fetchAll() {
+    isLoading = true
+    Task {
+      let result = await SuprSend.shared.preferences.getPreferences(
+        args: Preferences.Args(tenantId: ""))
+      DispatchQueue.main.async {
+        self.preferenceData = result.body
+        self.isLoading = false
+      }
+    }
+  }
+}
+
+struct UserPreferences: View {
+
+  @StateObject var viewModel = PreferenceViewModel()
+  @State private var selectedTab = "Category"
+  var colors = ["Category", "Channel"]
+
+  @State private var selection = Set<String>()
+
+  var body: some View {
+    NavigationView {
+
+      VStack(alignment: .leading) {
+        if viewModel.isLoading {
+          Text("loading...")
+        } else {
+          if selectedTab == "Category" {
+            List($viewModel.categories, id: \.category) { $category in
+              CategoryView(category: category)
+            }
+          } else {
+            List($viewModel.channels, id: \.channel) { item in
+              Section(header: Text(item.wrappedValue.channel)) {
+                RadioView(channel: item.wrappedValue)
+              }
+              .headerProminence(.increased)
+            }
+          }
+        }
+      }
+      .navigationBarTitle(Text("Notification Preferences"), displayMode: .inline)
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          Picker("Preferences", selection: $selectedTab) {
+            ForEach(colors, id: \.self) {
+              Text($0)
+            }
+          }
+          .pickerStyle(.segmented)
+        }
+      }
+      .navigationBarHidden(false)
+      .navigationBarBackButtonHidden(true)
+    }
+  }
+}
+
+struct CategoryView: View {
+
+  @State var isOn: Bool = false
+  var category: SuprSend.Category
+
+  var body: some View {
+    Section(
+      header: Toggle(category.name, isOn: $isOn)
+        .onChange(
+          of: isOn,
+          perform: { value in
+            print("Toggle value: \(value)")
+            _ = SuprSend.shared.preferences.updateCategoryPreference(
+              category: category.category,
+              preference: value ? PreferenceOptions.optIn : PreferenceOptions.optOut)
+          }
+        )
+        .disabled(!category.isEditable)
+    ) {
+      ForEach(category.channels ?? [], id: \.channel) { item in
+        ToggleView(category: category.category, channel: item)
+      }
+    }
+    .headerProminence(.increased)
+    .onAppear {
+      isOn = category.preference == .optIn
+    }
+    .onChange(
+      of: category.preference,
+      perform: { value in
+        isOn = value == .optIn
+      })
+  }
+}
+
+struct RadioView: View {
+  var channel: ChannelPreference
+  @State var selection: ChannelLevelPreferenceOptions
+
+  init(channel: ChannelPreference) {
+    self.channel = channel
+    self.selection = channel.isRestricted ? .required : .all
+  }
+
+  var body: some View {
+    Picker(selection: $selection, label: Text(channel.channel)) {
+      Text("All").tag(ChannelLevelPreferenceOptions.all)
+      Text("Required").tag(ChannelLevelPreferenceOptions.required)
+    }.pickerStyle(.automatic)
+      .onChange(of: selection) { value in
+        _ = SuprSend.shared.preferences.updateOverallChannelPreference(
+          channel: channel.channel,
+          preference: selection
+        )
+      }
+  }
+}
+
+struct ToggleView: View {
+  let category: String
+  let channel: CategoryChannel
+  @State var isOn: Bool = false
+
+  var body: some View {
+    Toggle(channel.channel, isOn: $isOn)
+      .onChange(
+        of: isOn,
+        perform: { value in
+          print("Toggle value: \(value)")
+          Task {
+            await SuprSend.shared.preferences.updateChannelPreferenceInCategory(
+              channel: channel.channel,
+              preference: value ? .optIn : .optOut,
+              category: category,
+              args: nil
+            )
+          }
+        }
+      )
+      .disabled(!channel.isEditable)
+      .onAppear {
+        self.isOn = channel.preference == .optIn
+      }
+      .onChange(
+        of: channel.preference,
+        perform: { value in
+          self.isOn = value == .optIn
+        })
+  }
+}
+
+```
+
+---
