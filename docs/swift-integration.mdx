@@ -1,0 +1,114 @@
+---
+title: "Integration"
+description: "Integrate SuprSend SDK in your Swift project"
+---
+
+<Warning>
+ **`SuprSendSdk` is deprecated. Please migrate to `SuprSend` SDK**
+
+
+  This documentation is for new version of iOS sdk. If you are using older version of sdk `SuprSendSdk` please refer [documentation](https://github.com/suprsend/SuprSend-iOS-SDK/tree/main/documentation)
+</Warning>
+
+## Installation
+
+There are two ways you can install SuprSend SDK into your app:
+
+<Accordion title="Swift Package Manager (SPM)" defaultOpen={false}>
+    In Xcode, go to File > AddPackages to add a new dependency.
+
+    In that search bar, add suprsend-swift-sdk project github url `https://github.com/suprsend/suprsend-swift-sdk` and keep the default version settings and click `Add Package` button.
+
+    In second dialog box, select your project's target from dropdown and click `Add Package` button.
+
+</Accordion>
+<Accordion title="Cocoapods" defaultOpen={false}>
+  Add the SuprSendSwift SDK to your Podfile as `pod "SuprSend"` and run `pod install` to install the SDK.
+</Accordion>
+
+## Integration
+
+<Steps>
+<Step title="Create Client">
+Import SDK inside `AppDelegate.swift` and then initialize the SuprSend class inside `application(_:didFinishLaunchingWithOptions:)` method.
+
+<CodeGroup>
+
+```swift AppDelegate.swift
+import SuprSend
+
+SuprSend.shared.configure(publicKey: "YOUR_PUBLIC_API_KEY")
+```
+
+</CodeGroup>
+
+| Params         | Description                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| publicApiKey\* | This is public Key used to authenticate API calls to SuprSend. Get it in SuprSend dashboard **ApiKeys -> Public Keys** section |
+
+</Step>
+<Step title="Authenticate User">
+    Authenticate user so that all the actions performed after authenticating will be w.r.t that user. This is mandatory step and need to be called before using any other method. This is usually performed after successful login and on reload of page to re-authenticate user.
+
+    <CodeGroup>
+      ```swift syntax
+      await SuprSend.shared.identify(distinctID: "YOUR_USER_ID", userToken: userTokenData, options: AuthenticateOptions(refreshUserToken: {oldUserToken,tokenPayload in return refreshedUserToken()}));
+      ```
+    </CodeGroup>
+
+    | Properties       | Description                                                                                                                                                                                                      |
+    | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                            |
+    | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken. |
+    | refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                               |
+
+    **Returns:** `async -> APIResponse`
+
+    #### 2.1 Check if user is authenticated
+
+    This method will check if user is authenticated i.e. `distinctId` is attached to SuprSend instance. To check for userToken also pass checkUserToken flag true.
+
+    <CodeGroup>
+      ```swift syntax
+      SuprSend.shared.isIdentified(checkUserToken: true)
+      ```
+    </CodeGroup>
+
+  </Step>
+
+  <Step title="Reset user">
+    This will remove user data from SuprSend instance. This is usually called on logout action.
+
+    <CodeGroup>
+      ```swift syntax
+     await SuprSend.shared.reset()
+      ```
+    </CodeGroup>
+
+    **Returns:** `async -> APIResponse`
+
+  </Step>
+  </Steps>
+
+## Response Structure
+
+<CodeGroup>
+  ```swift syntax
+  struct APIResponse {
+    /// The status of the response (success or error).
+    public let status: ResponseStatus
+
+    /// The HTTP status code associated with the response.
+    public let statusCode: StatusCode?
+
+    /// The JSON response body.
+    public let body: ResponseBody?
+
+    /// Any error that occurred during the request. {type: string, message: string}
+    public let error: ResponseError?
+
+}
+
+```
+</CodeGroup>
+```
