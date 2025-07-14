@@ -1,142 +1,460 @@
 ---
 title: "Slack Template"
-description: "How to design simple Slack template using text editor or use JSONNET editor for templates designed in Slack block kit builder."
+description: "How to design Slack templates using text editor or JSONNET editor for rich block kit templates."
 ---
 
-## Design Slack Template
+## Edit Template
 
-<Steps>
-  <Step title="Design Template using JSONNET editor">
-    You can design slack template using JSONNET editor. For ease of use:
+SuprSend provides two ways to design Slack templates:
+
+- **Text Editor**: For simple text-based messages with variable interpolation
+- **JSONNET Editor**: For rich, interactive templates using Slack's Block Kit with buttons, images, and complex layouts
+
+
+### Text Editor
+
+The text editor is ideal for simple text messages with variable content. You can add variables in Handlebars syntax as `{{...}}`. If the output has special html text, enclose variable in triple curly braces as `{{{url}}}` to avoid HTML escaping.
+
+<CodeGroup>
+```text Sample Template
+New Signup request in ABC company
+
+UserName: {{user_name}}
+Email: {{user_email}}
+Organization: {{org.name}}
+Domain: {{org.domain}}
+```
+
+```json Mock Data
+{
+  "user_name": "John Doe",
+  "user_email": "john@doe.com",
+  "org": {
+    "name": "ABC company",
+    "domain": "abc.com"
+  }
+}
+```
+</CodeGroup>
+
+### JSONNET Editor
+
+The JSONNET editor enables rich template design using [Slack Block Kit Builder](https://app.slack.com/block-kit-builder/). This allows you to create interactive templates with buttons, images, checkboxes, and styled text.
+It is essentially JSON template where variables can be added in JSONNET syntax as `data.variable_name` or `data["$variable_name"]`.
+
+![Slack Editor Demo](https://files.readme.io/ae3572a-slack_editor.gif)
+
+#### Template Examples
+<AccordionGroup>
+<Accordion title="1. Simple Text Template">
 
 
 
-    <Accordion title="Build Slack Template in Slack block Kit Builder" defaultOpen={false}>
-      You can build slack template in [Slack block kit builder](https://app.slack.com/block-kit-builder/T021L49RVHR) and add the content of block key in the JSONNET editor
-
-      ![](https://files.readme.io/ae3572a-slack_editor.gif "slack_editor.gif")
-    </Accordion>
-
-    <Accordion title="You can use one of our sample templates to start editing" defaultOpen={false}>
-      You can use one of our sample templates to start editing. We have used some mock data in our examples. Copy-paste the mock data values in the global `Mock data` button to see the preview
-
-      ![](/images/docs/d20757b-Screenshot_2022-07-13_at_11.35.21_AM.png "Screenshot 2022-07-13 at 11.35.21 AM.png")
-
-      <Warning>
-        You'll need to add mock data for the variables added in your JSONNET template to view the parsed JSON template. JSON template will throw an error in case of missing mock data for a variable
-      </Warning>
-    </Accordion>
-  </Step>
-
-  <Step title="Preview Message">
-    Click on the `Load Preview` button to load the message preview. To see how the message will look like in an actual slack chat, click on `View in Slack Block Kit` on the Preview Template modal.
-
-    This will show the preview of parsed JSON in the Slack UI editor
-
-    ![](https://files.readme.io/b481ef6-slack_preview.gif "slack_preview.gif")
-  </Step>
-
-  <Step title="Publish the Template">
-    Once designed, you can save the slack template by clicking on Save Draft. When you are ready, you can `Publish Draft` by providing a name to the version. This will become the Live version and will be used whenever the associated workflow is triggered.
-  </Step>
-</Steps>
-
-## Adding dynamic content in Slack template
-
-There will always be the case where you would need to add dynamic content to a template, so as to personalise it for your users. To achieve this, you can add variables in the template, which will be replaced with the dynamic content at the time of sending slack notification. To send actual values which will replace the variables at the time of communication trigger, use one of our frontend or backend SDKs.
-
-Here is a step by step guide on how to add dynamic content in slack:
-
-<Steps>
-  <Step title="Declaring Variables in the global 'Mock data' button:">
-    If you are at this stage, it is assumed that you have declared the variables along with sample values in the global `Mock data` button. To see how to declare variables before using them in designing templates, refer to [this section in the Templates documentation](/docs/templates#adding-dynamic-content).
-  </Step>
-
-  <Step title="Using variables in the templates:">
-    Once the variables are declared, you can add them in the slack template as **`data.<variable_name>`**.
-
-    Note that you will be able to enter a variable name even when you have not declared it inside the 'Mock data' button. However, the preview will not load without declaring the variables in `Mock data`. Hence it is advised to always declare variables before loading the preview of slack template
-
-    Below are some examples of how to enter variables in the template design. For illustration, we are using the same sample variable names that we have declared in the 'Templates' section:
-
-    <CodeGroup>
-      ```json json
-      {
-        "array": [
-          {
-            "product_name": "Aldo Sling Bag",
-            "product_price": "3,950.00"
-          },
-          {
-            "product_name": "Clarles & Keith Women Slipper, Biege, 38UK",
-            "product_price": "2,549.00"
-          },
-          {
-            "product_name": "RayBan Sunglasses",
-            "product_price": "7,899.00"
-          }
-        ],
-        "event": {
-          "location": {
-            "city": "Bangalore",
-            "state": "KA"
-          },
-          "order_id": "11200123",
-          "first name": "Nikita"
-        },
-        "product_page": "https://www.suprsend.com"
+<CodeGroup>
+```json JSONNET Template
+[
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "New Signup on ABC company"
+    }
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": ">_UserName_: *%(user_name)s*\n>_Email_: *%(email)s*\n>_Organization_: *%(org_name)s*\n>_Domain_: *%(domain)s*" % {
+        user_name: data.user_name, 
+        email: data.user_email, 
+        org_name: data.org.name, 
+        domain: data.org.domain
       }
-      ```
-    </CodeGroup>
+    }
+  },
+  {
+    "type": "divider"
+  }
+]
+```
 
+```json Mock Data
+{
+  "user_name": "John Doe",
+  "user_email": "john@doe.com",
+  "org": {
+    "name": "ABC company",
+    "domain": "abc.com"
+  }
+}
+```
+</CodeGroup>
+</Accordion>
+<Accordion title="2. With Buttons: Approval Request">
 
+<CodeGroup>
+```json Template
+[
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "Share access requested for *<%(document_link)s|%(document_name)s>*" % {
+        document_link: data.document_link,
+        document_name: data.document_name
+      }
+    }
+  },
+  {
+    "type": "section",
+    "fields": [
+      {
+        "type": "mrkdwn",
+        "text": "*Requested by:*\n" + data.requester_name
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*When:*\n" + data.submitted_at
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Reason:*\n" + data.access_reason
+      }
+    ]
+  },
+  {
+    "type": "actions",
+    "elements": [
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "emoji": true,
+          "text": "Approve"
+        },
+        "style": "primary",
+        "value": "approve_access"
+      },
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "emoji": true,
+          "text": "Deny"
+        },
+        "style": "danger",
+        "value": "deny_access"
+      }
+    ]
+  }
+]
+```
 
-    Variables could be used and added in a number of ways:
+```json Mock Data
+{
+  "access_type": "View",
+  "submitted_at": "Jul 14, 2025",
+  "access_reason": "Need to review figures before tomorrow's board meeting.",
+  "document_link": "https://docs.company.com/12345",
+  "document_name": "Q3 Financial Report",
+  "requester_name": "Jane Doe"
+}
+```
+</CodeGroup>
 
+</Accordion>
+<Accordion title="3. With Image: Anomaly Alert">
 
-
-
-
-    > **1. Add Nested Variable**
-    > To enter a nested variable, enter in the format `data.var1.var2.var3`. Eg. to refer to city in the example above, you need to enter `data.event.location.city`
-
-    > &#x20;**2. Add Variable with space in variable name**
-    > If you have any space in the variable name, enclose it in square bracket `data.event['first name']`
-
-    > **3. Add Single array element**
-    > To refer to an array element, enter in format `data.var[*index*].var2}}`. Eg. to refer to `product_name` of the first element of the array `array`, enter `data.array[0].product_name}}`
-
-    > **4. Add list of array items**
-    > Enter in the below format to add a dynamic list of items. In the above example, variable `array` has a list of product items, with `product_name`, and `product_price` as array properties. Below is an example code to fetch array items in a text field list:
-
-    <CodeGroup>
-      ```json JSONNET
-      [
-        {
-          "type": "section",
-          "fields":[
-            {
-              "type": "plain_text",
-              "text": product.product_name +" at "+ product.product_price,
-              "emoji": true
-            }
-            for product in data.array
-          ]
+<CodeGroup>
+```json Template
+[
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": ":warning: *High Error Rate Detected*\nOur system has experienced a spike in errors over the last *30 minutes*."
+    }
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "The error rate has significantly increased, impacting reliability.\nPlease investigate immediately to avoid service degradation."
+    }
+  },
+  {
+    "type": "image",
+    "title": {
+      "type": "plain_text",
+      "text": "Request vs Failure Trend (Last 6 Hours)",
+      "emoji": true
+    },
+    "image_url": data.image_url,
+    "alt_text": "Graph showing high error rate spike"
+  },
+  {
+    "type": "section",
+    "fields": [
+      {
+        "type": "mrkdwn",
+        "text": "*Impacted Services:*\n" + data.impacted_services
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Time Range:*\n" + data.time_range
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Error Rate:*\n" + data.error_rate
+      }
+    ]
+  },
+  {
+    "type": "divider"
+  },
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "mrkdwn",
+        "text": "🔍 View logs: <%(log_url)s|Open in Monitoring Tool>\n📊 See metrics dashboard: <%(dashboard_url)s|Error Trends>" % {
+          log_url: data.log_url,
+          dashboard_url: data.dashboard_url
         }
-      ]
-      ```
-    </CodeGroup>
+      }
+    ]
+  }
+]
+```
+
+```json Mock Data
+{
+  "log_url": "https://monitoring.company.com/logs?range=last_30_minutes",
+  "image_url": "https://datadog-docs.imgix.net/images/dashboards/widgets/alert_graph/alert_graph.0ddfb73f548355b8adbe31723dff1dd3.png?fit=max&auto=format",
+  "error_rate": "17.2% (normally <1%)",
+  "time_range": "12:00 PM – 12:30 PM UTC",
+  "dashboard_url": "https://monitoring.company.com/dashboards/error-trends",
+  "impacted_services": "API Gateway, Auth Service"
+}
+```
+</CodeGroup>
+
+</Accordion>
+
+<Accordion title="4. With Array List: Pending Task Digest (Batched Alert)">
+
+<CodeGroup>
+```json Template
+[
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "Hi " + data["$recipient"].name + " :wave:"
+    }
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "You have "+data["$batched_events_count"]+" *pending tasks* for today:"
+    }
+  },
+  {
+    "type": "rich_text",
+    "elements": [
+      {
+        "type": "rich_text_list",
+        "style": "bullet",
+        "indent": 0,
+        "elements": [
+          {
+            "type": "rich_text_section",
+            "elements": [
+              {
+                "type": "text",
+                "text": task.title + " (" + task.status + ")"
+              }
+            ]
+          }
+          for task in data["$batched_events"]
+        ]
+      }
+    ]
+  },
+  {
+    "type": "actions",
+    "elements": [
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": "View Pending tasks",
+          "emoji": true
+        },
+        "url": "https://app.company.com/tasks",
+        "value": "task_url"
+      }
+    ]
+  }
+]
+```
+
+```json Mock Data
+{
+  "$batched_events_count": 3,
+  "$batched_events": [
+    {
+      "title": "Fix login bug on mobile",
+      "status": "In Progress",
+    },
+    {
+      "title": "Write API docs for new endpoints",
+      "status": "Todo"
+    },
+    {
+      "title": "Review design spec for onboarding",
+      "status": "Blocked"
+    }
+  ]
+}
+```
+</CodeGroup>
+</Accordion>
+</AccordionGroup>
 
 
 
-    > You will be able to see the sample values by loading the preview of your draft version. Make sure to see the preview before publishing the template to check if the parsed `JSON` is valid or not
-  </Step>
-</Steps>
+### Adding dynamic content
+Here's how you can different types of variables in both [handlebars](https://docs.suprsend.com/docs/handlebars-helpers) and [JSONNET](https://jsonnet.org/ref/language.html) syntax.
+
+| Variable Type | Handlebars Syntax | JSONNET Syntax |
+|---------------|-------------------|----------------|
+| **Parent Level variables** | `{{user_name}}` | `data.user_name` |
+| **Nested Object** | `{{org.name}}` | `data.org.name` |
+| **Print Array element at Index** | `{{task_list.[0].task_name}}` | `data.task_list[0].task_name` |
+| **Recipient** | `{{$recipient.name}}` | `data["$recipient"].name` |
+| **Actor** | `{{$actor.name}}` | `data["$actor"].name` |
+| **Tenant** | `{{$tenant.brand_name}}` | `data["$tenant"].brand_name` |
+
+**Print each item in the Array**
+
+<CodeGroup>
+```text Handlebars
+{{#each task_list}}
+{{task_name}}: {{task_description}}
+{{/each}}
+```
+
+```json JSONNET
+[
+  {
+    "type": "section",
+    "fields": [
+      {
+        "type": "plain_text",
+        "text": tasks.task_name + ": " + tasks.task_description,
+        "emoji": true
+      }
+      for tasks in data.task_list
+    ]
+  }
+]
+```
+</CodeGroup>
+
+**Conditional Logic**
+
+<CodeGroup>
+```text Handlebars
+{{#if is_new_org}}
+New Organization
+{{else}}
+Existing Organization
+{{/if}}
+```
+
+```json JSONNET
+{
+  "type": "section",
+  "text": {
+    "type": "mrkdwn",
+    "text": if "is_new_org" in data then
+      "New Organization"
+    else
+      "Existing Organization"
+  }
+}
+```
+</CodeGroup>
+
+**Batched Template**
+
+<CodeGroup>
+```text Handlebars
+Total events: {{$batched_events_count}}
+
+{{#each $batched_events}}
+{{item}}
+{{/each}}
+```
+
+```json JSONNET
+[
+  {
+    "type": "section",
+    "text": {
+      "type": "plain_text",
+      "text": "Total events: " + data["$batched_events_count"],
+      "emoji": true
+    }
+  },
+  {
+    "type": "section",
+    "fields": [
+      {
+        "type": "plain_text",
+        "text": events.item,
+        "emoji": true
+      }
+      for events in data["$batched_events"]
+    ]
+  }
+]
+```
+</CodeGroup>
+
+
+## Preview Template
+
+1. Add mock JSON data using the `Mock data` button for all variables used in the template
+2. Click `Load Preview` to see the rendered template
+3. For JSONNET templates, click `View in Slack Block Kit` to see the actual Slack UI preview
 
 <Warning>
-  At the time of sending communication, if there is a variable present in the template whose value is not rendered due to mismatch or missing, SuprSend will simply discard the template and not send that particular notification to your user.
-
-  Please note that the rest of the templates will be sent. Eg. if there is an error in rendering Android Push template, but email template is successfully rendered, Android Push notification will not be triggered, but email notification will be triggered by SuprSend.
+You must add mock data for all variables in your template. Missing mock data will cause rendering errors and prevent the preview from loading.
 </Warning>
 
-***
+![Slack Preview Demo](https://files.readme.io/b481ef6-slack_preview.gif)
+
+## Publish Template
+
+Once your template is ready, click **Publish Draft** and provide a version name to publish it. The published template becomes the live version and will be used whenever the associated workflow is triggered.
+
+## Test Template
+
+Use this option to send a test message in Slack and preview how it will appear in user's device. 
+Click the Test button, then enter the user's distinct_id and select the Slack channel where the test message should be sent.
+
+
+<Note>
+Template testing only uses the published Live version, so make sure to publish your changes before testing.
+</Note>
+
+## Promote to Production
+
+You can clone template across workspaces by using Clone -> Outside Template option. Clone -> Within template can be used to clone within different languages and versions of the same template.
+
+<Tip>
+**Best Practice**: Always design templates in your staging workspace first, then promote them to production. This ensures thorough testing of the changes without impacting end users.
+</Tip>
