@@ -71,7 +71,371 @@ You can set following default preferences at category level:
 
 1. **On**: opt-in on all channels
 2. **Off**: opt-out on all channels
-3. **Can't Unsubscribe**: Use this to prevent users from completely opting out of critical notification categories, such as anomaly alerts or important transactions (e.g., completed trades, payments). Channel `opt-out` of does not block notifications from mandatory channels in this category.
+3. **Can't Unsubscribe**: Use this to prevent users from completely opting out of critical notification categories, such as anomaly alerts or important transactions (e.g., completed trades, payments). Channel `opt-out` does not block notifications from mandatory channels in this category.
+
+## Preference States
+
+Understanding preference states is crucial for implementing effective notification management. SuprSend supports several preference states that control how notifications are delivered to users:
+
+### Available Preference States
+
+| State | Description | When to Use | User Control |
+|-------|-------------|-------------|--------------|
+| `opt_in` | User actively chooses to receive notifications in this category | Default for transactional notifications, user-initiated subscriptions | User can change to `opt_out` |
+| `opt_out` | User has disabled notifications for this category | Default for promotional notifications, user unsubscribes | User can change to `opt_in` |
+| `cant_unsubscribe` | System-enforced delivery, user cannot disable | Critical system notifications (OTPs, security alerts, password resets) | User cannot modify |
+
+<CodeGroup>
+
+```json Example: Mixed Preference States
+{
+  "categories": [
+    {
+      "category": "security-alerts",
+      "preference": "cant_unsubscribe",
+      "description": "Critical security notifications"
+    },
+    {
+      "category": "order-updates", 
+      "preference": "opt_in",
+      "description": "Transaction confirmations and delivery updates"
+    },
+    {
+      "category": "marketing-emails",
+      "preference": "opt_out", 
+      "description": "Promotional campaigns and newsletters"
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+### State Behavior in Practice
+
+- **`opt_in`**: Notifications are delivered across all enabled channels unless specifically restricted
+- **`opt_out`**: All notifications in this category are blocked regardless of channel
+- **`cant_unsubscribe`**: Notifications are always delivered, ignoring user channel preferences for this category
+
+## System vs Custom Categories
+
+SuprSend provides a structured approach to organizing notification categories through system-defined and custom categories:
+
+### System Categories (Predefined by SuprSend)
+
+These are the three root categories that cannot be modified but can contain custom subcategories:
+
+| Category | Purpose | Default State | User Control | Priority |
+|----------|---------|---------------|--------------|----------|
+| **System** | Critical system notifications (OTPs, verification, authentication) | `cant_unsubscribe` | None - always delivered | Highest |
+| **Transactional** | User-initiated or transaction-related notifications | `opt_in` | Can opt-out of non-critical subcategories | High |
+| **Promotional** | Marketing and promotional content | `opt_out` | Full control | Lowest |
+
+### Custom Categories (Developer-Defined)
+
+Custom categories are subcategories you create under the system categories:
+
+<CodeGroup>
+
+```json System Category Structure
+{
+  "system": {
+    "subcategories": [
+      "password-reset",
+      "account-verification", 
+      "security-alerts"
+    ]
+  },
+  "transactional": {
+    "subcategories": [
+      "order-confirmations",
+      "payment-receipts",
+      "delivery-updates",
+      "comment-notifications"
+    ]
+  },
+  "promotional": {
+    "subcategories": [
+      "newsletters",
+      "product-announcements", 
+      "special-offers",
+      "feature-updates"
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+### Key Differences
+
+| Aspect | System Categories | Custom Categories |
+|--------|-------------------|-------------------|
+| **Creation** | Predefined by SuprSend | Created by developers |
+| **Modification** | Names and behavior fixed | Fully customizable |
+| **Hierarchy** | Root level only | Nested under system categories |
+| **Default Behavior** | Inherits system defaults | Can override defaults |
+| **UI Display** | Always visible | Can be hidden with visibility controls |
+
+<Note>
+**Why Some Examples Show Extra Toggles**: Documentation examples that display additional preference toggles often use system categories with multiple custom subcategories. Each subcategory appears as a separate toggle in the preference UI, giving users granular control over their notification experience.
+</Note>
+
+## Hiding Notifications from UI
+
+You can suppress notifications from appearing in UI components (like toast notifications or in-app feeds) while still maintaining them in logs for analytics and debugging purposes.
+
+<Note>
+**React SDK Note**: In the latest `@suprsend/react` SDK, toast notification functionality is no longer included in the `Inbox` component by default. Use the headless approach with `useFeedClient` hook and event listeners for custom toast control, or implement conditional rendering for feed visibility.
+
+**Web Components Note**: The `hideToast` and `hideFeed` properties are configuration options that can be passed in the initial config object to `initSuprSend()`, or updated dynamically after initialization using `updateInboxConfig()` and `updateFeedConfig()` methods.
+</Note>
+
+### Suppressing Toast Notifications
+
+<CodeGroup>
+
+```javascript React - Headless Toast Control
+import { SuprSendProvider, SuprSendFeedProvider, useFeedClient } from '@suprsend/react';
+import { useEffect } from 'react';
+
+function App() {
+  return (
+    <SuprSendProvider>
+      <SuprSendFeedProvider>
+        <NotificationHandler />
+      </SuprSendFeedProvider>
+    </SuprSendProvider>
+  );
+}
+
+function NotificationHandler() {
+  const feedClient = useFeedClient();
+  
+  useEffect(() => {
+    if (!feedClient) return;
+    
+    feedClient.emitter.on('feed.new_notification', (notification) => {
+      // Custom logic to decide whether to show toast
+      const shouldShowToast = notification.category !== 'low-priority';
+      
+      if (shouldShowToast) {
+        // Show your custom toast
+        showCustomToast(notification);
+      }
+      
+      // Notification is always logged regardless of toast display
+      console.log('Notification logged:', notification.id);
+    });
+  }, [feedClient]);
+  
+  return null; // This component only handles notifications
+}
+```
+
+```javascript Web Components - Hide Toast
+// Initialize with inbox config to hide toast
+const suprsendConfig = {
+  distinctId: "YOUR_DISTINCT_ID",
+  publicApiKey: "YOUR_PUBLIC_API_KEY",
+  inbox: {
+    hideToast: true  // No toast notifications shown
+  }
+};
+
+// Initialize components
+initSuprSend(suprsendConfig);
+
+// All notifications still tracked in logs
+```
+
+```javascript React - Complete Toast Suppression
+import { SuprSendProvider, SuprSendFeedProvider, useFeedClient } from '@suprsend/react';
+
+function App() {
+  return (
+    <SuprSendProvider>
+      <SuprSendFeedProvider>
+        <NotificationFeed />
+        <ToastController suppressAll={true} />
+      </SuprSendFeedProvider>
+    </SuprSendProvider>
+  );
+}
+
+function ToastController({ suppressAll }) {
+  const feedClient = useFeedClient();
+  
+  useEffect(() => {
+    if (!feedClient || !suppressAll) return;
+    
+    // Completely suppress toast notifications
+    feedClient.emitter.on('feed.new_notification', (notification) => {
+      // Do nothing - toast is suppressed
+      // Notification still logged in SuprSend
+      console.log('Toast suppressed for:', notification.id);
+    });
+  }, [feedClient, suppressAll]);
+  
+  return null;
+}
+```
+
+</CodeGroup>
+
+### Hiding In-App Feed
+
+<CodeGroup>
+
+```javascript Web Components - Hide Feed, Show Only Toast
+// Initialize with feed config to hide feed but show toast
+const suprsendConfig = {
+  distinctId: "YOUR_DISTINCT_ID",
+  publicApiKey: "YOUR_PUBLIC_API_KEY",
+  feed: {
+    hideFeed: true,     // Hide the notification feed UI
+    hideToast: false    // Still show toast notifications
+  }
+};
+
+// Initialize components
+initSuprSend(suprsendConfig);
+
+// Useful for showing immediate notifications without persistent feed
+```
+
+```javascript React - Conditional Feed Rendering
+import { SuprSendProvider, SuprSendFeedProvider, NotificationFeed, useFeedClient } from '@suprsend/react';
+import { useState } from 'react';
+
+function App() {
+  const [showFeed, setShowFeed] = useState(false);
+  
+  return (
+    <SuprSendProvider>
+      <SuprSendFeedProvider>
+        {/* Conditionally render feed based on state */}
+        {showFeed && <NotificationFeed />}
+        
+        {/* Toast notifications still work */}
+        <ToastController />
+        
+        {/* Toggle button for feed visibility */}
+        <button onClick={() => setShowFeed(!showFeed)}>
+          {showFeed ? 'Hide Feed' : 'Show Feed'}
+        </button>
+      </SuprSendFeedProvider>
+    </SuprSendProvider>
+  );
+}
+
+function ToastController() {
+  const feedClient = useFeedClient();
+  
+  useEffect(() => {
+    if (!feedClient) return;
+    
+    feedClient.emitter.on('feed.new_notification', (notification) => {
+      // Always show toast notifications
+      showCustomToast(notification);
+    });
+  }, [feedClient]);
+  
+  return null;
+}
+```
+
+</CodeGroup>
+
+### How It Works
+
+When you suppress UI notifications:
+
+1. **Logging Continues**: All notifications are still recorded in SuprSend logs
+2. **Analytics Preserved**: Delivery metrics and user interaction data remain intact  
+3. **API Access**: Notifications remain accessible via API calls
+4. **Debugging Available**: Full notification history available in workflow execution logs
+
+**Use Case**: Suppress promotional toast notifications during user focus sessions while maintaining audit trails for compliance.
+
+## Real-World Example: E-commerce Notification Strategy
+
+Consider an e-commerce platform implementing a comprehensive notification preference system:
+
+### Scenario Setup
+
+```json Category Configuration
+{
+  "system": {
+    "password-reset": { "preference": "cant_unsubscribe" },
+    "account-verification": { "preference": "cant_unsubscribe" },
+    "security-alerts": { "preference": "cant_unsubscribe" }
+  },
+  "transactional": {
+    "order-confirmations": { "preference": "opt_in" },
+    "payment-receipts": { "preference": "opt_in" }, 
+    "delivery-updates": { "preference": "opt_in" },
+    "review-requests": { "preference": "opt_in" }
+  },
+  "promotional": {
+    "daily-deals": { "preference": "opt_out" },
+    "newsletters": { "preference": "opt_out" },
+    "product-recommendations": { "preference": "opt_out" }
+  }
+}
+```
+
+### User Behavior Examples
+
+**Scenario 1: User Disables Marketing Emails**
+```json User Preference Update
+{
+  "categories": [
+    {
+      "category": "daily-deals",
+      "preference": "opt_out"
+    },
+    {
+      "category": "newsletters", 
+      "preference": "opt_out"
+    }
+  ]
+}
+```
+
+**Result**: 
+- ❌ Daily deals and newsletters are blocked
+- ✅ Order confirmations and delivery updates continue normally
+- ✅ Password reset emails always delivered (system category)
+
+**Scenario 2: User Disables All Email**
+```json Channel-Level Opt-out
+{
+  "channel_preferences": [
+    {
+      "channel": "email",
+      "is_restricted": true
+    }
+  ]
+}
+```
+
+**Result**:
+- ❌ All promotional and transactional emails blocked
+- ✅ Critical system notifications (OTPs, password resets) still delivered via email
+- ✅ Notifications continue via other channels (SMS, push, in-app)
+
+### Business Impact
+
+This approach ensures:
+- **User Trust**: Critical communications always reach users
+- **Compliance**: Transactional notifications maintain legal delivery requirements  
+- **Engagement**: Users retain control without losing essential updates
+- **Revenue Protection**: Payment confirmations and order updates preserve customer experience
+
+<Tip>
+**Best Practice**: Always categorize password resets, account security alerts, and payment confirmations under system or mandatory transactional categories to ensure delivery regardless of user preferences.
+</Tip>
 
 ### Map category to notifications
 
