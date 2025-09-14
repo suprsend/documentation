@@ -1,88 +1,78 @@
 ---
-title: "API Keys Management"
-description: "How to securely manage authentication, API Keys and secrets in your application and backend code."
+title: "Best Practices for Key & Token Management"
+description: "How to securely manage Workspace Keys, Secrets, API Keys, and Service Tokens in your application and backend code."
 ---
 
-SuprSend provides 2 methods for authentication:
+SuprSend provides multiple authentication methods, each with different scopes:  
 
-* [Workspace Key & Secret](/docs/best-practices-for-api-keys-management#1-workspace-key--secret)
+- **Workspace Key & Secret** → Backend SDK authentication  
+- **API Keys** → REST API authentication per workspace  
+- **Service Tokens** → Management API authentication across workspaces  
 
-* [API Keys](/docs/best-practices-for-api-keys-management#2-api-keys)
+This guide covers best practices for keeping them secure.  
 
-## 1. Workspace Key & Secret
+---
 
-This authentication method is available when you are using one of our SDKs to send requests. Unlike API Keys, Workspace Secret is not exposed on network, and is relatively more safer option.
+## 1. Workspace Key & Secret  
 
-#### Using Workspace key & secret
+- Pre-generated for each workspace.  
+- Used only with **backend SDKs**.  
+- Safer by design as the **Workspace Secret is never transmitted over the network**.  
 
-The Workspace Key and Secret are pre-generated for every environment. You can access your workspace key & secret by following steps below:
+**Best Practices**:  
+- Never share Workspace Secrets (not even with SuprSend support).  
+- Store them securely in environment variables or a key management system.  
+- Rotate if compromised or leaked. Secret rotation option is not currently exposed to SuprSend dashboard. Please reach out to [support@suprsend.com](mailto:support@suprsend.com) for secret rotation.
 
-1. Go to a workspace > Settings (left panel) > API Keys
+---
 
-2. On API Keys page, you will find`Workspace Key`and`Workspace Secret`. Click on them to copy.
+## 2. API Keys  
 
-![](/images/docs/9a0aa16-image.png)
+- Used for authenticating **REST API requests** at the workspace level.  
+- Each workspace has its own set of API Keys, isolating staging and production environments.  
 
-If you wish to rotate the Workspace Key & Secret, please contact us on [support@suprsend.com](mailto:support@suprsend.com)
+**Best Practices**:  
+- Treat API Keys as sensitive secrets — never expose them in client-side code.  
+- Always store keys securely (as environment variables or in a secure vault).  
+- Rotate periodically (e.g., every 6 months).  
+- Rotate immediately if a key is compromised or accidentally exposed.  
+- Monitor API usage for anomalies on [SuprSend dashboard -> Logs (Requests tab)](https://app.suprsend.com/en/staging/logs/requests?last_n_minutes=1440) (unexpected spikes, unauthorized calls). 
 
-<Warning>
-  🚧 Never share workspace secret with anyone including our support team
-</Warning>
+---
 
-## 2. API Keys
+## 3. Service Tokens  
 
-When making requests over HTTPS, you can generate your private API Key for a workspace directly through the SuprSend dashboard.
+- Used to authenticate **Management APIs**.  
+- Scoped at the **account level**, allowing cross-workspace operations (e.g., promoting workflows from staging → production).  
+- Provide higher privilege than API Keys, so require stricter handling.  
 
-### Generate API Keys
+**Best Practices**:  
+- Limit use of Service Tokens to CI/CD pipelines and automation — avoid day-to-day manual use.  
+- Store them as environment variable or encrypted secrets manager.  
+- Rotate on a scheduled basis (every 6–12 months).  
+- Rotate immediately if exposed or if a privileged user leaves the team.  
+- Maintain strict access control — only admins or automation systems should have access.  
 
-Use these steps to create an API Key for your SuprSend account:
+---
 
-1. Go to a workspace > Settings (left panel) > API Keys
+## General Security Guidelines  
 
-2. On API Keys page, click on`Generate Key`
+1. **Never commit keys/tokens** to version control (e.g., GitHub).  
+2. **Use environment variables** or a **Key Management Service** (e.g., AWS KMS, HCP Vault, GCP Secret Manager).  
+3. **Follow least privilege principle** — share keys only with systems or people that need them.  
+4. **Set up monitoring & alerts** for unauthorized or unusual activity.  
+5. **Rotate keys/tokens** regularly and immediately upon suspected compromise.  
 
-3. Enter a Name for the API Key
+---
 
-![](/images/docs/bcc40c1-image.png)
+## Rotation Strategy  
 
-1. Select`Create and View`and copy the token
+- **Scheduled Rotation**  
+  - API Keys → every 6 months  
+  - Service Tokens → every 6–12 months  
+  - Workspace Secrets → rotate if organizational policy requires  
 
-![](/images/docs/dcd6078-image.png)
-
-<Warning>
-  🚧 The token is only displayed once. Store the token somewhere secure that you can access when you make API requests.
-
-
-
-  Your API Keys carry many privileges. Don't store them in publicly accessible areas.
-
-
-
-  After rotating tokens make sure you always use the new token.
-</Warning>
-
-### Rotate API Keys
-
-As a security best practice, rotate tokens periodically.
-
-* To rotate an existing API Key, select`Disable`to disable the existing key and generate a new API Key.
-
-![](/images/docs/4926893-image.png)
-
-## Best Practices for enhanced security
-
-1. Never commit your key to your repository
-
-2. Use Environment Variables in place of your API Key
-
-3. Use a Key Management Service
-
-4. Monitor your account usage and rotate your keys when needed
-
-### Rotation Strategy
-
-**1. Scheduled Rotation:** Implement a scheduled rotation of API Keys (e.g. every 6 months) to reduce the risk of long-term exposure.
-
-**2. Ad-Hoc Rotation:** Rotate keys immediately if you suspect that a key has been compromised or if it has been inadvertently exposed.
-
-***
+- **Ad-Hoc Rotation**  
+  - Immediately upon exposure (logs, repos, screenshots)  
+  - On suspicious activity or abuse  
+  - When a team member with access leaves 
