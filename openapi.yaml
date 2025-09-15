@@ -23,17 +23,94 @@ components:
       name: Authorization
       x-bearer-format: bearer
       description: Bearer authentication header of the form `Bearer <token>`, where <token> is your auth token.
+  parameters:
+    TenantId:
+      name: tenant_id
+      in: path
+      required: true
+      description: Unique identifier of the tenant
+      schema:
+        type: string
+    ListId:
+      name: list_id
+      in: path
+      required: true
+      description: Unique identifier of the list
+      schema:
+        type: string
+    DistinctId:
+      name: distinct_id
+      in: path
+      required: true
+      description: Unique identifier of the user
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      description: Number of results to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      description: Starting position for pagination
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  requestBodies:
+    WorkflowCreateUpdate:
+      description: Workflow creation or update data
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/WorkflowCreateUpdate'
+    EventTrigger:
+      description: Event trigger data
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - distinct_id
+              - event
+            properties:
+              distinct_id:
+                type: string
+                description: Unique identifier of the recipient
+              event:
+                type: string
+                description: Event name that triggers the workflow
+              properties:
+                type: object
+                description: Event properties for template rendering
+              tenant_id:
+                type: string
+                description: Tenant identifier
+              $idempotency_key:
+                type: string
+                description: Idempotency key for duplicate prevention
   schemas:
     Workflow:
       type: object
       properties:
         $schema:
           type: string
+          format: uri
           description: Schema URL for workflow validation
           example: "https://schema.suprsend.com/workflow/v1/schema.json"
         slug:
           type: string
           description: Unique identifier for the workflow
+          minLength: 1
+          maxLength: 100
+          pattern: "^[a-z0-9-_]+$"
           example: "welcome-sequence"
         is_enabled:
           type: boolean
@@ -51,11 +128,14 @@ components:
         name:
           type: string
           description: Human-readable name of the workflow
+          minLength: 1
+          maxLength: 200
           example: "Welcome Sequence"
         description:
           type: string
           nullable: true
           description: Description explaining the usecase of the workflow
+          maxLength: 1000
         updated_at:
           type: string
           format: date-time
@@ -70,7 +150,7 @@ components:
           description: Git-like hash for version tracking
         status:
           type: string
-          enum: [active, inactive, draft]
+          enum: ["active", "inactive", "draft"]
           description: Current status of the workflow
         category:
           type: string
@@ -92,7 +172,7 @@ components:
           description: Trigger Conditions for workflow execution. Workflow will only be executed if trigger conditions evaluate to true.
         trigger_type:
           type: string
-          enum: [event, dynamic, api]
+          enum: ["event", "dynamic", "api"]
           description: How the workflow is triggered. You can refer to all trigger types [here](https://docs.suprsend.com/reference/trigger-workflows#trigger-types).
         trigger_events:
           type: array
@@ -103,7 +183,7 @@ components:
           type: string
           nullable: true
           description: Type of recipient override. Define whether to override and run this workflow for user, list of users or a single object.
-          enum: [user, single_object_fields]
+          enum: ["user", "single_object_fields"]
         override_recipients_user_expr:
           type: string
           nullable: true
@@ -133,6 +213,7 @@ components:
               description: Name of the user who last updated the workflow
             email:
               type: string
+              format: email
               description: Email of the user who last updated the workflow
           description: User who last updated the workflow
         tree:
@@ -237,7 +318,14 @@ components:
         tz_fixed:
           type: string
           description: "Fixed IANA timezone."
-          example: ["America/New_York", "Europe/London"]
+          pattern: "^[A-Za-z_/]+$"
+          examples:
+            new_york:
+              summary: "New York timezone"
+              value: "America/New_York"
+            london:
+              summary: "London timezone"
+              value: "Europe/London"
 
     DelayNode:
       type: object
@@ -265,7 +353,17 @@ components:
         duration:
           type: string
           description: "Duration value. Required for 'fixed' and 'dynamic' delay types."
-          example: ["30s", ".delay_duration", "$recipient.delay_duration"]
+          pattern: "^(\\d+[smhd]|\\.[\\w.]+|\\$[\\w.]+)$"
+          examples:
+            fixed_duration:
+              summary: "Fixed duration example"
+              value: "30s"
+            dynamic_duration:
+              summary: "Dynamic duration from trigger payload"
+              value: ".delay_duration"
+            recipient_duration:
+              summary: "Dynamic duration from recipient properties"
+              value: "$recipient.delay_duration"
         relative_to:
           type: object
           description: "Relative delay configuration. Required when delay_type is 'relative_to'."
@@ -285,7 +383,13 @@ components:
             offset_value:
               type: string
               description: "Offset value"
-              example: ["15m", "$recipient.reminder_offset"]
+              examples:
+                fixed_offset:
+                  summary: "Fixed duration offset"
+                  value: "15m"
+                dynamic_offset:
+                  summary: "Dynamic offset from recipient properties"
+                  value: "$recipient.reminder_offset"
 
     BatchNode:
       type: object
@@ -322,7 +426,19 @@ components:
         dynamic_window_expr:
           type: string
           description: "Batch window when window_type is 'dynamic'. jq-expression for deriving batch window duration at runtime."
-          example: [".window_duration", "$recipient.batch_duration", "$actor.window_duration", "$tenant.window_duration"]
+          examples:
+            trigger_payload:
+              summary: "From trigger payload"
+              value: ".window_duration"
+            recipient_property:
+              summary: "From recipient properties"
+              value: "$recipient.batch_duration"
+            actor_property:
+              summary: "From actor properties"
+              value: "$actor.window_duration"
+            tenant_property:
+              summary: "From tenant properties"
+              value: "$tenant.window_duration"
         relative_to:
           type: object
           description: "Batch window when window_type is 'relative_to'. Batch window is calculated relative to a future timestamp."
@@ -330,7 +446,13 @@ components:
             pivot_expr:
               type: string
               description: "(jq-expression) variable defining the future timestamp from trigger payload relative to which batch window is calculated."
-              example: [".start_time", "$recipient.task_end_time"]
+              examples:
+                trigger_payload:
+                  summary: "From trigger payload"
+                  value: ".start_time"
+                recipient_property:
+                  summary: "From recipient properties"
+                  value: "$recipient.task_end_time"
             offset_type:
               type: string
               enum: ["before", "after"]
@@ -342,7 +464,13 @@ components:
             offset_value:
               type: string
               description: "Offset value."
-              example: ["15m", "$recipient.reminder_offset"]
+              examples:
+                fixed_offset:
+                  summary: "Fixed duration offset"
+                  value: "15m"
+                dynamic_offset:
+                  summary: "Dynamic offset from recipient properties"
+                  value: "$recipient.reminder_offset"
         retain_count:
           type: integer
           minimum: 1
@@ -383,6 +511,7 @@ components:
           description: "HTTP method of the API call."
         url:
           type: string
+          format: uri
           description: "Endpoint URL of the API call. You can add variables in JSONNET format. Eg. `\"https://api.example.com/webhook?id=\"+data[\"$recipient\"].id`"
           example: "https://api.example.com/webhook"
         headers:
@@ -459,7 +588,13 @@ components:
               key:
                 type: string
                 description: "header key"
-                example: ["\"Authorization\"", "\"Content-Type\""]
+                examples:
+                  authorization:
+                    summary: "Authorization header"
+                    value: "Authorization"
+                  content_type:
+                    summary: "Content-Type header"
+                    value: "Content-Type"
               value:
                 type: string
                 description: "header value"
@@ -473,11 +608,23 @@ components:
               key:
                 type: string
                 description: "Query Parameter Key"
-                example: ["\"id\"", "\"name\""]
+                examples:
+                  id_param:
+                    summary: "ID parameter"
+                    value: "id"
+                  name_param:
+                    summary: "Name parameter"
+                    value: "name"
               value:
                 type: string
                 description: "Query Parameter Value"
-                example: ["data.id", "data[\"$recipient\"].name"]
+                examples:
+                  data_id:
+                    summary: "Data ID from payload"
+                    value: "data.id"
+                  recipient_name:
+                    summary: "Recipient name from data"
+                    value: "data[\"$recipient\"].name"
         output_key:
           type: string
           description: "Optional key to store the response of API call. If not provided, the response will be appended at the root of the workflow payload. It's recommended to provide a unique key here to avoid overwriting existing data."
@@ -585,7 +732,16 @@ components:
                         value:
                           type: string
                           description: "Delay value. Required for 'fixed' and 'dynamic' delay types."
-                          example: ["30s", ".delay_duration", "$recipient.delay_duration"]
+                          examples:
+                            fixed_duration:
+                              summary: "Fixed duration example"
+                              value: "30s"
+                            dynamic_duration:
+                              summary: "Dynamic duration from trigger payload"
+                              value: ".delay_duration"
+                            recipient_duration:
+                              summary: "Dynamic duration from recipient properties"
+                              value: "$recipient.delay_duration"
                         relative_to:
                           type: object
                           description: "Relative delay configuration. Required when delay_type is 'relative_to'."
@@ -610,7 +766,13 @@ components:
                             offset_value:
                               type: string
                               description: "Offset value. Required for 'fixed' and 'dynamic' offset_value_types."
-                              example: ["15m", "$recipient.reminder_offset"]
+                              examples:
+                                fixed_offset:
+                                  summary: "Fixed duration offset"
+                                  value: "15m"
+                                dynamic_offset:
+                                  summary: "Dynamic offset from recipient properties"
+                                  value: "$recipient.reminder_offset"
               nodes:
                 type: array
                 description: "Array of nodes to execute when this branch condition is met. Minimum 1 node required."
@@ -727,6 +889,8 @@ components:
                 type: string
                 description: "Literal string key for the variable."
                 minLength: 1
+                maxLength: 100
+                pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
               value_lang:
                 type: string
                 enum: ["jsonnet", "handlebars"]
@@ -1336,7 +1500,19 @@ components:
         success:
           type: string
           description: "Success metric to track for smart channel routing."
-          example: ["delivered", "seen", "interacted","<custom_event_name>"]
+          examples:
+            delivered:
+              summary: "Notification delivered"
+              value: "delivered"
+            seen:
+              summary: "Notification seen"
+              value: "seen"
+            interacted:
+              summary: "User interacted with notification"
+              value: "interacted"
+            custom_event:
+              summary: "Custom event name"
+              value: "<custom_event_name>"
         success_is_event:
           type: boolean
           description: "Whether the success metric is a custom event. If not, notification status will be used to determine success."
@@ -1384,10 +1560,10 @@ components:
           items:
             type: string
           description: Tags are used for grouping and filtering workflows in list.
-          example: ["onboarding-sequence"]
+          example: "onboarding-sequence"
         trigger_type:
           type: string
-          enum: [event, api]
+          enum: ["event", "api"]
           description: You can trigger a workflow either via API by passing its slug directly, or through an event-based system where the workflow runs when a specific event occurs. You can compare both methods [here](https://docs.suprsend.com/docs/event-vs-api-trigger). If the workflow should run when a user enters or exits a list, use `trigger_type = event`.
         payload_schema:
           type: object
@@ -1593,6 +1769,30 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    BadRequestError:
+      description: Bad request - invalid input data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation error - data validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Conflict - resource already exists or state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
           example:
             code: 401
             error_code: "unauthorized"
@@ -1660,7 +1860,6 @@ paths:
                             properties:
                               data:
                                 type: string
-                                format: string
                                 description: Base64-encoded content of the file
                               filename:
                                 type: string
@@ -1913,6 +2112,120 @@ paths:
               schema:
                 type: object
                 description: error code and message detailing the error
+      x-codeSamples:
+        - lang: cURL
+          source: |
+            curl -X GET "https://hub.suprsend.com/v1/tenant/my_tenant_id" \
+              --header 'Authorization: Bearer YOUR_API_KEY' \
+              --header 'Content-Type: application/json'
+        - lang: JavaScript
+          source: |
+            const response = await fetch('https://hub.suprsend.com/v1/tenant/my_tenant_id', {
+              method: 'GET',
+              headers: {
+                'Authorization': 'Bearer YOUR_API_KEY',
+                'Content-Type': 'application/json'
+              }
+            });
+            const data = await response.json();
+        - lang: Python
+          source: |
+            import requests
+            
+            url = "https://hub.suprsend.com/v1/tenant/my_tenant_id"
+            headers = {
+                "Authorization": "Bearer YOUR_API_KEY",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(url, headers=headers)
+            print(response.json())
+        - lang: PHP
+          source: |
+            <?php
+            $url = 'https://hub.suprsend.com/v1/tenant/my_tenant_id';
+            
+            $options = [
+                'http' => [
+                    'header' => "Authorization: Bearer YOUR_API_KEY\r\nContent-Type: application/json\r\n",
+                    'method' => 'GET'
+                ]
+            ];
+            
+            $context = stream_context_create($options);
+            $result = file_get_contents($url, false, $context);
+            echo $result;
+            ?>
+        - lang: Java
+          source: |
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+            import java.net.URI;
+            
+            HttpClient client = HttpClient.newHttpClient();
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://hub.suprsend.com/v1/tenant/my_tenant_id"))
+                .header("Authorization", "Bearer YOUR_API_KEY")
+                .header("Content-Type", "application/json")
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println(response.body());
+        - lang: Go
+          source: |
+            package main
+            
+            import (
+                "fmt"
+                "io"
+                "net/http"
+            )
+            
+            func main() {
+                url := "https://hub.suprsend.com/v1/tenant/my_tenant_id"
+                
+                req, err := http.NewRequest("GET", url, nil)
+                if err != nil {
+                    panic(err)
+                }
+                
+                req.Header.Set("Authorization", "Bearer YOUR_API_KEY")
+                req.Header.Set("Content-Type", "application/json")
+                
+                client := &http.Client{}
+                resp, err := client.Do(req)
+                if err != nil {
+                    panic(err)
+                }
+                defer resp.Body.Close()
+                
+                body, err := io.ReadAll(resp.Body)
+                if err != nil {
+                    panic(err)
+                }
+                
+                fmt.Println(string(body))
+            }
+        - lang: Ruby
+          source: |
+            require 'net/http'
+            require 'json'
+            require 'uri'
+            
+            url = URI('https://hub.suprsend.com/v1/tenant/my_tenant_id')
+            
+            http = Net::HTTP.new(url.host, url.port)
+            http.use_ssl = true
+            
+            request = Net::HTTP::Get.new(url)
+            request['Authorization'] = 'Bearer YOUR_API_KEY'
+            request['Content-Type'] = 'application/json'
+            
+            response = http.request(request)
+            puts response.body
       deprecated: false
     delete:
       summary: Delete Tenant
@@ -1930,10 +2243,6 @@ paths:
       responses:
         '204':
           description: '204 - No Content'
-          content:
-            application/json:
-              schema:
-                type: object
         '404':
           description: '404 - Not Found'
           content:
@@ -2051,7 +2360,13 @@ paths:
                         blocked_channels:
                           type: string
                           nullable: true
-                          example: ["email","sms"]
+                          examples:
+                            email:
+                              summary: "Email channel"
+                              value: "email"
+                            sms:
+                              summary: "SMS channel"
+                              value: "sms"
                           description: channels that are blocked for the tenant.
                         embedded_preference_url:
                           type: string
@@ -2122,7 +2437,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           required: true
           schema:
             type: string
@@ -2207,14 +2522,14 @@ paths:
           in: query
           description: number of results to be returned in API response
           schema:
-            type: string
-            default: '20'
+            type: integer
+            default: 20
         - name: offset
           in: query
           description: starting position of tenant list
           schema:
-            type: string
-            default: '0'
+            type: integer
+            default: 0
       responses:
         '200':
           description: '200'
@@ -2312,7 +2627,7 @@ paths:
               properties:
                 list_id:
                   type: string
-                  description: Unique string idenitifier of the list. Add an id which defines the type of users who are part of the list
+                  description: Unique string identifier of the list. Add an id which defines the type of users who are part of the list
                   default: _list_id_
                 list_name:
                   type: string
@@ -2358,7 +2673,7 @@ paths:
                     example: "Users subscribed to the newsletter"
                   list_type:
                     type: string
-                    enum: ["static_list","query_based"]
+                    enum: ["static_list", "query_based"]
                   subscribers_count:
                     type: integer
                     description: number of users in the list
@@ -2567,7 +2882,6 @@ paths:
                             properties:
                               data:
                                 type: string
-                                format: string
                                 description: Base64-encoded content of the file
                               filename:
                                 type: string
@@ -2815,7 +3129,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           required: true
           schema:
             type: string
@@ -2895,7 +3209,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list.
+          description: Unique string identifier of the list.
           required: true
           schema:
             type: string
@@ -2937,7 +3251,7 @@ paths:
                     example: "Users subscribed to the newsletter"
                   list_type:
                     type: string
-                    enum: ["static_list","query_based"]
+                    enum: ["static_list", "query_based"]
                   subscribers_count:
                     type: integer
                     description: number of users in the list
@@ -3505,7 +3819,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list which you want to delete
+          description: Unique string identifier of the list which you want to delete
           schema:
             type: string
           required: true
@@ -3779,14 +4093,14 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           schema:
             type: string
             default: _list_id_
           required: true
         - name: version_id
           in: path
-          description: Unique string idenitifier of the draft version of the list to which user needs to be updated
+          description: Unique string identifier of the draft version of the list to which user needs to be updated
           schema:
             type: string
             default: __version_id__
@@ -3851,7 +4165,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list which you want to delete
+          description: Unique string identifier of the list which you want to delete
           schema:
             type: string
           required: true
@@ -4012,7 +4326,16 @@ paths:
                     type: array
                     items:
                       type: string
-                    example: ["en", "fr", "es"]
+                    examples:
+                      english:
+                        summary: "English language"
+                        value: "en"
+                      french:
+                        summary: "French language"
+                        value: "fr"
+                      spanish:
+                        summary: "Spanish language"
+                        value: "es"
                   channels:
                     type: array
                     description: array of all template enabled channels along with their language and active status
@@ -4034,14 +4357,14 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list
+          description: Unique string identifier of the list
           schema:
             type: string
             default: _list_id_
           required: true
         - name: version_id
           in: path
-          description: Unique string idenitifier of the draft version of the list which needs to be made active(live)
+          description: Unique string identifier of the draft version of the list which needs to be made active(live)
           schema:
             type: string
             default: __version_id__
@@ -4102,14 +4425,14 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           schema:
             type: string
             default: _list_id_
           required: true
         - name: version_id
           in: path
-          description: Unique string idenitifier of the draft version of the list to which user needs to be updated
+          description: Unique string identifier of the draft version of the list to which user needs to be updated
           schema:
             type: string
             default: __version_id__
@@ -4417,7 +4740,10 @@ paths:
                           description: languages last published in the channel
                           items:
                             type: string
-                          example: ["en"]
+                          examples:
+                            english:
+                              summary: "English language"
+                              value: "en"
         '404':
           description: '404 - Not Found'
           content:
@@ -4604,7 +4930,16 @@ paths:
                           type: array
                           items:
                             type: string
-                          example: ["en", "hi", "kn"]
+                          examples:
+                            english:
+                              summary: "English language"
+                              value: "en"
+                            hindi:
+                              summary: "Hindi language"
+                              value: "hi"
+                            kannada:
+                              summary: "Kannada language"
+                              value: "kn"
                         channels:
                           type: array
                           description: array of all template enabled channels along with their language and active status
@@ -4614,7 +4949,7 @@ paths:
                           type: array
                           items:
                             type: string
-                          example: []
+                          example: null
       deprecated: false
   /trigger/:
     post:
@@ -4771,7 +5106,6 @@ paths:
                             properties:
                               data:
                                 type: string
-                                format: string
                                 description: Base64-encoded content of the file
                               filename:
                                 type: string
@@ -7335,16 +7669,7 @@ paths:
           required: true
       responses:
         '204':
-          description: '204'
-          content:
-            application/json:
-              examples:
-                Result:
-                  value: No Content
-              schema:
-                type: string
-                description: Indicates a successful request with no content in the response body.
-                example: "No Content"
+          description: '204 - No Content'
         '404':
           description: '404'
           content:
@@ -8155,7 +8480,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Mode to filter workflows (draft or live). By default, draft workflows are returned.
         - in: query
@@ -8278,7 +8603,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Which workflow version to fetch (draft or live). By default, draft version is returned.
       responses:
@@ -8615,7 +8940,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Specify if you want to fetch draft or live schema.
       responses:
@@ -8662,7 +8987,7 @@ paths:
                           example: "Schema for order placement action"
                         status:
                           type: string
-                          enum: [draft, live]
+                          enum: ["draft", "live"]
                           description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                           example: "draft"
                         hash:
@@ -8774,7 +9099,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Mode to fetch schema (draft or live). By default, draft schema is returned.
       responses:
@@ -8800,7 +9125,7 @@ paths:
                     example: "Schema for order placement action"
                   status:
                     type: string
-                    enum: [draft, live]
+                    enum: ["draft", "live"]
                     description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                     example: "draft"
                   hash:
@@ -9025,7 +9350,7 @@ paths:
                     example: "Schema for order placement action"
                   status:
                     type: string
-                    enum: [draft, live]
+                    enum: ["draft", "live"]
                     description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                     example: "draft"
                   hash:
@@ -9060,7 +9385,7 @@ paths:
                         items:
                           type: string
                         description: List of errors if commit failed
-                        example: ["hash: no uncommitted changes found"]
+                        example: "hash: no uncommitted changes found"
                     example:
                       is_committed: false
                       errors: ["hash: no uncommitted changes found"]
@@ -9216,7 +9541,7 @@ paths:
                     example: "Schema for order placement action"
                   status:
                     type: string
-                    enum: [draft, live]
+                    enum: ["draft", "live"]
                     description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                     example: "live"
                   hash:
@@ -9792,7 +10117,7 @@ paths:
                         slug:
                           type: string
                           description: Workflow slug where this event is used
-                          example: "onbaording_series"
+                          example: "onboarding_series"
                         usage:
                           type: array
                           items:
@@ -9801,7 +10126,7 @@ paths:
                             example: "Wait Event"
               example:
                 results:
-                  - slug: "onbaording_series"
+                  - slug: "onboarding_series"
                     usage:
                       - "Trigger Event"
         '404':
