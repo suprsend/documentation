@@ -9576,6 +9576,118 @@ paths:
           schema:
             type: string
           description: Workspace slug (staging, production, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Unique Identifier of the Event.
+                  example: "User Signup Event"
+                description:
+                  type: string
+                  description: Description of the event. Can be used to describe which action this event is linked to.
+                  example: "Triggered whenever a new user successfully signs up on the platform"
+                payload_schema:
+                  type: object
+                  required:
+                    - schema
+                  properties:
+                    schema:
+                      type: string
+                      description: Linked schema slug to validate event properties structure. You can create a schema via [Create Schema](/reference/create-schema) endpoint and then link it here.
+                      example: "user_signup_v1"
+                    version_no:
+                      type: integer
+                      description: Schema version number to link. By default, live version is always picked for validation.
+                      example: 1
+              example:
+                name: "User Signup Event"
+                description: "Triggered whenever a new user successfully signs up on the platform"
+                payload_schema:
+                  schema: "user_signup_v1"
+                  version_no: 1
+      responses:
+        '200':
+          description: Updated event details
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                name: "user_signup"
+                description: "Triggered whenever a new user successfully signs up on the platform"
+                payload_schema:
+                  schema: "user_signup_v1"
+                  version_no: 1
+                created_at: "2025-08-27T09:30:57.945326Z"
+                $schema: "https://schema.suprsend.com/event/v1/schema.json"
+        '400':
+          description: Invalid event format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code
+                    example: 400
+                  error_code:
+                    type: string
+                    description: Error code identifier
+                    example: "error"
+                  type:
+                    type: string
+                    description: Error type
+                    example: "ValidationError"
+                  message:
+                    type: string
+                    description: Error message
+                    example: "{\"name\": [\"This field is required.\"]}"
+                  detail:
+                    type: object
+                    description: Detailed error information
+                    example:
+                      name: ["This field is required."]
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "{\"name\": [\"This field is required.\"]}"
+                detail:
+                  name: ["This field is required."]
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+          description: AuthenticationFailed - Invalid service token.
+
+  /v1/{workspace}/event/{url_encoded_event_name}/:
+    get:
+      summary: Get Event Details
+      description: Fetch event details and its linked schema.
+      operationId: get-event
+      servers:
+        - url: https://api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          source: |
+            curl -X GET "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
         - in: path
           name: url_encoded_event_name
           required: true
