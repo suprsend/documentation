@@ -1,0 +1,159 @@
+---
+title: "MCP Server"
+description: "Use the SuprSend MCP server to connect SuprSend with LLMs and AI agents"
+keywords:
+  - suprsend mcp
+  - mcp tools suprsend
+  - multi-agent communication
+  - ai agents suprsend
+  - model context protocol
+  - llm integration
+---
+
+<Note>
+**The SuprSend MCP server is Beta**. Since LLM behavior can vary and responses aren’t always deterministic, we recommend starting with a development workspace before rolling it out in production.
+</Note>
+
+The SuprSend MCP server exposes key SuprSend components—such as workflows, users, tenants, objects, and preferences—through the Model Context Protocol. With MCP, your AI agents can directly query, update, and manage SuprSend resources, as well as trigger notifications, all through tool calling.
+
+## What can you do with MCP?
+
+Here are some examples of how you can use MCP server for building with LLM and SuprSend:
+
+- **Search documentation and apply results.** 
+"Find the setup guide for integrating the React Drop-in Inbox and insert the required code snippet into my project."
+
+- **Trigger workflows on demand.**
+“Run the approval-required workflow for user John Doe to test my notification setup.”
+
+- **Bootstrap test data.**
+"Create a sample user named John Doe and a tenant called acme-corp in my workspace.”
+
+- **Manage notification preferences.**
+“Enable email notifications for marketing team and disable SMS.”
+
+- **Configure tenant-level branding.**
+“Update the logo and primary color for the enterprise tenant to match the new design guidelines.”
+
+
+## Authentication
+
+The MCP server requires a Service Token for authentication.
+Generate one from your SuprSend dashboard: [Account Settings -> Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens).
+
+
+## Starting MCP Sever from CLI
+
+```bash
+suprsend start-mcp-server
+
+# Start MCP server with specific tools using SSE transport
+suprsend start-mcp-server --tools "users,tenants" -t sse
+
+```
+Flags include:
+
+- `--tools` – restricts which tools are available (recommended).
+- `--transport` – transport to use (`stdio` or `sse`).
+
+## Setting it up in Claude
+1. Open Claude Settings → Developer Section.
+2. Click Edit Config under Local MCP Servers.
+3. Add the following snippet:
+
+```json
+{
+  "mcpServers": {
+    "suprsend": {
+      "command": "suprsend",
+      "args": [
+        "start-mcp-server",
+        "--service-token", "YOUR-SERVICE-TOKEN"
+      ]
+    }
+  }
+}
+```
+
+## Setting it up in Cursor
+1. Go to Cursor -> Settings -> Cursor Settings
+2. On the settings modal, Go to MCP & Integrations and click on "New MCP Server".
+3. Inside mcp.json file, add below code:
+
+```json
+{
+  "mcpServers": {
+    "suprsend": {
+      "command": "suprsend",
+      "args": [
+        "start-mcp-server",
+        "--service-token", "YOUR-SERVICE-TOKEN"
+      ]
+    }
+  }
+}
+```
+
+### Setting it up in Windsurf
+
+1. Open Windsurf settings → Extensions.
+2. Add the SuprSend MCP configuration:
+
+```json
+{
+  "suprsend": {
+    "command": "suprsend",
+    "args": ["start-mcp-server", "--service-token", "YOUR-SERVICE-TOKEN"],
+    "name": "SuprSend MCP Server"
+  }
+}
+```
+
+## Tool List  
+Here’s a list of all tools available in the MCP server. We'll keep adding more tools to this list as we build out the MCP server:  
+
+| TOOL TYPE | TOOL NAME | TOOL DESCRIPTION |
+|-----------|-----------|------------------|
+| **documentation** | `documentation.search` | Search across SuprSend documentation for relevant topics or examples. |
+| **documentation** | `documentation.fetch` | Retrieve the full content of a specific documentation page by its URI. |
+| **objects** | `objects.get` | Fetch details for a specific object by ID or key. |
+| **objects** | `objects.upsert` | Create a new object or update an existing one. |
+| **objects** | `objects.get_subscriptions` | View all subscriptions associated with an object. |
+| **objects** | `objects.upsert_subscriptions` | Add or update subscriptions for an object. |
+| **objects** | `objects.get_preferences` | Retrieve an object’s preferences, optionally filtered by category. |
+| **objects** | `objects.update_preferences` | Update category-level preferences for an object. |
+| **tenants** | `tenants.get` | Fetch information about a specific tenant. |
+| **tenants** | `tenants.upsert` | Create a new tenant or update an existing one. |
+| **tenants** | `tenants.get_preferences` | Retrieve all category preferences for a tenant. |
+| **tenants** | `tenants.update_preferences` | Update category-level preferences for a tenant. |
+| **users** | `users.get` | Fetch information about a specific user. |
+| **users** | `users.upsert` | Create a new user or update an existing one. |
+| **users** | `users.get_preferences` | Retrieve a user’s preferences, optionally filtered by category. |
+| **users** | `users.update_preferences` | Update category-level preferences for a user. |
+
+
+## Configuring the available tools
+
+By default, the MCP server exposes all tools. In most cases, you won’t want to grant your AI agent access to everything—especially in production. Instead, you can control which tools are available by using the `--tools` flag when starting the MCP server. This helps ensure the agent only interacts with the resources it actually needs.
+
+The `--tools` flag accepts one or more tool identifiers in the format tool_type.tool. You can also use a wildcard (*) to enable all tools of a type. For example, users.* will allow access to all user-related tools, while users.get_preferences will expose only that single tool.
+
+Here's an example of how to pass tool configuration:
+
+```json
+{
+  "suprsend": {
+    "command": "suprsend",
+    "args": [
+      "start-mcp-server",
+      "--tools", "users.createUser",
+      "tenants.*",
+      "--service-token", "YOUR-SERVICE-TOKEN"
+    ],
+    "name": "SuprSend MCP Server"
+  }
+}
+```
+
+
+
