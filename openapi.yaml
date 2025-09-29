@@ -29,11 +29,15 @@ components:
       properties:
         $schema:
           type: string
+          format: uri
           description: Schema URL for workflow validation
           example: "https://schema.suprsend.com/workflow/v1/schema.json"
         slug:
           type: string
           description: Unique identifier for the workflow
+          minLength: 1
+          maxLength: 255
+          pattern: "^[a-z0-9-_]+$"
           example: "welcome-sequence"
         is_enabled:
           type: boolean
@@ -70,7 +74,7 @@ components:
           description: Git-like hash for version tracking
         status:
           type: string
-          enum: [active, inactive, draft]
+          enum: ["active", "inactive", "draft"]
           description: Current status of the workflow
         category:
           type: string
@@ -92,7 +96,7 @@ components:
           description: Trigger Conditions for workflow execution. Workflow will only be executed if trigger conditions evaluate to true.
         trigger_type:
           type: string
-          enum: [event, dynamic, api]
+          enum: ["event", "dynamic", "api"]
           description: How the workflow is triggered. You can refer to all trigger types [here](https://docs.suprsend.com/reference/trigger-workflows#trigger-types).
         trigger_events:
           type: array
@@ -103,7 +107,7 @@ components:
           type: string
           nullable: true
           description: Type of recipient override. Define whether to override and run this workflow for user, list of users or a single object.
-          enum: [user, single_object_fields]
+          enum: ["user", "single_object_fields"]
         override_recipients_user_expr:
           type: string
           nullable: true
@@ -133,6 +137,7 @@ components:
               description: Name of the user who last updated the workflow
             email:
               type: string
+              format: email
               description: Email of the user who last updated the workflow
           description: User who last updated the workflow
         tree:
@@ -237,7 +242,14 @@ components:
         tz_fixed:
           type: string
           description: "Fixed IANA timezone."
-          example: ["America/New_York", "Europe/London"]
+          pattern: "^[A-Za-z_/]+$"
+          examples:
+            new_york:
+              summary: "New York timezone"
+              value: "America/New_York"
+            london:
+              summary: "London timezone"
+              value: "Europe/London"
 
     DelayNode:
       type: object
@@ -265,7 +277,16 @@ components:
         duration:
           type: string
           description: "Duration value. Required for 'fixed' and 'dynamic' delay types."
-          example: ["30s", ".delay_duration", "$recipient.delay_duration"]
+          examples:
+            fixed_duration:
+              summary: "Fixed duration example"
+              value: "30s"
+            dynamic_duration:
+              summary: "Dynamic duration from trigger payload"
+              value: ".delay_duration"
+            recipient_duration:
+              summary: "Dynamic duration from recipient properties"
+              value: "$recipient.delay_duration"
         relative_to:
           type: object
           description: "Relative delay configuration. Required when delay_type is 'relative_to'."
@@ -285,7 +306,13 @@ components:
             offset_value:
               type: string
               description: "Offset value"
-              example: ["15m", "$recipient.reminder_offset"]
+              examples:
+                fixed_offset:
+                  summary: "Fixed duration offset"
+                  value: "15m"
+                dynamic_offset:
+                  summary: "Dynamic offset from recipient properties"
+                  value: "$recipient.reminder_offset"
 
     BatchNode:
       type: object
@@ -322,7 +349,19 @@ components:
         dynamic_window_expr:
           type: string
           description: "Batch window when window_type is 'dynamic'. jq-expression for deriving batch window duration at runtime."
-          example: [".window_duration", "$recipient.batch_duration", "$actor.window_duration", "$tenant.window_duration"]
+          examples:
+            trigger_payload:
+              summary: "From trigger payload"
+              value: ".window_duration"
+            recipient_property:
+              summary: "From recipient properties"
+              value: "$recipient.batch_duration"
+            actor_property:
+              summary: "From actor properties"
+              value: "$actor.window_duration"
+            tenant_property:
+              summary: "From tenant properties"
+              value: "$tenant.window_duration"
         relative_to:
           type: object
           description: "Batch window when window_type is 'relative_to'. Batch window is calculated relative to a future timestamp."
@@ -330,7 +369,13 @@ components:
             pivot_expr:
               type: string
               description: "(jq-expression) variable defining the future timestamp from trigger payload relative to which batch window is calculated."
-              example: [".start_time", "$recipient.task_end_time"]
+              examples:
+                trigger_payload:
+                  summary: "From trigger payload"
+                  value: ".start_time"
+                recipient_property:
+                  summary: "From recipient properties"
+                  value: "$recipient.task_end_time"
             offset_type:
               type: string
               enum: ["before", "after"]
@@ -342,7 +387,13 @@ components:
             offset_value:
               type: string
               description: "Offset value."
-              example: ["15m", "$recipient.reminder_offset"]
+              examples:
+                fixed_offset:
+                  summary: "Fixed duration offset"
+                  value: "15m"
+                dynamic_offset:
+                  summary: "Dynamic offset from recipient properties"
+                  value: "$recipient.reminder_offset"
         retain_count:
           type: integer
           minimum: 1
@@ -383,6 +434,7 @@ components:
           description: "HTTP method of the API call."
         url:
           type: string
+          format: uri
           description: "Endpoint URL of the API call. You can add variables in JSONNET format. Eg. `\"https://api.example.com/webhook?id=\"+data[\"$recipient\"].id`"
           example: "https://api.example.com/webhook"
         headers:
@@ -459,7 +511,13 @@ components:
               key:
                 type: string
                 description: "header key"
-                example: ["\"Authorization\"", "\"Content-Type\""]
+                examples:
+                  authorization:
+                    summary: "Authorization header"
+                    value: "\"Authorization\""
+                  content_type:
+                    summary: "Content-Type header"
+                    value: "Content-Type"
               value:
                 type: string
                 description: "header value"
@@ -473,11 +531,23 @@ components:
               key:
                 type: string
                 description: "Query Parameter Key"
-                example: ["\"id\"", "\"name\""]
+                examples:
+                  id_param:
+                    summary: "ID parameter"
+                    value: "id"
+                  name_param:
+                    summary: "Name parameter"
+                    value: "name"
               value:
                 type: string
                 description: "Query Parameter Value"
-                example: ["data.id", "data[\"$recipient\"].name"]
+                examples:
+                  data_id:
+                    summary: "Data ID from payload"
+                    value: "data.id"
+                  recipient_name:
+                    summary: "Recipient name from data"
+                    value: "data[\"$recipient\"].name"
         output_key:
           type: string
           description: "Optional key to store the response of API call. If not provided, the response will be appended at the root of the workflow payload. It's recommended to provide a unique key here to avoid overwriting existing data."
@@ -585,7 +655,16 @@ components:
                         value:
                           type: string
                           description: "Delay value. Required for 'fixed' and 'dynamic' delay types."
-                          example: ["30s", ".delay_duration", "$recipient.delay_duration"]
+                          examples:
+                            fixed_duration:
+                              summary: "Fixed duration example"
+                              value: "30s"
+                            dynamic_duration:
+                              summary: "Dynamic duration from trigger payload"
+                              value: ".delay_duration"
+                            recipient_duration:
+                              summary: "Dynamic duration from recipient properties"
+                              value: "$recipient.delay_duration"
                         relative_to:
                           type: object
                           description: "Relative delay configuration. Required when delay_type is 'relative_to'."
@@ -610,7 +689,13 @@ components:
                             offset_value:
                               type: string
                               description: "Offset value. Required for 'fixed' and 'dynamic' offset_value_types."
-                              example: ["15m", "$recipient.reminder_offset"]
+                              examples:
+                                fixed_offset:
+                                  summary: "Fixed duration offset"
+                                  value: "15m"
+                                dynamic_offset:
+                                  summary: "Dynamic offset from recipient properties"
+                                  value: "$recipient.reminder_offset"
               nodes:
                 type: array
                 description: "Array of nodes to execute when this branch condition is met. Minimum 1 node required."
@@ -1336,7 +1421,19 @@ components:
         success:
           type: string
           description: "Success metric to track for smart channel routing."
-          example: ["delivered", "seen", "interacted","<custom_event_name>"]
+          examples:
+            delivered:
+              summary: "Notification delivered"
+              value: "delivered"
+            seen:
+              summary: "Notification seen"
+              value: "seen"
+            interacted:
+              summary: "User clicked the notification"
+              value: "interacted"
+            custom_event:
+              summary: "Custom event name"
+              value: "<custom_event_name>"
         success_is_event:
           type: boolean
           description: "Whether the success metric is a custom event. If not, notification status will be used to determine success."
@@ -1384,10 +1481,10 @@ components:
           items:
             type: string
           description: Tags are used for grouping and filtering workflows in list.
-          example: ["onboarding-sequence"]
+          example: "onboarding-sequence"
         trigger_type:
           type: string
-          enum: [event, api]
+          enum: ["event", "api"]
           description: You can trigger a workflow either via API by passing its slug directly, or through an event-based system where the workflow runs when a specific event occurs. You can compare both methods [here](https://docs.suprsend.com/docs/event-vs-api-trigger). If the workflow should run when a user enters or exits a list, use `trigger_type = event`.
         payload_schema:
           type: object
@@ -1593,6 +1690,30 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    BadRequestError:
+      description: Bad request - invalid input data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation error - data validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Conflict - resource already exists or state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
           example:
             code: 401
             error_code: "unauthorized"
@@ -1638,7 +1759,8 @@ paths:
                       items:
                         oneOf:
                           - type: object
-                            description: Pass file as **publicly accessible URL** (No limit on file size)
+                            title: "publicly accessible URL"
+                            description: "**Option 1: Pass file as publicly accessible URL** (No limit on file size)"
                             required: [url]
                             properties:
                               url:
@@ -1655,12 +1777,12 @@ paths:
                                 description: Ignore the attachment if it fails to load
 
                           - type: object
+                            title: "base64-encoded file"
                             description: Pass file as a **base-64 file** (supported limit < 50KB)
                             required: [data]
                             properties:
                               data:
                                 type: string
-                                format: string
                                 description: Base64-encoded content of the file
                               filename:
                                 type: string
@@ -1760,9 +1882,9 @@ paths:
                     LinkedIn:
                       type: string
                       description: tenant linkedin page link
-                    twitter:
+                    x:
                       type: string
-                      description: tenant twitter page link
+                      description: tenant x(previously twitter) page link
                     instagram:
                       type: string
                       description: tenant instagram page link
@@ -1778,6 +1900,9 @@ paths:
                     youtube:
                       type: string
                       description: tenant youtube page link
+                    tiktok:
+                      type: string
+                      description: tenant tiktok page link
                 properties:
                   type: object
                   description: Custom properties associated with the tenant. Update operation on properties works like upsert on 1st-level keys (i.e., if top-level key doesn't already exist, then it will be added, otherwise its value will be replaced by the new value. All other key-value pairs will remain unchanged).
@@ -1848,7 +1973,7 @@ paths:
       summary: Get Tenant data
       security:
         - BearerAuth: []
-      description: API to fetch tenant settings (logo, colors, links, preference) corresponding to a tenant_id.
+      description: API to fetch tenant settings (logo, colors, links, preference) corresponding to a tenant_id. To create or update tenant data, use the [Create/Update Tenant](#create-update-tenants) endpoint. To create or update tenant data, use the [Create/Update Tenant](#create-update-tenants) endpoint. To create or update tenant data, use the [Create/Update Tenant](#operation/create-tenants) endpoint.
       operationId: get-tenant
       parameters:
         - name: tenant_id
@@ -1865,14 +1990,14 @@ paths:
               examples:
                 Result:
                   value: {
-                    "tenant_id": "brand_id",
+                    "tenant_id": "_tenant_id_",
                     "tenant_name": "Awesome Tenant",
                     "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
                     "timezone": null,
                     "blocked_channels": [
                       "email"
                     ],
-                    "embedded_preference_url": "https://app.suprsend.com/settings",
+                    "embedded_preference_url": "https://app.suprsend.com/en/user-settings/notifications",
                     "hosted_preference_domain": "preferences.suprsend.com",
                     "primary_color": "#ff0000",
                     "secondary_color": "#0000ff",
@@ -1881,12 +2006,13 @@ paths:
                       "website": "https://suprsend.com",
                       "facebook": "https://www.company.com",
                       "linkedin": "",
-                      "twitter": "",
+                      "x": "",
                       "instagram": "",
                       "medium": "",
                       "discord": "",
                       "telegram": "",
-                      "youtube": ""
+                      "youtube": "",
+                      "tiktok": ""
                     },
                     "properties": {
                       "k1": "v1",
@@ -1896,7 +2022,7 @@ paths:
                   }
               schema:
                 type: object
-                description: Updated Object Payload is returned in response. JSON structure similar to request payload.
+                description: Updated Object Payload is returned in response. JSON structure similar to [request payload](/reference/create-update-tenants).
         '404':
           description: '404 - Not Found'
           content:
@@ -1930,10 +2056,6 @@ paths:
       responses:
         '204':
           description: '204 - No Content'
-          content:
-            application/json:
-              schema:
-                type: object
         '404':
           description: '404 - Not Found'
           content:
@@ -2051,7 +2173,13 @@ paths:
                         blocked_channels:
                           type: string
                           nullable: true
-                          example: ["email","sms"]
+                          examples:
+                            email:
+                              summary: "Email channel"
+                              value: "email"
+                            sms:
+                              summary: "SMS channel"
+                              value: "sms"
                           description: channels that are blocked for the tenant.
                         embedded_preference_url:
                           type: string
@@ -2122,7 +2250,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           required: true
           schema:
             type: string
@@ -2207,14 +2335,14 @@ paths:
           in: query
           description: number of results to be returned in API response
           schema:
-            type: string
-            default: '20'
+            type: integer
+            default: 20
         - name: offset
           in: query
           description: starting position of tenant list
           schema:
-            type: string
-            default: '0'
+            type: integer
+            default: 0
       responses:
         '200':
           description: '200'
@@ -2312,7 +2440,7 @@ paths:
               properties:
                 list_id:
                   type: string
-                  description: Unique string idenitifier of the list. Add an id which defines the type of users who are part of the list
+                  description: Unique string identifier of the list. Add an id which defines the type of users who are part of the list
                   default: _list_id_
                 list_name:
                   type: string
@@ -2358,7 +2486,7 @@ paths:
                     example: "Users subscribed to the newsletter"
                   list_type:
                     type: string
-                    enum: ["static_list","query_based"]
+                    enum: ["static_list", "query_based"]
                   subscribers_count:
                     type: integer
                     description: number of users in the list
@@ -2487,51 +2615,119 @@ paths:
                         type: array
                         description: Send androidpush on the given push token
                         items:
-                          properties:
-                            token:
-                              type: string
-                              description: Androidpush token
-                              default: __android_push_token__
-                            provider:
-                              type: string
-                              description: vendor delivering the push notification
-                              default: fcm
-                            device_id:
-                              type: string
-                              description: unique identifier of user's device. This is used to avoid sending duplicate push notification on the user's device
-                          required:
-                            - token
-                            - provider
-                          type: object
+                          type: string
                       $iospush:
                         type: array
                         description: Send iOSpush on the given push token
                         items:
-                          properties:
-                            token:
-                              type: string
-                              description: iOSpush token
-                              default: __ios_push_token__
-                            provider:
-                              type: string
-                              description: vendor delivering the push notification
-                              default: apns
-                            device_id:
-                              type: string
-                              description: unique identifier of user's device. This is used to avoid sending duplicate push notification on the same device
-                          required:
-                            - token
-                            - provider
-                          type: object
+                          type: string
                       $slack:
-                        type: string
-                        description: |
-                          Send Slack on a particular channel in user's profile. Use one of the methods to add slack token -
-                          1. slack using email: `{"email": "user@example.com", "access_token": "xoxb-XXXXXXXX"}`
-                          2. slack using member_id: `{"user_id": "U/WXXXXXXXX", "access_token": "xoxb-XXXXXXXX"}`
-                          3. slack channel: `{"channel": "CXXXXXXXX", "access_token": "xoxb-XXXXXXXX"}`
-                          4. slack incoming webhook: `{"incoming_webhook": { "url": "https://hooks.slack.com/services/TXXXX/BXXXX/XXXXXXX"}}'`
-                        format: json
+                        type: array
+                        description: Slack channel configuration
+                        items:
+                          oneOf:
+                            - type: object
+                              title: "user email_id"
+                              required: [email, access_token]
+                              properties:
+                                email:
+                                  type: string
+                                  format: email
+                                  description: User email address
+                                  example: "user@example.com"
+                                access_token:
+                                  type: string
+                                  description: Slack bot access token
+                                  example: "xoxb-XXXXXXXX"
+                            - type: object
+                              title: "user member_id"
+                              required: [user_id, access_token]
+                              properties:
+                                user_id:
+                                  type: string
+                                  description: Slack user ID (U/WXXXXXXXX format)
+                                  example: "U/WXXXXXXXX"
+                                access_token:
+                                  type: string
+                                  description: Slack bot access token
+                                  example: "xoxb-XXXXXXXX"
+                            - type: object
+                              title: "Slack channel"
+                              required: [channel, access_token]
+                              properties:
+                                channel:
+                                  type: string
+                                  description: Slack channel ID (CXXXXXXXX format)
+                                  example: "CXXXXXXXX"
+                                access_token:
+                                  type: string
+                                  description: Slack bot access token
+                                  example: "xoxb-XXXXXX"
+                            - type: object
+                              title: "Using incoming webhook"
+                              required: [incoming_webhook]
+                              properties:
+                                incoming_webhook:
+                                type: object
+                                required: [url]
+                                properties:
+                                  url:
+                                    type: string
+                                    format: uri
+                                    description: Slack incoming webhook URL
+                                    example: "https://hooks.slack.com/services/TXXXX/BXXXX/XXXXXXX"
+                      $ms_teams:
+                        type: array
+                        description: Microsoft Teams channel configuration
+                        items:
+                          oneOf:
+                            - type: object
+                              title: "MS Teams using conversation ID"
+                              required: [tenant_id, service_url, conversation_id]
+                              properties:
+                                tenant_id:
+                                  type: string
+                                  description: Microsoft Teams tenant ID
+                                  example: "c1981ab2-9aaf-xxxx-xxxx"
+                                service_url:
+                                  type: string
+                                  format: uri
+                                  description: Microsoft Teams service URL
+                                  example: "https://smba.trafficmanager.net/amer"
+                                conversation_id:
+                                    type: string
+                                    description: Microsoft Teams conversation ID
+                                    example: "19:c1524d7c-a06f-456f-8abe-xxxx"
+                            - type: object
+                              title: "MS Teams using user ID"
+                              required: [tenant_id, service_url, user_id]
+                              properties:
+                                tenant_id:
+                                  type: string
+                                  description: Microsoft Teams tenant ID
+                                  example: "c1981ab2-9aaf-xxxx-xxxx"
+                                service_url:
+                                  type: string
+                                  format: uri
+                                  description: Microsoft Teams service URL
+                                  example: "https://smba.trafficmanager.net/amer"
+                                user_id:
+                                  type: string
+                                  description: Microsoft Teams user ID
+                                  example: "29:1nsLcmJ2RKtYH6Cxxxx-xxxx"
+                            - type: object
+                              title: "MS Teams using incoming webhook"
+                              required: [incoming_webhook]
+                              properties:
+                                incoming_webhook:
+                                  type: object
+                                  required: [url]
+                                  properties:
+                                    url:
+                                      type: string
+                                      format: uri
+                                      description: Microsoft Teams incoming webhook URL
+                                      example: "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
                     required:
                       - distinct_id
                     type: object
@@ -2545,6 +2741,7 @@ paths:
                       items:
                         oneOf:
                           - type: object
+                            title: "publicly accessible URL"
                             description: Pass file as **publicly accessible URL** (No limit on file size)
                             required: [url]
                             properties:
@@ -2562,12 +2759,12 @@ paths:
                                 description: Ignore the attachment if it fails to load
 
                           - type: object
+                            title: "base64-encoded file"
                             description: Pass file as a **base-64 file** (supported limit < 50KB)
                             required: [data]
                             properties:
                               data:
                                 type: string
-                                format: string
                                 description: Base64-encoded content of the file
                               filename:
                                 type: string
@@ -2778,12 +2975,15 @@ paths:
                             properties:
                               channel:
                                 type: string
+                                description: channel name
                                 example: email
                               preference:
                                 type: string
+                                description: user preference for this channel (opt_in, opt_out)
                                 example: opt_in
                               is_editable:
                                 type: boolean
+                                description: whether the user can edit this channel preference
                                 example: false
         '404':
           description: '404 - Not Found'
@@ -2803,7 +3003,7 @@ paths:
                     example: 404
                   message:
                     type: string
-                    example: "user [distinct_id: 'user1'] not found"
+                    example: "user [distinct_id: 'user1'] not found"          
       deprecated: false
   /v1/subscriber_list/{list_id}/subscriber/add:
     post:
@@ -2815,7 +3015,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           required: true
           schema:
             type: string
@@ -2883,7 +3083,7 @@ paths:
                     example: "list_id: _list_id_ not found"
                   detail:
                     type: string
-                    example: "list_id: _list_id_ not found"
+                    example: "list_id: _list_id_ not found"        
       deprecated: false
   /v1/subscriber_list/{list_id}/:
     get:
@@ -2895,7 +3095,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list.
+          description: Unique string identifier of the list.
           required: true
           schema:
             type: string
@@ -2937,7 +3137,7 @@ paths:
                     example: "Users subscribed to the newsletter"
                   list_type:
                     type: string
-                    enum: ["static_list","query_based"]
+                    enum: ["static_list", "query_based"]
                   subscribers_count:
                     type: integer
                     description: number of users in the list
@@ -3008,7 +3208,7 @@ paths:
                   - error_code
                   - type
                   - message
-                  - detail
+                  - detail      
       deprecated: false
   /{workspace_key}/broadcast:
     post:
@@ -3017,9 +3217,26 @@ paths:
         - BearerAuth: []
       description: API to trigger broadcast notification to list users.
       operationId: trigger-broadcast
+      x-codeSamples:
+        - lang: cURL
+          label: Trigger Broadcast
+          source: |
+            curl -X POST "https://api.suprsend.com/{workspace_key}/broadcast" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "list_id": "_list_id_",
+                "template": "_template_slug_",
+                "notification_category": "transactional",
+                "data": {
+                  "user_name": "John Doe",
+                  "product_name": "Premium Plan"
+                }
+              }'
       parameters:
         - name: workspace_key
           in: path
+          description: unique identifier of your workspace
           schema:
             type: string
           required: true
@@ -3087,7 +3304,7 @@ paths:
                   value: BAD REQUEST
               schema:
                 type: string
-                description: Error in case the API request is missing mandatory fields
+                description: Error in case the API request is missing mandatory fields            
       deprecated: false
   /v1/user/{distinct_id}/preference/channel_preference/:
     get:
@@ -3137,6 +3354,7 @@ paths:
                       properties:
                         channel:
                           type: string
+                          description: channel name
                           example: "androidpush"
                         is_restricted:
                           type: boolean
@@ -3295,7 +3513,7 @@ paths:
                   default: opt_in
                 opt_out_channels:
                   type: array
-                  description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
       responses:
@@ -3381,7 +3599,7 @@ paths:
                   }
               schema:
                 type: object
-                description: error code and message detailing the error
+                description: error code and message detailing the error     
       deprecated: false
   /v1/tenant/{tenant_id}/category/{category_slug}/:
     patch:
@@ -3451,6 +3669,7 @@ paths:
                     description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
                   description:
                     type: string
+                    description: description of the notification category
                   root_category:
                     type: string
                     description: root category this sub-category belongs to
@@ -3470,6 +3689,7 @@ paths:
                   preference:
                     type: string
                     enum: ["opt_in", "opt_out"]
+                    description: current preference setting for this category
                   blocked_channels:
                     type: array
                     description: channels blocked in the category from SuprSend dashboard -> tenants page
@@ -3505,7 +3725,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list which you want to delete
+          description: Unique string identifier of the list which you want to delete
           schema:
             type: string
           required: true
@@ -3602,12 +3822,15 @@ paths:
                 properties:
                   name:
                     type: string
+                    description: name of the notification category
                     example: Newsletter
                   category:
                     type: string
+                    description: category slug identifier
                     example: newsletter
                   description:
                     type: string
+                    description: description of the notification category
                     example: Send me updates on new product updates
                   original_preference:
                     type: string
@@ -3616,6 +3839,7 @@ paths:
                     example: null
                   preference:
                     type: string
+                    description: "updated user preference of the category"
                     example: opt_in
                   is_editable:
                     type: boolean
@@ -3629,12 +3853,15 @@ paths:
                       properties:
                         channel:
                           type: string
+                          description: channel name
                           example: email
                         preference:
                           type: string
+                          description: user preference for this channel (opt_in, opt_out)
                           example: opt_in
                         is_editable:
                           type: boolean
+                          description: whether the user can edit this channel preference
                           example: false
         '404':
           description: '404 - Not Found'
@@ -3654,7 +3881,7 @@ paths:
                     example: 404
                   message:
                     type: string
-                    example: "category 'category_slug' not found"
+                    example: "category 'category_slug' not found"    
       deprecated: false
   /v1/tenant/{tenant_id}/category/:
     get:
@@ -3706,12 +3933,15 @@ paths:
                     properties:
                       count:
                         type: integer
+                        description: total number of categories
                         example: 12
                       limit:
                         type: integer
+                        description: maximum number of categories returned per request
                         example: 10
                       offset:
                         type: integer
+                        description: offset passed in request
                   results:
                     type: array
                     items:
@@ -3725,6 +3955,7 @@ paths:
                           description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
                         description:
                           type: string
+                          description: description of the notification category
                         root_category:
                           type: string
                           description: root category this sub-category belongs to
@@ -3744,6 +3975,7 @@ paths:
                         preference:
                           type: string
                           enum: ["opt_in", "opt_out"]
+                          description: current preference setting for this category
                         blocked_channels:
                           type: array
                           description: channels blocked in the category from SuprSend dashboard -> tenants page
@@ -3779,14 +4011,14 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           schema:
             type: string
             default: _list_id_
           required: true
         - name: version_id
           in: path
-          description: Unique string idenitifier of the draft version of the list to which user needs to be updated
+          description: Unique string identifier of the draft version of the list to which user needs to be updated
           schema:
             type: string
             default: __version_id__
@@ -3851,7 +4083,7 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list which you want to delete
+          description: Unique string identifier of the list which you want to delete
           schema:
             type: string
           required: true
@@ -4012,7 +4244,16 @@ paths:
                     type: array
                     items:
                       type: string
-                    example: ["en", "fr", "es"]
+                    examples:
+                      english:
+                        summary: "English language"
+                        value: "en"
+                      french:
+                        summary: "French language"
+                        value: "fr"
+                      spanish:
+                        summary: "Spanish language"
+                        value: "es"
                   channels:
                     type: array
                     description: array of all template enabled channels along with their language and active status
@@ -4022,7 +4263,16 @@ paths:
                     type: array
                     description: tags added in the template group
                     items:
-                      type: string
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: unique tag identifier
+                          example: "01H9HPT1C5ABN61S12D85J9DJ7"
+                        name:
+                          type: string
+                          description: tag name
+                          example: "tag"
       deprecated: false
   /v1/subscriber_list/{list_id}/version/{version_id}/finish_sync:
     patch:
@@ -4034,14 +4284,14 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list
+          description: Unique string identifier of the list
           schema:
             type: string
             default: _list_id_
           required: true
         - name: version_id
           in: path
-          description: Unique string idenitifier of the draft version of the list which needs to be made active(live)
+          description: Unique string identifier of the draft version of the list which needs to be made active(live)
           schema:
             type: string
             default: __version_id__
@@ -4102,14 +4352,14 @@ paths:
       parameters:
         - name: list_id
           in: path
-          description: Unique string idenitifier of the list to which user needs to be updated
+          description: Unique string identifier of the list to which user needs to be updated
           schema:
             type: string
             default: _list_id_
           required: true
         - name: version_id
           in: path
-          description: Unique string idenitifier of the draft version of the list to which user needs to be updated
+          description: Unique string identifier of the draft version of the list to which user needs to be updated
           schema:
             type: string
             default: __version_id__
@@ -4367,10 +4617,20 @@ paths:
                                 properties:
                                   name:
                                     type: string
+                                    description: language name
                                     example: "English"
                                   slug:
                                     type: string
+                                    description: language code
                                     example: "en"
+                              is_enabled:
+                                type: boolean
+                                description: whether the template is enabled for this language
+                                example: true
+                              approval_status:
+                                type: string
+                                description: approval status of the template (auto_approved, pending, rejected)
+                                example: "auto_approved"
                               content:
                                 type: object
                                 description: json content of the template
@@ -4392,8 +4652,22 @@ paths:
                                     type: string
                                     description: email of the team member who last updated the content
                                     example: "user@example.com"
+                              approval_cycle:
+                                type: string
+                                nullable: true
+                                description: approval cycle information
+                                example: null
+                              is_approval_needed:
+                                type: boolean
+                                description: whether approval is needed for this template
+                                example: false
+                              is_cloned_from_last_version:
+                                type: boolean
+                                description: whether this template was cloned from the last version
+                                example: false
                         status:
                           type: string
+                          description: version status (active, draft, archived)
                           example: "active"
                         version_tag:
                           type: string
@@ -4417,7 +4691,20 @@ paths:
                           description: languages last published in the channel
                           items:
                             type: string
+                          examples:
+                            english:
+                              summary: "English language"
+                              value: "en"
+                        apparent_published_languages:
+                          type: array
+                          description: languages that appear to be published in the channel
+                          items:
+                            type: string
                           example: ["en"]
+                        system_approval_info:
+                          type: object
+                          description: system approval information for the template
+                          example: {}
         '404':
           description: '404 - Not Found'
           content:
@@ -4440,7 +4727,7 @@ paths:
                     description: error type
                   message:
                     type: string
-                    description: error message giving reason of the failure
+                    description: error message giving reason of the failure      
       deprecated: false
   /v1/template:
     get:
@@ -4604,7 +4891,16 @@ paths:
                           type: array
                           items:
                             type: string
-                          example: ["en", "hi", "kn"]
+                          examples:
+                            english:
+                              summary: "English language"
+                              value: "en"
+                            hindi:
+                              summary: "Hindi language"
+                              value: "hi"
+                            kannada:
+                              summary: "Kannada language"
+                              value: "kn"
                         channels:
                           type: array
                           description: array of all template enabled channels along with their language and active status
@@ -4613,8 +4909,17 @@ paths:
                         tags:
                           type: array
                           items:
-                            type: string
-                          example: []
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                description: unique tag identifier
+                                example: "01H9HPT1C5ABN61S12D85J9DJ7"
+                              name:
+                                type: string
+                                description: tag name
+                                example: "tag"
+                          example: null
       deprecated: false
   /trigger/:
     post:
@@ -4623,6 +4928,28 @@ paths:
         - BearerAuth: []
       description: API to trigger multi-step workflow to one or more users/ objects by passing workflow slug.
       operationId: trigger-workflow-api
+      x-codeSamples:
+        - lang: cURL
+          label: Trigger Workflow
+          source: |
+            curl -X POST "https://api.suprsend.com/v1/workflow/trigger/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "workflow": "welcome-email-workflow",
+                "recipients": [
+                  {
+                    "distinct_id": "user123",
+                    "$email": {
+                      "value": "user@example.com"
+                    }
+                  }
+                ],
+                "data": {
+                  "user_name": "John Doe",
+                  "welcome_message": "Welcome to our platform!"
+                }
+              }'
       requestBody:
         content:
           application/json:
@@ -4642,7 +4969,8 @@ paths:
                   items:
                     oneOf:
                       - type: object
-                        description: Notify user
+                        title: "Identify user inline"
+                        description: "You can pass user properties and channels inline in workflow trigger request. Properties and channels passed here also update in user profile on workflow trigger."
                         required: [distinct_id]
                         properties:
                           is_transient:
@@ -4653,57 +4981,138 @@ paths:
                             description: unique identifier of the user who needs to be notified
                             default: id1
                           $email:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                format: email
-                                example: "john@example.com"
+                            type: array
+                            items:
+                              type: string
+                              format: email
+                              example: "john@example.com"
                           $sms:
-                            type: object
-                            properties:
-                              value:
+                              type: array
+                              items:
                                 type: string
                                 example: "+1234567890"
-                          $webpush:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: "webpush_token_abc123"
                           $inbox:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: "4nlPk4t4kurG5kChOELB8Q1LcDI9DHzHQ70st2E2C24"
-                              id_provider:
-                                type: string
-                                example: "suprsend"
+                            type: array
+                            items:
+                              type: string
+                              example: "4nlPk4t4kurG5kChxxxx"
                           $androidpush:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: "android_push_token_xyz987"
+                            type: array
+                            items:
+                              type: string
+                              example: "__android_push_token__"
                           $iospush:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: "ios_push_token_lmn456"
+                            type: array
+                            items:
+                              type: string
+                              example: "__ios_push_token__"
                           $slack:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: "U01ABCDE2F3"
+                            type: array
+                            description: Slack channel configuration
+                            items:
+                              oneOf:
+                                - type: object
+                                  title: "Slack using email"
+                                  required: [email, access_token]
+                                  properties:
+                                    email:
+                                      type: string
+                                      format: email
+                                      description: User email address
+                                      example: "user@example.com"
+                                    access_token:
+                                      type: string
+                                      description: Slack bot access token
+                                      example: "xoxb-XXXXXXXX"
+                                - type: object
+                                  title: "Slack using member ID"
+                                  required: [user_id, access_token]
+                                  properties:
+                                    user_id:
+                                      type: string
+                                      description: Slack user ID (U/WXXXXXXXX format)
+                                      example: "U/WXXXXXXXX"
+                                    access_token:
+                                      type: string
+                                      description: Slack bot access token
+                                      example: "xoxb-XXXXXX"
+                                - type: object
+                                  title: "Slack using channel"
+                                  required: [channel, access_token]
+                                  properties:
+                                    channel:
+                                      type: string
+                                      description: Slack channel ID (CXXXXXXXX format)
+                                      example: "CXXXXXXXX"
+                                    access_token:
+                                      type: string
+                                      description: Slack bot access token
+                                      example: "xoxb-XXXXXX"
+                                - type: object
+                                  title: "Slack using incoming webhook"
+                                  required: [incoming_webhook]
+                                  properties:
+                                    incoming_webhook:
+                                      type: object
+                                      required: [url]
+                                      properties:
+                                        url:
+                                          type: string
+                                          format: uri
+                                          description: Slack incoming webhook URL
+                                          example: "https://hooks.slack.com/services/TXXXX/BXXXX/XXXXXXX"
                           $ms_teams:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: "teams_user_id_123456"
+                            type: array
+                            description: Microsoft Teams channel configuration
+                            items:
+                              oneOf:
+                                - type: object
+                                  title: "MS Teams using conversation ID"
+                                  required: [tenant_id, service_url, conversation_id]
+                                  properties:
+                                    tenant_id:
+                                      type: string
+                                      description: Microsoft Teams tenant ID
+                                      example: "c1981ab2-9aaf-xxxx-xxxx"
+                                    service_url:
+                                      type: string
+                                      format: uri
+                                      description: Microsoft Teams service URL
+                                      example: "https://smba.trafficmanager.net/amer"
+                                    conversation_id:
+                                      type: string
+                                      description: Microsoft Teams conversation ID
+                                      example: "19:c1524d7c-a06f-456f-8abe-xxxx"
+                                - type: object
+                                  title: "MS Teams using user ID"
+                                  required: [tenant_id, service_url, user_id]
+                                  properties:
+                                    tenant_id:
+                                      type: string
+                                      description: Microsoft Teams tenant ID
+                                      example: "c1981ab2-9aaf-xxxx-xxxx"
+                                    service_url:
+                                      type: string
+                                      format: uri
+                                      description: Microsoft Teams service URL
+                                      example: "https://smba.trafficmanager.net/amer"
+                                    user_id:
+                                      type: string
+                                      description: Microsoft Teams user ID
+                                      example: "29:1nsLcmJ2RKtYH6Cxxxx-xxxx"
+                                - type: object
+                                  title: "MS Teams using incoming webhook"
+                                  required: [incoming_webhook]
+                                  properties:
+                                    incoming_webhook:
+                                      type: object
+                                      required: [url]
+                                      properties:
+                                        url:
+                                          type: string
+                                          format: uri
+                                          description: Microsoft Teams incoming webhook URL
+                                          example: "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
                           $timezone:
                             type: string
                             example: "America/New_York"
@@ -4711,7 +5120,7 @@ paths:
                             type: string
                             example: "en"
                       - type: object
-                        description: Notify object
+                        title: "Notify object"
                         required: [id,object_type]
                         properties:
                           id:
@@ -4749,6 +5158,7 @@ paths:
                       items:
                         oneOf:
                           - type: object
+                            title: "Pass Public URL"
                             description: Pass file as **publicly accessible URL** (No limit on file size)
                             required: [url]
                             properties:
@@ -4766,12 +5176,12 @@ paths:
                                 description: Ignore the attachment if it fails to load
 
                           - type: object
+                            title: "Pass Base64 File Locally"
                             description: Pass file as a **base-64 file** (supported limit < 50KB)
                             required: [data]
                             properties:
                               data:
                                 type: string
-                                format: string
                                 description: Base64-encoded content of the file
                               filename:
                                 type: string
@@ -4824,6 +5234,26 @@ paths:
                   message:
                     type: string
                     example: "BAD REQUEST"
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "status": "fail",
+                    "message": "workflow 'workflow_slug' not found"
+                  }
+              schema:
+                type: object
+                description: This error would come if the workflow slug is not found.
+                properties:
+                  status:
+                    type: string
+                    example: "fail"
+                  message:
+                    type: string
+                    example: "workflow 'workflow_slug' not found"
       deprecated: false
   /v1/bulk/user/preference/:
     patch:
@@ -4883,7 +5313,7 @@ paths:
                         default: opt_in
                       opt_out_channels:
                         type: array
-                        description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                        description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                         default: []
                         items:
                           type: string
@@ -4922,14 +5352,14 @@ paths:
                     example: 404
                   message:
                     type: string
-                    example: "tenant '_tenant_id_' not found"
+                    example: "tenant '_tenant_id_' not found"        
       deprecated: false
   /v1/bulk/user/preference/reset/:
     patch:
       summary: Reset
       security:
         - BearerAuth: []
-      description: API to reset user preference settings to default tenant preference.
+      description: API to reset user preference settings to default preference.
       operationId: reset-user-preferences
       parameters:
         - name: tenant_id
@@ -5124,6 +5554,7 @@ paths:
                       properties:
                         channel:
                           type: string
+                          description: channel name
                           example: "androidpush"
                         is_restricted:
                           type: boolean
@@ -5307,18 +5738,11 @@ paths:
         content:
           application/json:
             example:
-              $email: ["jsmith@example.com"]
-              $sms: ["+1234567890"]
-              $whatsapp: ["+1234567890"]
-              $inbox: ["4nlPk4XXLcDxxxHQ70xx2Cx24"]
-              $webpush: ["webpush_token_abc123"]
-              $androidpush: ["android_push_token_xyz987"]
-              $iospush: ["ios_push_token_lmn456"]
-              $slack: ["U01ABCDE2F3"]
-              $ms_teams: ["teams_user_id_12345"]
-              $timezone: America/New_York
-              $preferred_language: en
-              custom_key: custom_value
+              department: "Engineering"
+              $email: ["devs@example.com"]
+              $slack:
+                - channel: "CXXXXXXXX"
+                  access_token: "xoxb-XXXXXX"
             schema:
               properties:
                 $email:
@@ -5326,7 +5750,7 @@ paths:
                   items:
                     type: string
                     format: email
-                  description: List of email addresses. You can add other channels in the same format by replacing `$email` with the respective channel keys. Supported keys- `$email`, `$sms`, `$whatsapp`, `$inbox`, `$webpush`, `$androidpush`, `$iospush`, `$slack`, `$ms_teams`.
+                  description: List of email addresses.
                 $sms:
                   type: array
                   items:
@@ -5342,11 +5766,6 @@ paths:
                   items:
                     type: string
                   description: List of inbox identifiers
-                $webpush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of web push tokens
                 $androidpush:
                   type: array
                   items:
@@ -5359,14 +5778,111 @@ paths:
                   description: List of iOS Push tokens
                 $slack:
                   type: array
+                  description: Slack channel configuration
                   items:
-                    type: string
-                  description: List of Slack user IDs
+                    oneOf:
+                      - type: object
+                        title: "Slack using email"
+                        required: [email, access_token]
+                        properties:
+                          email:
+                            type: string
+                            format: email
+                            description: User email address
+                            example: "user@example.com"
+                          access_token:
+                            type: string
+                            description: Slack bot access token
+                            example: "xoxb-XXXXXXXX"
+                      - type: object
+                        title: "Slack using member ID"
+                        required: [user_id, access_token]
+                        properties:
+                          user_id:
+                            type: string
+                            description: Slack user ID (U/WXXXXXXXX format)
+                            example: "U/WXXXXXXXX"
+                          access_token:
+                            type: string
+                            description: Slack bot access token
+                            example: "xoxb-XXXXXX"
+                      - type: object
+                        title: "Slack using channel"
+                        required: [channel, access_token]
+                        properties:
+                          channel:
+                            type: string
+                            description: Slack channel ID (CXXXXXXXX format)
+                            example: "CXXXXXXXX"
+                          access_token:
+                            type: string
+                            description: Slack bot access token
+                            example: "xoxb-XXXXXX"
+                      - type: object
+                        title: "Slack using incoming webhook"
+                        required: [incoming_webhook]
+                        properties:
+                          incoming_webhook:
+                            type: object
+                            required: [url]
+                            properties:
+                              url:
+                                type: string
+                                format: uri
+                                description: Slack incoming webhook URL
+                                example: "https://hooks.slack.com/services/TXXXX/BXXXX/XXXXXXX"
                 $ms_teams:
                   type: array
+                  description: Microsoft Teams channel configuration
                   items:
-                    type: string
-                  description: List of Microsoft Teams user IDs
+                    oneOf:
+                      - type: object
+                        title: "MS Teams using conversation ID"
+                        required: [tenant_id, service_url, conversation_id]
+                        properties:
+                          tenant_id:
+                            type: string
+                            description: Microsoft Teams tenant ID
+                            example: "c1981ab2-9aaf-xxxx-xxxx"
+                          service_url:
+                            type: string
+                            format: uri
+                            description: Microsoft Teams service URL
+                            example: "https://smba.trafficmanager.net/amer"
+                          conversation_id:
+                            type: string
+                            description: Microsoft Teams conversation ID
+                            example: "19:c1524d7c-a06f-456f-8abe-xxxx"
+                      - type: object
+                        title: "MS Teams using user ID"
+                        required: [tenant_id, service_url, user_id]
+                        properties:
+                          tenant_id:
+                            type: string
+                            description: Microsoft Teams tenant ID
+                            example: "c1981ab2-9aaf-xxxx-xxxx"
+                          service_url:
+                            type: string
+                            format: uri
+                            description: Microsoft Teams service URL
+                            example: "https://smba.trafficmanager.net/amer"
+                          user_id:
+                            type: string
+                            description: Microsoft Teams user ID
+                            example: "29:1nsLcmJ2RKtYH6Cxxxx-xxxx"
+                      - type: object
+                        title: "MS Teams using incoming webhook"
+                        required: [incoming_webhook]
+                        properties:
+                          incoming_webhook:
+                            type: object
+                            required: [url]
+                            properties:
+                              url:
+                                type: string
+                                format: uri
+                                description: Microsoft Teams incoming webhook URL
+                                example: "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
                 $timezone:
                   type: string
                   description: User's timezone in [IANA format](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List)
@@ -5387,10 +5903,28 @@ paths:
                       "id": "engineering",
                       "subscriptions_count": 0,
                       "properties": {
-                        "$preferred_language": "en"
+                        "$preferred_language": "en",
+                        "department": "Engineering"
                       },
                       "created_at": "2025-04-06T10:00:37.893892+00:00",
                       "updated_at": "2025-04-06T10:00:37.893892+00:00",
+                      "$email": [
+                        {
+                          "value": "devs@example.com",
+                          "status": "active",
+                          "perma_status": "active"
+                        }
+                      ], 
+                      "$slack": [
+                        {
+                          "value": {
+                            "email_id": "user@example.com",
+                            "access_token": "xoxb-..."
+                          },
+                          "status": "active",
+                          "perma_status": "active"
+                        }
+                      ],
                       "$inbox": [
                         {
                           "value": "pO7w6x_HFZxCs30N4SHab05e3QIdB1e0xT2r4vQWjvM",
@@ -5440,6 +5974,25 @@ paths:
                           perma_status:
                             type: string
                             description: active/disabled. Perma_status is marked disabled in case of hard bounce on the channel.
+          '400':
+            description: '400 - Bad Request'
+            content:
+              application/json:
+                examples:
+                  Result:
+                    value: {
+                      "code": 400,
+                      "message": "invalid_request_error"
+                    }
+                schema:
+                  type: object
+                  properties:
+                    code:
+                      type: integer
+                      example: 400
+                    message:
+                      type: string
+                      description: "Error message describing the missing resource."
       deprecated: false
     get:
       summary: Fetch Object by id
@@ -5567,6 +6120,11 @@ paths:
       responses:
         '204':
           description: '204 - No Content'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: null
         '404':
           description: '404 - Not Found'
           content:
@@ -5593,6 +6151,28 @@ paths:
         - BearerAuth: []
       description: API to edit (add/remove) properties and communication-channels for an object.
       operationId: edit-object-profile
+      x-codeSamples:
+        - lang: cURL
+          source: |
+            curl -X PATCH "https://api.suprsend.com/v1/object/departments/engineering/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "operations": [
+                  {
+                    "$set": {
+                      "name": "Engineering Department",
+                      "$preferred_language": "en",
+                      "$timezone": "America/New_York"
+                    }
+                  },
+                  {
+                    "$append": {
+                      "$email": ["engineering@company.com"]
+                    }
+                  }
+                ]
+              }'
       parameters:
         - name: object_type
           in: path
@@ -5751,6 +6331,18 @@ paths:
         - BearerAuth: []
       description: API to add subscribers (users/child objects) to a given object, to notify subscribers when workflow is triggered on the parent object.
       operationId: add-object-subscription
+      x-codeSamples:
+        - lang: cURL
+          source: |
+            curl -X POST "https://api.suprsend.com/v1/object/departments/engineering/subscription/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "recipients": ["user123","user456"],
+                "properties": {
+                  "role": "developer"
+                }
+              }'
       parameters:
         - name: id
           in: path
@@ -5776,7 +6368,8 @@ paths:
                   items:
                     oneOf:
                       - type: object
-                        description: Add user subscription by passing user json. You can pass user distinct_ids in array as `["id1","id2"]` or as user object to identify recipient inline.
+                        title: "Add user"
+                        description: "**Option 1: Add user subscription** - Add user subscription by passing user json. You can pass user distinct_ids in array as `[\"id1\",\"id2\"]` or as user object to identify recipient inline."
                         required: [distinct_id]
                         properties:
                           distinct_id:
@@ -5785,9 +6378,141 @@ paths:
                             default: id1
                           $email:
                             type: array
-                            description: List of email addresses. You can add other channels in the same format by replacing $email with respective channel keys. Available channel keys - `$email`, `$sms`, `$inbox`, `$webpush`, `$androidpush`, `$iospush`, `$slack`, `$ms_teams`.
+                            description: List of email addresses.
                             items:
                               type: string
+                          $sms:
+                            type: array
+                            description: List of SMS numbers.
+                            items:
+                              type: string
+                          $whatsapp:
+                            type: array
+                            description: List of WhatsApp numbers.
+                            items:
+                              type: string
+                          $inbox:
+                            type: array
+                            description: List of Inbox numbers.
+                            items:
+                              type: string
+                          $androidpush:
+                            type: array
+                            description: List of Android Push tokens.
+                            items:
+                              type: string
+                          $iospush:
+                            type: array
+                            description: List of iOS Push tokens.
+                            items:
+                              type: string
+                          $slack:
+                            type: array
+                            description: Slack channel configuration
+                            items:
+                              oneOf:
+                                - type: object
+                                  title: "Slack using email"
+                                  required: [email, access_token]
+                                  properties:
+                                    email:
+                                      type: string
+                                      format: email
+                                      description: User email address
+                                      example: "user@example.com"
+                                    access_token:
+                                      type: string
+                                      description: Slack bot access token
+                                      example: "xoxb-XXXXXXXX"
+                                - type: object
+                                  title: "Slack using member ID"
+                                  required: [user_id, access_token]
+                                  properties:
+                                    user_id:
+                                      type: string
+                                      description: Slack user ID (U/WXXXXXXXX format)
+                                      example: "U/WXXXXXXXX"
+                                    access_token:
+                                      type: string
+                                      description: Slack bot access token
+                                      example: "xoxb-XXXXXX"
+                                - type: object
+                                  title: "Slack using channel"
+                                  required: [channel, access_token]
+                                  properties:
+                                    channel:
+                                      type: string
+                                      description: Slack channel ID (CXXXXXXXX format)
+                                      example: "CXXXXXXXX"
+                                    access_token:
+                                      type: string
+                                      description: Slack bot access token
+                                      example: "xoxb-XXXXXX"
+                                - type: object
+                                  title: "Slack using incoming webhook"
+                                  required: [incoming_webhook]
+                                  properties:
+                                    incoming_webhook:
+                                      type: object
+                                      required: [url]
+                                      properties:
+                                        url:
+                                          type: string
+                                          format: uri
+                                          description: Slack incoming webhook URL
+                                          example: "https://hooks.slack.com/services/TXXXX/BXXXX/XXXXXXX"
+                          $ms_teams:
+                            type: array
+                            description: Microsoft Teams channel configuration
+                            items:
+                              oneOf:
+                                - type: object
+                                  title: "MS Teams using conversation ID"
+                                  required: [tenant_id, service_url, conversation_id]
+                                  properties:
+                                    tenant_id:
+                                      type: string
+                                      description: Microsoft Teams tenant ID
+                                      example: "c1981ab2-9aaf-xxxx-xxxx"
+                                    service_url:
+                                      type: string
+                                      format: uri
+                                      description: Microsoft Teams service URL
+                                      example: "https://smba.trafficmanager.net/amer"
+                                    conversation_id:
+                                      type: string
+                                      description: Microsoft Teams conversation ID
+                                      example: "19:c1524d7c-a06f-456f-8abe-xxxx"
+                                - type: object
+                                  title: "MS Teams using user ID"
+                                  required: [tenant_id, service_url, user_id]
+                                  properties:
+                                    tenant_id:
+                                      type: string
+                                      description: Microsoft Teams tenant ID
+                                      example: "c1981ab2-9aaf-xxxx-xxxx"
+                                    service_url:
+                                      type: string
+                                      format: uri
+                                      description: Microsoft Teams service URL
+                                      example: "https://smba.trafficmanager.net/amer"
+                                    user_id:
+                                      type: string
+                                      description: Microsoft Teams user ID
+                                      example: "29:1nsLcmJ2RKtYH6Cxxxx-xxxx"
+                                - type: object
+                                  title: "MS Teams using incoming webhook"
+                                  required: [incoming_webhook]
+                                  properties:
+                                    incoming_webhook:
+                                      type: object
+                                      required: [url]
+                                      properties:
+                                        url:
+                                          type: string
+                                          format: uri
+                                          description: Microsoft Teams incoming webhook URL
+                                          example: "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
                           $preferred_language:
                             type: string
                             description: 2-letter language code in ISO 639-1 Alpha-2 code format. e.g. 'en' (for English)
@@ -5798,7 +6523,8 @@ paths:
                           type: string
                           description: You can pass other user properties to render dynamic template content in key-value pair as "user_prop1":"value1" . Extra properties will be set in subscriber profile (as subscriber properties) which can then be used in the template as $recipient.<property>.
                       - type: object
-                        description: Add other object as child subscriber to the parent object
+                        title: "Add child object"
+                        description: "**Option 2: Add object subscription** - Add other object as child subscriber to the parent object"
                         required: [id,object_type]
                         properties:
                           id:
@@ -6113,6 +6839,11 @@ paths:
       responses:
         '204':
           description: '204 - No Content'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: null
         '404':
           description: '404 - Not Found'
           content:
@@ -6304,7 +7035,7 @@ paths:
                   default: opt_in
                 opt_out_channels:
                   type: array
-                  description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
       responses:
@@ -6546,6 +7277,7 @@ paths:
                       properties:
                         channel:
                           type: string
+                          description: channel name
                           example: "androidpush"
                         is_restricted:
                           type: boolean
@@ -6702,6 +7434,7 @@ paths:
                       properties:
                         channel:
                           type: string
+                          description: channel name
                           example: "androidpush"
                         is_restricted:
                           type: boolean
@@ -6863,12 +7596,15 @@ paths:
                             properties:
                               channel:
                                 type: string
+                                description: channel name
                                 example: email
                               preference:
                                 type: string
+                                description: user preference for this channel (opt_in, opt_out)
                                 example: opt_in
                               is_editable:
                                 type: boolean
+                                description: whether the user can edit this channel preference
                                 example: false
         '404':
           description: '404 - Not Found'
@@ -6983,12 +7719,15 @@ paths:
                       properties:
                         channel:
                           type: string
+                          description: channel name
                           example: email
                         preference:
                           type: string
+                          description: user preference for this channel (opt_in, opt_out)
                           example: opt_in
                         is_editable:
                           type: boolean
+                          description: whether the user can edit this channel preference
                           example: false
         '404':
           description: '404 - Not Found'
@@ -7017,6 +7756,25 @@ paths:
         - BearerAuth: []
       description: API to upsert (create if not exists, update if exists) user profile using a `distinct_id`.
       operationId: create-update-users
+      x-codeSamples:
+        - lang: cURL
+          source: |
+            curl -X POST "https://api.suprsend.com/v1/user/user123/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "$email": ["user@example.com"],
+                "$sms": ["+1234567890"],
+                "$slack": [{
+                  "email_id": "user@example.com",
+                  "access_token": "xoxb-..."
+                }],
+                "$ms_teams": [{
+                  "user_id": "teams_user_id_12345",
+                  "tenant_id": "tenant_12345",
+                  "service_url": "https://smba.trafficmanager.net/amer"
+                }]
+              }'
       parameters:
         - name: distinct_id
           in: path
@@ -7032,11 +7790,22 @@ paths:
               $sms: ["+1234567890"]
               $whatsapp: ["+1234567890"]
               $inbox: ["4nlPk4XXLcDxxxHQ70xx2Cx24"]
-              $webpush: ["webpush_token_abc123"]
+              $webpush: 
+                - token: "webpush_token_abc123"
+                  endpoint: "https://fcm.googleapis.com/fcm/send/abc123"
+                  keys:
+                    p256dh: "BNJxwH..."
+                    auth: "tBH..."
               $androidpush: ["android_push_token_xyz987"]
               $iospush: ["ios_push_token_lmn456"]
-              $slack: ["U01ABCDE2F3"]
-              $ms_teams: ["teams_user_id_12345"]
+              $slack:
+                - user_id: "U01ABCDE2F3"
+                  team_id: "T1234567890"
+                  access_token: "xoxb-..."
+              $ms_teams:
+                - user_id: "teams_user_id_12345"
+                  tenant_id: "tenant_12345"
+                  conversation_id: "conversation_12345"
               $timezone: America/New_York
               $preferred_language: en
               custom_key: custom_value
@@ -7064,11 +7833,6 @@ paths:
                   items:
                     type: string
                   description: List of inbox identifiers
-                $webpush:
-                  type: array
-                  items:
-                    type: string
-                  description: List of web push tokens
                 $androidpush:
                   type: array
                   items:
@@ -7081,14 +7845,111 @@ paths:
                   description: List of iOS Push tokens
                 $slack:
                   type: array
+                  description: Slack channel configuration
                   items:
-                    type: string
-                  description: List of Slack user IDs
+                    oneOf:
+                      - type: object
+                        title: "Slack using email"
+                        required: [email, access_token]
+                        properties:
+                          email:
+                            type: string
+                            format: email
+                            description: User email address
+                            example: "user@example.com"
+                          access_token:
+                            type: string
+                            description: Slack bot access token
+                            example: "xoxb-XXXXXXXX"
+                      - type: object
+                        title: "Slack using member ID"
+                        required: [user_id, access_token]
+                        properties:
+                          user_id:
+                            type: string
+                            description: Slack user ID (U/WXXXXXXXX format)
+                            example: "U/WXXXXXXXX"
+                          access_token:
+                            type: string
+                            description: Slack bot access token
+                            example: "xoxb-XXXXXX"
+                      - type: object
+                        title: "Slack using channel"
+                        required: [channel, access_token]
+                        properties:
+                          channel:
+                            type: string
+                            description: Slack channel ID (CXXXXXXXX format)
+                            example: "CXXXXXXXX"
+                          access_token:
+                            type: string
+                            description: Slack bot access token
+                            example: "xoxb-XXXXXX"
+                      - type: object
+                        title: "Slack using incoming webhook"
+                        required: [incoming_webhook]
+                        properties:
+                          incoming_webhook:
+                            type: object
+                            required: [url]
+                            properties:
+                              url:
+                                type: string
+                                format: uri
+                                description: Slack incoming webhook URL
+                                example: "https://hooks.slack.com/services/TXXXX/BXXXX/XXXXXXX"
                 $ms_teams:
                   type: array
+                  description: Microsoft Teams channel configuration
                   items:
-                    type: string
-                  description: List of Microsoft Teams user IDs
+                    oneOf:
+                      - type: object
+                        title: "MS Teams using conversation ID"
+                        required: [tenant_id, service_url, conversation_id]
+                        properties:
+                          tenant_id:
+                            type: string
+                            description: Microsoft Teams tenant ID
+                            example: "c1981ab2-9aaf-xxxx-xxxx"
+                          service_url:
+                            type: string
+                            format: uri
+                            description: Microsoft Teams service URL
+                            example: "https://smba.trafficmanager.net/amer"
+                          conversation_id:
+                            type: string
+                            description: Microsoft Teams conversation ID
+                            example: "19:c1524d7c-a06f-456f-8abe-xxxx"
+                      - type: object
+                        title: "MS Teams using user ID"
+                        required: [tenant_id, service_url, user_id]
+                        properties:
+                          tenant_id:
+                            type: string
+                            description: Microsoft Teams tenant ID
+                            example: "c1981ab2-9aaf-xxxx-xxxx"
+                          service_url:
+                            type: string
+                            format: uri
+                            description: Microsoft Teams service URL
+                            example: "https://smba.trafficmanager.net/amer"
+                          user_id:
+                            type: string
+                            description: Microsoft Teams user ID
+                            example: "29:1nsLcmJ2RKtYH6Cxxxx-xxxx"
+                      - type: object
+                        title: "MS Teams using incoming webhook"
+                        required: [incoming_webhook]
+                        properties:
+                          incoming_webhook:
+                            type: object
+                            required: [url]
+                            properties:
+                              url:
+                                type: string
+                                format: uri
+                                description: Microsoft Teams incoming webhook URL
+                                example: "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
                 $timezone:
                   type: string
                   description: User's timezone in [IANA format](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List)
@@ -7138,37 +7999,23 @@ paths:
                         "perma_status": "active"
                       }
                     ],
-                    "$whatsapp": [
-                      {
-                        "value": "+1234567890",
-                        "status": "active",
-                        "perma_status": "active"
-                      }
-                    ],
-                    "$webpush": [
-                      {
-                        "value": "webpush_token_here",
-                        "status": "active",
-                        "perma_status": "active"
-                      }
-                    ],
-                    "$androidpush": [
-                      {
-                        "value": "android_push_token",
-                        "status": "active",
-                        "perma_status": "active"
-                      }
-                    ],
                     "$slack": [
                       {
-                        "value": "U01ABCDE2F3",
+                        "value": {
+                          "email_id": "user@example.com",
+                          "access_token": "xoxb-..."
+                        },
                         "status": "active",
                         "perma_status": "active"
                       }
                     ],
                     "$ms_teams": [
                       {
-                        "value": "teams_user_id",
+                        "value": {
+                          "user_id": "teams_user_id_12345",
+                          "tenant_id": "tenant_12345",
+                          "service_url": "https://smba.trafficmanager.net/amer"
+                        },
                         "status": "active",
                         "perma_status": "active"
                       }
@@ -7335,16 +8182,7 @@ paths:
           required: true
       responses:
         '204':
-          description: '204'
-          content:
-            application/json:
-              examples:
-                Result:
-                  value: No Content
-              schema:
-                type: string
-                description: Indicates a successful request with no content in the response body.
-                example: "No Content"
+          description: '204 - No Content'
         '404':
           description: '404'
           content:
@@ -7373,6 +8211,29 @@ paths:
         - BearerAuth: []
       description: API to edit (add/remove) properties and communication-channels for a user.
       operationId: edit-user-profile
+      x-codeSamples:
+        - lang: cURL
+          label: Edit User Profile
+          source: |
+            curl -X PATCH "https://api.suprsend.com/v1/user/user123/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "operations": [
+                  {
+                    "$set": {
+                      "name": "John Doe",
+                      "$preferred_language": "en",
+                      "$timezone": "America/New_York"
+                    }
+                  },
+                  {
+                    "$append": {
+                      "$email": ["john@example.com"]
+                    }
+                  }
+                ]
+              }'
       parameters:
         - name: distinct_id
           in: path
@@ -7537,15 +8398,7 @@ paths:
                           "name":"Marge Simpson"
                         },
                         "created_at": "2025-04-04T21:37:36.712496+00:00",
-                        "updated_at": "2025-04-04T21:37:36.743167+00:00",
-                        "$inbox": [
-                          {
-                            "value": "4nlPk4t4kurG5kChOELB8Q1LcDI9DHzHQ70st2E2C24",
-                            "id_provider": "suprsend",
-                            "status": "active",
-                            "perma_status": "active"
-                          }
-                        ]
+                        "updated_at": "2025-04-04T21:37:36.743167+00:00"
                       }
                     ]
                   }
@@ -7592,10 +8445,7 @@ paths:
                           example: _distinct_id_
                         properties:
                           type: object
-                          properties:
-                            name:
-                              type: string
-                              example: Marge Simpson
+                          description: User properties (simplified)
                         created_at:
                           type: string
                           format: date-time
@@ -7604,23 +8454,6 @@ paths:
                           type: string
                           format: date-time
                           example: "2025-04-04T21:37:36.743167+00:00"
-                        $inbox:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              value:
-                                type: string
-                                example: 4nlPk4t4kurG5kChOELB8Q1LcDI9DHzHQ70st2E2C24
-                              id_provider:
-                                type: string
-                                example: suprsend
-                              status:
-                                type: string
-                                example: active
-                              perma_status:
-                                type: string
-                                example: active
       deprecated: false
   /v1/user/{distinct_id}/merge/:
     post:
@@ -8140,6 +8973,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: List Workflows
           source: |
             curl -X GET "https://api.suprsend.com/v1/{workspace}/workflow/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -8155,7 +8989,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Mode to filter workflows (draft or live). By default, draft workflows are returned.
         - in: query
@@ -8257,6 +9091,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Get Workflow
           source: |
             curl -X GET "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -8278,7 +9113,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Which workflow version to fetch (draft or live). By default, draft version is returned.
       responses:
@@ -8422,6 +9257,26 @@ paths:
           description: The response includes the same workflow object as input along with a validation_result field that indicates whether the workflow configuration is valid.
           content:
             application/json:
+              examples:
+                workflow_example:
+                  summary: Example workflow creation
+                  description: Example of creating a simple email workflow
+                  value:
+                    name: "Welcome Email"
+                    description: "Sends welcome email to new users"
+                    category: "transactional"
+                    tags: ["welcome", "onboarding"]
+                    tree:
+                      nodes:
+                        - name: "Send Email"
+                          node_type: "send_email"
+                          properties:
+                            template: "welcome-email-template"
+                            subject: "Welcome to our platform!"
+                          description: "Send welcome email to new users"
+                    validation_result:
+                      is_valid: true
+                      errors: []
               schema:
                 type: object
                 properties:
@@ -8451,6 +9306,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Delete Workflow
           source: |
             curl -X DELETE "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -8540,6 +9396,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Toggle Workflow
           source: |
             curl -X PATCH "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/enable/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -8600,6 +9457,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: List Schemas
           source: |
             curl -X GET "https://api.suprsend.com/v1/{workspace}/schema/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -8615,7 +9473,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Specify if you want to fetch draft or live schema.
       responses:
@@ -8662,7 +9520,7 @@ paths:
                           example: "Schema for order placement action"
                         status:
                           type: string
-                          enum: [draft, live]
+                          enum: ["draft", "live"]
                           description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                           example: "draft"
                         hash:
@@ -8753,6 +9611,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Get Schema
           source: |
             curl -X GET "https://api.suprsend.com/v1/{workspace}/schema/{schema_slug}/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -8774,7 +9633,7 @@ paths:
           name: mode
           schema:
             type: string
-            enum: [draft, live]
+            enum: ["draft", "live"]
             default: draft
           description: Mode to fetch schema (draft or live). By default, draft schema is returned.
       responses:
@@ -8800,7 +9659,7 @@ paths:
                     example: "Schema for order placement action"
                   status:
                     type: string
-                    enum: [draft, live]
+                    enum: ["draft", "live"]
                     description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                     example: "draft"
                   hash:
@@ -8909,6 +9768,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Upsert Schema
           source: |
             curl -X POST "https://api.suprsend.com/v1/{workspace}/schema/{schema_slug}/?commit=true&commit_message=Initial%20schema%20creation" \
               --header 'Authorization: ServiceToken <token>' \
@@ -9025,7 +9885,7 @@ paths:
                     example: "Schema for order placement action"
                   status:
                     type: string
-                    enum: [draft, live]
+                    enum: ["draft", "live"]
                     description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                     example: "draft"
                   hash:
@@ -9060,7 +9920,7 @@ paths:
                         items:
                           type: string
                         description: List of errors if commit failed
-                        example: ["hash: no uncommitted changes found"]
+                        example: "hash: no uncommitted changes found"
                     example:
                       is_committed: false
                       errors: ["hash: no uncommitted changes found"]
@@ -9170,6 +10030,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Commit Schema
           source: |
             curl -X PATCH "https://api.suprsend.com/v1/{workspace}/schema/{schema_slug}/commit/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -9216,7 +10077,7 @@ paths:
                     example: "Schema for order placement action"
                   status:
                     type: string
-                    enum: [draft, live]
+                    enum: ["draft", "live"]
                     description: Status of returned schema. By default, draft version is returned. You can set `mode=live` to fetch the live schema.
                     example: "live"
                   hash:
@@ -9314,6 +10175,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: List Events
           source: |
             curl -X GET "https://api.suprsend.com/v1/{workspace}/event/?limit=10&offset=0" \
               --header 'Authorization: ServiceToken <token>' \
@@ -9414,6 +10276,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Create Event
           source: |
             curl -X POST "https://api.suprsend.com/v1/{workspace}/event/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -9643,6 +10506,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Update Event
           source: |
             curl -X POST "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -9759,6 +10623,7 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
+          label: Get Linked Workflows
           source: |
             curl -X GET "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/linked_workflows/" \
               --header 'Authorization: ServiceToken <token>' \
@@ -9792,7 +10657,7 @@ paths:
                         slug:
                           type: string
                           description: Workflow slug where this event is used
-                          example: "onbaording_series"
+                          example: "onboarding_series"
                         usage:
                           type: array
                           items:
@@ -9801,9 +10666,145 @@ paths:
                             example: "Wait Event"
               example:
                 results:
-                  - slug: "onbaording_series"
+                  - slug: "onboarding_series"
                     usage:
                       - "Trigger Event"
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code
+                    example: 404
+                  error_code:
+                    type: string
+                    description: Error code identifier
+                    example: "not_found"
+                  type:
+                    type: string
+                    description: Error type
+                    example: "NotFound"
+                  message:
+                    type: string
+                    description: Error message
+                    example: "Event 'user_signup' not found in workspace 'staging'"
+                  detail:
+                    type: string
+                    description: Detailed error information
+                    example: "Event 'user_signup' not found in workspace 'staging'"
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "Event 'user_signup' not found in workspace 'staging'"
+                detail: "Event 'user_signup' not found in workspace 'staging'"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+          description: AuthenticationFailed - Invalid service token.
+
+  /v1/{workspace}/event/{url_encoded_event_name}/delink_schema/:
+    patch:
+      summary: Delink Schema from Event
+      description: Remove the linked schema from an event, making it schema-less. This allows the event to accept any payload structure without validation against a predefined schema.
+      operationId: delink-event-schema
+      servers:
+        - url: https://api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delink Schema from Event
+          source: |
+            curl -X PATCH "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/delink_schema/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+        - in: path
+          name: url_encoded_event_name
+          required: true
+          schema:
+            type: string
+          description: URL encoded event name. Example - `SHIPMENT%20ARRIVED`
+      responses:
+        '200':
+          description: Successfully delinked schema from event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: Event name
+                    example: "user_signup"
+                  description:
+                    type: string
+                    description: Description of the event
+                    example: "Triggered whenever a new user successfully signs up on the platform"
+                  payload_schema:
+                    type: null
+                    description: Schema has been delinked from the event
+                    example: null
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: When the event was created
+                    example: "2025-08-27T09:30:57.945326Z"
+                  $schema:
+                    type: string
+                    description: JSON Schema reference for how the event API call should be structured
+                    example: "https://schema.suprsend.com/event/v1/schema.json"
+                example:
+                  name: "user_signup"
+                  description: "Triggered whenever a new user successfully signs up on the platform"
+                  payload_schema: null
+                  created_at: "2025-08-27T09:30:57.945326Z"
+                  $schema: "https://schema.suprsend.com/event/v1/schema.json"
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code
+                    example: 400
+                  error_code:
+                    type: string
+                    description: Error code identifier
+                    example: "error"
+                  type:
+                    type: string
+                    description: Error type
+                    example: "ValidationError"
+                  message:
+                    type: string
+                    description: Error message
+                    example: "Event does not have a linked schema to delink"
+                  detail:
+                    type: object
+                    description: Detailed error information
+                    example:
+                      payload_schema: ["Event does not have a linked schema to delink"]
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "Event does not have a linked schema to delink"
+                detail:
+                  payload_schema: ["Event does not have a linked schema to delink"]
         '404':
           description: Event not found
           content:
