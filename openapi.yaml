@@ -3221,7 +3221,7 @@ paths:
         - lang: cURL
           label: Trigger Broadcast
           source: |
-            curl -X POST "https://api.suprsend.com/{workspace_key}/broadcast" \
+            curl -X POST "https://hub.suprsend.com/{workspace_key}/broadcast" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -4932,7 +4932,7 @@ paths:
         - lang: cURL
           label: Trigger Workflow
           source: |
-            curl -X POST "https://api.suprsend.com/v1/workflow/trigger/" \
+            curl -X POST "https://hub.suprsend.com/v1/workflow/trigger/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -6154,7 +6154,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/object/departments/engineering/" \
+            curl -X PATCH "https://hub.suprsend.com/v1/object/departments/engineering/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -6334,7 +6334,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X POST "https://api.suprsend.com/v1/object/departments/engineering/subscription/" \
+            curl -X POST "https://hub.suprsend.com/v1/object/departments/engineering/subscription/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -7759,7 +7759,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X POST "https://api.suprsend.com/v1/user/user123/" \
+            curl -X POST "https://hub.suprsend.com/v1/user/user123/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -8215,7 +8215,7 @@ paths:
         - lang: cURL
           label: Edit User Profile
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/user/user123/" \
+            curl -X PATCH "https://hub.suprsend.com/v1/user/user123/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -10842,20 +10842,20 @@ paths:
           $ref: '#/components/responses/AuthenticationError'
           description: AuthenticationFailed - Invalid service token.
 
-  /v1/{workspace}/category/:
+  /v1/{workspace}/preference_category/:
     get:
-      summary: List Categories
-      description: Retrieve a list of preference categories in a workspace.
-      operationId: list-categories
+      summary: Get Category Configuration
+      description: Retrieve the current preference category configuration for a workspace
+      operationId: get-category
       servers:
         - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
-          label: List Categories
+          label: Get Category
           source: |
-            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/category/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/preference_category/?mode=live" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -10867,91 +10867,101 @@ paths:
           description: Workspace slug (staging, production, etc.)
         - in: query
           name: mode
+          required: true
           schema:
             type: string
-            enum: ["draft", "live"]
-            default: draft
-          description: Mode of categories to retrieve
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 20
-            minimum: 1
-            maximum: 100
-          description: Number of categories to return per page
-        - in: query
-          name: offset
-          schema:
-            type: integer
-            default: 0
-            minimum: 0
-          description: Number of categories to skip
+            enum: [live, draft]
+          description: The mode to retrieve categories in. Use 'live' to get the active configuration or 'draft' to get the current draft configuration.
       responses:
         '200':
-          description: Successfully retrieved categories
+          description: Successfully retrieved category configuration
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  results:
+                  $schema:
+                    type: string
+                    example: "https://schema.suprsend.com/v1/preference_category/schema.json"
+                  categories:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Category'
-                  count:
+                      type: object
+                      properties:
+                        root_category:
+                          type: string
+                          example: "system"
+                        sections:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                example: "Account Updates"
+                              description:
+                                type: string
+                                example: "Important account-related notifications"
+                              tags:
+                                type: array
+                                items:
+                                  type: string
+                                example: ["account", "security"]
+                              subcategories:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    category:
+                                      type: string
+                                      example: "password_reset"
+                                    name:
+                                      type: string
+                                      example: "Password Reset"
+                                    description:
+                                      type: string
+                                      example: "Notifications when password is reset"
+                                    default_preference:
+                                      type: string
+                                      example: "enabled"
+                                    default_mandatory_channels:
+                                      type: array
+                                      items:
+                                        type: string
+                                      example: ["email"]
+                                    tags:
+                                      type: array
+                                      items:
+                                        type: string
+                                      example: ["security", "authentication"]
+                  hash:
+                    type: string
+                    example: "abc123def456"
+                  version_no:
                     type: integer
-                    description: Total number of categories
-                  next:
+                    example: 1
+                  status:
                     type: string
-                    format: uri
-                    description: URL for next page of results
-                  previous:
-                    type: string
-                    format: uri
-                    description: URL for previous page of results
+                    enum: [draft, active]
+                    example: "active"
         '401':
-          $ref: '#/components/responses/AuthenticationError'
-          description: AuthenticationFailed - Invalid service token.
-
-  /v1/{workspace}/category/{slug}/:
-    get:
-      summary: Get Category
-      description: Fetch a specific preference category by its slug in a given workspace.
-      operationId: get-category
-      servers:
-        - url: https://management-api.suprsend.com
-      security:
-        - ServiceTokenAuth: []
-      x-codeSamples:
-        - lang: cURL
-          label: Get Category
-          source: |
-            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/category/{slug}/" \
-              --header 'Authorization: ServiceToken <token>' \
-              --header 'Content-Type: application/json'
-      parameters:
-        - in: path
-          name: workspace
-          required: true
-          schema:
-            type: string
-          description: Workspace slug (staging, production, etc.)
-        - in: path
-          name: slug
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the category
-      responses:
-        '200':
-          description: Successfully retrieved category
+          description: ServiceToken not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Category'
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
         '404':
-          description: Category not found
+          description: Workspace not found
           content:
             application/json:
               schema:
@@ -10962,15 +10972,15 @@ paths:
                     example: 404
                   message:
                     type: string
-                    example: "Category 'newsletter' not found"
-        '401':
-          $ref: '#/components/responses/AuthenticationError'
-          description: AuthenticationFailed - Invalid service token.
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
 
     post:
-      summary: Create or Update Category
-      description: Create a new preference category or update an existing category configuration. You can optionally commit the category immediately upon creation/update.
-      operationId: upsert-category
+      summary: Create or Update Category Configuration
+      description: Create a new preference category configuration or update an existing one
+      operationId: create-update-category
       servers:
         - url: https://management-api.suprsend.com
       security:
@@ -10979,15 +10989,29 @@ paths:
         - lang: cURL
           label: Create/Update Category
           source: |
-            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/category/{slug}/" \
-              --header 'Authorization: ServiceToken <token>' \
-              --header 'Content-Type: application/json' \
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/preference_category/?commit=true&commit_message=Initial%20preference%20category%20creation" \
+              --header "Authorization: ServiceToken <token>" \
+              --header "Content-Type: application/json" \
               --data '{
-                "name": "Newsletter",
-                "description": "Marketing and promotional notifications",
-                "default_preference": "opt_in",
-                "is_editable": true,
-                "channels": ["email", "sms"]
+                "categories": [
+                  {
+                    "root_category": "system",
+                    "sections": [
+                      {
+                        "name": "Account Updates",
+                        "description": "Important account notifications",
+                        "subcategories": [
+                          {
+                            "category": "password-reset",
+                            "name": "Password Reset",
+                            "default_preference": "opt_in",
+                            "default_mandatory_channels": ["email"]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }'
       parameters:
         - in: path
@@ -10996,66 +11020,100 @@ paths:
           schema:
             type: string
           description: Workspace slug (staging, production, etc.)
-        - in: path
-          name: slug
-          required: true
-          schema:
-            type: string
-          description: Unique identifier of the category
         - in: query
           name: commit
           schema:
             type: boolean
-            default: false
-          description: Whether to commit the category immediately
+          description: Whether to commit the changes immediately. Set to true to make changes live, false to save as draft.
         - in: query
           name: commit_message
           schema:
             type: string
-          description: Commit message for the changes
+          description: Optional commit message describing the changes made. Required when commit=true.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - name
-                - default_preference
               properties:
-                name:
+                $schema:
                   type: string
-                  description: Display name of the category
-                  example: "Newsletter"
-                description:
-                  type: string
-                  description: Description of the category
-                  example: "Marketing and promotional notifications"
-                default_preference:
-                  type: string
-                  enum: ["opt_in", "opt_out", "cant_unsubscribe"]
-                  description: Default preference for the category
-                  example: "opt_in"
-                is_editable:
-                  type: boolean
-                  description: Whether users can edit this category preference
-                  example: true
-                channels:
+                  example: "https://schema.suprsend.com/v1/preference_category/schema.json"
+                categories:
                   type: array
                   items:
-                    type: string
-                    enum: ["email", "sms", "whatsapp", "androidpush", "inbox", "iospush", "slack", "webpush"]
-                  description: Available channels for this category
-                  example: ["email", "sms"]
+                    type: object
+                    properties:
+                      root_category:
+                        type: string
+                        enum: [system, transactional, promotional]
+                      sections:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            description:
+                              type: string
+                            tags:
+                              type: array
+                              items:
+                                type: string
+                            subcategories:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  category:
+                                    type: string
+                                  name:
+                                    type: string
+                                  description:
+                                    type: string
+                                  default_preference:
+                                    type: string
+                                  default_mandatory_channels:
+                                    type: array
+                                    items:
+                                      type: string
+                                  tags:
+                                    type: array
+                                    items:
+                                      type: string
+                hash:
+                  type: string
+                version_no:
+                  oneOf:
+                    - type: null
+                    - type: integer
+                status:
+                  type: string
+                  enum: [draft, active]
       responses:
         '200':
-          description: Successfully created/updated category
+          description: Successfully created/updated category configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Category'
-        '400':
-          description: Bad request - Invalid category data
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Category configuration updated successfully"
+                  hash:
+                    type: string
+                    example: "abc123def456"
+                  version_no:
+                    type: integer
+                    example: 2
+                  status:
+                    type: string
+                    enum: [draft, active]
+                    example: "draft"
+        '401':
+          description: ServiceToken not found
           content:
             application/json:
               schema:
@@ -11063,18 +11121,34 @@ paths:
                 properties:
                   code:
                     type: integer
-                    example: 400
+                    example: 401
                   message:
                     type: string
-                    example: "Invalid category data"
-        '401':
-          $ref: '#/components/responses/AuthenticationError'
-          description: AuthenticationFailed - Invalid service token.
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
 
-  /v1/{workspace}/category/{slug}/commit/:
+  /v1/{workspace}/preference_category/commit/:
     patch:
-      summary: Commit Category
-      description: Commit a preference category to make the draft version live. This action makes the category changes active in the workspace.
+      summary: Commit Category Configuration
+      description: Commit draft changes to the preference category configuration to make them live
       operationId: commit-category
       servers:
         - url: https://management-api.suprsend.com
@@ -11084,12 +11158,9 @@ paths:
         - lang: cURL
           label: Commit Category
           source: |
-            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/category/{slug}/commit/" \
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/preference_category/commit/?commit_message=Updated system categories with new security preferences" \
               --header 'Authorization: ServiceToken <token>' \
-              --header 'Content-Type: application/json' \
-              --data '{
-                "commit_message": "Updated newsletter category settings"
-              }'
+              --header 'Content-Type: application/json'
       parameters:
         - in: path
           name: workspace
@@ -11097,31 +11168,51 @@ paths:
           schema:
             type: string
           description: Workspace slug (staging, production, etc.)
-        - in: path
-          name: slug
+        - in: query
+          name: commit_message
           required: true
           schema:
             type: string
-          description: Unique identifier of the category
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                commit_message:
-                  type: string
-                  description: Commit message describing the changes
-                  example: "Updated newsletter category settings"
+          description: Commit message describing the changes being made live.
       responses:
         '200':
-          description: Successfully committed category
+          description: Successfully committed category configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Category'
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Category configuration committed successfully"
+                  hash:
+                    type: string
+                    example: "abc123def456"
+                  version_no:
+                    type: integer
+                    example: 2
+                  status:
+                    type: string
+                    enum: [draft, active]
+                    example: "active"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
         '404':
-          description: Category not found
+          description: Workspace not found
           content:
             application/json:
               schema:
@@ -11132,10 +11223,11 @@ paths:
                     example: 404
                   message:
                     type: string
-                    example: "Category 'newsletter' not found"
-        '401':
-          $ref: '#/components/responses/AuthenticationError'
-          description: AuthenticationFailed - Invalid service token.
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
+
 x-readme:
   headers: []
   explorer-enabled: true
