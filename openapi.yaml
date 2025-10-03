@@ -11050,8 +11050,8 @@ paths:
                 message: "workspace not found for slug/uid: workspace"
 
     post:
-      summary: Create or Update Category Configuration
-      description: Create a new preference category configuration or update an existing one
+      summary: Update Preference Categories
+      description: Use this API to set preference categories to be used in workflow or to show on user preference page.
       operationId: create-update-category
       servers:
         - url: https://management-api.suprsend.com
@@ -11067,16 +11067,34 @@ paths:
               --data '{
                 "categories": [
                   {
-                    "root_category": "system",
+                    "root_category": "system"
+                  },
+                  {
+                    "root_category": "transactional",
                     "sections": [
                       {
-                        "name": "Account Updates",
+                        "name": "Task Updates",
                         "subcategories": [
                           {
-                            "category": "password-reset",
-                            "name": "Password Reset",
-                            "default_preference": "opt_in",
-                            "default_mandatory_channels": ["email"]
+                            "category": "tagged-to-me",
+                            "name": "Tagged to Me",
+                            "description": "Status Update or mentions on tasks assigned by me or tagged to me",
+                            "default_preference": "opt_in"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "root_category": "promotional",
+                    "sections": [
+                      {
+                        "name": "Product Updates",
+                        "subcategories": [
+                          {
+                            "category": "newsletter",
+                            "name": "Newsletter",
+                            "default_preference": "opt_out"
                           }
                         ]
                       }
@@ -11108,23 +11126,19 @@ paths:
             schema:
               type: object
               properties:
-                $schema:
-                  type: string
-                  description: JSON schema reference for preference category structure
-                  example: "https://schema.suprsend.com/preference_category/v1/schema.json"
                 categories:
                   type: array
-                  description: Array of preference categories
+                  description: Array of preference categories. Pass each category object in the request even if it's empty - transactional, promotional, system.
                   items:
                     type: object
                     properties:
                       root_category:
                         type: string
-                        description: The root category classification for the preference category
+                        description: Root category inside which sections and their subcategories are grouped. <br/> - System is for critical notifications that users can't opt out of. <br/> - Transactional is for notifications related to user transactions on your platform, such as payment confirmations, delivery statuses, and comments. <br/> - Promotional is for marketing notifications like newsletters, announcements, deals, and discounts.
                         enum: [system, transactional, promotional]
                       sections:
                         type: array
-                        description: Array of sections within the preference category
+                        description: Sections inside which subcategories are grouped. Sections are just a label used to organize subcategories. Users can't set preferences at section level.
                         items:
                           type: object
                           properties:
@@ -11136,49 +11150,41 @@ paths:
                               description: Description of what notifications this section covers
                             tags:
                               type: array
-                              description: Tags to categorize and filter this section
+                              description: Tags to categorize and filter this section. You can filter out on tags in get category API.
                               items:
                                 type: string
                             subcategories:
                               type: array
-                              description: Array of subcategories within this section
+                              description: Array of subcategories within this section. Subcategories are the ones that users can set preferences for.
                               items:
                                 type: object
                                 properties:
                                   category:
                                     type: string
-                                    description: Unique identifier for the subcategory
+                                    description: Unique identifier for the category
+                                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
                                   name:
                                     type: string
-                                    description: Display name for the subcategory
+                                    description: Display name for the category
                                   description:
                                     type: string
-                                    description: Description of what notifications this subcategory covers
+                                    description: Description of what notifications this category covers
                                   default_preference:
                                     type: string
-                                    description: Default preference setting for this subcategory
+                                    description: Default preference setting for this category
+                                    enum: [opt_in, opt_out, cant_unsubscribe]
                                   default_mandatory_channels:
                                     type: array
-                                    description: Channels that are mandatory for this subcategory
+                                    description: Channels that users can't unsubscribe from when default preference is set to cant_unsubscribe.
                                     items:
                                       type: string
+                                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush]
                                   tags:
                                     type: array
-                                    description: Tags to categorize and filter this subcategory
+                                    description: Tags to categorize and filter this category in get category API. You can use tags to filter out categories based on roles, departments etc.
+                                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
                                     items:
                                       type: string
-                hash:
-                  type: string
-                  description: Hash value for content integrity verification
-                version_no:
-                  oneOf:
-                    - type: null
-                    - type: integer
-                  description: Version number of the preference category configuration
-                status:
-                  type: string
-                  description: Current status of the preference category configuration
-                  enum: [draft, active]
       responses:
         '200':
           description: Successfully created/updated category configuration
