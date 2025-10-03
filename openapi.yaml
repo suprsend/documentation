@@ -2809,6 +2809,29 @@ paths:
                 $idempotency_key:
                   type: string
                   description: Unique identifier of the request (deduplicates request for 24hrs)
+      x-codeSamples:
+        - lang: cURL
+          label: Dynamic Workflow Trigger
+          source: |
+            curl -X POST "https://hub.suprsend.com/{workspace_key}/dynamic-workflow/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "name": "Welcome Email Workflow",
+                "template": "welcome-email-template",
+                "notification_category": "transactional",
+                "users": [
+                  {
+                    "distinct_id": "user123",
+                    "$email": ["user@example.com"],
+                    "$channels": ["email"]
+                  }
+                ],
+                "data": {
+                  "user_name": "John Doe",
+                  "welcome_message": "Welcome to our platform!"
+                }
+              }'
       responses:
         '202':
           description: '202'
@@ -3483,6 +3506,17 @@ paths:
         - BearerAuth: []
       description: API to update user preferences for a specific notification category.
       operationId: update-user-preference-category
+      x-codeSamples:
+        - lang: cURL
+          label: Update User Category Preference - Opt Out Channel
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/user/user123/preference/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "opt_out_channels": ["email", "slack"]
+              }'
       parameters:
         - name: distinct_id
           in: path
@@ -3608,6 +3642,17 @@ paths:
         - BearerAuth: []
       description: API to update tenant default preferences for a specific notification category.
       operationId: update-brand-default-preference
+      x-codeSamples:
+        - lang: cURL
+          label: Update Tenant Default Preference
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/tenant/brand_id/preference/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "visible_to_subscriber": true
+              }'
       parameters:
         - name: tenant_id
           in: path
@@ -4932,17 +4977,16 @@ paths:
         - lang: cURL
           label: Trigger Workflow
           source: |
-            curl -X POST "https://hub.suprsend.com/v1/workflow/trigger/" \
-              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+            curl --request POST \
+              --url 'https://hub.suprsend.com/trigger/' \
+              --header 'Authorization: Bearer __your_api_key__' \
               --header 'Content-Type: application/json' \
               --data '{
-                "workflow": "welcome-email-workflow",
+                "workflow": "demo_notification_workflow",
                 "recipients": [
                   {
                     "distinct_id": "user123",
-                    "$email": {
-                      "value": "user@example.com"
-                    }
+                    "$email": ["user@example.com"]
                   }
                 ],
                 "data": {
@@ -6154,7 +6198,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X PATCH "https://hub.suprsend.com/v1/object/departments/engineering/" \
+            curl -X PATCH "https://hub.suprsend.com/v1/object/{object_type}/{id}/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -6334,7 +6378,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X POST "https://hub.suprsend.com/v1/object/departments/engineering/subscription/" \
+            curl -X POST "https://hub.suprsend.com/v1/object/{object_type}/{id}/subscription/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -6999,6 +7043,17 @@ paths:
         - BearerAuth: []
       description: API to update object preferences for a specific notification category.
       operationId: object-preference-category
+      x-codeSamples:
+        - lang: cURL
+          label: Object Preference Category - Opt Out Channel
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/object/departments/engineering/preference/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "opt_out_channels": ["email", "slack"]
+              }'
       parameters:
         - name: tenant_id
           in: query
@@ -8229,7 +8284,7 @@ paths:
                   },
                   {
                     "$append": {
-                      "$email": ["john@example.com"]
+                      "$email": "john@example.com"
                     }
                   }
                 ]
@@ -10882,66 +10937,83 @@ paths:
                 properties:
                   $schema:
                     type: string
+                    description: JSON schema reference for preference category structure
                     example: "https://schema.suprsend.com/preference_category/v1/schema.json"
                   categories:
                     type: array
+                    description: Array of preference categories to be created or updated
                     items:
                       type: object
                       properties:
                         root_category:
                           type: string
+                          description: The root category classification for the preference category
                           example: "system"
                         sections:
                           type: array
+                          description: Array of sections within the preference category
                           items:
                             type: object
                             properties:
                               name:
                                 type: string
+                                description: Name of the section
                                 example: "Account Updates"
                               description:
                                 type: string
+                                description: Description of what notifications this section covers
                                 example: "Important account-related notifications"
                               tags:
                                 type: array
+                                description: Tags to categorize and filter this section
                                 items:
                                   type: string
                                 example: ["account", "security"]
                               subcategories:
                                 type: array
+                                description: Array of subcategories within this section
                                 items:
                                   type: object
                                   properties:
                                     category:
                                       type: string
+                                      description: Unique identifier for the subcategory
                                       example: "password-reset"
                                     name:
                                       type: string
+                                      description: Display name for the subcategory
                                       example: "Password Reset"
                                     description:
                                       type: string
+                                      description: Description of what notifications this subcategory covers
                                       example: "Notifications when password is reset"
                                     default_preference:
                                       type: string
+                                      description: Default preference setting for this subcategory
                                       example: "opt_in"
                                     default_mandatory_channels:
                                       type: array
+                                      description: Channels that are mandatory for this subcategory
                                       items:
                                         type: string
                                       example: ["email"]
                                     tags:
                                       type: array
+                                      description: Tags to categorize and filter this subcategory
                                       items:
                                         type: string
                                       example: ["security", "authentication"]
                   hash:
                     type: string
+                    description: Hash value for content integrity verification
                     example: "abc123def456"
                   version_no:
                     type: integer
+                    description: Version number of the preference category configuration
                     example: 1
                   status:
                     type: string
+                    description: Current status of the preference category configuration
                     enum: [draft, active]
                     example: "active"
         '401':
@@ -11038,57 +11110,74 @@ paths:
               properties:
                 $schema:
                   type: string
+                  description: JSON schema reference for preference category structure
                   example: "https://schema.suprsend.com/preference_category/v1/schema.json"
                 categories:
                   type: array
+                  description: Array of preference categories
                   items:
                     type: object
                     properties:
                       root_category:
                         type: string
+                        description: The root category classification for the preference category
                         enum: [system, transactional, promotional]
                       sections:
                         type: array
+                        description: Array of sections within the preference category
                         items:
                           type: object
                           properties:
                             name:
                               type: string
+                              description: Name of the section
                             description:
                               type: string
+                              description: Description of what notifications this section covers
                             tags:
                               type: array
+                              description: Tags to categorize and filter this section
                               items:
                                 type: string
                             subcategories:
                               type: array
+                              description: Array of subcategories within this section
                               items:
                                 type: object
                                 properties:
                                   category:
                                     type: string
+                                    description: Unique identifier for the subcategory
                                   name:
                                     type: string
+                                    description: Display name for the subcategory
                                   description:
                                     type: string
+                                    description: Description of what notifications this subcategory covers
                                   default_preference:
                                     type: string
+                                    description: Default preference setting for this subcategory
                                   default_mandatory_channels:
                                     type: array
+                                    description: Channels that are mandatory for this subcategory
                                     items:
                                       type: string
                                   tags:
                                     type: array
+                                    description: Tags to categorize and filter this subcategory
                                     items:
                                       type: string
                 hash:
                   type: string
+                  description: Hash value for content integrity verification
                 version_no:
                   oneOf:
                     - type: null
                     - type: integer
+                  description: Version number of the preference category configuration
                 status:
                   type: string
+                  description: Current status of the preference category configuration
                   enum: [draft, active]
       responses:
         '200':
@@ -11100,51 +11189,64 @@ paths:
                 properties:
                   $schema:
                     type: string
+                    description: JSON schema reference for preference category structure
                     example: "https://schema.suprsend.com/preference_category/v1/schema.json"
                   categories:
                     type: array
+                    description: Array of preference categories
                     items:
                       type: object
                       properties:
                         root_category:
                           type: string
+                          description: The root category classification for the preference category
                           example: "system"
                         sections:
                           type: array
+                          description: Array of sections within the preference category
                           items:
                             type: object
                             properties:
                               name:
                                 type: string
+                                description: Name of the section
                                 example: "Account Updates"
                               subcategories:
                                 type: array
+                                description: Array of subcategories within this section
                                 items:
                                   type: object
                                   properties:
                                     category:
                                       type: string
+                                      description: Unique identifier for the subcategory
                                       example: "password-reset"
                                     name:
                                       type: string
+                                      description: Display name for the subcategory
                                       example: "Password Reset"
                                     default_preference:
                                       type: string
+                                      description: Default preference setting for this subcategory
                                       example: "opt_in"
                                     default_mandatory_channels:
                                       type: array
+                                      description: Channels that are mandatory for this subcategory
                                       items:
                                         type: string
                                       example: ["email"]
                   status:
                     type: string
+                    description: Current status of the preference category configuration
                     enum: [draft, active]
                     example: "draft"
                   version_no:
                     type: string
+                    description: Version number of the preference category configuration
                     example: "{version_no}"
                   hash:
                     type: string
+                    description: Hash value for content integrity verification
                     example: "{hash}"
         '401':
           description: ServiceToken not found
@@ -11218,46 +11320,58 @@ paths:
                 properties:
                   $schema:
                     type: string
+                    description: JSON schema reference for preference category structure
                     example: "https://schema.suprsend.com/preference_category/v1/schema.json"
                   categories:
                     type: array
+                    description: Array of preference categories
                     items:
                       type: object
                       properties:
                         root_category:
                           type: string
+                          description: The root category classification for the preference category
                           example: "system"
                         sections:
                           type: array
+                          description: Array of sections within the preference category
                           items:
                             type: object
                             properties:
                               name:
                                 type: string
+                                description: Name of the section
                                 example: "Account Updates"
                               subcategories:
                                 type: array
+                                description: Array of subcategories within this section
                                 items:
                                   type: object
                                   properties:
                                     category:
                                       type: string
+                                      description: Unique identifier for the subcategory
                                       example: "password-reset"
                                     name:
                                       type: string
+                                      description: Display name for the subcategory
                                       example: "Password Reset"
                                     default_preference:
                                       type: string
+                                      description: Default preference setting for this subcategory
                                       example: "opt_in"
                   status:
                     type: string
+                    description: Current status of the preference category configuration
                     enum: [draft, active]
                     example: "active"
                   version_no:
                     type: string
+                    description: Version number of the preference category configuration
                     example: "{version_no}"
                   hash:
                     type: string
+                    description: Hash value for content integrity verification
                     example: "{hash}"
         '401':
           description: ServiceToken not found
