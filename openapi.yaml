@@ -2809,6 +2809,29 @@ paths:
                 $idempotency_key:
                   type: string
                   description: Unique identifier of the request (deduplicates request for 24hrs)
+      x-codeSamples:
+        - lang: cURL
+          label: Dynamic Workflow Trigger
+          source: |
+            curl -X POST "https://hub.suprsend.com/{workspace_key}/dynamic-workflow/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "name": "Welcome Email Workflow",
+                "template": "welcome-email-template",
+                "notification_category": "transactional",
+                "users": [
+                  {
+                    "distinct_id": "user123",
+                    "$email": ["user@example.com"],
+                    "$channels": ["email"]
+                  }
+                ],
+                "data": {
+                  "user_name": "John Doe",
+                  "welcome_message": "Welcome to our platform!"
+                }
+              }'
       responses:
         '202':
           description: '202'
@@ -3221,7 +3244,7 @@ paths:
         - lang: cURL
           label: Trigger Broadcast
           source: |
-            curl -X POST "https://api.suprsend.com/{workspace_key}/broadcast" \
+            curl -X POST "https://hub.suprsend.com/{workspace_key}/broadcast" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -3483,6 +3506,17 @@ paths:
         - BearerAuth: []
       description: API to update user preferences for a specific notification category.
       operationId: update-user-preference-category
+      x-codeSamples:
+        - lang: cURL
+          label: Update User Category Preference - Opt Out Channel
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/user/user123/preference/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "opt_out_channels": ["email", "slack"]
+              }'
       parameters:
         - name: distinct_id
           in: path
@@ -3608,6 +3642,17 @@ paths:
         - BearerAuth: []
       description: API to update tenant default preferences for a specific notification category.
       operationId: update-brand-default-preference
+      x-codeSamples:
+        - lang: cURL
+          label: Update Tenant Default Preference
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/tenant/brand_id/preference/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "visible_to_subscriber": true
+              }'
       parameters:
         - name: tenant_id
           in: path
@@ -4932,17 +4977,16 @@ paths:
         - lang: cURL
           label: Trigger Workflow
           source: |
-            curl -X POST "https://api.suprsend.com/v1/workflow/trigger/" \
-              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+            curl --request POST \
+              --url 'https://hub.suprsend.com/trigger/' \
+              --header 'Authorization: Bearer __your_api_key__' \
               --header 'Content-Type: application/json' \
               --data '{
-                "workflow": "welcome-email-workflow",
+                "workflow": "demo_notification_workflow",
                 "recipients": [
                   {
                     "distinct_id": "user123",
-                    "$email": {
-                      "value": "user@example.com"
-                    }
+                    "$email": ["user@example.com"]
                   }
                 ],
                 "data": {
@@ -6154,7 +6198,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/object/departments/engineering/" \
+            curl -X PATCH "https://hub.suprsend.com/v1/object/{object_type}/{id}/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -6334,7 +6378,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X POST "https://api.suprsend.com/v1/object/departments/engineering/subscription/" \
+            curl -X POST "https://hub.suprsend.com/v1/object/{object_type}/{id}/subscription/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -6999,6 +7043,17 @@ paths:
         - BearerAuth: []
       description: API to update object preferences for a specific notification category.
       operationId: object-preference-category
+      x-codeSamples:
+        - lang: cURL
+          label: Object Preference Category - Opt Out Channel
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/object/departments/engineering/preference/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "opt_out_channels": ["email", "slack"]
+              }'
       parameters:
         - name: tenant_id
           in: query
@@ -7759,7 +7814,7 @@ paths:
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X POST "https://api.suprsend.com/v1/user/user123/" \
+            curl -X POST "https://hub.suprsend.com/v1/user/user123/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -8215,7 +8270,7 @@ paths:
         - lang: cURL
           label: Edit User Profile
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/user/user123/" \
+            curl -X PATCH "https://hub.suprsend.com/v1/user/user123/" \
               --header 'Authorization: Bearer __YOUR_API_KEY__' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -8229,7 +8284,7 @@ paths:
                   },
                   {
                     "$append": {
-                      "$email": ["john@example.com"]
+                      "$email": "john@example.com"
                     }
                   }
                 ]
@@ -8968,14 +9023,14 @@ paths:
       description: Retrieve a list of workflows in a workspace.
       operationId: list-workflows
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: List Workflows
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/workflow/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/workflow/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -9086,14 +9141,14 @@ paths:
       description: Fetch workflow corresponding to the given slug in a workspace.
       operationId: get-workflow
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Get Workflow
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -9177,13 +9232,13 @@ paths:
       description: Create a new workflow or update the draft version of an existing one
       operationId: upsert-workflow
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X POST "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -9301,14 +9356,14 @@ paths:
       description: Permanently deletes a workflow by providing it's slug.
       operationId: delete-workflow
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Delete Workflow
           source: |
-            curl -X DELETE "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
+            curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/workflow/{slug}/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -9342,13 +9397,13 @@ paths:
       description: Commit a workflow to make the draft version live.
       operationId: commit-workflow
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/commit/" \
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/workflow/{slug}/commit/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -9391,14 +9446,14 @@ paths:
       description: Enable or disable a workflow. Disabled workflows will not be executed when triggered. By default, workflows are enabled unless you explicitly disable them.
       operationId: toggle-workflow
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Toggle Workflow
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/{workspace}/workflow/{slug}/enable/" \
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/workflow/{slug}/enable/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -9452,14 +9507,14 @@ paths:
       description: Retrieve a list of schemas in a workspace.
       operationId: list-schemas
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: List Schemas
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/schema/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/schema/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -9606,14 +9661,14 @@ paths:
       description: Fetch the JSON schema corresponding to a slug.
       operationId: get-schema
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Get Schema
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/schema/{schema_slug}/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/schema/{schema_slug}/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -9763,14 +9818,14 @@ paths:
       description: Upset draft version of a JSON schema. Creates a new schema if it doesn't exist.
       operationId: upsert-schema
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Upsert Schema
           source: |
-            curl -X POST "https://api.suprsend.com/v1/{workspace}/schema/{schema_slug}/?commit=true&commit_message=Initial%20schema%20creation" \
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/schema/{schema_slug}/?commit=true&commit_message=Initial%20schema%20creation" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -10025,14 +10080,14 @@ paths:
       description: Commit a draft schema to make it live. Changes will start to take effect as soon as it's live.
       operationId: commit-schema
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Commit Schema
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/{workspace}/schema/{schema_slug}/commit/" \
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/schema/{schema_slug}/commit/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -10170,14 +10225,14 @@ paths:
       description: Retrieve a list of events in a workspace.
       operationId: list-events
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: List Events
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/event/?limit=10&offset=0" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/event/?limit=10&offset=0" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -10271,14 +10326,14 @@ paths:
       description: Add events and their linked schemas in SuprSend
       operationId: create-event
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Create Event
           source: |
-            curl -X POST "https://api.suprsend.com/v1/{workspace}/event/" \
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/event/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -10391,13 +10446,13 @@ paths:
       description: Fetch event details and its linked schema.
       operationId: get-event
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -10501,14 +10556,14 @@ paths:
       description: Update event description and its linked schema.
       operationId: update-event
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Update Event
           source: |
-            curl -X POST "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/" \
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json' \
               --data '{
@@ -10618,14 +10673,14 @@ paths:
       description: Fetch list of all workflows where this event is used
       operationId: get-linked-workflows
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Get Linked Workflows
           source: |
-            curl -X GET "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/linked_workflows/" \
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/linked_workflows/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -10712,14 +10767,14 @@ paths:
       description: Remove the linked schema from an event, making it schema-less. This allows the event to accept any payload structure without validation against a predefined schema.
       operationId: delink-event-schema
       servers:
-        - url: https://api.suprsend.com
+        - url: https://management-api.suprsend.com
       security:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
           label: Delink Schema from Event
           source: |
-            curl -X PATCH "https://api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/delink_schema/" \
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/event/{url_encoded_event_name}/delink_schema/" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json'
       parameters:
@@ -10841,7 +10896,656 @@ paths:
         '401':
           $ref: '#/components/responses/AuthenticationError'
           description: AuthenticationFailed - Invalid service token.
-          
+
+  /v1/{workspace}/preference_category/:
+    get:
+      summary: Get Preference Category
+      description: Retrieve the current preference category for a workspace
+      operationId: get-category
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Category
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/preference_category/" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json"
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+          example: "my-workspace"
+        - in: query
+          name: mode
+          required: true
+          schema:
+            type: string
+            enum: [live, draft]
+          description: Mode to retrieve categories. Use 'live' for active categories or 'draft' for current draft.
+          example: "draft"
+      responses:
+        '200':
+          description: Successfully retrieved preference category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  $schema:
+                    type: string
+                    description: JSON schema reference for preference category structure
+                    example: "https://schema.suprsend.com/preference_category/v1/schema.json"
+                  categories:
+                    type: array
+                    description: Array of preference categories
+                    items:
+                      type: object
+                      properties:
+                        root_category:
+                          type: string
+                          description: The root category classification for the preference category
+                          example: "system"
+                        sections:
+                          type: array
+                          description: Array of sections within the preference category. Can be empty if not yet configured.
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                description: Name of the section
+                                example: "Account Updates"
+                              description:
+                                type: string
+                                description: Description of what notifications this section covers
+                                example: "Important account-related notifications"
+                              tags:
+                                type: array
+                                description: Tags to organize and filter sections. Use lowercase, hyphenated values.
+                                items:
+                                  type: string
+                              subcategories:
+                                type: array
+                                description: Array of subcategories within this section. Can be empty if not yet configured.
+                                items:
+                                  type: object
+                                  properties:
+                                    category:
+                                      type: string
+                                      description: Unique identifier for the subcategory
+                                      example: "password-reset"
+                                    name:
+                                      type: string
+                                      description: Display name for the subcategory
+                                      example: "Password Reset"
+                                    description:
+                                      type: string
+                                      description: Description of what notifications this subcategory covers
+                                    default_preference:
+                                      type: string
+                                      description: Default preference setting for this subcategory
+                                      example: "opt_in"
+                                    default_mandatory_channels:
+                                      type: array
+                                      description: Channels that are mandatory for this subcategory
+                                      items:
+                                        type: string
+                                      example: ["email"]
+                                    tags:
+                                      type: array
+                                      description: Tags to organize and filter subcategories. Use lowercase, hyphenated values (e.g., "user-management", "payment-alerts").
+                                      items:
+                                        type: string
+                                        pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                  version_no:
+                    type: integer
+                    description: Version number field as an identifier to track the version
+                    example: 1
+                  status:
+                    type: string
+                    description: Current status of the preference category
+                    enum: [draft, active]
+                  validation_result:
+                    type: object
+                    description: Result of validating the preference category
+                    properties:
+                      is_valid:
+                        type: boolean
+                        description: true if the preference category is valid, false if there are errors
+                      errors:
+                        type: array
+                        description: Array of error messages when validation fails
+                        items:
+                          type: string
+              example:
+                $schema: "https://schema.suprsend.com/preference_category/v1/schema.json"
+                categories:
+                  - root_category: "system"
+                    sections: []
+                  - root_category: "transactional"
+                    sections:
+                      - name: "Task Updates"
+                        subcategories:
+                          - category: "tagged-to-me"
+                            name: "Tagged to Me"
+                            description: "Status Update or mentions on tasks assigned by me or tagged to me"
+                            default_preference: "opt_in"
+                  - root_category: "promotional"
+                    sections:
+                      - name: "Product Updates"
+                        subcategories:
+                          - category: "newsletter"
+                            name: "Newsletter"
+                            default_preference: "opt_out"
+                version_no: 15
+                status: "draft"
+                validation_result:
+                  is_valid: false
+                  errors:
+                    - "it seems some subcategories have been deleted in this version, on which active workflows are configured. missing subcategories: [\"chapter-added\" \"forecast\" \"onboarding-guide\" \"training-new\"]"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
+
+    post:
+      summary: Update Preference Categories
+      description: Use this API to set preference categories to be used in workflow or to show on user preference page.
+      operationId: create-update-category
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Create/Update Category
+          source: |
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/preference_category/?commit=false" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json" \
+              --data '{
+                "categories": [
+                  {
+                    "root_category": "system"
+                  },
+                  {
+                    "root_category": "transactional",
+                    "sections": [
+                      {
+                        "name": "Task Updates",
+                        "subcategories": [
+                          {
+                            "category": "tagged-to-me",
+                            "name": "Tagged to Me",
+                            "description": "Status Update or mentions on tasks assigned by me or tagged to me",
+                            "default_preference": "opt_in"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "root_category": "promotional",
+                    "sections": [
+                      {
+                        "name": "Product Updates",
+                        "subcategories": [
+                          {
+                            "category": "newsletter",
+                            "name": "Newsletter",
+                            "default_preference": "opt_out"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+        - in: query
+          name: commit
+          schema:
+            type: boolean
+          description: Whether to commit changes immediately. Set to true to make changes live, false to save as draft.
+        - in: query
+          name: commit_message
+          schema:
+            type: string
+          description: Optional commit message describing the changes made. Required when commit=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                categories:
+                  type: array
+                  description: Array of preference categories. Include all three root categories (system, transactional, promotional) even if empty.
+                  items:
+                    type: object
+                    properties:
+                      root_category:
+                        type: string
+                        description: Root category classification. system=critical notifications, transactional=user actions, promotional=marketing.
+                        enum: [system, transactional, promotional]
+                      sections:
+                        type: array
+                        description: Sections group related subcategories. Users cannot set preferences at section level.
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: Name of the section displayed in the preference interface.
+                            description:
+                              type: string
+                              description: Description of what notifications this section covers.
+                            tags:
+                              type: array
+                              description: Tags to organize and filter sections. Use lowercase, hyphenated values (e.g., "security", "billing").
+                              items:
+                                type: string
+                            subcategories:
+                              type: array
+                              description: Subcategories that users can set preferences for.
+                              items:
+                                type: object
+                                properties:
+                                  category:
+                                    type: string
+                                    description: Unique identifier for the subcategory. Use lowercase letters, numbers, and hyphens only.
+                                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                                  name:
+                                    type: string
+                                    description: Display name for the subcategory shown in the preference interface.
+                                  description:
+                                    type: string
+                                    description: Description of what notifications this subcategory covers.
+                                  default_preference:
+                                    type: string
+                                    description: Default preference setting for this subcategory.
+                                    enum: [opt_in, opt_out, cant_unsubscribe]
+                                  default_mandatory_channels:
+                                    type: array
+                                    description: Channels that users cannot unsubscribe from when default preference is cant_unsubscribe.
+                                    items:
+                                      type: string
+                                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush]
+                                  tags:
+                                    type: array
+                                    description: Tags to organize and filter subcategories. Use lowercase, hyphenated values (e.g., "user-management", "payment-alerts").
+                                    items:
+                                      type: string
+                                      pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+      responses:
+        '200':
+          description: Successfully created/updated preference category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  $schema:
+                    type: string
+                    description: JSON schema reference for preference category structure
+                    example: "https://schema.suprsend.com/preference_category/v1/schema.json"
+                  categories:
+                    type: array
+                    description: Array of preference categories
+                    items:
+                      type: object
+                      properties:
+                        root_category:
+                          type: string
+                          description: The root category classification for the preference category
+                          example: "system"
+                        sections:
+                          type: array
+                          description: Array of sections within the preference category
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                description: Name of the section
+                                example: "Account Updates"
+                              subcategories:
+                                type: array
+                                description: Array of subcategories within this section
+                                items:
+                                  type: object
+                                  properties:
+                                    category:
+                                      type: string
+                                      description: Unique identifier for the subcategory
+                                      example: "password-reset"
+                                    name:
+                                      type: string
+                                      description: Display name for the subcategory
+                                      example: "Password Reset"
+                                    default_preference:
+                                      type: string
+                                      description: Default preference setting for this subcategory
+                                      example: "opt_in"
+                                    default_mandatory_channels:
+                                      type: array
+                                      description: Channels that are mandatory for this subcategory
+                                      items:
+                                        type: string
+                                      example: ["email"]
+                  status:
+                    type: string
+                    description: Current status of the preference category
+                    enum: [draft, active]
+                    example: "draft"
+                  version_no:
+                    type: integer
+                    description: Version number of the preference category
+                    example: 3
+                  commit_message:
+                    type: string
+                    description: Commit message describing the changes that were made
+                    example: null
+                  committed_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the changes were committed
+                    example: null
+                  validation_result:
+                    type: object
+                    description: Result of validating the preference category
+                    properties:
+                      is_valid:
+                        type: boolean
+                        description: true if the preference category is valid, false if there are errors
+                        example: true
+                      errors:
+                        type: array
+                        description: Array of error messages when validation fails
+                        items:
+                          type: string
+              example:
+                $schema: "https://schema.suprsend.com/preference_category/v1/schema.json"
+                categories:
+                  - root_category: "system"
+                    sections: []
+                  - root_category: "transactional"
+                    sections:
+                      - name: "Task Updates"
+                        description: null
+                        tags: null
+                        subcategories:
+                          - category: "tagged-to-me"
+                            name: "Tagged to Me"
+                            description: "Status Update or mentions on tasks assigned by me or tagged to me"
+                            default_preference: "opt_in"
+                            default_mandatory_channels: null
+                            tags: null
+                  - root_category: "promotional"
+                    sections:
+                      - name: "Product Updates"
+                        description: null
+                        tags: null
+                        subcategories:
+                          - category: "newsletter"
+                            name: "Newsletter"
+                            description: null
+                            default_preference: "opt_out"
+                            default_mandatory_channels: null
+                            tags: null
+                version_no: 3
+                status: "draft"
+                commit_message: null
+                committed_at: null
+                validation_result:
+                  is_valid: true
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
+
+  /v1/{workspace}/preference_category/commit/:
+    patch:
+      summary: Commit Preference Category
+      description: Commit draft changes to the preference category to make them live
+      operationId: commit-category
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Commit Category
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/preference_category/commit/?commit_message=Added%20password-reset%20subcategory" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json"
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+        - in: query
+          name: commit_message
+          required: true
+          schema:
+            type: string
+          description: Commit message describing the changes being made live.
+      responses:
+        '200':
+          description: Successfully committed preference category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  $schema:
+                    type: string
+                    description: JSON schema reference for preference category structure
+                    example: "https://schema.suprsend.com/preference_category/v1/schema.json"
+                  categories:
+                    type: array
+                    description: Array of preference categories
+                    items:
+                      type: object
+                      properties:
+                        root_category:
+                          type: string
+                          description: The root category classification for the preference category
+                          example: "system"
+                        sections:
+                          type: array
+                          description: Array of sections within the preference category
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                description: Name of the section
+                                example: "Account Updates"
+                              subcategories:
+                                type: array
+                                description: Array of subcategories within this section
+                                items:
+                                  type: object
+                                  properties:
+                                    category:
+                                      type: string
+                                      description: Unique identifier for the subcategory
+                                      example: "password-reset"
+                                    name:
+                                      type: string
+                                      description: Display name for the subcategory
+                                      example: "Password Reset"
+                                    default_preference:
+                                      type: string
+                                      description: Default preference setting for this subcategory
+                                      example: "opt_in"
+                  status:
+                    type: string
+                    description: Current status of the preference category
+                    enum: [draft, active]
+                    example: "active"
+                  version_no:
+                    type: integer
+                    description: Version number of the preference category
+                    example: 2
+                  commit_message:
+                    type: string
+                    description: Commit message describing the changes that were made live
+                    example: "Added password-reset subcategory"
+                  committed_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the changes were committed
+                    example: "2025-10-03T09:52:55.273317+00:00"
+              example:
+                $schema: "https://schema.suprsend.com/preference_category/v1/schema.json"
+                categories:
+                  - root_category: "system"
+                    sections:
+                      - name: "Alerts"
+                        description: null
+                        tags: null
+                        subcategories:
+                          - category: "critical-updates"
+                            name: "Critical Updates"
+                            description: "Important system alerts requiring immediate attention"
+                            default_preference: "opt_in"
+                            default_mandatory_channels: null
+                            tags: null
+                  - root_category: "transactional"
+                    sections:
+                      - name: "Task Updates"
+                        description: null
+                        tags: null
+                        subcategories:
+                          - category: "tagged-to-me"
+                            name: "Tagged to Me"
+                            description: "Status updates or mentions on tasks assigned by me or tagged to me"
+                            default_preference: "opt_in"
+                            default_mandatory_channels: null
+                            tags: null
+                  - root_category: "promotional"
+                    sections:
+                      - name: "Product Updates"
+                        description: null
+                        tags: null
+                        subcategories:
+                          - category: "newsletter"
+                            name: "Newsletter"
+                            description: null
+                            default_preference: "opt_out"
+                            default_mandatory_channels: null
+                            tags: null
+                version_no: 2
+                status: "active"
+                commit_message: "Added password-reset subcategory"
+                committed_at: "2025-10-03T09:52:55.273317+00:00"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
+
 x-readme:
   headers: []
   explorer-enabled: true
