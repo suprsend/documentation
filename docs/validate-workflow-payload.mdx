@@ -1,0 +1,79 @@
+---
+title: "Validate Trigger Payload"
+description: "Validate the data passed to workflow API or event properties using JSON schemas to catch payload mismatch errors at API level."
+---
+
+## Why Payload Validation Matters
+
+When you trigger a workflow, you pass data (payload) that is used to resolve workflow variables and populate dynamic content in templates.
+
+If the payload does not include all the variables expected in the workflow, the execution may fail at different stages. This can cause:
+
+- Hard-to-debug errors (logged at multiple workflow steps).
+- Inconsistent behavior (e.g., first notification fails but subsequent steps succeed).
+- Incorrect or incomplete notifications being sent.
+
+<Note>
+To avoid these issues, you can **validate the payload against a JSON Schema at the API level**.  
+If the incoming payload does not conform to the schema, the trigger endpoint immediately returns an error response with detailed validation information.
+</Note>
+
+---
+
+## Creating a JSON Schema
+
+In SuprSend, a schema is created as an independent entity and then **linked to a workflow or event** for validation.
+
+You can create a schema in two ways:
+
+- **From UI** - [Developers -> Schemas](https://app.suprsend.com/en/staging/developers/schema) Page 
+- **Using Management API** via the [Create Schema](/reference/upsert-schema) endpoint  
+
+Schemas follow the standard [JSON Schema specification.](https://json-schema.org/draft/2020-12/schema).
+
+### Example Schema: Order Placement Workflow
+
+This schema enforces the following rules:
+
+- `order_id` is **required** and must be a string.  
+- `amount` is optional, but if provided, it must be an integer.  
+
+```json
+{
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": ["order_id"],
+  "properties": {
+    "order_id": { "type": "string" },
+    "amount": { "type": "integer" }
+  },
+  "additionalProperties": true
+}
+```
+
+With this schema linked:
+- If `order_id` is missing, not a string, or if `amount` is not an integer → API call fails.
+- Otherwise → workflow executes as expected.
+
+## Linking Schema to Workflow
+
+There are two types of workflow triggers, so schema linking differs accordingly:
+
+- **API Trigger** - Link schema directly to the workflow in the Trigger Step → Schema section.
+- **Event Trigger** - Link schema to the linkedEvent from the Event Details page.
+    - If multiple events are used in a trigger, the schema linked to each event is applied individually.
+    - If an event has no linked schema, payload for that event are not validated, and the workflow executes normally.
+
+Both actions are supported via UI and using Management API in [workflow](/reference/create-update-workflow) or [event](/reference/create-event) upsert methods.
+
+## Error Logging
+
+Schema validation errors are logged in two places:
+- **Immediate API Response** – returned directly to the client making the trigger call.
+- **[Request Logs](https://app.suprsend.com/en/staging/logs/requests?last_n_minutes=1440)** – stored for later inspection on SuprSend dashboard.
+
+If you run a test trigger from the UI, validation errors are displayed directly in the trigger modal.
+
+<Check>
+With schema validation, you can guarantee that workflows always start with valid, expected data — reducing runtime errors and preventing incorrect notifications.
+</Check>
