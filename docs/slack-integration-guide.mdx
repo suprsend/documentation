@@ -1,0 +1,1080 @@
+---
+title: "Slack Integration Guide"
+description: "Complete developer guide for integrating Slack with SuprSend across three key use cases with tested, production-ready code."
+---
+
+This guide provides everything you need to integrate Slack with SuprSend across three distinct use cases. Each integration pattern serves different needs and follows proven patterns.
+
+## 🎯 Integration Patterns
+
+<CardGroup cols={3}>
+  <Card title="Company Channels" icon="building">
+    **Your Workspace → Users**
+    
+    Perfect for building community features and automated onboarding
+  </Card>
+  <Card title="OAuth Integration" icon="key">
+    **Users' Workspaces → Them**
+    
+    Ideal when users need control over their notification preferences
+  </Card>
+  <Card title="Webhooks" icon="webhook">
+    **Your Workspace → Specific Channel**
+    
+    Best for simple broadcasts and system notifications
+  </Card>
+</CardGroup>
+
+---
+
+# Tutorials
+
+<AccordionGroup>
+  <Accordion title="Tutorial 1: Company Channel Integration">
+    **Goal**: Create shared channels with users for community building and support.
+
+    <Steps>
+      <Step title="Setup">
+        Create shared channels with users for community building and support
+      </Step>
+      <Step title="Build">
+        Automated channel creation with user invitation
+      </Step>
+      <Step title="Deploy">
+        Welcome message system via SuprSend workflows
+      </Step>
+    </Steps>
+
+    **What You'll Build:**
+    - Automated channel creation with user invitation
+    - Welcome message system via SuprSend workflows
+    - User profile management in SuprSend
+
+    **Prerequisites:**
+    - SuprSend account
+    - Slack workspace with admin access
+    - Node.js environment
+
+    ### Step 1: Setup
+
+    <Tabs>
+      <Tab title="Install Dependencies">
+        ```bash
+        npm install @suprsend/node-sdk express dotenv
+        ```
+      </Tab>
+      <Tab title="Environment Variables">
+        Create `.env`:
+        ```env
+        SUPERSEND_WORKSPACE_KEY=your_workspace_key
+        SUPERSEND_WORKSPACE_SECRET=your_workspace_secret
+        SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+        ```
+      </Tab>
+    </Tabs>
+
+    ### Step 2: Create Slack App
+
+    <Steps>
+      <Step title="Create App">
+        Go to [Slack API Apps](https://api.slack.com/apps) and create new app → "From scratch"
+      </Step>
+      <Step title="Add Scopes">
+        Add required scopes:
+        - `channels:manage` - Create and manage channels
+        - `channels:read` - Read channel information
+        - `chat:write` - Send messages to channels
+        - `im:write` - Send direct messages
+        - `users:read` - Read user information
+        - `users:read.email` - Read user email addresses
+      </Step>
+      <Step title="Install & Get Token">
+        Install app and copy Bot User OAuth Token
+      </Step>
+    </Steps>
+
+    ### Step 3: Implementation
+
+    ```javascript
+    const { Suprsend, WorkflowTriggerRequest } = require('@suprsend/node-sdk');
+
+    const suprClient = new Suprsend(
+      process.env.SUPERSEND_WORKSPACE_KEY,
+      process.env.SUPERSEND_WORKSPACE_SECRET
+    );
+
+    /**
+     * Create shared channel with user and invite them
+     */
+    async function createSharedChannel(userEmail, channelName) {
+      try {
+        // Step 1: Create channel
+        const channelResponse = await fetch('https://slack.com/api/conversations.create', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: channelName,
+            is_private: false,
+          }),
+        });
+
+        const channelData = await channelResponse.json();
+        
+        if (!channelData.ok) {
+          throw new Error(`Failed to create channel: ${channelData.error}`);
+        }
+
+        // Step 2: Look up user ID by email
+        const userLookup = await fetch(`https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(userEmail)}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+          },
+        });
+        const userData = await userLookup.json();
+        
+        if (!userData.ok) {
+          throw new Error(`User lookup failed: ${userData.error}`);
+        }
+
+        // Step 3: Invite user to channel using user ID
+        const inviteResponse = await fetch('https://slack.com/api/conversations.invite', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            channel: channelData.channel.id,
+            users: userData.user.id, // Use user ID, not email
+          }),
+        });
+
+        const inviteData = await inviteResponse.json();
+        
+        if (!inviteData.ok) {
+          console.warn(`Failed to invite user: ${inviteData.error}`);
+        }
+
+        return {
+          channelId: channelData.channel.id,
+          channelName: channelData.channel.name,
+          success: true,
+          inviteSuccess: inviteData.ok
+        };
+
+      } catch (error) {
+        console.error('Error creating shared channel:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Create SuprSend user profile for channel communication
+     */
+    async function createChannelUserProfile(userInfo, channelId) {
+      try {
+        const distinctId = `channel_${userInfo.email.replace('@', '_at_')}`;
+        const user = suprClient.user.get_instance(distinctId);
+        
+        // Add Slack channel information
+        user.add_slack({
+          channel_id: channelId,
+          access_token: process.env.SLACK_BOT_TOKEN,
+        });
+        
+        // Set user properties
+        user.set_once('name', userInfo.name);
+        user.set_once('email', userInfo.email);
+        user.set_once('channel_type', 'company_channel');
+        user.set_once('joined_at', new Date().toISOString());
+        
+        const response = await user.save();
+        return { distinct_id: distinctId, ...response };
+        
+      } catch (error) {
+        console.error('Error creating channel user profile:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Send welcome message to company channel
+     */
+    async function sendChannelWelcomeMessage(distinctId, userInfo) {
+      try {
+        const body = {
+          workflow: 'company_channel_welcome',
+          recipients: [
+            {
+              distinct_id: distinctId,
+              name: userInfo.name,
+            }
+          ],
+          data: {
+            user_name: userInfo.name,
+            user_email: userInfo.email,
+            channel_name: userInfo.channelName,
+            welcome_message: `Welcome ${userInfo.name}! We're excited to have you in our community.`,
+            getting_started_url: 'https://yourdomain.com/getting-started',
+            support_channel: '#support',
+            community_guidelines: 'https://yourdomain.com/guidelines',
+          }
+        };
+        
+        const workflowTrigger = new WorkflowTriggerRequest(body);
+        const response = await suprClient.workflows.trigger(workflowTrigger);
+        return response;
+        
+      } catch (error) {
+        console.error('Error sending channel welcome message:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Complete company channel integration flow
+     */
+    async function handleCompanyChannelIntegration(userInfo) {
+      try {
+        // Step 1: Create shared channel
+        const channelResult = await createSharedChannel(
+          userInfo.email, 
+          `community-${userInfo.name.toLowerCase().replace(/\s+/g, '-')}`
+        );
+        
+        // Step 2: Create SuprSend user profile
+        const userProfile = await createChannelUserProfile(userInfo, channelResult.channelId);
+        
+        // Step 3: Send welcome message
+        await sendChannelWelcomeMessage(userProfile.distinct_id, {
+          ...userInfo,
+          channelName: channelResult.channelName
+        });
+        
+        return {
+          channelId: channelResult.channelId,
+          channelName: channelResult.channelName,
+          distinctId: userProfile.distinct_id,
+          success: true
+        };
+        
+      } catch (error) {
+        console.error('Company channel integration failed:', error);
+        throw error;
+      }
+    }
+
+    // Usage example
+    const userInfo = {
+      name: 'John Doe',
+      email: 'john@example.com'
+    };
+
+    handleCompanyChannelIntegration(userInfo)
+      .then(result => console.log('Integration result:', result))
+      .catch(error => console.error('Integration failed:', error));
+    ```
+
+    ### Step 4: SuprSend Workflow Template
+
+    **SuprSend SDK Methods**: This guide uses the correct SuprSend Node.js SDK methods:
+    - `user.get_instance(distinctId)` - Get user instance
+    - `user.add_slack(data)` - Add Slack integration
+    - `user.remove_slack()` - Remove Slack integration  
+    - `user.set_once(key, value)` - Set property once
+    - `user.save()` - Save changes
+
+    **SuprSend Template Syntax**: SuprSend uses Handlebars.js templating. Use `{{variable_name}}` syntax for dynamic content. Access nested data with dot notation like `{{data.user_name}}`.
+
+    Create this template in your SuprSend dashboard for the `company_channel_welcome` workflow:
+
+    ```json
+    [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": "🎉 Welcome to Our Community!",
+          "emoji": true
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "Hi *{{data.user_name}}*! Welcome to our community channel. We're excited to have you here!"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "Here's what you can do:\n\n• 📚 <{{data.getting_started_url}}|Get Started Guide>\n• 💬 Join discussions in this channel\n• 🆘 Ask questions in <{{data.support_channel}}|#support>\n• 📋 Read our <{{data.community_guidelines}}|Community Guidelines>"
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "fields": [
+          {
+            "type": "mrkdwn",
+            "text": "*Email:*\n{{data.user_email}}"
+          },
+          {
+            "type": "mrkdwn",
+            "text": "*Channel:*\n#{{data.channel_name}}"
+          }
+        ]
+      },
+      {
+        "type": "actions",
+        "elements": [
+          {
+            "type": "button",
+            "text": {
+              "type": "plain_text",
+              "text": "🚀 Get Started",
+              "emoji": true
+            },
+            "url": "{{data.getting_started_url}}",
+            "value": "get_started",
+            "style": "primary"
+          },
+          {
+            "type": "button",
+            "text": {
+              "type": "plain_text",
+              "text": "📋 Guidelines",
+              "emoji": true
+            },
+            "url": "{{data.community_guidelines}}",
+            "value": "guidelines"
+          }
+        ]
+      }
+    ]
+    ```
+  </Accordion>
+
+  <Accordion title="Tutorial 2: User Workspace Integration">
+    **Goal**: Send notifications to user's personal Slack workspace (like Metabase alerts).
+
+    <Steps>
+      <Step title="OAuth Flow">
+        Send notifications to user's personal Slack workspace (like Metabase alerts)
+      </Step>
+      <Step title="Channel Selection">
+        Build UI for users to select notification channels
+      </Step>
+      <Step title="Delivery System">
+        Implement notification delivery system
+      </Step>
+    </Steps>
+
+    **What You'll Build:**
+    - OAuth flow for user authorization
+    - Channel selection UI
+    - Notification delivery system
+
+    **Prerequisites:**
+    - SuprSend account
+    - Slack workspace for testing
+    - Node.js environment
+
+    ### Step 1: Create Slack App for User Workspaces
+
+    <Steps>
+      <Step title="Create App">
+        Go to [Slack API Apps](https://api.slack.com/apps) and create new app → "From scratch"
+      </Step>
+      <Step title="Add Scopes">
+        Add required scopes:
+        - `channels:read` - Read channel information
+        - `chat:write` - Send messages to channels
+        - `im:write` - Send direct messages
+        - `users:read` - Read user information
+        - `users:read.email` - Read user email addresses
+      </Step>
+      <Step title="Set Redirect">
+        Set redirect URL: `https://yourdomain.com/slack/callback`
+      </Step>
+    </Steps>
+
+    ### Step 2: Implementation
+
+    ```javascript
+    /**
+     * Generate Slack OAuth authorization URL for user workspace
+     */
+    function generateUserWorkspaceAuthUrl(userId) {
+      const params = new URLSearchParams({
+        client_id: process.env.SLACK_CLIENT_ID,
+        scope: 'channels:read,chat:write,im:write,users:read,users:read.email',
+        redirect_uri: process.env.SLACK_REDIRECT_URI,
+        state: userId,
+      });
+      
+      return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
+    }
+
+    /**
+     * Exchange authorization code for access token
+     */
+    async function exchangeCodeForToken(code) {
+      try {
+        const response = await fetch('https://slack.com/api/oauth.v2.access', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            client_id: process.env.SLACK_CLIENT_ID,
+            client_secret: process.env.SLACK_CLIENT_SECRET,
+            code: code,
+            redirect_uri: process.env.SLACK_REDIRECT_URI,
+          }),
+        });
+
+        const data = await response.json();
+        
+        if (!data.ok) {
+          throw new Error(`Token exchange failed: ${data.error}`);
+        }
+        
+        return data;
+      } catch (error) {
+        console.error('Error exchanging code for token:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Fetch user's accessible channels
+     */
+    async function fetchUserChannels(accessToken) {
+      try {
+        const response = await fetch('https://slack.com/api/conversations.list', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok) {
+          throw new Error(`Failed to fetch channels: ${data.error}`);
+        }
+        
+        const channels = data.channels
+          .filter(channel => !channel.is_archived)
+          .map(channel => ({
+            id: channel.id,
+            name: channel.name,
+            is_private: channel.is_private,
+            is_member: channel.is_member,
+            num_members: channel.num_members,
+          }));
+        
+        return channels;
+        
+      } catch (error) {
+        console.error('Error fetching user channels:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Create SuprSend user profile for workspace integration
+     */
+    async function createUserWorkspaceProfile(userId, tokenData, channels) {
+      try {
+        const distinctId = `workspace_${userId}`;
+        const user = suprClient.user.get_instance(distinctId);
+        
+        // Add Slack workspace information
+        user.add_slack({
+          user_id: tokenData.authed_user.id,
+          access_token: tokenData.access_token,
+          workspace_id: tokenData.team.id,
+          workspace_name: tokenData.team.name,
+        });
+        
+        // Set user properties
+        user.set_once('name', tokenData.authed_user.name);
+        user.set_once('email', tokenData.authed_user.email);
+        user.set_once('workspace_type', 'user_workspace');
+        user.set_once('channels_count', channels.length);
+        user.set_once('connected_at', new Date().toISOString());
+        
+        // Store channels for later use
+        user.set_once('available_channels', channels);
+        
+        const response = await user.save();
+        return { distinct_id: distinctId, channels, ...response };
+        
+      } catch (error) {
+        console.error('Error creating user workspace profile:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Send notification to user's Slack workspace
+     */
+    async function sendUserWorkspaceNotification(userId, notificationData, channelId = null) {
+      try {
+        const distinctId = `workspace_${userId}`;
+        
+        const body = {
+          workflow: 'user_workspace_notification',
+          recipients: [
+            {
+              distinct_id: distinctId,
+              name: notificationData.userName,
+            }
+          ],
+          data: {
+            ...notificationData,
+            channel_id: channelId,
+            notification_type: channelId ? 'channel' : 'dm',
+            timestamp: new Date().toISOString(),
+          }
+        };
+        
+        const workflowTrigger = new WorkflowTriggerRequest(body);
+        const response = await suprClient.workflows.trigger(workflowTrigger);
+        return response;
+        
+      } catch (error) {
+        console.error('Error sending user workspace notification:', error);
+        throw error;
+      }
+    }
+
+    // Express routes
+    app.get('/slack/connect/:userId', (req, res) => {
+      const { userId } = req.params;
+      const authUrl = generateUserWorkspaceAuthUrl(userId);
+      res.redirect(authUrl);
+    });
+
+    app.get('/slack/callback', async (req, res) => {
+      const { code, state: userId, error } = req.query;
+      
+      if (error) {
+        console.error('Slack OAuth error:', error);
+        return res.redirect(`/slack/error?error=${encodeURIComponent(error)}`);
+      }
+      
+      try {
+        const tokenData = await exchangeCodeForToken(code);
+        const channels = await fetchUserChannels(tokenData.access_token);
+        const userProfile = await createUserWorkspaceProfile(userId, tokenData, channels);
+        
+        res.redirect(`/slack/success?userId=${userId}&channels=${channels.length}`);
+        
+      } catch (error) {
+        console.error('OAuth callback error:', error);
+        res.redirect(`/slack/error?message=${encodeURIComponent(error.message)}`);
+      }
+    });
+
+    // Usage examples
+    // Send DM
+    sendUserWorkspaceNotification('user123', {
+      userName: 'John Doe',
+      alertType: 'System Update',
+      message: 'Your account has been upgraded to Pro plan',
+      actionUrl: 'https://app.company.com/billing',
+    })
+    .then(result => console.log('DM sent:', result))
+    .catch(error => console.error('DM failed:', error));
+
+    // Send to specific channel
+    sendUserWorkspaceNotification('user123', {
+      userName: 'John Doe',
+      alertType: 'Query Alert',
+      queryName: 'Daily Sales Report',
+      message: 'Your query returned 0 results',
+      dashboardUrl: 'https://metabase.company.com/dashboard/123',
+    }, 'C1234567890')
+    .then(result => console.log('Channel message sent:', result))
+    .catch(error => console.error('Channel message failed:', error));
+    ```
+
+    ### Step 3: Channel Selection UI
+
+    ```javascript
+    // React component for channel selection
+    function ChannelSelection({ channels, onChannelSelect }) {
+      return (
+        <div className="channel-selection">
+          <h3>Select a channel for notifications:</h3>
+          <div className="channel-list">
+            {channels.map(channel => (
+              <div key={channel.id} className="channel-item">
+                <input
+                  type="radio"
+                  id={channel.id}
+                  name="channel"
+                  value={channel.id}
+                  onChange={() => onChannelSelect(channel.id)}
+                />
+                <label htmlFor={channel.id}>
+                  #{channel.name} 
+                  {channel.is_private && <span className="private-badge">Private</span>}
+                  <span className="member-count">({channel.num_members} members)</span>
+                </label>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => onChannelSelect(null)}>
+            Send Direct Message Instead
+          </button>
+        </div>
+      );
+    }
+
+    // Express route to serve channel selection page
+    app.get('/slack/channels/:userId', async (req, res) => {
+      const { userId } = req.params;
+      
+      try {
+        // Get user's stored channels from SuprSend
+        const user = suprClient.user.get_instance(`workspace_${userId}`);
+        const userData = await user.get();
+        const channels = userData.available_channels || [];
+        
+        res.render('channel-selection', { 
+          channels, 
+          userId,
+          actionUrl: `/slack/send-notification/${userId}`
+        });
+      } catch (error) {
+        res.status(500).send('Error loading channels');
+      }
+    });
+    ```
+
+    ### Step 4: SuprSend Workflow Template
+
+    Create this template in your SuprSend dashboard for the `user_workspace_notification` workflow:
+
+    ```json
+    [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "🔔 *{{data.alertType}}*"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "{{data.message}}"
+        }
+      },
+      {
+        "type": "section",
+        "fields": [
+          {
+            "type": "mrkdwn",
+            "text": "*Time:*\n{{data.timestamp}}"
+          },
+          {
+            "type": "mrkdwn",
+            "text": "*Type:*\n{{data.notification_type}}"
+          }
+        ]
+      },
+      {
+        "type": "actions",
+        "elements": [
+          {
+            "type": "button",
+            "text": {
+              "type": "plain_text",
+              "text": "View Details",
+              "emoji": true
+            },
+            "url": "{{data.dashboardUrl}}",
+            "value": "view_details",
+            "style": "primary"
+          }
+        ]
+      }
+    ]
+    ```
+  </Accordion>
+
+  <Accordion title="Tutorial 3: Incoming Webhook Integration">
+    **Goal**: Send notifications to specific channels using incoming webhooks.
+
+    <Steps>
+      <Step title="Webhook Setup">
+        Send notifications to specific channels using incoming webhooks
+      </Step>
+      <Step title="Permissions">
+        Configure channel-specific permissions
+      </Step>
+      <Step title="Simple Setup">
+        No OAuth complexity required
+      </Step>
+    </Steps>
+
+    **What You'll Build:**
+    - Webhook-based notification system
+    - Channel-specific permissions
+    - Simple setup without OAuth complexity
+
+    **Prerequisites:**
+    - SuprSend account
+    - Slack workspace with admin access
+    - Node.js environment
+
+    ### Step 1: Enable Incoming Webhooks
+
+    <Steps>
+      <Step title="Navigate to Settings">
+        Go to [Slack App Settings](https://api.slack.com/apps) and navigate to "Features" → "Incoming Webhooks"
+      </Step>
+      <Step title="Activate Webhooks">
+        Toggle "Activate Incoming Webhooks" to On
+      </Step>
+      <Step title="Create Webhook">
+        Click "Add New Webhook to Workspace" and select the specific channel for notifications
+      </Step>
+      <Step title="Copy URL">
+        Copy the webhook URL for your environment variables
+      </Step>
+    </Steps>
+
+    ### Step 2: Implementation
+
+    ```javascript
+    /**
+     * Set up webhook channel for notifications
+     */
+    async function setupWebhookChannel(channelName, webhookUrl, purpose = 'notifications') {
+      try {
+        const distinctId = `webhook_${channelName}`;
+        const user = suprClient.user.get_instance(distinctId);
+        
+        // Add webhook information
+        user.add_slack({
+          incoming_webhook: {
+            url: webhookUrl
+          }
+        });
+        
+        // Set channel properties
+        user.set_once('name', `#${channelName} (Webhook)`);
+        user.set_once('channel_type', 'webhook');
+        user.set_once('purpose', purpose);
+        user.set_once('created_at', new Date().toISOString());
+        
+        const response = await user.save();
+        return response;
+        
+      } catch (error) {
+        console.error(`Error setting up webhook channel ${channelName}:`, error);
+        throw error;
+      }
+    }
+
+    /**
+     * Send notification via webhook
+     */
+    async function sendWebhookNotification(channelName, notificationData) {
+      try {
+        const distinctId = `webhook_${channelName}`;
+        
+        const body = {
+          workflow: 'webhook_notification',
+          recipients: [
+            {
+              distinct_id: distinctId,
+              name: `#${channelName}`,
+            }
+          ],
+          data: {
+            ...notificationData,
+            channel_name: channelName,
+            timestamp: new Date().toISOString(),
+          }
+        };
+        
+        const workflowTrigger = new WorkflowTriggerRequest(body);
+        const response = await suprClient.workflows.trigger(workflowTrigger);
+        return response;
+        
+      } catch (error) {
+        console.error(`Error sending webhook notification to ${channelName}:`, error);
+        throw error;
+      }
+    }
+
+    // Initialize different webhook channels
+    async function initializeWebhookChannels() {
+      try {
+        await setupWebhookChannel('alerts', process.env.SLACK_WEBHOOK_ALERTS, 'system_alerts');
+        await setupWebhookChannel('deployments', process.env.SLACK_WEBHOOK_DEPLOYMENTS, 'deployment_notifications');
+        await setupWebhookChannel('support', process.env.SLACK_WEBHOOK_SUPPORT, 'customer_support');
+      } catch (error) {
+        console.error('Error initializing webhook channels:', error);
+        throw error;
+      }
+    }
+
+    // Call this during application startup
+    initializeWebhookChannels();
+
+    // Usage examples
+    sendWebhookNotification('alerts', {
+      alertType: 'High Error Rate',
+      service: 'API Gateway',
+      severity: 'Critical',
+      message: 'Error rate increased to 15% in the last 10 minutes',
+      dashboardUrl: 'https://monitoring.company.com',
+    })
+    .then(result => console.log('Alert sent:', result))
+    .catch(error => console.error('Alert failed:', error));
+
+    sendWebhookNotification('deployments', {
+      deploymentType: 'Production Deploy',
+      service: 'User API',
+      version: 'v2.1.0',
+      status: 'Success',
+      deployedBy: 'John Doe',
+      deploymentUrl: 'https://github.com/company/repo/commit/abc123',
+    })
+    .then(result => console.log('Deployment notification sent:', result))
+    .catch(error => console.error('Deployment notification failed:', error));
+    ```
+
+    ### Step 3: SuprSend Workflow Template
+
+    Create this template in your SuprSend dashboard for the `webhook_notification` workflow:
+
+    ```json
+    [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": "🚨 {{data.alertType}} Alert",
+          "emoji": true
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*Service:* {{data.service}}\n*Severity:* {{data.severity}}\n*Time:* {{data.timestamp}}"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "{{data.message}}"
+        }
+      },
+      {
+        "type": "actions",
+        "elements": [
+          {
+            "type": "button",
+            "text": {
+              "type": "plain_text",
+              "text": "View Dashboard",
+              "emoji": true
+            },
+            "url": "{{data.dashboardUrl}}",
+            "value": "view_dashboard",
+            "style": "primary"
+          }
+        ]
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": "Channel: #{{data.channel_name}}"
+          }
+        ]
+      }
+    ]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Reference
+
+This section provides quick reference information for Slack API error codes, required scopes, environment variables, and troubleshooting guides.
+
+### Slack API Error Codes
+
+| Error Code | What It Means | How Common | Solution |
+|------------|---------------|------------|----------|
+| `user_not_found` | User isn't in workspace | Very common | Verify user exists in workspace |
+| `already_in_channel` | User already invited | Common | Check if user is already a member |
+| `cant_invite_self` | Bot trying to invite itself | Rare | Use different user ID |
+| `channel_not_found` | Channel ID invalid | Common in testing | Verify channel exists and bot has access |
+| `invalid_auth` | Token invalid/expired | Common | Refresh or regenerate token |
+| `missing_scope` | Insufficient permissions | Common | Add required scopes to app |
+| `invalid_code` | OAuth code expired/invalid | Common | Restart OAuth flow |
+| `token_revoked` | User revoked access | Common | Re-authenticate user |
+
+### Required Scopes by Use Case
+
+| Use Case | Required Scopes | Purpose |
+|----------|----------------|---------|
+| Company Channels | `channels:manage, channels:read, chat:write, im:write, users:read, users:read.email` | Create channels, invite users, send messages |
+| User Workspace | `channels:read, chat:write, im:write, users:read, users:read.email` | Read channels, send messages to user's workspace |
+| Webhooks | `incoming-webhook` | Send messages to specific channels |
+
+### Environment Variables Reference
+
+| Variable | Required For | Description |
+|----------|--------------|-------------|
+| `SUPERSEND_WORKSPACE_KEY` | All | Your SuprSend workspace key |
+| `SUPERSEND_WORKSPACE_SECRET` | All | Your SuprSend workspace secret |
+| `SLACK_BOT_TOKEN` | Company Channels | Bot User OAuth Token for your workspace |
+| `SLACK_CLIENT_ID` | User Workspace | OAuth app client ID |
+| `SLACK_CLIENT_SECRET` | User Workspace | OAuth app client secret |
+| `SLACK_REDIRECT_URI` | User Workspace | OAuth redirect URI |
+| `SLACK_WEBHOOK_ALERTS` | Webhooks | Webhook URL for alerts channel |
+| `SLACK_WEBHOOK_DEPLOYMENTS` | Webhooks | Webhook URL for deployments channel |
+| `SLACK_WEBHOOK_SUPPORT` | Webhooks | Webhook URL for support channel |
+
+### Slack API Endpoints Reference
+
+| Endpoint | Method | Purpose | Use Case |
+|----------|--------|---------|----------|
+| `conversations.create` | POST | Create new channel | Company Channels |
+| `conversations.invite` | POST | Invite user to channel | Company Channels |
+| `users.lookupByEmail` | GET | Get user ID from email | Company Channels |
+| `oauth.v2.authorize` | GET | Start OAuth flow | User Workspace |
+| `oauth.v2.access` | POST | Exchange code for token | User Workspace |
+| `conversations.list` | GET | List user's channels | User Workspace |
+| `chat.postMessage` | POST | Send message to channel | All |
+| `auth.test` | GET | Test token validity | All |
+
+### SuprSend SDK Methods Reference
+
+| Method | Purpose | Example |
+|--------|---------|----------|
+| `user.get_instance(distinctId)` | Get user instance | `const user = suprClient.user.get_instance('user123')` |
+| `user.add_slack(data)` | Add Slack integration | `user.add_slack({access_token: 'xoxb-...'})` |
+| `user.remove_slack()` | Remove Slack integration | `user.remove_slack()` |
+| `user.set_once(key, value)` | Set property once | `user.set_once('name', 'John Doe')` |
+| `user.save()` | Save changes | `await user.save()` |
+| `workflows.trigger(request)` | Trigger workflow | `await suprClient.workflows.trigger(workflowTrigger)` |
+
+### Template Variables Reference
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `{{data.user_name}}` | User's display name | John Doe |
+| `{{data.user_email}}` | User's email address | john@example.com |
+| `{{data.channel_name}}` | Channel name | general |
+| `{{data.alertType}}` | Type of alert/notification | System Update |
+| `{{data.message}}` | Notification message | Your account has been upgraded |
+| `{{data.timestamp}}` | Current timestamp | 2024-01-15T10:30:00Z |
+
+### Security Considerations
+
+<Warning>
+  **Token Storage**: SuprSend encrypts tokens at rest, but remember:
+  - Users can revoke tokens at any time
+  - Implement error handling for revoked tokens
+  - Consider token refresh strategies for long-lived integrations
+</Warning>
+
+<Info>
+  **Best Practices**:
+  - Always validate tokens before making API calls
+  - Implement proper error handling for all API responses
+  - Use environment variables for sensitive data
+  - Test webhook URLs in a staging environment first
+  - Monitor API rate limits and implement backoff strategies
+</Info>
+
+### Troubleshooting Common Issues
+
+<AccordionGroup>
+  <Accordion title="OAuth Flow Not Working">
+    **Symptoms**: Users can't complete OAuth authorization
+    
+    **Common Causes**:
+    - Incorrect redirect URI
+    - Missing required scopes
+    - Invalid client ID/secret
+    
+    **Solutions**:
+    1. Verify redirect URI matches exactly in Slack app settings
+    2. Check that all required scopes are added
+    3. Regenerate client secret if needed
+    4. Test OAuth flow in Slack's OAuth tester
+  </Accordion>
+  
+  <Accordion title="Messages Not Sending">
+    **Symptoms**: SuprSend workflows trigger but messages don't appear in Slack
+    
+    **Common Causes**:
+    - Invalid channel ID
+    - Bot not in channel
+    - Insufficient permissions
+    
+    **Solutions**:
+    1. Verify channel ID is correct
+    2. Ensure bot is added to the channel
+    3. Check bot has required scopes
+    4. Test with `auth.test` endpoint
+  </Accordion>
+  
+  <Accordion title="User Invitation Fails">
+    **Symptoms**: `conversations.invite` returns error
+    
+    **Common Causes**:
+    - Using email instead of user ID
+    - User already in channel
+    - User not in workspace
+    
+    **Solutions**:
+    1. Use `users.lookupByEmail` to get user ID first
+    2. Check if user is already a member
+    3. Verify user exists in workspace
+    4. Handle `already_in_channel` error gracefully
+  </Accordion>
+  
+  <Accordion title="Webhook Not Receiving Messages">
+    **Symptoms**: Webhook URL configured but no messages received
+    
+    **Common Causes**:
+    - Invalid webhook URL
+    - Channel doesn't exist
+    - Webhook disabled
+    
+    **Solutions**:
+    1. Test webhook URL with curl
+    2. Verify channel exists and is active
+    3. Check webhook is enabled in Slack app
+    4. Ensure correct JSON payload format
+  </Accordion>
+</AccordionGroup>
+
+---
