@@ -1,0 +1,511 @@
+---
+title: "Amazon S3 v2.0"
+description: "Guide to export notification data & templates from SuprSend to Amazon S3 bucket."
+---
+
+## Overview
+
+The Amazon S3 v2.0 connector enables you to export notification data from SuprSend to your Amazon S3 bucket. This integration provides near real-time data synchronization (every 5 minutes), allowing you to maintain your own copy of notification logs for analytics, debugging, and compliance purposes.
+
+## How it works?
+
+The Amazon S3 v2.0 connector exports your notification data to your S3 bucket in [Parquet](https://parquet.apache.org/) format, providing you with complete logging capabilities similar to what you see on the SuprSend platform.
+
+### Data Export Process
+
+1. **Select Data Types**: Choose which data types you want to sync from the available options:
+   - **Requests** - API request logs with status and error details
+   - **Workflow Executions** - Step-by-step workflow execution logs
+   - **Messages** - Individual message delivery logs
+
+  ![Data Points Parameter on SuprSend Platform](/images/s3v2-types.png)
+
+2. **Sync Frequency**: Data syncs to your S3 bucket **every 5 minutes**, ensuring near real-time availability with acceptable latency.
+
+3. **File Organization**: 
+   - **1 parquet file per hour per workspace** - Data is organized by hour and workspace for efficient querying
+   - Files are normalized for easy readability and analysis
+   - Each data type (Requests, Workflow Executions, Messages) is exported as separate parquet files
+
+4. **Data Format**: All data is exported in Parquet format, which is optimized for analytics and can be easily queried using tools like AWS Athena or ingested into data warehouses.
+
+<Note>
+**Data Availability**: The exported data provides complete logging capability, including request statuses, error messages, execution details, and message delivery statuses. This normalized data structure allows you to perform the same queries you would use with the SuprSend logs API.
+</Note>
+
+---
+
+## Use Cases
+
+This integration is ideal for:
+
+- **In-house Logging and Analytics**: Maintain notification data in-house for logging and analytics purposes. Data is available in real-time with acceptable latency of 5 minutes.
+
+- **B2B2C Notification Logs**: Show notification logs and analytics to customers for B2B2C use cases where customer's customer is initiating the notification.
+
+- **Complete Request Tracking**: Track all API requests with their final status (success, failure, partial failure) along with detailed error messages showing the reason of failure and at what stage that error occurred.
+
+- **Debugging and Troubleshooting**: Access additional information to debug errors better, like template name, category name, computed channels after preference computation, and any data modification that happened during workflow run.
+
+---
+
+## Data Types
+
+The S3 connector v2.0 exports three types of data to help you track and analyze your notification system. You can choose which data types to sync based on your needs.
+
+<Tip>
+**Recommendation:** Start with **Messages** for basic delivery tracking, add **Workflow Executions** for debugging, and include **Requests** for complete API-level visibility.
+</Tip>
+
+<AccordionGroup>
+<Accordion title="1. Requests" defaultOpen={false}>
+
+The **Requests** data type captures all logs related to API requests sent to SuprSend, including request and response details, status, error messages, and execution IDs.
+
+**Use this when you need to:**
+- Track all incoming API requests to SuprSend
+- Monitor API-level errors and failures
+- Analyze request patterns and volumes
+
+**Common error types:**
+- **Recipient not found**: When a distinct_id provided in the request doesn't exist
+- **Workflow not found**: When a workflow with the given slug doesn't exist
+- **Workflow trigger conditions evaluated to false**: When workflow conditions prevent execution
+- **Invalid payload**: When the request payload doesn't meet validation requirements
+- **Authentication/Authorization errors**: When API credentials or permissions are invalid
+
+<Accordion title="View full schema reference" defaultOpen={false}>
+
+| Column name | Description | Datatype | Sample Values |
+| --- | --- | --- | --- |
+| api_type | Entity type that belongs to the API call | string | `user`, `event`, `workflow`, `tenant` |
+| api_name | Workflow, event or broadcast name passed in the API call | string | `test_workflow` |
+| distinct_id_list | List of user distinct_id or object type/id for which the API request was sent | array | `["id1","id2"]` |
+| actor | Actor passed in event or workflow API request | string | `"actor_id1"` |
+| tenant_id | Tenant id for which the API request is sent | string | `default` |
+| payload | Input payload passed in the trigger. Includes API call details | json |  |
+| response | Response of HTTP API request | json |  |
+| metadata | Other info like the SDK from which the request was received, machine details and location | json |  |
+| errors | Request level errors if any. Has error message and severity. Includes error type and error code for easy debugging | array(json) |  |
+| executions | Workflow or broadcast execution ids and slug triggered by that API call. Execution_id in this array can be used to link request log with workflow executions table | array(json) |  |
+| idempotency_key | Idempotency_key passed in the API request. We set a UUID to uniquely identify the request if not passed | string |  |
+| created_at | Time when the request was sent to SuprSend in UTC timezone | datetime |  |
+| updated_at | Time when this entry was last updated | datetime |  |
+| status | Status of the API request | string | `completed`, `failure`, `partial_failure` |
+
+</Accordion>
+
+</Accordion>
+
+<Accordion title="2. Workflow Executions" defaultOpen={false}>
+
+The **Workflow Executions** data type provides step-by-step execution logs of each workflow. Each workflow step is shown as a separate row in the output data, with node-level details, execution stages, and status.
+
+**Use this when you need to:**
+- Debug workflow execution issues at the node level
+- Monitor workflow performance and identify bottlenecks
+- Track step-by-step execution of workflows
+
+**Common error types:**
+- **Workflow Start Errors**: Invalid workflow configuration, workflow not found or disabled, insufficient permissions
+- **Node Processing Errors**: Template rendering failures, preference computation errors, channel computation failures, data transformation errors
+- **Node Execution Errors**: Webhook call failures, API integration errors, timeout errors, resource unavailability
+
+**Status levels:**
+- **`error`**: There is some error in executing the step
+- **`warning`**: Acceptable warning that leads to partial processing but is not actionable in most cases
+- **`info`**: The processing was successful for that step
+
+<Accordion title="View full schema reference" defaultOpen={false}>
+
+| Column Name | Description | Datatype | Sample Values |
+| --- | --- | --- | --- |
+| execution_id | Unique identifier of each workflow execution or run | String |  |
+| recipient_distinct_id | distinct_id of the user. In case of object, it will be object_type/id | String |  |
+| tenant_id | Unique identifier of the tenant | String |  |
+| idempotency_key | idempotency_key passed in the API request. We set a UUID to uniquely identify the request if not passed | String |  |
+| parent_object | parent object_type/id if the workflow is executed for its subscribers | String | `teams/developer` |
+| parent_object_execution_id | execution_id of the parent object in case the workflow is triggered on object | String |  |
+| workflow_slug | Unique slug of the workflow | String |  |
+| workflow_version | version of the workflow | String |  |
+| created_at | time when the workflow execution started | datetime |  |
+| updated_at | time when the subsequent workflow step log was updated | datetime |  |
+| node_id | unique identifier of the node | String |  |
+| node_name | Name of the node | String |  |
+| node_type | Type of the node | String |  |
+| execution_stage | What stage node execution is at: `workflow_started`, `node_started`, `node_processing`, `node_finished` | String |  |
+| message | short description of what happened at that stage. Error message if any will also show at this step if log_level = 'error' for that step | String |  |
+| status | log status of the step: `error`, `warning`, `info` | String |  |
+| properties | additional data consumed or generated as an output after processing that node, like in workflow_started state, input payload is part of properties or in webhook node, webhook request and response is part of properties | json |  |
+
+</Accordion>
+
+</Accordion>
+
+<Accordion title="3. Messages" defaultOpen={false}>
+
+The **Messages** data type provides the final log of individual messages sent to users, including delivery status, engagement metrics, failure reasons, and vendor information.
+
+**Use this when you need to:**
+- Track individual message delivery status
+- Monitor message engagement (seen, clicked, dismissed)
+- Analyze delivery failures and vendor performance
+
+**Error types:**
+
+There are 2 types of errors at message level:
+
+1. **Execution Failure** (happens during workflow execution at SuprSend level):
+   - Template rendering failure
+   - Preferences computed into empty channel array
+   - Invalid channel configuration
+   - Missing required template variables
+
+2. **Delivery Failure** (reported by vendor when making API call to route notification):
+   - Invalid recipient address (email, phone, etc.)
+   - Vendor API errors
+   - Rate limiting by vendor
+   - Vendor service unavailability
+   - Blocked or bounced messages
+
+**Status values:**
+- Message delivery statuses: `triggered`, `delivered`, `seen`, `clicked`, `dismissed`, `failed`
+- Execution failure reason includes severity (`error` or `warning`) to define the granularity of the error
+- Errors with `warning` severity can be safely ignored in most cases
+
+<Accordion title="View full schema reference" defaultOpen={false}>
+
+| Column Name | Description | Datatype | Sample Values |
+| --- | --- | --- | --- |
+| wf_execution_id | Unique identifier of each workflow execution or run | String |  |
+| broadcast_execution_id | Unique identifier of each broadcast execution or run | String |  |
+| message_id | Will only be present for cases with no execution_error | String |  |
+| recipient_distinct_id | distinct_id of the user. In case of object, it will be object_type/id | String |  |
+| tenant_id | Unique identifier of the tenant | String |  |
+| idempotency_key | idempotency_key passed in the API request. We set a UUID to uniquely identify the request if not passed | String |  |
+| parent_object | parent object_type/id if the workflow is executed for its subscribers | String | `teams/developer` |
+| parent_object_execution_id | execution_id of the parent object in case the workflow is triggered on object | String |  |
+| workflow_slug | Unique slug of the workflow | String |  |
+| template_name | name of the template group | String |  |
+| template_slug | Unique slug of the template | String |  |
+| status | status of the message delivery | String |  |
+| created_at | time when this entry was created | datetime |  |
+| updated_at | time when the message status was last updated | datetime |  |
+| node_id | unique identifier of the node | String |  |
+| node_name | Name of the node | String |  |
+| node_type | Type of the node | String |  |
+| execution_failure_reason | reason for failure at workflow execution level. will have severity to define the granularity of the error. Errors with `warning` severity can be safely ignored | json |  |
+| delivery_failure_reason | failure reason reported by vendor in case of failed delivery | String |  |
+| triggered_at | timestamp when the message request was sent by SuprSend to the vendor | datetime |  |
+| delivered_at | timestamp when the message request was sent by Vendor | datetime |  |
+| seen_at | timestamp when the message request was seen by the user on the respective channel | datetime |  |
+| clicked_at | timestamp when the message request was clicked by the user on the respective channel | datetime |  |
+| dismissed_at | timestamp when the message request was dismissed by the user on the respective channel | datetime |  |
+| vendor_ack_id | this is the id returned by vendor back to us for identifying the request uniquely. In case of reporting to vendor, this id can be used | String |  |
+| vendor_fallback_applicable | is true if vendor fallback is set for that channel | Boolean |  |
+| vendor_fallback_level | The number at which request was sent to this vendor in case of fallback. Position starts from 0 | Integer |  |
+| vendor_name | Nickname added in vendor form | String |  |
+| vendor_name_slug | vendor - channel, vendor type and channel to uniquely identify vendor type in a channel | String |  |
+| is_smart | true for smart channel routing node | Boolean |  |
+| success_metric | success_metric passed in smart channel routing node | String |  |
+| success_achieved_at | timestamp when success metric was achieved for smart channel routing node | String |  |
+| wait_time_in_seconds | wait time between 2 channels in case of smart channel routing node | Integer |  |
+| channel_slug | communication channel | String |  |
+| channel_info | value of the channel. Eg. email_id in case of email | String |  |
+| webhook_data | request and response for webhook node | json |  |
+
+</Accordion>
+
+</Accordion>
+</AccordionGroup>
+
+### Linking Data Types
+
+You can link these data types together to create a complete picture of your notification flow:
+
+- **Requests → Workflow Executions**: Use `execution_id` from the `executions` array in Requests table
+- **Workflow Executions → Messages**: Use `execution_id` (same as `wf_execution_id` in Messages table)
+- **Requests → Messages**: Use `idempotency_key` to trace from request to all related messages
+
+<Note>
+A single workflow execution can result in multiple messages based on how many delivery nodes are added in the workflow and how many channels a delivery node tries. Each channel request will result in a single entry in the messages table.
+</Note>
+
+---
+
+## Setup Guide
+
+### Pre-Requisites
+
+Before you begin, ensure you have:
+
+- An AWS account with administrative access
+- Necessary permissions to create S3 buckets and IAM roles/users
+- Access to AWS Console
+
+  <Note>
+**Time estimate:** The complete setup process typically takes 15-20 minutes, depending on your familiarity with AWS services.
+</Note>
+
+### AWS Setup Steps
+
+Follow these steps to configure your AWS resources for the S3 connector:
+
+<Steps>
+  <Step title="Create S3 Bucket">
+    <Note>
+      Skip this step if you want to use an existing bucket.
+    </Note>
+    
+    Otherwise, follow these steps:
+
+    1. Sign in to [AWS S3 Console](https://s3.console.aws.amazon.com/)
+    2. Click "Create bucket"
+
+    ![Create S3 Bucket](/images/docs/c37cc40-image.png)
+
+    3. Configure bucket settings:
+      - Bucket name: e.g. `suprsend-notification`
+      - Region: Choose your preferred region
+      - Object Ownership: **ACLs disabled** (recommended)
+      - Block all public access: **Enabled**
+      - Bucket versioning: **Disabled**
+      - Default encryption: Server-side encryption with Amazon S3 managed keys (SSE-S3)
+      - Bucket Key: **Enabled**
+    4. Click "Create bucket"
+
+    ![S3 Bucket Configuration](/images/docs/4a07acb-Screenshot_2023-08-09_at_9.29.19_PM.png)
+  </Step>
+
+  <Step title="Set Bucket Permission Policy">
+    We'll need permission to `PutObject` for data ingestion in your bucket. To set permission policy:
+
+    1. Go to [IAM Console](https://console.aws.amazon.com/iam/)
+    2. Select **Policies** → **Create Policy**
+    3. Use JSON editor and paste this policy (replace `suprsend-notification` with your bucket name). Set a relevant name to the policy, something like **`SingleBucketWriteAccess`**.
+
+    <CodeGroup>
+      ```json Amazon AWS IAM Management Console
+      {
+        "Version":"2012-10-17",
+        "Statement":[
+            {
+              "Sid":"AllObjectActions",
+              "Effect":"Allow",
+              "Action":[
+                  "s3:*"
+              ],
+              "Resource":[
+                  "arn:aws:s3:::suprsend-notification",
+                  "arn:aws:s3:::suprsend-notification/*"
+              ]
+            }
+        ]
+      }
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Select the Authentication Scheme">
+    Choose between IAM Role (recommended) or IAM User authentication. 
+
+    <Tip>
+      **IAM Role-based authentication is recommended** because it:
+      - Provides temporary, scoped access
+      - Eliminates the need for long-term credentials
+      - Follows security best practices
+    </Tip>
+
+    <AccordionGroup>
+    <Accordion title="IAM Role (Recommended)" defaultOpen={true}>
+      <Steps>
+        <Note>
+          If you're using IAM-role authentication at multiple places inside SuprSend, you can consolidate all permission statements within a single policy.
+        </Note>
+        <Step title="Create Policy">
+          * Go to IAM console → Policies
+          * Click "Create Policy"
+          * Either use a 'Visual-editor' or a 'JSON editor' to allow actions ``["s3:*"]``.
+          For simplity, choose "JSON editor" and replace the existing content with below JSON.
+            <Note>
+              Replace the s3-bucket in `Resource` with your own bucket
+            </Note>
+            <CodeGroup>
+              ```json IAM Role Policy
+              {
+                "Version":"2012-10-17",
+                "Statement":[
+                    {
+                      "Sid":"S3ObjectActions",
+                      "Effect":"Allow",
+                      "Action":[
+                          "s3:*"
+                      ],
+                      "Resource":[
+                          "arn:aws:s3:::suprsend-notification",
+                          "arn:aws:s3:::suprsend-notification/*"
+                      ]
+                    }
+                ]
+              }
+              ```
+            </CodeGroup>
+
+          * Click on `Next`, and enter a Policy Name (e.g. suprsend_trust_role_policy), & other optional Description.
+
+          * Finally, clicking on the `Create Policy` button, it will create a new policy with the above permissions.
+        </Step>
+        <Step title="Create IAM Role">
+            * Go to IAM console → Roles. To create an IAM Role, refer to this [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html).
+            * Click on `Create Role` button, and select `Another AWS Account` as the trusted entity.
+            * Enter SuprSend's AWS account ID: `924219879248`
+            * Next, Select the policy created above
+            * Enter role name (e.g. `suprsend_trust_role`) and create the role.
+        </Step>
+        <Step title="Verify Role Permissions">
+          * Select the role created above from IAM console → Roles tab
+          * In Trust Relationships tab, verify this trust policy:
+            <CodeGroup>
+                ```json IAM Role Policy
+                {
+                  "Version":"2012-10-17",
+                  "Statement":[
+                      {
+                        "Effect":"Allow",
+                        "Principal": {
+                            "AWS":"arn:aws:iam::924219879248:root"
+                        },
+                        "Action":"sts:AssumeRole",
+                        "Condition":{
+                            "StringEquals":{
+                              "sts:ExternalId":"<uniq-id-entered-by-user>"
+                            }
+                        }
+                      }
+                  ]
+                }
+                ```
+            </CodeGroup>
+
+            <Note>
+              Important:
+              - Principal must be SuprSend's AWS account ID: "924219879248"
+              - ExternalId should match the unique ID entered during role creation
+            </Note>
+
+          * Save these details for SuprSend setup:
+            - Role ARN
+            - External ID
+            - Maximum session duration
+        </Step>
+      </Steps>
+    </Accordion>
+    <Accordion title="IAM User" defaultOpen={false}>
+        Follow these steps to create an IAM user:
+
+        1. Create an IAM user with Programmatic access
+          - Add relevant user Name: e.g. `s3-bucket-suprsend`
+          - Attach the policy created in step 2
+        2. Complete the user creation process
+        3. Continue to step 4 before closing the browser.
+        4. Save the access credentials securely
+          <Steps>
+            <Step title="Get Access Credentials">
+              This is required to be added in the connector integration form on SuprSend.
+              For IAM User authentication:
+
+              1. Go to IAM Users → Select your user
+              2. Security credentials tab → Create access key
+              3. Choose "Third party service"
+              4. Add optional description
+              5. **IMPORTANT**: Copy and save both access key and secret
+              6. Click "Done"
+
+              ![Get Access Credentials](/images/docs/795e47f-image.png)
+            </Step>
+          </Steps>
+    </Accordion>
+    </AccordionGroup>
+  </Step>
+</Steps>
+
+---
+
+### Configure S3 Connector in SuprSend
+
+Now that your AWS resources are set up, configure the connector in SuprSend to start exporting data.
+
+#### Step 1: Navigate to Connector Settings
+
+1. Go to **Settings → Connectors → Amazon S3 v2.0**
+2. Click **Add Connector** or **Configure** (if editing an existing connector)
+
+#### Step 2: Fill in Connector Details
+
+The configuration form will display different fields based on your selected authentication scheme.
+
+<AccordionGroup>
+<Accordion title="IAM Role Configuration" defaultOpen={true}>
+
+![S3 Connector IAM Role Configuration](/images/s3-iamrole.png)
+
+Fill in the following fields:
+
+**Common Fields (all authentication types):**
+- **Connector name***: Choose a unique name to identify this connector
+- **Authentication Scheme***: Select **IAM Role** from the dropdown
+- **AWS Region***: Enter the AWS region where your S3 bucket is hosted (e.g., `us-east-1`, `ap-south-1`)
+- **Export Bucket***: Enter the name of your S3 bucket from the [Create S3 Bucket](#create-s3-bucket) step
+- **Data Points to export***: Select which data types to sync: **Requests**, **Workflow Executions**, and/or **Messages**
+
+**IAM Role Specific Fields:**
+- **Role ARN***: Enter the ARN of your IAM Role from the [Verify Role Permissions](#verify-role-permissions) step
+- **External ID***: Enter the External ID from the [Verify Role Permissions](#verify-role-permissions) step
+- **Duration Seconds** (optional): Session duration in seconds (default: 3600)
+
+</Accordion>
+
+<Accordion title="IAM User Configuration" defaultOpen={false}>
+
+![S3 Connector IAM User Configuration](/images/s3-iamuser.png)
+
+Fill in the following fields:
+
+**Common Fields (all authentication types):**
+- **Connector name***: Choose a unique name to identify this connector
+- **Authentication Scheme***: Select **IAM User** from the dropdown
+- **AWS Region***: Enter the AWS region where your S3 bucket is hosted (e.g., `us-east-1`, `ap-south-1`)
+- **Export Bucket***: Enter the name of your S3 bucket from the [Create S3 Bucket](#create-s3-bucket) step
+- **Data Points to export***: Select which data types to sync: **Requests**, **Workflow Executions**, and/or **Messages**
+
+**IAM User Specific Fields:**
+- **Access Key ID***: Enter the AWS access key ID from the [Get Access Credentials](#get-access-credentials) step
+- **Secret Access Key***: Enter the AWS secret access key from the [Get Access Credentials](#get-access-credentials) step
+
+</Accordion>
+</AccordionGroup>
+
+#### Step 3: Enable Data Sync
+
+After filling in all required fields:
+
+1. Review your configuration
+2. Click **Save** to save the connector settings
+3. Toggle **Enable sync** to start exporting data
+
+<Note>
+**Data sync frequency:** Data exports to your S3 bucket every 5 minutes. Files are organized by hour and workspace for easy querying.
+  </Note>
+  
+#### Managing Your Sync
+
+Once enabled, you can manage your data sync:
+
+- **Pause specific data types**: Deselect data types from "Data Points to export" and click **Save**
+- **Disable entire sync**: Turn off the **Enable sync** toggle
+- **Resume sync**: Re-enable sync to resume exports. Historical data will be exported when you re-enable
+
+<Tip>
+**Best Practice:** Start by enabling sync for one data type (e.g., **Messages**) to verify the integration works correctly, then enable additional data types as needed.
+</Tip>
+  
