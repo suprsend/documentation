@@ -19,12 +19,6 @@ You export three data points individually or together. Choose based on your need
 
 ![Data Points Parameter on SuprSend Platform](/images/s3v2-types.png)
 
-| Data Point | Use for | Helps diagnose |
-|------------|---------|----------------|
-| **Messages** | Delivery tracking, engagement analysis, vendor performance | Delivery failures, invalid addresses, vendor errors |
-| **Workflow Executions** | Debugging workflows, performance analysis | Template errors, preference issues, webhook failures |
-| **Requests** | API monitoring, compliance, integration debugging | API errors, invalid payloads, authentication failures |
-
 <Tabs>
 <Tab title="Messages">
 
@@ -89,19 +83,11 @@ graph LR
 - `Workflow Executions.execution_id` → `Messages.wf_execution_id`
 - `Requests.idempotency_key` → `Messages.idempotency_key`
 
-**Example flow:**
-
-1. **Request** (`idempotency_key: "req_abc123"`) triggers workflow `welcome_email`
-2. **Workflow Execution** (`execution_id: "exec_xyz789"`) processes the workflow
-3. **Messages** (`wf_execution_id: "exec_xyz789"`, `idempotency_key: "req_abc123"`) - Two messages created (email and SMS channels)
-
-**Result:** 1 Request → 1 Workflow Execution → 2 Messages
-
 ---
 
 ## Quick start
 
-You complete setup in 4 steps (~15 minutes).
+You complete setup in 4 steps (~15 minutes):
  
 ### Prerequisites
  
@@ -113,8 +99,11 @@ You complete setup in 4 steps (~15 minutes).
 ### Step 1: Create S3 bucket
  
 1. Open [AWS S3 Console](https://s3.console.aws.amazon.com/) → **Create bucket**
+
+   ![](/images/docs/c37cc40-image.png)
+
 2. Configure these settings:
-   - **Bucket name**: Unique name (e.g., `suprsend-notification`)
+   - **Bucket name**: Unique name (e.g., `supersend-staging-s3-connector`) - **Save this name, you'll need it in Step 2**
    - **Region**: Your preferred region
    - **Bucket type**: General purpose
    - **Object Ownership**: ACLs disabled (recommended)
@@ -122,7 +111,10 @@ You complete setup in 4 steps (~15 minutes).
    - **Bucket versioning**: Disabled
    - **Default encryption**: Server-side encryption with Amazon S3 managed keys (SSE-S3). For compliance-heavy use cases requiring audit trails and key management, use SSE-KMS instead.
    - **Bucket Key**: Enabled
+
 3. Click **Create bucket**
+
+   ![](/images/docs/4a07acb-Screenshot_2023-08-09_at_9.29.19_PM.png)
 
 
 ---
@@ -130,29 +122,30 @@ You complete setup in 4 steps (~15 minutes).
 ### Step 2: Create IAM policy
  
 1. Open [IAM Console](https://console.aws.amazon.com/iam/) → **Policies** → **Create Policy** → **JSON** tab
-2. Paste this policy (replace `suprsend-notification` with your bucket name):
+2. Paste this policy (replace `YOUR_BUCKET_NAME` with the exact bucket name from Step 1):
  
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "S3ObjectActions",
+      "Sid": "AllObjectActions",
       "Effect": "Allow",
       "Action": [
-        "s3:PutObject"  // Required: Allows SuprSend to write Parquet files to your bucket
+        "s3:PutObject",     // Upload notification data files
+        "s3:ListBucket",    // Check existing files (prevents duplicates)
+        "s3:GetObject"      // Read existing files for backfill operations
       ],
       "Resource": [
-        "arn:aws:s3:::suprsend-notification/*"  // Replace suprsend-notification with your bucket name
+        "arn:aws:s3:::YOUR_BUCKET_NAME/*",
+        "arn:aws:s3:::YOUR_BUCKET_NAME"
       ]
     }
   ]
 }
 ```
  
-<Note>
-**Replace `suprsend-notification`** in the Resource ARN with your actual bucket name. The `/*` suffix is required for object-level permissions. ARN must not have extra spaces.
-</Note>
+Replace both instances of `YOUR_BUCKET_NAME` with your exact bucket name from Step 1. Keep the `/*` suffix on the first Resource ARN and ensure there are no extra spaces in the ARN.
 
 3. Name it (e.g., `suprsend_s3_policy`) → **Create Policy**
 
@@ -160,16 +153,12 @@ You complete setup in 4 steps (~15 minutes).
  
 ### Step 3: Set up authentication
  
-Choose **IAM Role** (recommended) or **IAM User** (simpler).
+**Which should you choose?**
 
 | Auth Scheme | When to Use | Pros | Cons |
 |-------------|-------------|------|------|
 | **IAM Role** | Enterprises, multi-account setups, production | Most secure, automates trust, no key rotation needed | Requires trust relationship setup |
 | **IAM User** | Quick tests, small projects, development | Simple setup, fewer steps | Less secure, needs key rotation every 90 days |
- 
-<Note>
-**Best practice:** Assign IAM policies to groups, not individual users. This simplifies permission management and follows AWS security best practices. For IAM Users, rotate access keys every 90 days as required by AWS security standards.
-</Note>
  
 <Tabs>
 <Tab title="IAM Role">
@@ -203,19 +192,17 @@ Choose **IAM Role** (recommended) or **IAM User** (simpler).
       "Action": "sts:AssumeRole",
       "Condition": {
         "StringEquals": {
-          "sts:ExternalId": "<uniq-id-entered-by-user>"
+          "sts:ExternalId": "YOUR_EXTERNAL_ID_HERE"
         }
       }
     }
   ]
 }
 ```
- 
-<Note>
-**Important:**
-- Principal must be SuprSend's AWS account ID: `924219879248`
-- ExternalId should match the unique ID entered during role creation
-</Note>
+
+5. Replace `YOUR_EXTERNAL_ID_HERE` with the External ID you generated above
+
+6. Click **Update policy**
 
 #### Step 3.3: Save credentials
 
@@ -235,19 +222,11 @@ Choose **IAM Role** (recommended) or **IAM User** (simpler).
 4. Attach policy from Step 2
 5. Click **Next** → **Create user**
 
-<Note>
-**Best practice:** Assign the policy to an IAM group, then add the user to that group. This simplifies permission management and follows AWS security best practices.
-</Note>
-
 #### Step 3.2: Get credentials
 
 1. Open user → **Security credentials** → **Create access key**
 2. Choose **Third party service**
 3. **Save immediately:** Access Key ID and Secret Access Key (AWS won't show secret again)
-
-<Note>
-**Key rotation:** Rotate access keys every 90 days as required by AWS security standards. Plan for key rotation to avoid service interruption.
-</Note>
 
 #### Step 3.3: Save credentials
 
@@ -266,48 +245,38 @@ Choose **IAM Role** (recommended) or **IAM User** (simpler).
 <Tabs>
 <Tab title="IAM Role">
  
+<div style={{overflow: 'hidden', maxWidth: '100%'}}>
 ![S3 Connector IAM Role Configuration](/images/s3-iamrole.png)
- 
-**Configuration fields:**
-
-| Field | Description | Sample Value | Required |
-|-------|-------------|--------------|----------|
-| **Connector name** | Descriptive name for this connector | `Production S3 Export` | Yes |
-| **Authentication Scheme** | Authentication method | IAM Role | Yes |
-| **AWS Region** | Your bucket's AWS region | `us-east-1`, `ap-south-1` | Yes |
-| **Export Bucket** | Your S3 bucket name | Must match exactly with Step 1 | Yes |
-| **Data Points to export** | Which data points to sync | Messages, Workflow Executions, Requests, or all | Yes |
-| **Role ARN** | IAM Role ARN from Step 3 | Copy exactly from AWS (no extra spaces) | Yes |
-| **External ID** | External ID from Step 3 | Must match exactly (case-sensitive) | Yes |
-| **Duration Seconds** | How long credentials remain valid | Default: 3600 (1 hour), range: 900-43200 | No |
+</div>
 
 </Tab>
 
 <Tab title="IAM User">
  
+<div style={{overflow: 'hidden', maxWidth: '100%'}}>
 ![S3 Connector IAM User Configuration](/images/s3-iamuser.png)
- 
-**Configuration fields:**
-
-| Field | Description | Sample Value | Required |
-|-------|-------------|--------------|----------|
-| **Connector name** | Descriptive name for this connector | `Production S3 Export` | Yes |
-| **Authentication Scheme** | Authentication method | IAM User | Yes |
-| **AWS Region** | Your bucket's AWS region | `us-east-1`, `ap-south-1` | Yes |
-| **Export Bucket** | Your S3 bucket name | Must match exactly with Step 1 | Yes |
-| **Data Points to export** | Which data points to sync | Messages, Workflow Executions, Requests, or all | Yes |
-| **Access Key ID** | Access Key ID from Step 3 | Copy exactly from AWS (no extra spaces) | Yes |
-| **Secret Access Key** | Secret Access Key from Step 3 | Copy exactly from AWS (no extra spaces) | Yes |
+</div>
 
 </Tab>
 </Tabs>
 
+| Form Field | Description |
+|------------|-------------|
+| **Connector name*** | Descriptive name to identify the connector (for your reference) |
+| **Authentication Scheme*** | Select IAM Role or IAM User for authentication |
+| **AWS Region*** | AWS region where your S3 bucket is hosted (e.g., `us-east-1`, `ap-south-1`, `eu-west-2`). Must match Step 1 exactly. |
+| **Export Bucket*** | Name of the S3 bucket where Parquet files will be exported. Must match Step 1 exactly. |
+| **Data Points to export*** | Select which data points to sync: Messages, Workflow Executions, Requests, or all |
+| **Role ARN*** | (IAM Role only) The Amazon Resource Name (ARN) of the IAM Role that grants access to the S3 bucket. Copy exactly from AWS (no extra spaces). |
+| **External ID*** | (IAM Role only) The unique External ID you configured in the IAM Role's trust policy. Must match exactly (case-sensitive). |
+| **Duration Seconds** | (IAM Role only) How long credentials remain valid. Default: 3600 (1 hour), range: 900-43200 |
+| **Access Key ID*** | (IAM User only) The access key ID linked to the IAM user. Copy exactly from AWS (no extra spaces). |
+| **Secret Access Key*** | (IAM User only) The secret access key linked to the IAM user. Copy exactly from AWS (no extra spaces). |
+
 2. Click **Save** → Toggle **Enable sync**
- 
-<Tip>
-Start with **Messages** to verify setup. Add other data points as needed. Initial files appear within 5-10 minutes after enabling sync.
-</Tip>
- 
+
+Initial files appear within 5-10 minutes after enabling sync.
+
 ---
 
 ## Troubleshooting
@@ -315,27 +284,88 @@ Start with **Messages** to verify setup. Add other data points as needed. Initia
 <AccordionGroup>
 <Accordion title="Files not appearing or connection test failed" defaultOpen={false}>
 
-- Wait 10+ minutes for initial sync
-- Verify bucket name and region match exactly between AWS and SuprSend (case-sensitive)
-- Check IAM permissions: Role ARN/External ID match exactly (if using IAM Role) or Access Key credentials are correct (if using IAM User)
-- Ensure policy includes `s3:PutObject` and resource ARN has `/*` suffix
-- Verify sync is enabled and at least one data point is selected
+**Check these in order:**
+
+1. **Wait time:** Initial sync takes 10+ minutes. Wait at least 10 minutes before troubleshooting.
+
+2. **Bucket name mismatch:** Double-check your bucket name—even one wrong character will break the connection.
+   - AWS Console: Copy exact bucket name (case-sensitive)
+   - SuprSend: Paste exact same name (no extra spaces)
+
+3. **Region mismatch:** AWS region must match exactly between Step 1 and Step 4.
+
+4. **IAM permissions (IAM Role):**
+   - Role ARN copied exactly (no extra spaces)
+   - External ID matches exactly (case-sensitive)
+   - Trust policy has correct Principal (`924219879248`)
+
+5. **IAM permissions (IAM User):**
+   - Access Key ID and Secret Access Key are correct
+   - Keys haven't been rotated/deleted
+
+6. **Policy configuration:**
+   - Policy includes `s3:PutObject`, `s3:ListBucket`, `s3:GetObject`
+   - Resource ARN has `/*` suffix on first entry
+   - Both Resource ARNs use exact bucket name
+
+7. **SuprSend configuration:**
+   - Sync is enabled (toggle is ON)
+   - At least one data point is selected
+   - Connector status shows "Active"
  
 </Accordion>
  
 <Accordion title="Missing data" defaultOpen={false}>
 
-- Verify the data point is selected in "Data Points to export"
-- New data points only export going forward, not retroactively
-- If sync was paused, data backfills automatically when resumed
-- Check that notifications were actually sent during that time period
+**Common causes:**
+
+- **Data point not selected:** Verify the data point is selected in "Data Points to export"
+- **New data points:** New selections only export going forward, not retroactively
+- **No notifications sent:** Check that notifications were actually sent during that time period
+- **Sync was paused:** If sync was paused, data backfills automatically when resumed (may take time)
  
 </Accordion>
  
 <Accordion title="Backfill behavior" defaultOpen={false}>
 
-When you re-enable sync after pausing, all data from the pause period is automatically exported. You can add or remove data points anytime; new selections only export going forward.
+**How backfilling works:**
+
+- When you re-enable sync after pausing, all data from the pause period is automatically exported
+- You can add or remove data points anytime; new selections only export going forward
+- Backfill may take time depending on data volume
  
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Best practices
+
+<AccordionGroup>
+<Accordion title="Security" defaultOpen={false}>
+
+- **Use IAM Role for production** - More secure than IAM User, no key rotation needed
+- **Rotate IAM User access keys every 90 days** - Required by AWS security standards
+- **Never share IAM credentials** - Don't commit credentials to code repositories
+- **Enable S3 bucket encryption** - Use SSE-S3 or SSE-KMS for compliance
+- **Keep bucket private** - Block all public access
+
+</Accordion>
+
+<Accordion title="IAM management" defaultOpen={false}>
+
+- **Assign policies to groups, not individual users** - Simplifies permission management
+- **Use External ID for IAM Roles** - Prevents "confused deputy" attacks
+- **Plan for key rotation** - Avoid service interruption by rotating IAM User keys proactively
+
+</Accordion>
+
+<Accordion title="Data management" defaultOpen={false}>
+
+- **Start with Messages data point** - Verify setup before adding other data points
+- **Monitor sync status** - Check connector status in SuprSend dashboard
+- **Understand backfill behavior** - When you re-enable sync, historical data is automatically exported
+
 </Accordion>
 </AccordionGroup>
 
