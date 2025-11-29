@@ -3550,6 +3550,11 @@ paths:
                   description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
+                opt_in_channels:
+                  type: array
+                  description: You can either pass opt_out_channels when user opts out from a channel in the category or opt_in_channels when user opts in to a channel in the category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  items:
+                    type: string
       responses:
         '202':
           description: '202'
@@ -3674,20 +3679,28 @@ paths:
               properties:
                 preference:
                   type: string
-                  description: set `**opt_in**` to send notifications on all channels by default <br>  set `**opt_out**` to not send notifications in this category by default. For instance, **newsletter** <br>  set `**cant_unsubscribe**`if you do not want users to completely opt-out from this category. Notifications will always be sent on mandatory channels in this category.
-                  default: opt_in
+                  description: set `**opt_in**` to turn on notifications on all or selected channels by default, `**opt_out**` to turn-off notifications by default, `**cant_unsubscribe**`if you do not want users to completely opt-out from this category.
+                  enum: [opt_in, opt_out, cant_unsubscribe]
                 visible_to_subscriber:
                   type: boolean
                   description: set it `false` to hide a category from user's preference page
                 mandatory_channels:
                   type: array
-                  description: Add mandatory channels that the user can't unsubscribe from if preference is `cant_unsubscribe`. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  description: Add mandatory channels that the user can't unsubscribe from if preference is `cant_unsubscribe`.
                   items:
                     type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
                 opt_in_channels:
                   type: array
                   nullable: true
-                  description: Channels that are included in the default "On" state when preference is `opt_in`. Set to null or empty array to include all channels, or specify selected channels only (e.g., `["email", "sms"]`).
+                  description: Add channels that should be opted-in by default when preference is either `On` or `Can't Unsubscribe`. Set to null or do not pass this parameter to set all channels as opted-in. In case of `Can't Unsubscribe`, mandatory channels are opted-in by default.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+                blocked_channels:
+                  type: array
+                  nullable: true
+                  description: Pass channels which are not applicable for the tenant. This setting will apply to all categories and user will not be able to opt-in to these channels for the tenant.
                   items:
                     type: string
                     enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
@@ -3705,7 +3718,7 @@ paths:
                     "root_category": "transactional",
                     "default_preference": "opt_in",
                     "default_mandatory_channels": null,
-                    "default_opt_in_channels": null,
+                    "default_opt_in_channels": ['email', 'sms'],
                     "visible_to_subscriber": true,
                     "preference": "opt_in",
                     "mandatory_channels": null,
@@ -3731,22 +3744,22 @@ paths:
                   default_preference:
                     type: string
                     enum: ["cant_unsubscribe", "opt_in", "opt_out"]
-                    description: default preference of the category
-                  mandatory_channels:
+                    description: default preference of the category set while updating the category.
+                  default_mandatory_channels:
                     type: array
-                    description: mandatory channels in case default preference is can't unsubscribe
+                    description: default mandatory channels set while updating the category in case default preference is can't unsubscribe
                     items:
                       type: string
                   default_opt_in_channels:
                     type: array
                     nullable: true
-                    description: Channels that are included in the default "On" state when default preference is opt_in
+                    description: default opt-in channels set to have selective opt-in channels instead of all channels while updating the category.
                     items:
                       type: string
                   opt_in_channels:
                     type: array
                     nullable: true
-                    description: Channels that are included in the default "On" state when preference is opt_in (tenant-level override)
+                    description: opt-in channels overridden for this tenant.
                     items:
                       type: string
                   visible_to_subscriber:
@@ -3755,12 +3768,13 @@ paths:
                   preference:
                     type: string
                     enum: ["opt_in", "opt_out"]
-                    description: current preference setting for this category
+                    description: preference setting overridden for this tenant.
                   blocked_channels:
                     type: array
-                    description: channels blocked in the category from SuprSend dashboard -> tenants page
+                    description: channels which are opted-out across all categories for this tenant.
                     items:
                       type: string
+                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
         '404':
           description: '404'
           content:
@@ -4015,52 +4029,53 @@ paths:
                     items:
                       type: object
                       properties:
-                        name:
-                          type: string
-                          description: preference category name
-                        category:
-                          type: string
-                          description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
-                        description:
-                          type: string
-                          description: description of the notification category
-                        root_category:
-                          type: string
-                          description: root category this sub-category belongs to
-                          example: "transactional"
-                        default_preference:
-                          type: string
-                          enum: ["cant_unsubscribe", "opt_in", "opt_out"]
-                          description: default preference of the category
-                        mandatory_channels:
-                          type: array
-                          description: mandatory channels in case default preference is can't unsubscribe
-                          items:
-                            type: string
-                        default_opt_in_channels:
-                          type: array
-                          nullable: true
-                          description: Channels that are included in the default "On" state when default preference is opt_in
-                          items:
-                            type: string
-                        opt_in_channels:
-                          type: array
-                          nullable: true
-                          description: Channels that are included in the default "On" state when preference is opt_in (tenant-level override)
-                          items:
-                            type: string
-                        visible_to_subscriber:
-                          type: boolean
-                          description: set it `false` to hide a category from user's preference page
-                        preference:
-                          type: string
-                          enum: ["opt_in", "opt_out"]
-                          description: current preference setting for this category
-                        blocked_channels:
-                          type: array
-                          description: channels blocked in the category from SuprSend dashboard -> tenants page
-                          items:
-                            type: string
+                  name:
+                    type: string
+                    description: preference category name
+                  category:
+                    type: string
+                    description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
+                  description:
+                    type: string
+                    description: description of the notification category
+                  root_category:
+                    type: string
+                    description: root category this sub-category belongs to
+                    example: "transactional"
+                  default_preference:
+                    type: string
+                    enum: ["cant_unsubscribe", "opt_in", "opt_out"]
+                    description: default preference of the category set while updating the category.
+                  default_mandatory_channels:
+                    type: array
+                    description: default mandatory channels set while updating the category in case default preference is can't unsubscribe
+                    items:
+                      type: string
+                  default_opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: default opt-in channels set to have selective opt-in channels instead of all channels while updating the category.
+                    items:
+                      type: string
+                  opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: opt-in channels overridden for this tenant.
+                    items:
+                      type: string
+                  visible_to_subscriber:
+                    type: boolean
+                    description: set it `false` to hide a category from user's preference page
+                  preference:
+                    type: string
+                    enum: ["opt_in", "opt_out"]
+                    description: preference setting overridden for this tenant.
+                  blocked_channels:
+                    type: array
+                    description: channels which are opted-out across all categories for this tenant.
+                    items:
+                      type: string
+                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
         '404':
           description: '404 - Not Found'
           content:
@@ -5393,6 +5408,12 @@ paths:
                       opt_out_channels:
                         type: array
                         description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                        default: []
+                        items:
+                          type: string
+                      opt_in_channels:
+                        type: array
+                        description: You can either pass opt_out_channels when user opts out from a channel in the category or opt_in_channels when user opts in to a channel in the category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                         default: []
                         items:
                           type: string
@@ -7127,6 +7148,11 @@ paths:
                 opt_out_channels:
                   type: array
                   description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  items:
+                    type: string
+                opt_in_channels:
+                  type: array
+                  description: You can either pass opt_out_channels when user opts out from a channel in the category or opt_in_channels when user opts in to a channel in the category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
       responses:
@@ -11036,7 +11062,7 @@ paths:
                                     default_opt_in_channels:
                                       type: array
                                       nullable: true
-                                      description: Channels that are included in the default "On" state when default preference is opt_in. Set to null or empty array to include all channels, or specify selected channels only.
+                                      description: Opt-in channels set to have selective opt-in channels instead of all channels when channel preference is opt_in or cant_unsubscribe.
                                       items:
                                         type: string
                                       example: null
@@ -11258,7 +11284,7 @@ paths:
                                   default_opt_in_channels:
                                     type: array
                                     nullable: true
-                                    description: Channels that are included in the default "On" state when default preference is opt_in. Set to null or empty array to include all channels, or specify selected channels only.
+                                    description: Add channels that should be opted-in by default when preference is either `On` or `Can't Unsubscribe`. Set to null or do not pass this parameter to set all channels as opted-in. In case of `Can't Unsubscribe`, mandatory channels are opted-in by default.
                                     items:
                                       type: string
                                       enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
