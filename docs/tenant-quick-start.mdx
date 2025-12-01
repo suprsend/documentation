@@ -1,0 +1,159 @@
+---
+title: "Tenant Quick Start"
+description: "Get started with tenants using a minimal working example."
+---
+
+This guide shows a complete end-to-end example: creating a tenant, adding tenant variables to a template, and triggering a notification.
+
+## Step 1: Create a Tenant
+
+Create a tenant via the [dashboard](https://app.suprsend.com/tenants) or programmatically using SDKs.
+
+[Learn how to create tenants in detail →](/docs/tenant-management#creating-a-tenant)
+
+## Step 2: Add Tenant Variables to Template
+
+In your [email template](https://app.suprsend.com/templates), add tenant variables that will be automatically replaced with tenant-specific values at runtime.
+
+<CodeGroup>
+```handlebars Template
+<div style="background-color: {{$tenant.primary_color}};">
+  <img src="{{$tenant.logo}}" alt="{{$tenant.tenant_name}}" />
+  <h1>Welcome to {{$tenant.tenant_name}}!</h1>
+</div>
+```
+
+```text What Happens
+When tenant_id="tenant_01" is passed:
+- {{$tenant.tenant_name}} → "ABC Company"
+- {{$tenant.logo}} → "https://company_logo_image.png"
+- {{$tenant.primary_color}} → "#ff0000"
+```
+</CodeGroup>
+
+[Learn more about tenant variables →](/docs/tenant-templates)
+
+## Step 3: Trigger with tenant_id
+
+Pass `tenant_id` when triggering a workflow or event to use that tenant's properties.
+
+### Workflow Trigger
+
+<CodeGroup>
+```python Python
+from suprsend import WorkflowTriggerRequest
+
+w1 = WorkflowTriggerRequest(
+  body={
+    "workflow": "welcome_email",
+    "recipients": [{"$email": ["user@example.com"]}],
+  },
+  tenant_id="tenant_01"
+)
+
+response = supr_client.workflows.trigger(w1)
+print(response)
+```
+
+```javascript Node.js
+const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
+
+const supr_client = new Suprsend("workspace_key", "workspace_secret");
+
+const w1 = new WorkflowTriggerRequest(
+  {
+    workflow: "welcome_email",
+    recipients: [{"$email": ["user@example.com"]}],
+  },
+  {tenant_id: "tenant_01"}
+);
+
+const response = supr_client.workflows.trigger(w1);
+response.then((res) => console.log("response", res));
+```
+
+```go Go
+w1 := &suprsend.WorkflowTriggerRequest{
+  Body: map[string]interface{}{
+    "workflow": "welcome_email",
+    "recipients": []map[string]interface{}{
+      {"$email": []string{"user@example.com"}},
+    },
+  },
+  TenantId: "tenant_01",
+}
+
+resp, err := suprClient.Workflows.Trigger(w1)
+if err != nil {
+  log.Fatalln(err)
+}
+log.Println(resp)
+```
+</CodeGroup>
+
+### Event Trigger
+
+<CodeGroup>
+```python Python
+from suprsend import Event
+
+event = Event(
+  distinct_id="user_123",
+  event_name="user_signed_up",
+  properties={"plan": "premium"},
+  tenant_id="tenant_01"
+)
+
+response = supr_client.track_event(event)
+print(response)
+```
+
+```javascript Node.js
+const { Event } = require("@suprsend/node-sdk");
+
+const event = new Event(
+  "user_123",
+  "user_signed_up",
+  {plan: "premium"},
+  {tenant_id: "tenant_01"}
+);
+
+const response = supr_client.track_event(event);
+response.then((res) => console.log("response", res));
+```
+
+```go Go
+ev := &suprsend.Event{
+  EventName:  "user_signed_up",
+  DistinctId: "user_123",
+  Properties: map[string]interface{}{"plan": "premium"},
+  TenantId: "tenant_01",
+}
+
+_, err = suprClient.TrackEvent(ev)
+if err != nil {
+  log.Fatalln(err)
+}
+```
+</CodeGroup>
+
+[Learn more about triggering with tenant_id →](/docs/tenant-workflows)
+
+## Result
+
+The notification uses the tenant's logo, colors, and other configured properties. One template works for all tenants—SuprSend applies the correct tenant's branding based on the `tenant_id` you pass.
+
+## Best Practices
+
+- **Use internal customer IDs for tenant_id** — Map directly to your customer IDs
+- **Use default tenant for base branding** — Set base branding in default tenant, override only what differs
+- **Keep tenant properties minimal** — Only configure properties that differ from default
+- **Add social links only if used** — Keep tenant data clean by adding only referenced links
+- **Test with default tenant first** — Verify templates work before adding custom tenants
+
+
+## Next Steps
+
+* **[Tenant Management](/docs/tenant-management)** — Learn how to manage tenants via dashboard
+* **[Tenant Templates](/docs/tenant-templates)** — Use tenant components and variables
+* **[Tenant Workflows](/docs/tenant-workflows)** — Explore advanced tenant features

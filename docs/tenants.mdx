@@ -1,194 +1,129 @@
 ---
 title: "Tenants"
-description: "Learn what tenants stand for and how you can customize notifications for each tenant."
+description: "Learn what tenants are and how they customize notifications per customer."
 ---
 
-If you handle communications to end users on behalf of your customers, you might be tasked with handling custom styling in the messages. This can be quite cumbersome if you have to maintain these customisation for every tenant in your codebase.
+## Overview
 
-Tenants empower you to send personalized communication on behalf of your customers using a single API. You just have to store tenant guidelines like logo, name, colors, social links and other custom properties for your customers once and then use your tenant variables in templates to dynamically render the template for each of your customer.
+Tenants define branding, preferences, and vendor routing for each customer. They enable truly multi-tenant notification rendering: you maintain one workflow and one template, and SuprSend dynamically applies the correct tenant's branding, vendors, and preferences at runtime.
 
-You can programmatically create / update tenant using either one of our backend SDKs ([Python](/docs/python-tenants), [Node](/docs/node-tenants), [Java](/docs/tenants-java), [Go](/docs/tenants-go)) or through SuprSend dashboard. We'll cover the method to create tenant using SuprSend dashboard.
+<Note>
+  One template works for all tenants. SuprSend replaces `$tenant.*` variables with tenant-specific values based on the `tenant_id` you pass.
+</Note>
 
-## Creating / Updating tenant on SuprSend platform
+## Mental Model
 
-Go to Tenants page from Side Navigation panel. On the tenants page, you'll see a default tenant created. For every organization, we create a default tenant which represents org level settings like org logo, colors, social links etc.
+Think of tenants as customer profiles. Each tenant represents a customer organization with its own settings stored in SuprSend.
 
-You can create a new tenant by clicking on "New Tenant" button.
+**The Flow:**
+1. Configure each customer's branding, preferences, and vendor settings in the [dashboard](https://app.suprsend.com/tenants)
+2. Reference `$tenant.*` variables in [templates](https://app.suprsend.com/templates)
+3. Pass `tenant_id` when sending notifications
+4. SuprSend applies the correct tenant properties at runtime
 
-![](/images/docs/new-tenant.png)
+## When to Use Tenants
 
-This will open a form to add **`tenant id`** and **`tenant name`**. Add the required fields and click on **`Create tenant`**
+<CardGroup cols="2">
+  <Card title="Multi-tenant SaaS" icon="building" iconType="solid">
+    Send notifications on behalf of enterprise customers
+  </Card>
+  <Card title="White-labeled products" icon="palette" iconType="solid">
+    Different notification styling per brand
+  </Card>
+  <Card title="B2B Platforms" icon="users" iconType="solid">
+    Notifications to customers' end users
+  </Card>
+  <Card title="Regional Variation" icon="globe" iconType="solid">
+    Different styles for teams or regions
+  </Card>
+</CardGroup>
 
-* **Tenant id** is a unique identifier for your tenant and can't be changed once the tenant is created. You'll have to pass tenant\_id in your workflow / event calls to render tenant level customization in your templates. (if no tenant\_id is passed, default tenant properties are picked). So, add a tenant\_id which is unique and easily identifiable for you.
+## When Not to Use Tenants
 
-* **Tenant name** can be your customer company / organization name
+- **Localization (Translations)** — Use template variables or separate templates
+- **User-level overrides** — Tenants represent organizations, not individual users
+- **A/B tests** — Use workflow variants or separate templates
+- **Event-level styling** — Handle in templates or workflow data
+- **Temporary campaigns** — Tenants are for persistent relationships
 
-![](/images/docs/create-tenant.png)
+## Key Concepts
 
-This will open tenant details page. Fill tenant details and Save changes. You can always come back and edit it again later
+<CardGroup cols="2">
+  <Card title="Tenant ID" icon="hashtag" iconType="solid">
+    Unique identifier (max 64 chars). **Immutable** once created. **Map to your internal customer ID**. If omitted, default tenant is used.
+  </Card>
+  <Card title="Tenant Properties" icon="list" iconType="solid">
+    Settings for notification appearance and behavior: logo, name, colors, social links, custom JSON, vendor settings, and preferences.
+  </Card>
+  <Card title="Tenant Variables" icon="code" iconType="solid">
+    Template placeholders like `$tenant.tenant_name` replaced with tenant-specific values at runtime. [Learn how to use tenant variables →](/docs/tenant-templates)
+  </Card>
+  <Card title="Default Tenant" icon="star" iconType="solid">
+    Fallback tenant (`tenant_id="default"`) used when no `tenant_id` is provided. Represents organization's base settings.
+  </Card>
+</CardGroup>
 
-![](/images/docs/tenant-details.png)
+## Runtime Behavior
 
-Here are the form fields and its description
+When a notification is sent with a `tenant_id`:
 
-| Field             | Type                                                                                                                                                 | Description                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tenant ID         | string of max character length of 64 characters with allowed characters (\[a-z0-9\_-] that is alphanumeric characters, \_ (underscore) and - (hyphen).) | tenant\_id is used to identify tenant in workflow and event call                                                                                                                                                                                                                                                                                                   |
-| Tenant Name       | single line text                                                                                                                                     | Name of the company / organization                                                                                                                                                                                                                                                                                                                                 |
-| Logo              | image                                                                                                                                                | Tenant logo. Used to render logo in email tenant header                                                                                                                                                                                                                                                                                                            |
-| Tenant colors     | 6 digit color code                                                                                                                                   | Tenant color settings are mainly used while designing templates. Primary tenant color is used in button, header and footer border in tenant email template. If you don't provide any of the colors for the tenant, SuprSend will assume you want to use the default values, so color settings will automatically be set to the color settings of `default` tenant. |
-| Social Links      | URL                                                                                                                                                  | URLs of social media accounts of the tenant It is used to render social media logos in tenant email footer. if the link is not passed, that logo will not be shown in the footer.                                                                                                                                                                                  |
-| Custom Properties | JSON                                                                                                                                                 | Custom properties associated with the tenant. The option to add custom properties is currently not available on the dashboard but you can update it using backend SDK or APIs                                                                                                                                                                                      |
+<Steps>
+  <Step title="Fetch properties">
+    SuprSend fetches the tenant's properties
+  </Step>
+  <Step title="Replace variables">
+    Replaces `$tenant.*` variables in templates with tenant-specific values
+  </Step>
+  <Step title="Apply settings">
+    Applies tenant-level preferences and vendor routing
+  </Step>
+  <Step title="Deliver">
+    Renders and delivers the notification
+  </Step>
+</Steps>
 
-You can use [HTTP API](/reference/overview) or manage tenants using one of our backend SDKs:
+<Note>
+  **Fallback behavior:** If `tenant_id` is not provided, the default tenant is used. If a custom tenant is missing a property, SuprSend falls back to the default tenant's value for that property.
+</Note>
 
-1. [Update tenant using python SDK](/docs/python-tenants)
-
-2. [Update tenant using node SDK](/docs/node-tenants)
-
-3. [Update tenant using java SDK](/docs/tenants-java)
-
-4. [Update tenant using go SDK](/docs/tenants-go)
-
-## Using tenant components in templates
-
-### 1. Ready-to-use tenant components in email
-
-You can use tenant component in email to add ready-to-use header, footer and buttons in your email template. Tenant component automatically uses tenant logo, social links and primary color to style the email template. You'll find the tenant component in right side content menu in email editor.
-
-![](/images/docs/2b5cba1-image.png)
-
-You can add tenant component and change block type to switch between header, footer and buttons
-
-![](/images/docs/9bb5a1b-image.png)
-
-You can change the component using standard customization options like padding, background color etc. to best suit your email template.
-
-### 2. Use Tenant variable for all channels
-
-You can add tenant variables in all channel templates as `$tenant.<property>`. e.g., if you have to add tenant\_name in your template, you can add it as `$tenant.tenant_name`. Also, when you type `{`, tenant variable will automatically come up in auto-suggestions for your to add in the template
-
-![](/images/docs/9d494a1-small-Screenshot_2023-05-09_at_10.17.27_PM.png)
-
-## Triggering notification for your Tenant
-
-After adding the tenant variables in your template, you can add tenant\_id in your workflow or event trigger to trigger notification for that tenant. This will replace tenant variables with the properties of that tenant at run time.
-
-### 1. Adding tenant\_id in workflow trigger
+## Example
 
 <CodeGroup>
-  ```python python
-  from suprsend import Workflow
+```handlebars Template
+Welcome to {{ $tenant.tenant_name }}
+```
 
-  # Prepare Workflow body
-  workflow_body = {...}
+```json Trigger
+{
+  "tenant_id": "canva"
+}
+```
 
-  # Add tenant_id in workflow instance
-  wf = Workflow(body=workflow_body, tenant_id='_tenant_id')
-
-  # Trigger workflow
-  response = supr_client.trigger_workflow(wf)
-  print(response)
-  ```
-
-  ```javascript Node
-  const { Workflow } = require("@suprsend/node-sdk")
-
-  // Prepare Workflow body
-  const workflow_body = {...}
-
-  // Add brand_id in workflow instance
-  const wf = new Workflow(workflow_body, {brand_id: "_brand_id_"})
-
-  // Trigger workflow
-  const response =  supr_client.trigger_workflow(wf) // returns promise
-  response.then((res) => console.log("response", res));
-  ```
-
-  ```go go
-  // Create workflow body
-  wfBody := map[string]interface{}{...}
-
-  wf := &suprsend.Workflow{
-    Body:           wfBody,
-    BrandId:        "_brand_id_",
-  }
-
-  // Call TriggerWorkflow to send request to Suprsend
-  _, err = suprClient.TriggerWorkflow(wf)
-  if err != nil {
-    log.Fatalln(err)
-  }
+```text Result
+Welcome to Canva
   ```
 </CodeGroup>
 
-### 2. Adding tenant\_id in event trigger
+## Capabilities
 
-<CodeGroup>
-  ```python python
-  from suprsend import Event
+<CardGroup cols="2">
+  <Card title="Branding" icon="palette" iconType="solid" href="/docs/tenant-templates">
+    Logo, colors, and social links applied automatically
+  </Card>
+  <Card title="Vendor Routing" icon="route" iconType="solid" href="/docs/tenant-vendor">
+    Tenant-specific email domains and SMS headers
+  </Card>
+  <Card title="Preferences" icon="sliders" iconType="solid" href="/docs/tenant-preference">
+    Notification categories and channels controlled per tenant
+  </Card>
+  <Card title="Workflow Context" icon="play" iconType="solid" href="/docs/tenant-workflows">
+    Same workflow applies different tenant settings based on `tenant_id`
+  </Card>
+</CardGroup>
 
-  distinct_id = "distinct_id" # Mandatory, Unique id of user in your application
-  event_name = "event_name"   # Mandatory, name of the event you're tracking
+## Next Steps
 
-  # Properties:  Optional, default=None, a dict representing event-attributes
-  properties = {
-    "key1":"value1",
-    "key2":"value2"
-  }
-
-  # Add tenant_id in event instance
-  event = Event(distinct_id=distinct_id, event_name=event_name, properties=properties, tenant_id='_tenant_id_')
-
-  # Track event
-  response = supr_client.track_event(event)
-  print(response)
-  ```
-
-  ```javascript Node
-  const { Event } = require("@suprsend/node-sdk");
-
-  const distinct_id = "distinct_id" // Mandatory, Unique id of user in your application
-  const event_name = "event_name"   // Mandatory, name of the event you're tracking
-
-  // Properties:  Optional, a dict representing event-attributes
-  const properties = {
-    "key1":"value1",
-    "key2":"value2"
-  }
-
-  // Add brand_id in event instance
-  const event = new Event(distinct_id, event_name, properties, {brand_id: "_brand_id_"})
-
-  // Track event
-  const response  = supr_client.track_event(event)
-  response.then((res) => console.log("response", res));
-  ```
-
-  ```go go
-  // Add brand_id in event instance
-  ev := &suprsend.Event{
-    EventName:  "product_purchased", // Mandatory, name of the event you're tracking
-    DistinctId: "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08", // Mandatory, Unique id of user in your application
-    Properties: map[string]interface{}{...},
-    BrandId:        "_brand_id_",
-    }
-
-
-    // Send event to Suprsend by calling .TrackEvent
-    _, err = suprClient.TrackEvent(ev)
-    if err != nil {
-      log.Fatalln(err)
-    }
-  ```
-</CodeGroup>
-
-### Possible customizations at Tenant Level
-
-* **Custom Template Designs for Each Tenant**: You can create unique template designs for each tenant using tenant-specific properties. Refer to the [above section](/docs/tenants#using-tenant-components-in-templates) for details on how to implement this.
-
-* **Route Tenant messages from their own vendors**: You can direct messages through a tenant's designated vendors by configuring [tenant vendors](/docs/tenant-vendor) on the vendor settings page. Messages will be sent via the vendor associated with the tenant\_id provided in the trigger. If no tenant vendor is set, the system will use the default vendor settings.
-
-* **Tenant level preference setting**: Tenants can control what notifications should be sent to their associated users and the their default preference setting. It can be used for cases where admin wants to control the notifications that their teammates receive or when you are sending notifications to multiple tenant's users and tenant wants to control the notifications their users receive, on which channels and at what frequency. [Read more about tenant preferences here](/docs/tenant-preference).
-
-***
+* **[Tenant Quick Start](/docs/tenant-quick-start)** — Create the first tenant and send a notification
+* **[Tenant Management](/docs/tenant-management)** — Create and update tenants via dashboard
+* **[Tenant Templates](/docs/tenant-templates)** — Use tenant components and variables
+* **[Tenant Workflows](/docs/tenant-workflows)** — Trigger notifications with tenant context

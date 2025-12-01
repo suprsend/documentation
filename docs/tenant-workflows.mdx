@@ -1,64 +1,135 @@
 ---
 title: "Tenant Workflows"
-description: "How to trigger workflows for tenant to apply tenant level customization in notifications."
+description: "How to trigger workflows and events with tenant_id to apply tenant-level customization."
 ---
 
-Tenants represents a segment that user belongs to. It can be organizations, teams within an organization, subsidiary companies or different product lines in the same business. In SuprSend, you can dynamically manage tenant level notification customizations. This includes the ability to [customize template design or content](/docs/tenants#using-tenant-components-in-templates), set different [notification preferences at the tenant level](/docs/tenant-preference), route notifications via [tenant vendors](/docs/tenant-vendor) or even have a distinct set of notifications for each tenant. All of this can be managed dynamically within SuprSend by defining tenant settings once and passing `tenant_id` in your event or workflow call. [Know more about how to manage tenants within SuprSend here](/docs/tenants).
+## Overview
+
+By default, notifications are triggered for the default tenant. Pass `tenant_id` in workflow or event calls to apply tenant-specific customizations.
+
+When `tenant_id` is passed:
+
+- Tenant properties replace variables in templates
+- Per-tenant preferences are applied
+- Tenant-specific vendor routing is used if configured
 
 <Note>
-  📘 If you have a use case where the entire user base and notifications differ between two distinct business lines within your company, we recommend using different workspaces to manage these notifications effectively.&#x20;
-
-
-
-  This approach ensures clear separation and management of workflows, templates, and user data, tailored specifically to the unique requirements of each business line.
+  📘 For entirely different business lines with separate user bases, use different workspaces instead of tenants.
 </Note>
 
-## Sending notifications for a tenant
-
-By default, all notifications (aka workflow) are triggered for default tenant (your organization). You can override tenant by passing `tenant_id` in your workflow or event instance. Passing `tenant_id` in your workflow will:
-
-* Pick tenant properties for sending custom notification content or design for the tenant (by replacing tenant variables in the template).
-
-* Pick per-tenant preferences while executing the workflow.
-
-* Override vendor details for the tenant if set. This is especially useful for cases where you are sending notifications on behalf of your customers and they want the notifications to be sent with their email domain and tenant/brand handles or you have different customer applications for sending messages on chat applications (Slack and MS Teams).
-
-Below is a sample of how you can override tenant\_id in your workflow or event call
+## Workflow Trigger
 
 <CodeGroup>
-  ```python Sample Workflow (Python)
-  from suprsend import Event
-  from suprsend import WorkflowTriggerRequest
+  ```python Python
+  from suprsend import Suprsend, WorkflowTriggerRequest
 
   supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
 
-  # Prepare workflow payload
   w1 = WorkflowTriggerRequest(
     body={...},
-    tenant_id = "_tenant_id_",
-    idempotency_key = "_unique_identifier_of_the_request_"
+    tenant_id="_tenant_id_",
+    idempotency_key="_unique_identifier_"
   )
 
-  # Trigger workflow
   response = supr_client.workflows.trigger(w1)
   print(response)
   ```
 
-  ```python Sample Event (Python)
-  from suprsend import Event
+  ```javascript Node.js
+  const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
 
-  distinct_id = "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08" 
-  event_name = "product_purchased"   
-  properties = {...}
-  } 
+  const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
 
-  # Pass tenant_id in event instance
-  event = Event(distinct_id=distinct_id, event_name=event_name, properties=properties, tenant_id = "_tenant_id_")
+  const w1 = new WorkflowTriggerRequest(
+    {...},
+    {
+      tenant_id: "_tenant_id_",
+      idempotency_key: "_unique_identifier_"
+    }
+  );
 
-  # Track event
-  response = supr_client.track_event(event)
-  print(response)
+  const response = supr_client.workflows.trigger(w1);
+  response.then((res) => console.log("response", res));
+  ```
+
+  ```go Go
+  package main
+
+  import (
+    "log"
+    suprsend "github.com/suprsend/suprsend-go"
+  )
+
+  func main() {
+    suprClient, err := suprsend.NewClient("_workspace_key_", "_workspace_secret_")
+    if err != nil {
+      log.Fatalln(err)
+    }
+
+    w1 := &suprsend.WorkflowTriggerRequest{
+      Body: map[string]interface{}{...},
+      TenantId: "_tenant_id_",
+      IdempotencyKey: "_unique_identifier_",
+    }
+
+    resp, err := suprClient.Workflows.Trigger(w1)
+    if err != nil {
+      log.Fatalln(err)
+    }
+    log.Println(resp)
+  }
   ```
 </CodeGroup>
 
-***
+## Event Trigger
+
+<CodeGroup>
+  ```python Python
+  from suprsend import Event
+
+  event = Event(
+    distinct_id="0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+    event_name="product_purchased",
+    properties={...},
+    tenant_id="_tenant_id_"
+  )
+
+  response = supr_client.track_event(event)
+  print(response)
+  ```
+
+  ```javascript Node.js
+  const { Event } = require("@suprsend/node-sdk");
+
+  const event = new Event(
+    "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+    "product_purchased",
+    {...},
+    {tenant_id: "_tenant_id_"}
+  );
+
+  const response = supr_client.track_event(event);
+  response.then((res) => console.log("response", res));
+  ```
+
+  ```go Go
+  ev := &suprsend.Event{
+    EventName:  "product_purchased",
+    DistinctId: "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+    Properties: map[string]interface{}{...},
+    TenantId: "_tenant_id_",
+  }
+
+  _, err = suprClient.TrackEvent(ev)
+  if err != nil {
+    log.Fatalln(err)
+  }
+  ```
+</CodeGroup>
+
+## Next Steps
+
+* **[Tenant Templates](/docs/tenant-templates)** — Use tenant properties in templates
+* **[Tenant Management](/docs/tenant-management)** — Create and update tenants
+* **[Tenant Vendors](/docs/tenant-vendor)** — Configure tenant-specific vendor routing
+* **[Tenant Preferences](/docs/tenant-preference)** — Set tenant-level notification preferences
