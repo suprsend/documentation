@@ -3540,6 +3540,11 @@ paths:
           schema:
             type: string
           required: true
+        - name: locale
+          in: query
+          description: Locale code (e.g., es, fr, de, ja) to fetch translated category and section names and descriptions.
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -3652,6 +3657,7 @@ paths:
         - BearerAuth: []
       description: API to update tenant default preferences for a specific notification category.
       operationId: update-brand-default-preference
+      deprecated: true
       x-codeSamples:
         - lang: cURL
           label: Update Tenant Default Preference
@@ -3799,7 +3805,6 @@ paths:
                   message:
                     type: string
                     example: "tenant 'brand/tenant_id' not found"
-      deprecated: false
   /v1/subscriber_list/{list_id}/delete:
     patch:
       summary: Delete List
@@ -3972,10 +3977,11 @@ paths:
                   message:
                     type: string
                     example: "category 'category_slug' not found"    
-      deprecated: false
+      deprecated: true
   /v1/tenant/{tenant_id}/category/:
     get:
       summary: Get Tenant Default Preference
+      deprecated: true
       security:
         - BearerAuth: []
       description: API to get default tenant preference for all categories.
@@ -4110,6 +4116,617 @@ paths:
                   message:
                     type: string
                     example: "tenant 'brand/tenant_id' not found"
+  /v1/tenant/{tenant_id}/preference/:
+    get:
+      summary: Full Preference
+      security:
+        - BearerAuth: []
+      description: API to fetch tenant preferences across all channels and categories.
+      operationId: get-tenant-full-preference
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to get preferences for
+          schema:
+            type: string
+          required: true
+        - name: show_opt_out_channels
+          in: query
+          description: set this flag to `true` if you want to fetch channel list for opt-out categories.
+          schema:
+            type: boolean
+            default: true
+        - name: tags
+          in: query
+          description: >
+            Filter preference categories with tags assigned to them. Used to filter preference categories relevant to the user on UI based on their roles, department or teams.
+
+            You can apply single tag filter like `tags=tag1` or build nested conditions using logical operators - `and`, `or`, `not`, `exists`.
+
+
+            Example:
+
+            ```
+
+            tags=admin
+
+            tags={"or":[{"and":["admin","sales"]},{"and":["admin","manager"]}]}
+
+            tags={"not":"admin"}
+
+            tags={"exists":true}
+          schema:
+            type: string
+        - name: locale
+          in: query
+          description: Locale code (e.g., es, fr, de, ja) to fetch translated category and section names and descriptions.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "sections": [
+                      {
+                        "subcategories": [
+                          {
+                            "name": "Newsletter",
+                            "category": "newsletter",
+                            "description": "Send me updates on new product updates",
+                            "preference": "opt_in",
+                            "is_editable": true,
+                            "channels": [
+                              { "channel": "androidpush", "preference": "opt_in", "is_editable": true },
+                              { "channel": "email", "preference": "opt_in", "is_editable": true }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "channel_preferences": [
+                      { "channel": "email", "is_restricted": false }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        subcategories:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                example: "Newsletter"
+                              category:
+                                type: string
+                                example: "newsletter"
+                              description:
+                                type: string
+                                example: "Send me updates on new product updates"
+                              preference:
+                                type: string
+                                enum: ["opt_in", "opt_out"]
+                                example: "opt_in"
+                              is_editable:
+                                type: boolean
+                                description: "false when category default preference is set to can't unsubscribe"
+                              channels:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    channel:
+                                      type: string
+                                      example: "email"
+                                    preference:
+                                      type: string
+                                      enum: ["opt_in", "opt_out"]
+                                      example: "opt_in"
+                                    is_editable:
+                                      type: boolean
+                                      description: "false when category default preference is set to can't unsubscribe"
+                  channel_preferences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                          description: channel name
+                          example: "androidpush"
+                        is_restricted:
+                          type: boolean
+                          description: "True means notification will be sent in categories where this channel is marked as mandatory channel. False means opt_in on channel."
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found"
+      deprecated: false
+  /v1/tenant/{tenant_id}/preference/category/:
+    get:
+      summary: All Categories
+      security:
+        - BearerAuth: []
+      description: API to fetch tenant preferences across all categories.
+      operationId: get-tenant-preference-all-categories
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to get preferences for
+          schema:
+            type: string
+          required: true
+        - name: show_opt_out_channels
+          in: query
+          description: set this flag to `true` if you want to fetch channel list for opt-out categories.
+          schema:
+            type: boolean
+            default: true
+        - name: tags
+          in: query
+          description: >
+            Filter preference categories with tags assigned to them. Used to filter preference categories relevant to the user on UI based on their roles, department or teams.
+
+            You can apply single tag filter like `tags=tag1` or build nested conditions using logical operators - `and`, `or`, `not`, `exists`.
+
+
+            Example:
+
+            ```
+
+            tags=admin
+
+            tags={"or":[{"and":["admin","sales"]},{"and":["admin","manager"]}]}
+
+            tags={"not":"admin"}
+
+            tags={"exists":true}
+          schema:
+            type: string
+        - name: locale
+          in: query
+          description: Locale code (e.g., es, fr, de, ja) to fetch translated category and section names and descriptions.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "meta": {
+                      "count": 12,
+                      "limit": 10,
+                      "offset": 0
+                    },
+                    "results": [
+                      {
+                        "name": "Status Update Alert",
+                        "category": "status-update-alert",
+                        "description": "Send me updates when account status changes",
+                        "root_category": "transactional",
+                        "default_preference": "opt_in",
+                        "default_mandatory_channels": null,
+                        "default_opt_in_channels": null,
+                        "visible_to_subscriber": true,
+                        "preference": "opt_in",
+                        "mandatory_channels": null,
+                        "opt_in_channels": null,
+                        "blocked_channels": null
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: total number of categories
+                        example: 12
+                      limit:
+                        type: integer
+                        description: maximum number of categories returned per request
+                        example: 10
+                      offset:
+                        type: integer
+                        description: offset passed in request
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: preference category name
+                        category:
+                          type: string
+                          description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
+                        description:
+                          type: string
+                          description: description of the notification category
+                        root_category:
+                          type: string
+                          description: root category this sub-category belongs to
+                          example: "transactional"
+                        default_preference:
+                          type: string
+                          enum: ["cant_unsubscribe", "opt_in", "opt_out"]
+                          description: default preference of the category set while updating the category.
+                        default_mandatory_channels:
+                          type: array
+                          description: default mandatory channels set while updating the category in case default preference is can't unsubscribe
+                          items:
+                            type: string
+                        default_opt_in_channels:
+                          type: array
+                          nullable: true
+                          description: default opt-in channels set to have selective opt-in channels instead of all channels while updating the category.
+                          items:
+                            type: string
+                        visible_to_subscriber:
+                          type: boolean
+                          description: set it `false` to hide a category from user's preference page
+                        preference:
+                          type: string
+                          enum: ["opt_in", "opt_out"]
+                          description: preference setting overridden for this tenant.
+                        mandatory_channels:
+                          type: array
+                          nullable: true
+                          description: mandatory channels overridden for this tenant.
+                          items:
+                            type: string
+                        opt_in_channels:
+                          type: array
+                          nullable: true
+                          description: opt-in channels overridden for this tenant.
+                          items:
+                            type: string
+                        blocked_channels:
+                          type: array
+                          description: channels which are opted-out across all categories for this tenant.
+                          items:
+                            type: string
+                            enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found"
+      deprecated: false
+  /v1/tenant/{tenant_id}/preference/category/{category}/:
+    get:
+      summary: Single Category
+      security:
+        - BearerAuth: []
+      description: API to fetch tenant preferences for a given category.
+      operationId: get-tenant-preference-single-category
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to get preferences for
+          schema:
+            type: string
+          required: true
+        - name: category
+          in: path
+          description: notification category slug. You can get this from Notification Categories page on SuprSend dashboard -> Settings page
+          schema:
+            type: string
+          required: true
+        - name: show_opt_out_channels
+          in: query
+          description: set this flag to `true` if you want to fetch channel list for opt-out categories.
+          schema:
+            type: boolean
+            default: true
+        - name: locale
+          in: query
+          description: Locale code (e.g., es, fr, de, ja) to fetch translated category and section names and descriptions.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "name": "Newsletter",
+                    "category": "newsletter",
+                    "description": "Send me updates on new product updates",
+                    "original_preference": null,
+                    "preference": "opt_in",
+                    "is_editable": false,
+                    "channels": [
+                      {
+                        "channel": "email",
+                        "preference": "opt_in",
+                        "is_editable": false
+                      },
+                      {
+                        "channel": "ms_teams",
+                        "preference": "opt_in",
+                        "is_editable": false
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: name of the notification category
+                    example: Newsletter
+                  category:
+                    type: string
+                    description: category slug identifier
+                    example: newsletter
+                  description:
+                    type: string
+                    description: description of the notification category
+                    example: Send me updates on new product updates
+                  original_preference:
+                    type: string
+                    description: "default preference of the category"
+                    nullable: true
+                    example: null
+                  preference:
+                    type: string
+                    description: "updated tenant preference of the category"
+                    example: opt_in
+                  is_editable:
+                    type: boolean
+                    description: "false when category default preference is set to `can't unsubscribe`"
+                    example: false
+                  channels:
+                    type: array
+                    description: "channel level preference in the category"
+                    items:
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                          description: channel name
+                          example: email
+                        preference:
+                          type: string
+                          description: tenant preference for this channel (opt_in, opt_out)
+                          example: opt_in
+                        is_editable:
+                          type: boolean
+                          description: whether the tenant can edit this channel preference
+                          example: false
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "category 'category' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "category 'category' not found"
+      deprecated: false
+
+    patch:
+      summary: Category and Channel within Category
+      security:
+        - BearerAuth: []
+      description: API to update tenant default preferences for a specific notification category.
+      operationId: update-tenant-preference-category
+      x-codeSamples:
+        - lang: cURL
+          label: Update Tenant Category Preference
+          source: |
+            curl -X PATCH "https://hub.suprsend.com/v1/tenant/brand_id/preference/category/status-update-alert/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "preference": "opt_in",
+                "visible_to_subscriber": true
+              }'
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to update default preferences for
+          schema:
+            type: string
+          required: true
+        - name: category
+          in: path
+          description: notification category slug. You can get this from Notification Categories page on SuprSend dashboard -> Settings page
+          schema:
+            type: string
+          required: true
+        - name: locale
+          in: query
+          description: Locale code (e.g., es, fr, de, ja) to fetch translated category and section names and descriptions.
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preference:
+                  type: string
+                  description: set `**opt_in**` to turn on notifications on all or selected channels by default, `**opt_out**` to turn-off notifications by default, `**cant_unsubscribe**`if you do not want users to completely opt-out from this category.
+                  enum: [opt_in, opt_out, cant_unsubscribe]
+                visible_to_subscriber:
+                  type: boolean
+                  description: set it `false` to hide a category from user's preference page
+                mandatory_channels:
+                  type: array
+                  description: Add mandatory channels that the user can't unsubscribe from if preference is `cant_unsubscribe`.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+                opt_in_channels:
+                  type: array
+                  nullable: true
+                  description: Add channels that should be opted-in by default when preference is either `On` or `Can't Unsubscribe`. Set to null or do not pass this parameter to set all channels as opted-in. In case of `Can't Unsubscribe`, mandatory channels are opted-in by default.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+                blocked_channels:
+                  type: array
+                  nullable: true
+                  description: Pass channels which are not applicable for the tenant. This setting will apply to all categories and user will not be able to opt-in to these channels for the tenant.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+      responses:
+        '202':
+          description: '202'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "name": "Status Update Alert",
+                    "category": "status-update-alert",
+                    "description": "Send me updates when account status changes",
+                    "root_category": "transactional",
+                    "default_preference": "opt_in",
+                    "default_mandatory_channels": null,
+                    "default_opt_in_channels": ['email', 'sms'],
+                    "visible_to_subscriber": true,
+                    "preference": "opt_in",
+                    "mandatory_channels": null,
+                    "opt_in_channels": null,
+                    "blocked_channels": null
+                  }
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: preference category name
+                  category:
+                    type: string
+                    description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
+                  description:
+                    type: string
+                    description: description of the notification category
+                  root_category:
+                    type: string
+                    description: root category this sub-category belongs to
+                    example: "transactional"
+                  default_preference:
+                    type: string
+                    enum: ["cant_unsubscribe", "opt_in", "opt_out"]
+                    description: default preference of the category set while updating the category.
+                  default_mandatory_channels:
+                    type: array
+                    description: default mandatory channels set while updating the category in case default preference is can't unsubscribe
+                    items:
+                      type: string
+                  default_opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: default opt-in channels set to have selective opt-in channels instead of all channels while updating the category.
+                    items:
+                      type: string
+                  visible_to_subscriber:
+                    type: boolean
+                    description: set it `false` to hide a category from user's preference page
+                  preference:
+                    type: string
+                    enum: ["opt_in", "opt_out"]
+                    description: preference setting overridden for this tenant.
+                  mandatory_channels:
+                    type: array
+                    nullable: true
+                    description: mandatory channels overridden for this tenant.
+                    items:
+                      type: string
+                  opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: opt-in channels overridden for this tenant.
+                    items:
+                      type: string
+                  blocked_channels:
+                    type: array
+                    description: channels which are opted-out across all categories for this tenant.
+                    items:
+                      type: string
+                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found"
       deprecated: false
   /v1/subscriber_list/{list_id}/version/{version_id}/subscriber/add:
     post:
@@ -7155,6 +7772,11 @@ paths:
           schema:
             type: string
           required: true
+        - name: locale
+          in: query
+          description: Locale code (e.g., es, fr, de, ja) to fetch translated category and section names and descriptions.
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
