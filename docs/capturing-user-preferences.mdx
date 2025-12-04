@@ -1,0 +1,99 @@
+---
+title: "Capturing User Preferences"
+description: "Guide to implementing preference centers and capturing user preference choices."
+---
+
+This guide covers how to capture user preference choices in your application. For an overview of how preferences work, see [User Preferences](/docs/user-preferences).
+
+## Hosted preference page
+
+Once you publish preference categories, SuprSend automatically generates a dedicated webpage for collecting user preferences. Users can set channel-specific preferences from the hosted page. If the link is included in an email, the hosted page focuses on email-relevant categories by default, and the user's selections apply only to email preferences. Include it in your templates using `{{$hosted_preference_url}}`.
+
+![](/images/docs/e46d21ae0de53196f50ba38f00ab208eb961ab96d2dbbf55b585a8dbbfa4ea27-hosted_page.svg)
+
+> This page is currently hosted on a SuprSend domain, but you can reach out if you'd prefer it hosted on your own domain.
+
+## Embed in your product
+
+You can embed the preference interface directly inside your product using SuprSend's ready-made UI components. SDKs exist in the languages below. Update your product preference page link on the tenant page and render it in templates using `{{$embedded_preference_url}}`.
+
+<CardGroup cols="3">
+  <Card title="Javascript" icon="js" iconType="solid" href="/docs/js-preferences">
+
+  </Card>
+  <Card title="React" icon="react" iconType="solid" href="/docs/preference-react-sdk">
+
+  </Card>
+  <Card title="Angular" icon="angular" iconType="solid" href="/docs/preferences-angular">
+
+  </Card>
+</CardGroup>
+
+![](/images/docs/a2ec79a301149f157c50fcd94378fbe448d2b789d68da8cb4a1b97dccfd15680-image.png)
+
+## Channel-specific unsubscription options
+
+In addition to the preference center within SuprSend, communication channels provide their own opt-out options, which SuprSend manages internally.
+
+<AccordionGroup>
+  <Accordion title="Email: Unsubscribe URL header" icon="envelope-dot" iconType="solid">
+    Gmail requires an unsubscribe URL in email headers when sending bulk emails (5,000+ emails/day). Most email providers expect you to add your own unsubscription page or offer a basic all-or-nothing opt-out option. You can add `{{$hosted_preference_url}}` here to load the SuprSend hosted preference page from the email header.
+
+    ![](/images/docs/96222900be2910eeaae1edfb7bd8e532ef2b090d828616ac87409085cb1bd89a-image.png)
+  </Accordion>
+  <Accordion title="Inbox (In-App): Render preference page inside your Inbox" icon="inbox-full" iconType="solid">
+    Companies also give users the option to load preference settings inside their in-app Inbox or provide a link to redirect users to the Preference center in their product.
+  </Accordion>
+  <Accordion title="Mobile Push: Preference Page in App settings" icon="mobile-screen" iconType="solid">
+    For mobile push notifications, users typically manage their preferences through the app settings. The category you assign in your workflow is also sent as the push "category" (used by Android/iOS to group notifications). If you set preference categories, the system automatically reflects them in the user's app settings, loading similar preference controls.
+
+    ![](/images/docs/0a8782302c5613a1a952b362912789007197bf449b8c5888e9857470840a1865-image.png)
+  </Accordion>
+  <Accordion title="SMS & Whatsapp: Reply `STOP`" icon="comments" iconType="solid">
+    Users generally unsubscribe from Short Message Service (SMS) by replying "STOP." SuprSend automatically marks the SMS channel as inactive in the user's profile when it receives a STOP reply. For WhatsApp, opt-out behavior depends on the provider; where supported, users can reply STOP and SuprSend will mark the channel inactive.
+  </Accordion>
+</AccordionGroup>
+
+## Controlling what categories to show on UI
+
+It's always a good practice to show only the categories that are relevant to the user. There are two ways to achieve this:
+
+1. **Hide categories for tenant users**: Use `visible_to_subscriber: false` in [tenant preferences](/reference/update-tenant-default-preference) to hide categories from tenant users. See [Tenant Preferences](/docs/tenant-preference#controlling-preference-ui-for-users) for details.
+
+2. **Filter categories with tags**: Use tags to show categories based on user roles, departments, or teams. These tags can then be used to filter categories in the preference center.
+
+<Steps>
+<Step title="Setting Preference tags">
+Tags can be added to sections and sub-categories directly from **Developers → Notification Categories** in the SuprSend Console. When a tag is assigned at the section level, it automatically applies to all categories under that section—so filtering by a section tag also filters its child categories.
+![Tags Within Preference Categories](/images/preference-tag-changelog.png)
+
+</Step>
+
+<Step title="Filter Categories with Tags">
+You can filter categories using the tags query parameter in the API. This can be a simple tag match (e.g. `tags=tag1`) or a more advanced filter using logical operators.
+
+**Supported operators:**
+
+| Operator | Operand Datatype | Description                                                | Example                               |
+| -------- | ---------------- | ---------------------------------------------------------- | ------------------------------------- |
+| `exists` | boolean          | Returns categories where any tag is set                    | `tags={ "exists": true }`             |
+| `not`    | string           | Excludes categories that have the specified tag            | `tags={ "not": "admin" }`             |
+| `or`     | array            | Returns categories that match **any** of the provided tags | `tags={ "or": ["sales", "marketing"] }` |
+| `and`    | array            | Returns categories that match **all** provided tags        | `tags={ "and": ["sales", "manager"] }`  |
+
+You can combine these operators for nested filtering like `tags={ "or": [{ "and": ["sales", "manager"] }, { "and": ["marketing", "associate"] }] }`.
+
+If no tags are provided, the preference center returns all visible categories.
+
+</Step>
+</Steps>
+
+For details on how tags work, see [Tags](/docs/notification-category#tags).
+
+---
+
+## Related documentation
+
+- [User Preferences](/docs/user-preferences) - Preference structure & evaluation
+- [Notification Categories](/docs/notification-category) - Setting up categories & defaults
+- [Manage Categories](/docs/managing-notification-categories) - Complete guide to setting up and managing categories
