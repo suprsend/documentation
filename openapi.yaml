@@ -6064,6 +6064,239 @@ paths:
                     type: string
                     example: "user [distinct_id: 'user1'] not found"
       deprecated: false
+    patch:
+      summary: Update User Full Preference
+      security:
+        - BearerAuth: []
+      description: API to update user preferences across all channels and categories with translated names and descriptions in the response.
+      operationId: update-user-full-preference
+      parameters:
+        - name: distinct_id
+          in: path
+          description: distinct_id of the user whose preferences should be updated
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: query
+          description: to update user preferences for a particular tenant
+          schema:
+            type: string
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch translated category and section names and descriptions. 
+            When provided, the API returns category and section names and descriptions in the specified language if translations are available. 
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                distinct_ids:
+                  type: array
+                  description: distinct_id of users whose preference need to be updated
+                  items:
+                    type: string
+                channel_preferences:
+                  type: array
+                  description: Use this to update channel level user preferences. Set `is_restricted - true` if the channel is opted_out by the user. This will only send critical notifications to the user which can't be opted out
+                  items:
+                    type: object
+                    properties:
+                      channel:
+                        type: string
+                        description: Add channel as `email`, `inbox`, `sms`, `whatsapp`, `androidpush`, `slack`, `iospush`, `webpush`
+                      is_restricted:
+                        type: boolean
+                        description: set `is_restricted = true` if user wants to receive notification in mandatory categories on this channel. Mandatory categories are `can't unsubscribe` categories and the above channel is added as `mandatory channel` in that category
+                categories:
+                  type: array
+                  description: Use this to update user preference across categories and channels inside a category.
+                  items:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                        description: notification category slug
+                      preference:
+                        type: string
+                        enum: ["opt_in", "opt_out"]
+                        description: set `opt_in` to turn on notifications on all or selected channels, `opt_out` to turn-off notifications
+                      opt_out_channels:
+                        type: array
+                        description: List of channels to opt-out from this category. Only applicable when preference is `opt_in`
+                        items:
+                          type: string
+                      opt_in_channels:
+                        type: array
+                        description: List of channels to opt-in for this category. Only applicable when preference is `opt_in`
+                        items:
+                          type: string
+            examples:
+              Update Preferences:
+                value: {
+                  "distinct_ids": ["id1", "id2"],
+                  "channel_preferences": [
+                    {
+                      "channel": "email",
+                      "is_restricted": false
+                    }
+                  ],
+                  "categories": [
+                    {
+                      "category": "_category_slug_",
+                      "preference": "opt_in",
+                      "opt_out_channels": [],
+                      "opt_in_channels": []
+                    }
+                  ]
+                }
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "sections": [
+                      {
+                        "name": null,
+                        "slug": null,
+                        "subcategories": [
+                          {
+                            "name": "Promotion de remboursement",
+                            "category": "refund-promotion",
+                            "description": "mises à jour",
+                            "original_preference": null,
+                            "preference": "opt_in",
+                            "is_editable": false,
+                            "channels": [
+                              {
+                                "channel": "email",
+                                "preference": "opt_in",
+                                "is_editable": false
+                              },
+                              {
+                                "channel": "inbox",
+                                "preference": "opt_in",
+                                "is_editable": false
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "channel_preferences": [
+                      {
+                        "channel": "email",
+                        "is_restricted": false
+                      },
+                      {
+                        "channel": "inbox",
+                        "is_restricted": false
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                        slug:
+                          type: string
+                          nullable: true
+                        description:
+                          type: string
+                          nullable: true
+                        tags:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        subcategories:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              category:
+                                type: string
+                              description:
+                                type: string
+                                nullable: true
+                              tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              effective_tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              original_preference:
+                                type: string
+                                nullable: true
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              preference:
+                                type: string
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              is_editable:
+                                type: boolean
+                              channels:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    channel:
+                                      type: string
+                                    preference:
+                                      type: string
+                                      enum: ["opt_in", "opt_out"]
+                                    is_editable:
+                                      type: boolean
+                  channel_preferences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                        is_restricted:
+                          type: boolean
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "user [distinct_id: 'user1'] not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "user [distinct_id: 'user1'] not found"
+      deprecated: false
   /v1/subscriber_list/{list_id}/subscriber/:
     get:
       summary: Get list subscribers
@@ -7959,6 +8192,199 @@ paths:
                         is_restricted:
                           type: boolean
                           description: "True means notification will be sent in categories where this channel is marked as mandatory channel. False means opt_in on channel."
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "object 'object_type/id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "object 'object_type/id' not found"
+      deprecated: false
+    patch:
+      summary: Update Object Full Preference
+      security:
+        - BearerAuth: []
+      description: API to update object preferences across all channels and categories with translated names and descriptions in the response.
+      operationId: update-object-full-preference
+      parameters:
+        - name: object_type
+          in: path
+          description: Used to group similar objects together. Give plural namespace like teams, organizations, and roles.
+          schema:
+            type: string
+          required: true
+        - name: id
+          in: path
+          description: Unique identifier of the object in your system
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: query
+          description: to update object preferences for a particular tenant
+          schema:
+            type: string
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch translated category and section names and descriptions. 
+            When provided, the API returns category and section names and descriptions in the specified language if translations are available. 
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_preferences:
+                  type: array
+                  description: Use this to update channel level object preferences. Set `is_restricted - true` if the channel is opted_out. This will only send critical notifications which can't be opted out
+                  items:
+                    type: object
+                    properties:
+                      channel:
+                        type: string
+                        description: Add channel as `email`, `inbox`, `sms`, `whatsapp`, `androidpush`, `slack`, `iospush`, `webpush`
+                      is_restricted:
+                        type: boolean
+                        description: set `is_restricted = true` if object wants to receive notification in mandatory categories on this channel. Mandatory categories are `can't unsubscribe` categories and the above channel is added as `mandatory channel` in that category
+            examples:
+              Update Preferences:
+                value: {
+                  "channel_preferences": [
+                    {
+                      "channel": "email",
+                      "is_restricted": false
+                    }
+                  ]
+                }
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "sections": [
+                      {
+                        "name": null,
+                        "slug": null,
+                        "subcategories": [
+                          {
+                            "name": "Promotion de remboursement",
+                            "category": "refund-promotion",
+                            "description": "mises à jour",
+                            "original_preference": null,
+                            "preference": "opt_in",
+                            "is_editable": false,
+                            "channels": [
+                              {
+                                "channel": "inbox",
+                                "preference": "opt_in",
+                                "is_editable": false
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "channel_preferences": [
+                      {
+                        "channel": "inbox",
+                        "is_restricted": false
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                        slug:
+                          type: string
+                          nullable: true
+                        description:
+                          type: string
+                          nullable: true
+                        tags:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        subcategories:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              category:
+                                type: string
+                              description:
+                                type: string
+                                nullable: true
+                              tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              effective_tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              original_preference:
+                                type: string
+                                nullable: true
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              preference:
+                                type: string
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              is_editable:
+                                type: boolean
+                              channels:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    channel:
+                                      type: string
+                                    preference:
+                                      type: string
+                                      enum: ["opt_in", "opt_out"]
+                                    is_editable:
+                                      type: boolean
+                  channel_preferences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                        is_restricted:
+                          type: boolean
         '404':
           description: '404'
           content:
