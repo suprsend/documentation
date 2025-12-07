@@ -1,25 +1,31 @@
 ---
 title: "Overview"
-description: "Learn what notification categories are, how they work, and why they matter for organizing notifications and user preferences."
+description: "Overview of Notification Categories: How they drive preferences, vendor selection, and latency rules in workflow execution"
 ---
 
-Notification categories define the classification your workflow belongs to. Each workflow is assigned to a **sub-category**, which determines how users can control it and what rules apply.
+Notification categories define the classification your workflow belongs to. Each workflow can be either to a **root-category** (system, transactional, or promotional) or a **sub-category**. User Preference rules are applied at the sub-category level.
 
 Categories serve three main purposes:
 
 <AccordionGroup>
-  <Accordion title="Defining notification latency">
+  <Accordion title="Maintaining separate vendor config for marketing vs product notifications">
+    For Email and SMS channels, **vendor is configured at root-category level**. This is done to solve for the following use cases:
+    - Many companies separate promotional and transactional traffic to ensure that opt-outs from promotional messages do not impact critical system notifications. 
+    - SMS vendors may also expose different APIs for system messages (e.g., OTPs) versus marketing messages.
+
+    <Note>
+      For Email and SMS, ensure a vendor is configured for the category used in the workflow; otherwise, delivery will fail.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Picking the right notification queue">
     We maintain separate notification queues for different notification categories to ensure that marketing and promotional notifications don't delay system or time-sensitive notifications.
   </Accordion>
 
   <Accordion title="Setting category-level preferences per-user and tenant">
     You can create sub-categories for different types of notifications and give your users and tenants the option to set their notification preferences at the category level.
 
-    See more in the [dedicated section below](/docs/notification-category#setting-category-level-preferences-per-user-and-tenant).
-  </Accordion>
-
-  <Accordion title="Setting category-level rules or limits">
-    You can set rules that apply to all notifications in a category. For example, you can set a rule that all notifications in the promotional category should only be sent between 10 AM - 5 PM, or set a limit that the max notifications in the category should not exceed 100k per day.
+    See how to set it up in the next [document](/docs/managing-notification-categories).
   </Accordion>
 </AccordionGroup>
 
@@ -29,180 +35,144 @@ Categories serve three main purposes:
 
 Notification categories use a functional hierarchy:
 
-**Top-level category** → **Sub-category**
+**Root-category** → **Section** → **Sub-category**
 
-Sections are optional UI groupings inside a top-level category and are used to organize sub-categories.
+| Concept | Description |
+  |-------|---------------------|
+  | **Root-category** | Choose one of three: **System**, **Transactional**, or **Promotional**. This determines which notification queue or vendor to pick for the workflow. Preferences are not applied at the root-category level. You can't create new ones. |
+  | **Sub-category** | Sub-categories are created inside a root-category to manage user preferences. When sub-category is assigned to the workflow, user preferences are evaluated before sending the notification. Sub-categories are what users see on preference / unsubscription page and can opt in/out of. |
+  | **Section** | Sections are optional UI groupings used to organize sub-categories on the preference page. |
 
-| Level | What you need to know | Example |
-|-------|---------------------|---------|
-| **Top-level category** | Choose one of three: **System**, **Transactional**, or **Promotional**. This determines how fast notifications are sent and what rules apply. You can't create new ones. | Promotional |
-| **Sub-category** | The actual notification type you assign to workflows. This is what users see and can opt in/out of. | Newsletter |
+  **Example structure:**
 
-**Example structure:**
+  ```
+  Promotional (root category)
+ └── Marketing (section)
+  ├── Newsletters (sub-category) ← Use sub-category slug in workflows to apply user preferences
+  └── Product Announcements (sub-category)
+  ```
+  <Note>
+  When users visit their preference page, they see sub-categories organized under sections. Root-categories control delivery behind the scenes but aren't shown to users.
+  </Note>
 
+  ---
+
+  ## Root-categories
+
+  SuprSend has three root-categories — **System**, **Transactional**, and **Promotional** — which define latency and queueing behavior. Sub-categories are always created inside one of these three.
+
+  **How it works:**
+  - Notification queues and vendors are inherited from the root-category at sub-category level
+  - User or tenant preferences are applied at the sub-category level
+  - Root-categories are not shown to users—only sub-categories appear on preference pages
+
+  ### System
+
+  Essential notifications that users can't unsubscribe from.
+
+  **Common examples:** OTP, Forgot Password, Incident reports
+
+  ### Transactional
+
+  Notifications sent in response to user actions or transactions.
+
+  **Common examples:** Payment confirmation or reminders, Booking confirmation, Post shared/liked, Balance alerts, Account updates
+
+  ### Promotional
+
+  Notifications sent to promote products or re-engage users to your platform.
+
+  **Common examples:** Newsletters, Announcements, Product updates, Sales/events, Deals and discounts, Price drop alerts
+
+  <Note>
+  Promotional notifications are sent in bulk and consume significant pipeline resources. To ensure that marketing notifications doesn't impact the latency of product alerts, always use the promotional category for bulk messages and broadcasts.
+  </Note>
+
+  ---
+
+  ## Sections and Sub-Categories
+
+  ### Sub-categories
+  Sub-categories are where notification preferences are applied. This is what appears on the preference page and what users can opt in/out of. **Assign category slug to the workflow**. You'll get the slug by clicking on the sub-category on [Preference page](https://app.suprsend.com/en/staging/developers/preference-categories).
+
+  ![](/images/category-slug-copy.png)
+  ### Sections
+  Sections are used to organize related sub-categories on the preference page. Think of them as folders that help users find notifications more easily.
+  They are just used for visual grouping and are not used to apply preferences.
+
+  **Example:** `Quotes` is a section containing the `Quote Approval` and `Forecast` sub-categories:
+
+  ![](/images/docs/80cbf50-image.png)
+
+  ---
+
+  ## Default preferences
+
+  Default preferences determine how users receive notifications when they haven't set their own preferences. Configure these at the sub-category level when setting up categories.
+
+  **Preference modes:**
+  - **On**: Users receive notifications by default
+  - **Off**: Users must opt in to receive notifications
+  - **Can't Unsubscribe**: Users cannot fully opt out (required notifications)
+
+  When using **Can't Unsubscribe**, channel-level opt-in/out still applies unless channels are marked mandatory.
+
+  For detailed information on configuring default preferences, preference modes, and recommended defaults, see [Default Preferences](/docs/user-preferences#default-preferences).
+
+  ---
+
+  ## Setting per-user and tenant preferences 
+
+  Users and tenants can set their notification preferences at the sub-category level. Users can opt in or out of specific sub-categories, channels or channels within a category, and tenants can set default preferences that apply to all their users.
+  ```scss
+  Default Preference (Sub-category)
+        ↓ (tenant override)
+Tenant Preference (Applies to all users of the tenant)
+        ↓ (user override)
+User Preference (Final preference)
 ```
-Promotional (top-level)
-  └── Marketing (section)
-      ├── Newsletter (sub-category) ← Use this in workflows, set preferences here
-      └── Product Updates (sub-category) ← Use this in workflows, set preferences here
-  └── Sales (section)
-      ├── Deals (sub-category) ← Use this in workflows, set preferences here
-      └── Price Drops (sub-category) ← Use this in workflows, set preferences here
-```
+  **Override Rules:**
+  - **Tenants** can override the default sub-category preference for their entire user base at the tenant level.
+  - **Users** can override the tenant-level preference for themselves at the user level.
+  - **Once a tenant or user overrides a sub-category preference, changes to the default preference in that sub-category no longer affect them.**
 
-<Note>
-  **Workflows always reference sub-category slugs.** You cannot assign a workflow directly to System/Transactional/Promotional.
-</Note>
+  For details, see [User Preferences](/docs/user-preferences) and [Tenant Preferences](/docs/tenant-preference).
 
-When users visit their preference page, they see sub-categories (Newsletter, Product Updates, Deals, Price Drops) organized under sections. Top-level categories control delivery behind the scenes but aren't shown to users.
+  ---
 
----
+  ## Tags
 
-## Top-level categories
+  Tags are used to filter categories on the preference page. **Common usecases** are to filter categories based on user role or department. Tags added at the section level are inherited by all sub-categories inside that section.
 
-SuprSend has three top-level categories — **System**, **Transactional**, and **Promotional** — which define latency and queueing behavior. Sub-categories are always created inside one of these three.
+  ![Tags Within Preference Categories](/images/preference-tag-changelog.png)
 
-**How it works:**
-- Notification rules and latency priority are inherited from the top-level category
-- Preference settings are defined at each sub-category level
-- Top-level categories are not shown to users—only sub-categories appear on preference pages
+  You can filter categories using the tags query parameter in the [get user preference API](/reference/get-user-full-preference).
 
-<Warning>
-  **Preferences only work with sub-categories:** User preferences apply to sub-categories you create (e.g., "Newsletter", "Product Updates"), not top-level categories (System, Transactional, Promotional). Use sub-category slugs in workflows for preferences to work.
-</Warning>
+  <Note>
+    Tags do not impact delivery logic or preference rules — they are only used for filtering and organizing the UI. Even if a category is hidden from the user on the preference page due to tag filters, the user can still opt in/out via API, and notifications will still be sent if the default preference is set to opt-in.
+  </Note>
 
-### System
+  ---
 
-Essential notifications that users can't unsubscribe from. **Highest priority** in notification queues.
+  ## Category translations
 
-**Why it exists:** Ensures critical messages are always delivered immediately, regardless of user preferences.
+  <Note>
+    This feature is only available for Enterprise plan customers or the ones who have enabled translation feature in their account.
+  </Note>
 
-**Common examples:** OTP, Forgot Password, Verification emails, Account security alerts
+  Translate categories and sections into **users' locale** by uploading `.json` translations for each locale. Translations go live immediately after upload—no commit or publish required.
 
-### Transactional
+  **How it works:**
+  - English (`en`) is always available as the base language and is auto-generated from the category names and descriptions you define.
+  - You can download **en.json** file, translate it into your desired locale and upload it back.
+  - While loading preference page, **pass the locale parameter to the API or preference SDK** and the translations will be loaded for that locale.
+  - If a translation is missing for a specific locale or key in the passed locale, the system automatically falls back to first regional locale, and then to English. <br />**Example:** User's locale is set to `locale=es-AR` and translation is missing for one of the categories in `es-AR.json`, it will look for translation of that category first in `es.json`, then falls back to `en.json` if needed.
 
-Notifications sent in response to user actions or transactions. **Second priority** in notification queues.
+  
 
-**Why it exists:** User-initiated actions require confirmation and updates.
+  ---
 
-**Common examples:** Delivery updates, Payment confirmation, Booking confirmation, Post shared/liked, Balance alerts, Account updates, Reminders
+  ## Related documentation
 
-### Promotional
-
-Notifications sent to promote products or bring users back to your platform. **Lowest priority** in notification queues.
-
-**Why it exists:** Marketing messages shouldn't impact delivery of critical notifications.
-
-**Common examples:** Newsletters, Announcements, Product updates, Sales/events, Deals and discounts, Price drop alerts
-
-<Note>
-Promotional notifications are sent in bulk and consume significant pipeline resources, which is why they have the lowest priority. Always use the promotional category for bulk messages and broadcasts to avoid impacting system and transactional notification latency.
-</Note>
-
----
-
-## Sections and Sub-Categories
-
-<Tabs>
-  <Tab title="Section">
-    Sections are optional groups that organize related sub-categories on the preference page. Think of them as folders that help users find notifications more easily.
-
-    **What sections do:**
-    - Group related sub-categories together (e.g., "Billing" section with "Invoice Ready" and "Payment Reminder" sub-categories)
-    - Make the preference page easier to navigate
-    - Don't affect delivery, latency, or rules
-
-    Sections are purely for UI organization and don't impact how notifications are sent.
-  </Tab>
-
-  <Tab title="Sub-category">
-    Sub-categories are the actual notification types that users can control. This is what you assign to workflows and what appears on the preference page.
-
-    **What sub-categories do:**
-    - Define specific notification types (e.g., "Newsletter", "Invoice Ready", "OTP")
-    - Are assigned to workflows using their slug (e.g., `newsletter`, `invoice-ready`)
-    - Names and descriptions are rendered on the preference UI to help users understand what notifications they'll receive
-  </Tab>
-</Tabs>
-
-**Example:** `Quotes` is a section containing the `Quote Approval` and `Forecast` sub-categories:
-
-![](/images/docs/80cbf50-image.png)
-
----
-
-## Default preferences
-
-Default preferences determine how users receive notifications when they haven't set their own preferences. Configure these at the sub-category level when setting up categories.
-
-**Preference modes:**
-- **On**: Users receive notifications by default
-- **Off**: Users must opt in to receive notifications
-- **Can't Unsubscribe**: Users cannot fully opt out (required notifications)
-
-When using **Can't Unsubscribe**, channel-level opt-in/out still applies unless channels are marked mandatory.
-
-For detailed information on configuring default preferences, preference modes, and recommended defaults, see [Default Preferences](/docs/user-preferences#default-preferences).
-
----
-
-## Setting category-level preferences per-user and tenant
-
-You can create sub-categories for different types of notifications and give your users and tenants the option to set their notification preferences at the category level. Users can opt in or out of specific categories, and tenants can set default preferences that apply to all their users.
-
-For details, see [User Preferences](/docs/user-preferences) and [Tenant Preferences](/docs/tenant-preference).
-
----
-
-## Tags
-
-Tags are used to filter categories on the preference page. Tags added at the section level are inherited by all sub-categories inside that section.
-
-![Tags Within Preference Categories](/images/preference-tag-changelog.png)
-
-You can filter categories using the tags query parameter in the [get user preference API](/reference/get-user-full-preference).
-
-<Note>
-  Tags do not affect delivery or rules — they only help with filtering and UI organization.
-</Note>
-
----
-
-## Category translations
-
-<Note>
-  This feature is only available for Enterprise plan customers.
-</Note>
-
-Translate category and section names and descriptions to display preference centers in users' preferred languages. This is essential for applications serving users across multiple countries and languages.
-
-**Why it exists:** Users are more likely to engage with preference centers when content is in their native language. Category translations ensure your preference UI is accessible and understandable for international users.
-
-**What gets translated:**
-- Category names and descriptions
-- Section names and descriptions
-- All preference-related text visible to users on preference pages
-
-When users access preference centers or fetch preferences via API with a `locale` parameter, they see content in their preferred language.
-
-**How it works:**
-
-English (`en`) is always available as the base language and is auto-generated from the category names and descriptions you define. It cannot be overridden.
-
-If a translation is missing for a specific locale, the system automatically falls back in this order:
-1. `locale-region` (e.g., `es-AR`)
-2. `locale` (e.g., `es`)
-3. `en` (English - always available)
-
-**Example:** If a user requests preferences with `locale=es-AR` and a translation is missing, the system tries `es`, then falls back to `en` if needed.
-
-Translations go live immediately after upload—no commit or publish required.
-
-For step-by-step instructions on uploading and managing translations, see [Managing category translations](/docs/managing-notification-categories#managing-category-translations).
-
----
-
-## Related documentation
-
-- [Manage Categories and Preferences](/docs/managing-notification-categories) - Complete guide to setting up and managing categories and preferences
-- [User Preferences](/docs/user-preferences) - Overview of how preferences work
+  - [Manage Categories and Preferences](/docs/managing-notification-categories) - Complete guide to setting up and managing categories and preferences
+  - [User Preferences](/docs/user-preferences) - Overview of how preferences work
