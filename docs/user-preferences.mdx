@@ -1,6 +1,6 @@
 ---
 title: "User Preferences"
-description: "Learn how user preferences work in SuprSend and how to capture and evaluate them."
+description: "Learn how user preferences work in SuprSend and how to capture them."
 ---
 
 <Note>
@@ -25,25 +25,30 @@ In SuprSend, you can use [ready-made UI](/docs/user-preferences#controlling-what
 ## What are user preferences?
 
 <Warning>
-  **Preferences only work with sub-categories:** User preferences apply to sub-categories you create (e.g., "Marketing", "Newsletter"), not top-level categories (System, Transactional, Promotional). Use sub-category slugs in workflows for preferences to work.
+  **Preferences only work with sub-categories:** User preferences apply to sub-categories you create, not root-categories (System, Transactional, Promotional). Use sub-category slugs in workflows for preferences to work.
 </Warning>
 
-Each user has a preference set that controls which notifications they receive. Preferences are evaluated in this order: global channel opt-outs → category preferences → category-specific channel opt-outs.
-
-A preference set has three levels:
+Each user has a preference set that controls which notifications they receive.
+A preference set has three levels of control:
 
 1. **`channel_preferences`** — Global channel opt-outs (e.g., opt out of all email)
-2. **`categories`** — Category-level preferences (opt in/out of specific notification types)
-3. **`opt_out_channels`** — Channel opt-outs within specific categories
+2. **`categories`** — Category-level preferences (opt in/out of all channels of a notification type)
+3. **`opt_out_channels`** — Opt-in/out of specific channels within a category
 
 **Example:**
 ```json
 {
   "channel_preferences": [
-    { "channel": "email", "is_restricted": true }
+    { 
+        "channel": "email", 
+        "is_restricted": true 
+    }
   ],
   "categories": [
-    { "category": "invoice-ready", "preference": "opt_out" },
+    { 
+      "category": "invoice-ready", 
+      "preference": "opt_out" 
+    },
     {
       "category": "payment-reminder",
       "preference": "opt_in",
@@ -53,28 +58,30 @@ A preference set has three levels:
 }
 ```
 
-In this example: user opted out of email globally, opted out of `invoice-ready` category, and opted in to `payment-reminder` but without Slack.
+In this example: user opted out of email globally, opted out of `invoice-ready` category completely, and stays opted in to `payment-reminder` but without Slack.
 
 ---
 
 ## How preferences are determined
 
-When a user hasn't set their own preferences, SuprSend uses defaults in this order:
+When a user hasn't set their own preferences in a category, SuprSend uses defaults in this order:
 
 1. **User Preference** — Individual user's explicit choices (highest priority)
-2. **Tenant Default Preference** — Default preferences set at the tenant level
+2. **Tenant Default Preference** — Default preferences set by tenant for the category
 3. **Category Default Preference** — Default preferences set at the category level (lowest priority)
 
 <Note>
   <strong>Preference precedence:</strong> User Preference → Tenant Default Preference → Category Default Preference
 </Note>
 
+<Note>
+**Preference precedence is determined at category level**. So, if a user overrides preference for a category but doesn't touch other categories, defaults continue to apply to the untouched categories.
+</Note>
 ---
 
 ## Setting up preference categories
 
-Before users can set their preferences, you must first create and configure preference categories. These categories determine what users can control.
-
+Before users can set their preferences, you must first create and configure preference categories.
 For step-by-step setup instructions, see [Manage Categories and Preferences](/docs/managing-notification-categories).
 
 ---
@@ -86,12 +93,11 @@ Default preferences determine how users receive notifications when they haven't 
 ### What default preferences control
 
 Default preferences control:
-- **Channel defaults**: Which channels are enabled by default (email, push, SMS, etc.)
-- **Mandatory channels**: Which channels users cannot opt out of
-- **Auto-enable channels**: Channels that turn on automatically when a mandatory channel is enabled
+- **Channel or Category defaults**: Which categories or channels will be turned on/off by default on users' preference page.
+- **Mandatory channels**: Which channel or category users cannot opt out of (shown as disabled on preference page)
 - **Visibility**: Whether a category appears on the preference page
 
-### Preference modes
+### Preference types
 
 <AccordionGroup>
   <Accordion title="On — Users receive this category's notifications by default">
@@ -101,11 +107,11 @@ Default preferences control:
     - **Selected Channels only**: Only specific channels you select are enabled by default (e.g., Email, Android Push, iOS Push, In-App Inbox, MS Teams, Slack)
   </Accordion>
 
-  <Accordion title="Off — Users must opt in">
+  <Accordion title="Off — Users must opt in to get notifications">
     Users will not receive notifications unless they change the preference.
   </Accordion>
 
-  <Accordion title="Can't Unsubscribe — Required notifications">
+  <Accordion title="Can't Unsubscribe — Users cannot opt out of mandatory channels in this category">
     Prevents users from fully opting out of the category. When selected, you can configure:
 
     - **Mandatory Channels**: Channels which can't be opted out of by the user. Set to "All" or "Selected Channels".
@@ -123,21 +129,21 @@ This configuration gives you fine-grained control over which channels a user is 
 
 ## Capturing user preferences
 
-Users can set their preferences through multiple methods:
+Users can set their preferences through one of the following methods:
 
 ### Hosted preference page
 
-Once you publish preference categories, SuprSend automatically generates a dedicated webpage for collecting user preferences. Users can set channel-specific preferences from the hosted page. If the link is included in an email, the hosted page focuses on email-relevant categories by default, and the user's selections apply only to email preferences. Include it in your templates using `{{$hosted_preference_url}}`.
+Once you publish preference categories, **SuprSend automatically generates a dedicated unsubscription webpage for collecting user preferences**. Users can set channel-specific preferences from the hosted page. If the link is included in an email, the hosted page will show and save email preferences. <br /><br/> Include it in your templates using `{{$hosted_preference_url}}`.
 
 ![](/images/docs/e46d21ae0de53196f50ba38f00ab208eb961ab96d2dbbf55b585a8dbbfa4ea27-hosted_page.svg)
 
-> This page is currently hosted on a SuprSend domain, but you can reach out if you'd prefer it hosted on your own domain.
+> This page is currently hosted on a SuprSend domain, but you can reach out to [support@suprsend.com](mailto:support@suprsend.com) if you'd prefer it hosted on your own domain.
 
 ### Embed in your product
 
-You can embed the preference interface directly inside your product using SuprSend's ready-made UI components. SDKs exist in the languages below. Update your product preference page link on the tenant page and render it in templates using `{{$embedded_preference_url}}`.
+You can embed the preference interface directly inside your product using SuprSend's ready-made UI components. SDKs exist in the languages below. 
 
-**Category translations:** Pass a `locale` parameter (e.g., `es`, `fr`, `de`) when loading the preference center to display translated category and section names. The system automatically falls back using this logic: `locale-region` → `locale` → `en`. This enables users to see preference categories in their preferred language, improving user experience and engagement. See [Category translations](/docs/notification-category#category-translations) for details.
+Update your product preference page link on the tenant page and render it in templates using `{{$embedded_preference_url}}`.
 
 <CardGroup cols="3">
   <Card title="Javascript" icon="js" iconType="solid" href="/docs/js-preferences">
@@ -150,31 +156,9 @@ You can embed the preference interface directly inside your product using SuprSe
 
   </Card>
 </CardGroup>
-
+<Frame caption="Embeddable preference page">
 ![](/images/docs/a2ec79a301149f157c50fcd94378fbe448d2b789d68da8cb4a1b97dccfd15680-image.png)
-
-### Channel-specific unsubscription options
-
-In addition to the preference center within SuprSend, communication channels provide their own opt-out options, which SuprSend manages internally.
-
-<AccordionGroup>
-  <Accordion title="Email: Unsubscribe URL header" icon="envelope-dot" iconType="solid">
-    Gmail requires an unsubscribe URL in email headers when sending bulk emails (5,000+ emails/day). Most email providers expect you to add your own unsubscription page or offer a basic all-or-nothing opt-out option. You can add `{{$hosted_preference_url}}` here to load the SuprSend hosted preference page from the email header.
-
-    ![](/images/docs/96222900be2910eeaae1edfb7bd8e532ef2b090d828616ac87409085cb1bd89a-image.png)
-  </Accordion>
-  <Accordion title="Inbox (In-App): Render preference page inside your Inbox" icon="inbox-full" iconType="solid">
-    Companies also give users the option to load preference settings inside their in-app Inbox or provide a link to redirect users to the Preference center in their product.
-  </Accordion>
-  <Accordion title="Mobile Push: Preference Page in App settings" icon="mobile-screen" iconType="solid">
-    For mobile push notifications, users typically manage their preferences through the app settings. The category you assign in your workflow is also sent as the push "category" (used by Android/iOS to group notifications). If you set preference categories, the system automatically reflects them in the user's app settings, loading similar preference controls.
-
-    ![](/images/docs/0a8782302c5613a1a952b362912789007197bf449b8c5888e9857470840a1865-image.png)
-  </Accordion>
-  <Accordion title="SMS & Whatsapp: Reply `STOP`" icon="comments" iconType="solid">
-    Users generally unsubscribe from Short Message Service (SMS) by replying "STOP." SuprSend automatically marks the SMS channel as inactive in the user's profile when it receives a STOP reply. For WhatsApp, opt-out behavior depends on the provider; where supported, users can reply STOP and SuprSend will mark the channel inactive.
-  </Accordion>
-</AccordionGroup>
+</Frame>
 
 ---
 
@@ -182,9 +166,11 @@ In addition to the preference center within SuprSend, communication channels pro
 
 It's always a good practice to show only the categories that are relevant to the user. There are two ways to achieve this:
 
-1. **Hide categories for tenant users**: In a multi-tenant setup, tenants or admins can control which categories their users see. Setting `visible_to_subscriber: false` in [tenant preferences](/reference/update-tenant-default-preference) hides the category from tenant users' preference pages. Hidden categories won't send notifications to those users, even if they previously opted in. See [Tenant Preferences](/docs/tenant-preference#controlling-preference-ui-for-users) for details.
+### Hide categories for tenant users
+In a multi-tenant setup, tenants or admins can control which categories their users see. Setting `visible_to_subscriber: false` in [tenant preferences](/reference/update-tenant-default-preference) hides the category from tenant users' preference pages. Hidden categories won't send notifications to those users, even if they previously opted in.
 
-2. **Filter categories with tags**: Use tags to show categories based on user roles, departments, or teams. Filter categories in the preference center using the `tags` query parameter.
+### Filter categories with tags
+Use tags to show categories based on user roles, departments, or teams. Filter categories in the preference center using the `tags` query parameter.
 
 <Steps>
 <Step title="Setting Preference tags">
@@ -216,11 +202,43 @@ For details on how tags work, see [Tags](/docs/notification-category#tags).
 
 ---
 
+## Translating preference categories in user's locale
+
+You'll first need to upload translation files for the locale you want to translate to. See [How to manage Category translations](/docs/managing-notification-categories#managing-category-translations) for details.
+
+Once translation files are updated, pass a `locale` parameter (e.g., `es`, `fr`, `de`) when loading the [embeddable preference center](/docs/user-preferences#embed-in-your-product) or pass locale as query parameter in the [get user preference API](/reference/get-user-full-preference).
+
+---
 ## How preferences are evaluated
 
 SuprSend evaluates user preferences at send time. For every recipient, the system checks user-level preferences first, then tenant-level overrides, and finally category defaults.
 
 For detailed information on the evaluation process, see [Preference Evaluation](/docs/preference-evaluation).
+
+---
+
+## Other ways to unsubcribe from notifications
+
+In addition to the preference center within SuprSend, communication channels provide their own opt-out options, which SuprSend manages internally.
+
+<AccordionGroup>
+  <Accordion title="Email: Unsubscribe URL header" icon="envelope-dot" iconType="solid">
+    Gmail requires an unsubscribe URL in email headers when sending bulk emails (5,000+ emails/day). Most email providers expect you to add your own unsubscription page or offer a basic all-or-nothing opt-out option. You can add `{{$hosted_preference_url}}` here to load the SuprSend hosted preference page from the email header.
+
+    ![](/images/docs/96222900be2910eeaae1edfb7bd8e532ef2b090d828616ac87409085cb1bd89a-image.png)
+  </Accordion>
+  <Accordion title="Inbox (In-App): Render preference page inside your Inbox" icon="inbox-full" iconType="solid">
+    Companies also give users the option to load preference settings inside their in-app Inbox or provide a link to redirect users to the Preference center in their product.
+  </Accordion>
+  <Accordion title="Mobile Push: Preference Page in App settings" icon="mobile-screen" iconType="solid">
+    For mobile push notifications, users typically manage their preferences through the app settings. The category you assign in your workflow is also sent as the push "category" (used by Android/iOS to group notifications). If you set preference categories, the system automatically reflects them in the user's app settings, loading similar preference controls.
+
+    ![](/images/docs/0a8782302c5613a1a952b362912789007197bf449b8c5888e9857470840a1865-image.png)
+  </Accordion>
+  <Accordion title="SMS & Whatsapp: Reply `STOP`" icon="comments" iconType="solid">
+    Users generally unsubscribe from Short Message Service (SMS) by replying "STOP." SuprSend automatically marks the SMS channel as inactive in the user's profile when it receives a STOP reply. For WhatsApp, opt-out behavior depends on the provider; where supported, users can reply STOP and SuprSend will mark the channel inactive.
+  </Accordion>
+</AccordionGroup>
 
 ---
 
