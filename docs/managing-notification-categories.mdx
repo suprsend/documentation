@@ -79,7 +79,7 @@ Tags are used to filter categories on the preference page. **Common usecases** a
 3. Section-level tags apply to all sub-categories in that section
 
 <Frame caption="Tags within preference categories">
-  ![](/images/preference-tag-changelog.png)
+  ![](/images/tags.png)
 </Frame>
 
 You can filter categories using the tags query parameter in the [get user preference API](/reference/get-user-full-preference).
@@ -100,9 +100,17 @@ Before making your categories live, preview how they'll appear to users, then pu
 <Steps>
   <Step title="Preview">
     Click **Preview** to see how categories will appear to users on the preference page.
+
+    ![](/images/pref-preview.png)
+
+    The preview will show how your categories are organized and displayed to users.
+
+    ![](/images/preview.png)
   </Step>
   <Step title="Publish">
     Click **`Publish Changes`** to make categories live. Categories are only available in workflows after publishing and will not appear in workflow dropdowns until published.
+
+    ![](/images/pref-publish.png)
   </Step>
   <Step title="Clone to production">
     Use **`Clone`** to copy changes from staging to production workspace. Not required if you are directly doing changes in production workspace.
@@ -183,7 +191,7 @@ For more details on what it does and how it works, see [Overview of category tra
   <Step title="Add translation file">
     Click **"+ Add Translation"**. Select a locale and upload the translated JSON file (e.g., `es.json`, `fr.json`), then click **"Save & Add"**.
     
-    ![](/images/tr-add.png)
+    ![](/images/add-translation-file.png)
     
     **Translation file structure:**
     
@@ -251,9 +259,121 @@ For more details on what it does and how it works, see [Overview of category tra
 </Note>
   </Tab>
   <Tab title="Via Management API">
-    Use Management API to programmatically add, update, or delete translations for specific locales.
-  
-  See [Category Translation API](/reference/list-category-translation) for complete API reference.
+    Use Management API to programmatically add, update, or delete translations for specific locales. Translations go live immediately after upload.
+
+    **Get Translation**
+
+    Fetch existing translations for a specific locale:
+
+    ```bash
+    curl -X GET "https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/es/" \
+      --header "Authorization: ServiceToken {token}" \
+      --header "Content-Type: application/json"
+    ```
+
+    **Example response:**
+    ```json
+    {
+      "sections": {
+        "billing": {
+          "name": "Facturation",
+          "description": "Notifications liées à la facturation"
+        }
+      },
+      "categories": {
+        "invoice-ready": {
+          "name": "Facture prête",
+          "description": "Vous recevrez une notification lorsque votre facture est prête"
+        },
+        "payment-reminder": {
+          "name": "Rappel de paiement",
+          "description": null
+        }
+      }
+    }
+    ```
+
+    **Add or Update Translation**
+
+    Add new translations or update existing ones for a locale. The API will merge your changes with existing translations:
+
+    ```bash
+    curl -X POST "https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/es/" \
+      --header "Authorization: ServiceToken {token}" \
+      --header "Content-Type: application/json" \
+      --data '{
+        "sections": {
+          "billing": {
+            "name": "Facturation",
+            "description": "Notifications liées à la facturation"
+          },
+          "marketing": {
+            "name": "Marketing",
+            "description": "Notifications marketing et promotions"
+          }
+        },
+        "categories": {
+          "invoice-ready": {
+            "name": "Facture prête",
+            "description": "Vous recevrez une notification lorsque votre facture est prête"
+          },
+          "newsletter": {
+            "name": "Newsletter",
+            "description": "Recevez nos dernières actualités et offres"
+          }
+        }
+      }'
+    ```
+
+    **Python example:**
+    ```python
+    import requests
+
+    workspace = "my-workspace"
+    locale = "es"
+    service_token = "your_service_token"
+    
+    # Get existing translations
+    get_url = f"https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/{locale}/"
+    headers = {
+        "Authorization": f"ServiceToken {service_token}",
+        "Content-Type": "application/json"
+    }
+    
+    response = requests.get(get_url, headers=headers)
+    existing_translations = response.json()
+    
+    # Add or update translations
+    translations = {
+        "sections": {
+            "billing": {
+                "name": "Facturation",
+                "description": "Notifications liées à la facturation"
+            }
+        },
+        "categories": {
+            "invoice-ready": {
+                "name": "Facture prête",
+                "description": "Vous recevrez une notification lorsque votre facture est prête"
+            }
+        }
+    }
+    
+    post_url = f"https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/{locale}/"
+    response = requests.post(post_url, headers=headers, json=translations)
+    
+    if response.status_code == 200:
+        print("Translations updated successfully")
+    ```
+
+    **Important notes:**
+    - Replace `{workspace}` with your workspace slug (e.g., `staging`, `production`)
+    - Replace `{token}` with your Service Token (found in [Workspace Settings](https://app.suprsend.com/en/staging/settings/workspace))
+    - The `locale` parameter supports standard locale codes (e.g., `es`, `fr`, `de`, `es-AR`)
+    - You can update partial translations—only the sections/categories you include will be updated
+    - Set `description` to `null` if you want to remove a description
+
+    See [Category Translation API](/reference/list-category-translation) for complete API reference.
   </Tab>
   <Tab title="Via CLI">
   See [CLI Category Translation documentation](/reference/cli-category-overview) for `category translation pull` and `category translation push` commands.
@@ -267,29 +387,61 @@ For more details on what it does and how it works, see [Overview of category tra
 <AccordionGroup>
   <Accordion title="When should I create sections?">
     Create sections when:
-    - **Large number of categories**: If you have 10+ sub-categories, sections help users navigate the preference page
-    - **Similar categories**: If you have categories that are similar in nature, you can group them under a section
+    - **Large number of categories**: If you have 10+ sub-categories, sections help users navigate the preference page more easily
+    - **Similar categories**: Group related sub-categories together (e.g., "Billing" section for invoice, payment, and subscription categories)
+    - **Better organization**: Sections improve the user experience by organizing categories into logical groups
+    
+    **Example:** If you have categories like "Invoice Ready", "Payment Reminder", and "Subscription Renewal", group them under a "Billing" section for better organization.
   </Accordion>
 
   <Accordion title="How many categories should I create?">
-    Don't add too many categories as it can drive users to use channel level opt-outs. Keep your category structure simple and focused on the most important notification types.
+    Keep your category structure simple and focused on the most important notification types. Here are some guidelines:
+    
+    - **Recommended**: 5-15 sub-categories total across all root-categories
+    - **Too many categories** can overwhelm users and drive them to use channel-level opt-outs instead
+    - **Too few categories** may not give users enough granular control
+    
+    **Best practice**: Create categories based on user actions or notification purposes (e.g., "Order Updates", "Account Security", "Marketing Newsletters") rather than creating a category for every single workflow.
   </Accordion>
 
   <Accordion title="Why aren't user preferences working for my notifications?">
     User preferences only work with **sub-categories** you create, not with top-level categories (System, Transactional, Promotional) alone.
     
-    If you're sending notifications using only a top-level category (e.g., `notification_category: "promotional"`), preferences won't apply. You must:
+    **Common issue**: If you're sending notifications using only a root-category (e.g., `notification_category: "promotional"`), preferences won't apply and all users will receive notifications regardless of their preference settings.
     
-    1. Create a sub-category (e.g., "Marketing", "Newsletter") under the top-level category
+    **Solution**: 
+    1. Create a sub-category (e.g., "Marketing", "Newsletter", "Product Updates") under the appropriate root-category
     2. Use the sub-category slug in your workflows (e.g., `notification_category: "marketing"`)
+    3. Publish your category changes
     
-    Once you use a sub-category, user preferences will be respected and unsubscribed users won't receive notifications.
+    Once you use a sub-category, user preferences will be respected and unsubscribed users won't receive notifications in that category.
   </Accordion>
-  <Accordion title="My user has opted out of all categories, but they are still receiving promotional notifications">
-   User preferences only work with **sub-categories** you create, not with top-level categories (System, Transactional, Promotional) alone. So, you are sending notifications in root-category, user will continue to receive notifications even after complete opt-out.
+  
+  <Accordion title="My user has opted out of all categories, but they are still receiving notifications">
+    This typically happens when you're using root-categories instead of sub-categories in your workflows.
+    
+    **Root-categories** (System, Transactional, Promotional) don't respect user preferences. If you're sending notifications with `notification_category: "promotional"` or `notification_category: "transactional"`, users will continue to receive notifications even after opting out.
+    
+    **To fix this**:
+    1. Check your workflow configuration and ensure you're using sub-category slugs (e.g., `"marketing"`, `"order-updates"`) instead of root-category names
+    2. Verify that the sub-categories are published (categories must be published to appear in workflows)
+    3. Test by triggering a workflow and checking if the notification respects user preferences
+    
+    **Note**: System category notifications are designed to always be sent (users can't unsubscribe), so this behavior is expected for critical notifications like OTPs and password resets.
   </Accordion>
-  <Accordion title="How to show users only the categories relevant to their role?">
-    You can add tags to sections and sub-categories from preference categories page. Tags are used to filter categories on the preference page.
+  
+  <Accordion title="How do I show users only the categories relevant to their role or department?">
+    Use **tags** to filter categories based on user roles, departments, or teams. Tags allow you to customize which categories appear on each user's preference page.
+    
+    **How it works**:
+    1. Add tags to sections or sub-categories from the [Preference categories page](https://app.suprsend.com/en/staging/developers/preference-categories)
+    2. When fetching user preferences via API, pass the `tags` query parameter to filter categories
+    3. Only categories matching the specified tags will be returned
+    
+    **Example**: If you tag "Sales" categories with `sales` and "Engineering" categories with `engineering`, you can filter preferences by passing `tags=sales` or `tags=engineering`.
+    
+    **Important**: Tags only affect what's shown on the preference page—they don't impact delivery logic. Users can still opt in/out, and notifications will be sent based on default preferences if the category is hidden from the UI.
+    
     Read more about tags [here](/docs/managing-notification-categories#adding-tags-optional).
   </Accordion>
 </AccordionGroup>
