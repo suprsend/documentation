@@ -3,440 +3,161 @@ title: "Translations"
 description: "Learn how to use translations to localize your notifications in SuprSend."
 ---
 
-import { Card, CardGroup, Steps, Tabs, Tab, Accordion, CodeGroup } from '@mintlify/components';
-
-Translations localize the notifications you send with SuprSend. Instead of maintaining separate templates for each language, you can create a single template with translation keys that are automatically replaced with the appropriate language content based on the user's locale setting.
+Translations help you **localize notifications dynamically** based on your user's locale.  
+Instead of maintaining multiple templates per language, you can manage a single template and multiple translation files.
 
 <Note>
-**Key concept**: One template + multiple translation files = localized notifications for all your users.
+**One template + multiple translation files = localized notifications for all your users.**
 </Note>
+
+---
 
 ## How translations work
+SuprSend automatically handles localization while sending notifications — no extra code required.
 
-SuprSend handles localization automatically when sending notifications—no extra code required.
+### Steps to Enable Translations
 
-**The flow:**
+1. **Upload translation files** from the [dashboard](https://app.suprsend.com/en/staging/developers/translations), via [CLI](https://docs.suprsend.com/reference/cli-translation-overview), or [API](/reference/add-translation).  
+   Each file is a JSON containing key-value pairs consistent across locales.
+2. **Set user locale** in SDK using `set_locale()` or via the `$locale` property in [create/update user API](/reference/create-update-users).
+3. **Use translation keys** inside templates:
+   - Handlebars: `{{t "key_name"}}`
+   - JSONNET: `t("key_name")`
+4. At the time of workflow execution, SuprSend looks for key_name in the user's locale file and if not found, applies below fallback logic.
 
-1. **Detect locale** → Reads user's `$locale` (set via API with `$set_locale` action or `$locale` parameter). Falls back to account default if unset.
+### Fallback Logic
 
-2. **Find translation file** → Searches using fallback hierarchy:
-   - Exact match: `es_MX.json` (for `es_MX` locale)
-   - Language fallback: `es.json`
-   - Default fallback: `en.json`
+If either the locale file or key inside the locale file is missing, SuprSend searches in this order:
 
-3. **Replace keys** → Replaces `{{t "key_name"}}` tags with translated values from the selected file. Interpolates variables like `{{t "greeting" name=user.first_name}}`.
-
-4. **Send notification** → Delivers localized content to the user.
-
-
-### Translation directory structure
-
-Translation files must be organized by locale codes:
-
-```bash
-translations/
-├── en/                  # English (base language)
-│   ├── en.json         # General translations
-│   └── auth.en.json    # Authentication-specific translations
-└── en_GB/              # English (Great Britain)
-    ├── en_GB.json      # General translations
-    └── orders.en_GB.json # Order management translations
-```
-
-<Note>
-**Naming convention**: SuprSend supports underscore format (`en_GB`) for locale codes.
-</Note>
-
-Files within each locale directory follow naming patterns based on their scope. Use the format that matches your needs:
-
-| Type | Format | Description | Example |
-| :--- | :--- | :--- | :--- |
-| **Language only** | `{language}.json` | Translations for a specific language without regional variations | `en.json` |
-| **Language + Region** | `{language}_{region}.json` | Translations for a specific language in a specific region or country | `en_GB.json` |
-| **Namespaced files** | `{namespace}.{language}.json` | Translations for a specific feature or module in a specific language | `auth.en.json` |
-
-### Fallback logic
-
-SuprSend automatically finds the best translation using a fallback system. If a translation isn't available, it tries the next best option:
-
-1. **First try:** Exact match for the user's locale (`es_MX.json` for Spanish - Mexico)
-2. **Second try:** General language file (`es.json` for Spanish)
-3. **Last try:** Default language file (`en.json` for English)
-
-**When does fallback happen?**
-- The translation file doesn't exist
-- The translation key isn't in the file
-
-**Result:** Users always get a translation, even if it's not in their exact language.
+1. Exact locale match — e.g., `es-MX.json`
+2. General language file — e.g., `es.json`
+3. Default language fallback — e.g., `en.json`
 
 ```mermaid
 flowchart TD
-    Start["User wants translation<br/>for es_MX locale"] --> Step1["Step 1: Check es_MX.json<br/>(Spanish - Mexico)"]
-    Step1 -->|"Translation found ✓"| Success["✅ Use this translation"]
-    Step1 -->|"Translation not found<br/>(file missing or key missing)"| Step2["Step 2: Check es.json<br/>(Spanish - General)"]
-    Step2 -->|"Translation found ✓"| Success
-    Step2 -->|"Translation not found"| Step3["Step 3: Check en.json<br/>(English - Default)"]
-    Step3 -->|"Translation found ✓"| Success
-    Step3 -->|"Translation not found"| Fallback["⚠️ Show original key name"]
-    
-    style Step1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-    style Step2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-    style Step3 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-    style Success fill:#c8e6c9,stroke:#388e3c,stroke-width:2px,color:#000
-    style Fallback fill:#ffcdd2,stroke:#c62828,stroke-width:2px,color:#000
+Start["User's locale is es-MX"] --> Step1["Check es-MX.json"]
+Step1 -->|"Found ✓"| Success["✅ Use this translation"]
+Step1 -->|"File or Key Missing"| Step2["Check es.json"]
+Step2 -->|"Found ✓"| Success
+Step2 -->|"File or Key Missing"| Step3["Check en.json"]
+Step3 -->|"Found ✓"| Success
+Step3 -->|"File or Key Missing"| Fallback["⚠️ Throw variable missing error"]
+
+style Step1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+style Step2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+style Step3 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+style Success fill:#c8e6c9,stroke:#388e3c,stroke-width:2px,color:#000
+style Fallback fill:#ffcdd2,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 <Note>
 **Best practice:** Always maintain an `en.json` file as the base language. It ensures your system always has a fallback even if locale-specific keys are missing.
 </Note>
 
-### Translation key types
+## Basic usage
+Translations are JSON objects that define the localized text for your app messages in different locales.
+Let’s say you have a task management app and you want to notify users when a new task is created or completed — localized for English and French users.
 
-Translation keys can be organized using two main approaches:
-
-<Tabs>
-  <Tab title="Normal keys">
-    **Simple key-value pairs:**
-    ```json
-    {
-      "welcome": "Welcome!",
-      "goodbye": "See you later!"
-    }
-    ```
-    ```handlebars
-    {{t "welcome"}}           <!-- Normal key -->
-    ```
-    
-    **Benefits:**
-    - **Simple and straightforward** - Easy to understand and implement
-    - **Quick to set up** - No need to plan namespaces upfront
-    - **Perfect for small projects** - Ideal when you have limited translation keys
-    - **Direct access** - Shorter syntax in templates
-    
-    **Potential conflict example:**
-    ```json
-    {
-      "title": "Welcome to our app",     // Auth page title
-      "title": "Order confirmation"      // Order page title - CONFLICT!
-    }
-    ```
-  </Tab>
-  <Tab title="Namespaced keys">
-    **Organize by feature or module:**
-    ```json
-    {
-      "auth:login": "Sign in to continue",
-      "auth:logout": "Sign out",
-      "order:confirmed": "Order confirmed",
-      "order:shipped": "Your order has shipped"
-    }
-    ```
-    ```handlebars
-    {{t "auth:login"}}        <!-- Namespaced key -->
-    ```
-    
-    **Benefits:**
-    - **Avoid conflicts** - No duplicate key names across features
-    - **Better organization** - Group related translations together
-    - **Easier maintenance** - Update feature-specific translations independently
-    - **Team collaboration** - Different teams can work on different namespaces
-    - **Scalable structure** - Perfect for large applications with many features
-  </Tab>
-</Tabs>
-
-
-## Setup
-
-Setting up translations in SuprSend requires three steps:
-
-<Steps>
-  <Step title="Upload translation files">
-    Navigate to [Dashboard](https://app.suprsend.com) → **Developers** → **Translations** and upload JSON files.
-    
-    ![Upload translation files interface](/images/translations.png)
-    
-    **Commit changes** to make translations live. Learn more about [managing translation files](#managing-translation-files).
-    
-
-  </Step>
-  
-  <Step title="Set user locale">
-    Set the user's locale via API. The older method used preferred language, but you can now use locale directly with `$set_locale` action or `$locale` parameter. The locale determines which translation file SuprSend will use for that user's notifications.
-    
-    **Example:**
-    ```json
-    {
-      "$set_locale": "en_GB"
-    }
-    ```
-    
-    Use standard ISO locale codes like `en_US`, `es_ES`, `fr_FR`, `en_GB`, etc.
-  </Step>
-  
-  <Step title="Use in templates">
-    Add translation keys to templates using the `{{t}}` tag:
-    
-    ```handlebars
-    Subject: {{t "greeting"}}
-    Body: {{t "welcome_message"}}, {{user.first_name}}!
-    ```
-    
-    **Preview your translations:**
-    1. **Open template editor** and add `{{t}}` tags
-    2. **Click Preview** (top right corner)
-    3. **Select different locales** from the dropdown
-    4. **Verify output** matches expectations
-    
-    ![Language dropdown for previewing translations](/images/translations-dropdown.png)
-    
-    🎉 Notifications will now automatically display in each user's preferred language.
-  </Step>
-</Steps>
-
-## Using translations in templates
-
-Use the `{{t}}` tag to localize content. Examples for common scenarios:
-
-<Tabs>
-  <Tab title="Basic usage">
-    <Accordion title="Simple translations">
-      Static text that doesn't change based on user data.
-    
-    ```handlebars
-    Subject: {{t "welcome"}}
-    Body: {{t "goodbye"}}
-    ```
-    ```json
-    {
-      "welcome": "Welcome!",
-      "goodbye": "See you later!"
-    }
-    ```
-      **Output:** `"Welcome!"` and `"See you later!"`
-    </Accordion>
-
-    <Accordion title="Namespaced translations">
-      Group related translations by feature/module to avoid key name conflicts.
-    
-    ```handlebars
-      {{t "auth:login"}}
-      {{t "orders:status"}}
-    ```
-    ```json
-    {
-      "auth:login": "Sign in to continue",
-      "orders:status": "Order status"
-    }
-    ```
-      **Output:** `"Sign in to continue"` and `"Order status"`
-    
-      Use `auth:title` and `orders:title` instead of conflicting `title` keys.
-    </Accordion>
-  </Tab>
-
-  <Tab title="Dynamic content">
-    <Accordion title="Variable interpolation">
-      Pass dynamic data into translations for personalized content.
-
-    ```handlebars
-    {{t "greeting" name=user.first_name}}
-    {{t "order_confirmation" order_id=order.id customer=user.name}}
-    ```
-```json
+```json {en.json}
 {
-  "greeting": "Hello, {{name}}!",
-  "order_confirmation": "Hi {{customer}}, your order #{{order_id}} is confirmed!"
+"TaskCreated": "A new task has been created: {{task_name}}",
+"TaskCompleted": "Task {{task_name}} has been completed successfully!"
 }
 ```
-      **Output:** `"Hello, John!"` and `"Hi Sarah, your order #12345 is confirmed!"`
-    </Accordion>
 
-    <Accordion title="Pluralization">
-      Automatically handle singular/plural forms based on count.
+```json {fr.json}
 
-```handlebars
-{{t "items_count" count=cart.items.length}}
-```
-```json
 {
-  "items_count": {
-    "zero": "No items",
-    "one": "1 item",
-    "other": "{{count}} items"
-  }
+"task_created": "Une nouvelle tâche a été créée : {{task_name}}",
+"task_completed": "La tâche {{task_name}} a été complétée avec succès !"
 }
 ```
-      **Rules:** 
-      - `count = 0` → uses `zero` form → `"No items"`
-      - `count = 1` → uses `one` form → `"1 item"`
-      - `count ≥ 2` → uses `other` form → `"5 items"`
-
-      <Note>
-      If `count` variable is missing, it defaults to `0` (uses the `zero` form).
-      </Note>
-    </Accordion>
-
-    <Accordion title="Combining with Handlebars helpers">
-      Use translation tags with other Handlebars helpers for advanced formatting.
-
-      ```handlebars
-      {{t "welcome" | uppercase}}                    <!-- Uppercase -->
-      {{default (t "name") "Guest"}}                  <!-- Default value -->
-      
-      {{#if user.is_premium}}
-        {{t "premium_welcome"}}
-      {{else}}
-        {{t "standard_welcome"}}
-      {{/if}}                                          <!-- Conditional -->
-      
-      {{#each items}}
-        <li>{{t "item_name" name=this.name price=this.price}}</li>
-      {{/each}}                                        <!-- Loops -->
-      
-      {{t "email_subject" company=tenant.name}}       <!-- Tenant data -->
-      ```
-    </Accordion>
-  </Tab>
-
-  <Tab title="Advanced: JSONNET">
-    <Note>
-      **Tip:** For most cases, simple variable interpolation is sufficient. Use JSONNET only when you need complex conditional logic that goes beyond Handlebars helpers.
-    </Note>
-
-    <Accordion title="JSONNET for complex logic">
-      Use JSONNET when translation behavior depends on dynamic business rules that require conditional logic.
-
-    ```jsonnet
-    local message = if user.is_premium then
-      "Welcome, VIP member!"
-    else
-      "Welcome!";
-    
-    {
-      subject: message,
-      body: suprsend.t("welcome_body", {name: user.name})
-    }
-    ```
-
-      **Simple alternative (when possible):**
-    ```handlebars
-      {{t "welcome_message" tier=user.subscription_tier}}
-      ```
-      ```json
-      {
-        "welcome_message": "Welcome, {{tier}} member!"
-      }
-      ```
-    </Accordion>
-  </Tab>
-</Tabs>
-
-### One template for all languages
-
-Instead of maintaining separate templates for each language, SuprSend uses a single template with translation keys. The template structure stays the same across all languages—only the text content changes.
-
-**The problem it solves:**
-
-Traditional approaches require duplicating templates for each language, which leads to:
-- Layout inconsistencies when updating styles across multiple files
-- Increased maintenance when fixing bugs or making design changes
-- Risk of forgetting to update all language versions
-
-**How it works:**
-
-Create one template with translation keys, and SuprSend automatically replaces them with the appropriate language content:
-
-```handlebars
-<div class="welcome-card">
-  <h1>{{t "welcome_title"}}</h1>
-  <p>{{t "welcome_message" name=user.first_name}}</p>
-  <button>{{t "get_started"}}</button>
-</div>
-```
-
-**File structure:**
-
-<Tabs>
-  <Tab title="Traditional approach">
-    Each language requires a separate template file:
-    
-    ```bash
-    templates/
-    ├── welcome_en.html
-    ├── welcome_es.html
-    ├── welcome_fr.html
-    └── welcome_de.html
-    ```
-  </Tab>
-  <Tab title="SuprSend approach">
-    One template, multiple translation files:
-    
-    ```bash
-    templates/
-    └── welcome.html          <!-- Single template -->
-    translations/
-    ├── en.json              <!-- Translation files -->
-    ├── es.json
-    ├── fr.json
-    └── de.json
-    ```
-  </Tab>
-</Tabs>
+Once you have the files uploaded for `en` and `fr` locales, you can reference it in your templates using the `t` tag:
 
 
-
+<CodeGroup> 
+```handlebars handlebars 
+{{t "task_created" task_name=task.name}} 
+{{t "task_completed" task_name=task.name}} 
+``` 
+```jsonnet jsonnet 
+{ 
+  task_created: t("task_created", {task_name: task.name}), 
+  task_completed: t("task_completed", {task_name: task.name}) 
+} 
+``` 
+</CodeGroup> 
 
 ## Managing translation files
 
-Manage your translation files through the SuprSend dashboard or programmatically via API and CLI.
+You can manage translation files from [developers -> translations](https://app.suprsend.com/en/staging/developers/translations) on the SuprSend dashboard, via [API](/reference/add-translation) and [CLI](/reference/cli-translation-overview).
 
-### Translation process
+### Flow
 
-SuprSend uses a commit-based process to manage translation changes safely.
+All translation changes, including delete, is version controlled and needs to be committed to make them live.
 
-**Development → Commit → Production**
+    ```mermaid
+    flowchart TD
+    A["📝 Make Changes<br/><small>Add, edit, or delete translation files in the dashboard</small>"] --> B["👀 Review Drafts<br/><small>All changes are saved in draft version until committed</small>"]
+    B --> C["✅ Commit Changes<br/><small>Commit translations to make them live</small>"]
+    C --> D["🕓 Version History / Rollback<br/><small>Each commit creates a new version; you can review or rollback anytime</small>"]
 
-1. **Make changes** - Add, edit, or delete translation files in the dashboard
-2. **Review drafts** - All changes are saved as drafts until committed
-3. **Commit changes** - Commit translations to make them live
-4. **Version control** - Every commit creates a new version with full history
+    style A fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style B fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style C fill:#c8e6c9,stroke:#388e3c,stroke-width:2px,color:#000
+    style D fill:#fff3cd,stroke:#f9a825,stroke-width:2px,color:#000
+    ```
 
-![Translation process](/images/translations.png)
+### Directory structure
+There are two ways to organize translation files:
+1. **By locale code** — one file per language, e.g. en.json, fr.json
+2. **By namespace + locale code** — group translations by feature or module within the same language, e.g. `auth.en.json`, `tasks.fr.json`. This comes in handy when you have different teams managing their translations or can have same key across different features or modules.
 
-### Add new translation files
+All files for a locale goes into a single directory.
 
-Upload new translation files to add support for additional languages or create namespaced translations.
+```json
+translations/
+├── en/                  # English (base language)
+│   ├── en.json         # General translations
+│   └── auth.en.json    # namespaced translations
+└── en-GB/              
+    ├── en-GB.json      
+    └── orders.en-GB.json 
+```
+
+### Add locale files
 
 <Steps>
-  <Step title="Navigate and select file">
-    Go to **Developers** → **Translations**. Upload your JSON translation file and verify the file structure matches the required format.
+  <Step title="Upload file">
+    Go to **Developers** → **Translations** section. Click on `+New File` button and upload locale files. 
+    Locale file naming convention:
+      - `{locale_code}.json`: example: `en.json`, `es-MX.json`
+      - `{namespace}.{locale_code}.json`: example: `auth.en.json`, `orders.es-MX.json`
 
-<Note>
-    **File naming:** Use correct naming convention (`en.json`, `es_MX.json`, or `auth.en.json` for namespaced files).
-</Note>
+      ![Upload Translation File](/images/translations.png)
+
+<Warning>
+    File uploads with wrong name would throw error on upload. Make sure to edit the name before upload.
+</Warning>
   </Step>
   
-  <Step title="Upload file">
-    Click the **Next** button to add the file.
+  <Step title="Save Changes">
+    Click **Next** to save. Files are saved as a draft version until committed.
     
     ![Upload translation file](/images/upload-tran.png)
   </Step>
   
   <Step title="Commit changes">
-    Click **Commit** to make the translation file live.
+    Click **Commit Changes** to make translations live. Add a short description of your update for later reference. You can also skip this step and commit later.
     
     ![Commit translations](/images/commit-tran.png)
   </Step>
 </Steps>
 
-### Edit existing translation files
-
-Download, edit locally, and re-upload translation files.
+### Update existing files
+Download, edit locally, and re-upload updated translation files.
 
 <Steps>
-  <Step title="Open translation file">
-    Go to the translation file you want to edit.
-  </Step>
   
   <Step title="Download file">
     Click **Download** to save the translation file locally for editing.
@@ -445,173 +166,239 @@ Download, edit locally, and re-upload translation files.
   </Step>
   
   <Step title="Edit, upload and commit">
-    Make your edits to the downloaded JSON file, then click **Upload** to replace the existing file. Finally, click **Commit** to make your translation changes live.
+    Make your edits to the downloaded JSON file, then click `+ New File` and upload the edited file to replace the existing file. Finally, click **Commit** to make your translation changes live.
   </Step>
 </Steps>
 
-### Delete translation files
+### Delete files
 
-Remove translation files that are no longer needed.
+Remove locale files that are no longer needed.
 
 <Steps>
   <Step title="Delete file">
-    Find the translation file you want to remove, and click **Delete**.
+    Find the translation file you want to remove, and click **Delete**. This will mark the file for deletion in the draft version.
     
     ![Delete translation file](/images/delete-tran.png)
   </Step>
-  
   <Step title="Commit deletion">
-    Click **Commit** to publish the deletion.
+    Click **Commit** to make deletion live. The deletion will only take place after you commit.
     
     ![Commit translations](/images/commit-tran.png)
   </Step>
 </Steps>
 
-<Warning>
-**Deletion impact:** Removing a translation file affects all users in that locale. They will fall back to the language file or default locale. Ensure you have fallback translations available.
-</Warning>
+### Version history and rollback
 
-### Version control
+SuprSend uses git-like versioning for locale file changes. Every commit creates a new version that you can view, download, or roll back to.
 
-All translation changes are automatically versioned with complete history and rollback capabilities.
-
-<Steps>
-  <Step title="Open version history">
-    Go to **Developers** → **Translations**, click on a translation file, then open the **Version History** tab.
-  </Step>
-  
-  <Step title="Select and rollback">
-    Select the version you want to restore and click **Rollback**. Confirm the action.
+  - **View version history**<br/>
+  Click **Version History** to see all previous versions. You can download and view older files, and check the status column to see what changed compared to the previous version.
+  - **Rollback to an older version**<br/>
+  Inside version history tab, select the version you want to restore and click **Rollback version**.
     
     ![Rollback translation](/images/rollback-tran.png)
-  </Step>
-  
-  <Step title="Commit changes">
-    Click **Commit** to make the rollback live.
-    
-    ![Commit translations](/images/commit-tran.png)
-  </Step>
-</Steps>
-
-<Warning>
-Rollback immediately affects all users in that locale. Test before rolling back.
-</Warning>
-
-## Automating translation with CLI
-
-Manage your translations programmatically using SuprSend's CLI. For CLI commands and workflows, see the [CLI translations overview](/reference/cli-translation-overview).
-
-## Translation Management APIs
-
-Programmatically manage translations using SuprSend's Management APIs. For API documentation and endpoints, see the [Translation Management API reference](/reference/list-translations).
 
 
+## Using translations in templates
+You can use translations in your templates using the `t` tag. Anything inside the `t` tag will be replaced with the translation for the key.
+
+#### Simple, Nested and Namespaced keys
+<CodeGroup>
+```handlebars handlebars (sms, email, push, inbox)
+{{t "key_name"}}
+{{t "feature:key_name"}} // for namespaced locale files
+{{t "nested_key.sub_key"}} // for nested keys
+```
+```jsonnet jsonnet (slack, ms_teams)
+{
+  simple_key: t("key_name"),
+  namespaced_key: t("feature:key_name"),
+  batched_key: t(data["$batched_events"][0].name)
+  nested_key: t("nested_key.sub_key")
+}
+```
+</CodeGroup>
+
+#### Pluralization
+Translations support plural forms using the keys `zero`, `one`, and `other`.
+When you pass a count variable, SuprSend automatically picks the correct form.
+If count is missing or null, the zero form is used by default.
+
+**translation file:**
+```json en.json
+{
+  "tasks": {
+    "zero": "You have no tasks",
+    "one": "You have 1 task",
+    "other": "You have {{count}} tasks"
+  }
+}
+```
+      **Rules:** 
+      - `count = 0` → uses `zero` form → `"No items"`
+      - `count = 1` → uses `one` form → `"1 item"`
+      - `count ≥ 2` → uses `other` form → `"5 items"`
+
+**template:**
+<CodeGroup>
+```handlebars handlebars (sms, email, push, inbox)
+{{t "tasks" count=$batched_events_count}}
+```
+```jsonnet jsonnet (slack, ms_teams)
+{
+  tasks: t('tasks', {count: data["$batched_events_count"]})
+}
+```
+</CodeGroup>
+
+#### Interpolation
+If your translation includes variables, you can dynamically replace them with values from your template or workflow data like this:
+
+**translation file:**
+```json en.json
+{
+  "greeting": "Hello, {{name}}!"
+}
+```
+
+**template:**
+<CodeGroup>
+```handlebars handlebars (sms, email, push, inbox)
+{{t "greeting" name=$recipient.name}}
+```
+```jsonnet jsonnet (slack, ms_teams)
+{
+  greeting: t('greeting', {name: data["$recipient"].name})
+}
+```
+</CodeGroup>
+
+**Rendered content:**
+- "Hello, John!" when $recipient.name is "John"
+
+#### Combining with Handlebars helpers
+Here, are some examples of how you can combine translations with other Handlebars helpers.
+
+1. **Default value**
+```handlebars
+{{default (t "name") "Guest"}} 
+```
+2. **Conditional rendering**
+```handlebars
+{{#if user.is_premium}}
+{{t "premium_plan.details"}}
+{{else}}
+{{t "standard_plan.detail"}}
+{{/if}}
+```
+3. **Looping**
+```handlebars
+{{#each $batched_events}}
+{{t "item_name"}}
+{{/each}}
+```
+
+## Automate translation with CLI and APIs
+You can manage your translations files programmatically using:
+- [CLI](/reference/cli-translation-overview)
+- [Management API](/reference/add-translation)
 
 ## Supported locales
 
-<Accordion title="View all supported locales">
-
-SuprSend supports standard ISO locale codes following the `language_COUNTRY` format:
+SuprSend supports standard ISO locale codes following the `language-COUNTRY` format. Here's the complete list of supported locales:
+<Accordion title="Supported locale codes">
 
 | Locale Code | Language | Country/Region |
 |-------------|----------|----------------|
-| `af_ZA` | Afrikaans | South Africa |
-| `ar_AE` | Arabic | United Arab Emirates |
-| `ar_SA` | Arabic | Saudi Arabia |
-| `ar_EG` | Arabic | Egypt |
-| `az_AZ` | Azerbaijani | Azerbaijan |
-| `be_BY` | Belarusian | Belarus |
-| `bg_BG` | Bulgarian | Bulgaria |
-| `bn_BD` | Bengali | Bangladesh |
-| `bs_BA` | Bosnian | Bosnia and Herzegovina |
+| `af-ZA` | Afrikaans | South Africa |
+| `ar-AE` | Arabic | United Arab Emirates |
+| `ar-SA` | Arabic | Saudi Arabia |
+| `ar-EG` | Arabic | Egypt |
+| `az-AZ` | Azerbaijani | Azerbaijan |
+| `be-BY` | Belarusian | Belarus |
+| `bg-BG` | Bulgarian | Bulgaria |
+| `bn-BD` | Bengali | Bangladesh |
+| `bs-BA` | Bosnian | Bosnia and Herzegovina |
 | `ca_ES` | Catalan | Spain |
-| `cs_CZ` | Czech | Czech Republic |
-| `cy_GB` | Welsh | United Kingdom |
-| `da_DK` | Danish | Denmark |
-| `de_AT` | German | Austria |
-| `de_CH` | German | Switzerland |
-| `de_DE` | German | Germany |
+| `cs-CZ` | Czech | Czech Republic |
+| `cy-GB` | Welsh | United Kingdom |
+| `da-DK` | Danish | Denmark |
+| `de-AT` | German | Austria |
+| `de-CH` | German | Switzerland |
+| `de-DE` | German | Germany |
 | `el_GR` | Greek | Greece |
-| `en_AU` | English | Australia |
-| `en_CA` | English | Canada |
-| `en_GB` | English | United Kingdom |
-| `en_IE` | English | Ireland |
-| `en_IN` | English | India |
-| `en_NZ` | English | New Zealand |
-| `en_US` | English | United States |
-| `en_ZA` | English | South Africa |
 | `es_AR` | Spanish | Argentina |
-| `es_CL` | Spanish | Chile |
-| `es_CO` | Spanish | Colombia |
-| `es_ES` | Spanish | Spain |
-| `es_MX` | Spanish | Mexico |
-| `es_PE` | Spanish | Peru |
-| `es_VE` | Spanish | Venezuela |
-| `et_EE` | Estonian | Estonia |
-| `eu_ES` | Basque | Spain |
-| `fa_IR` | Persian | Iran |
-| `fi_FI` | Finnish | Finland |
-| `fr_BE` | French | Belgium |
-| `fr_CA` | French | Canada |
-| `fr_CH` | French | Switzerland |
-| `fr_FR` | French | France |
-| `gl_ES` | Galician | Spain |
-| `gu_IN` | Gujarati | India |
-| `he_IL` | Hebrew | Israel |
-| `hi_IN` | Hindi | India |
-| `hr_HR` | Croatian | Croatia |
-| `hu_HU` | Hungarian | Hungary |
-| `hy_AM` | Armenian | Armenia |
-| `id_ID` | Indonesian | Indonesia |
-| `is_IS` | Icelandic | Iceland |
-| `it_CH` | Italian | Switzerland |
-| `it_IT` | Italian | Italy |
-| `ja_JP` | Japanese | Japan |
-| `ka_GE` | Georgian | Georgia |
-| `kk_KZ` | Kazakh | Kazakhstan |
-| `km_KH` | Khmer | Cambodia |
-| `kn_IN` | Kannada | India |
-| `ko_KR` | Korean | South Korea |
-| `ky_KG` | Kyrgyz | Kyrgyzstan |
-| `lo_LA` | Lao | Laos |
-| `lt_LT` | Lithuanian | Lithuania |
-| `lv_LV` | Latvian | Latvia |
-| `mk_MK` | Macedonian | North Macedonia |
-| `ml_IN` | Malayalam | India |
-| `mn_MN` | Mongolian | Mongolia |
-| `mr_IN` | Marathi | India |
-| `ms_MY` | Malay | Malaysia |
-| `my_MM` | Burmese | Myanmar |
-| `ne_NP` | Nepali | Nepal |
-| `nl_BE` | Dutch | Belgium |
-| `nl_NL` | Dutch | Netherlands |
-| `no_NO` | Norwegian | Norway |
-| `pa_IN` | Punjabi | India |
-| `pl_PL` | Polish | Poland |
-| `pt_BR` | Portuguese | Brazil |
-| `pt_PT` | Portuguese | Portugal |
-| `ro_MD` | Romanian | Moldova |
-| `ro_RO` | Romanian | Romania |
-| `ru_RU` | Russian | Russia |
-| `si_LK` | Sinhala | Sri Lanka |
-| `sk_SK` | Slovak | Slovakia |
-| `sl_SI` | Slovenian | Slovenia |
-| `sq_AL` | Albanian | Albania |
-| `sr_RS` | Serbian | Serbia |
-| `sv_SE` | Swedish | Sweden |
-| `sw_KE` | Swahili | Kenya |
-| `ta_IN` | Tamil | India |
-| `te_IN` | Telugu | India |
-| `th_TH` | Thai | Thailand |
-| `tr_TR` | Turkish | Turkey |
-| `uk_UA` | Ukrainian | Ukraine |
-| `ur_PK` | Urdu | Pakistan |
-| `uz_UZ` | Uzbek | Uzbekistan |
-| `vi_VN` | Vietnamese | Vietnam |
-| `zh_CN` | Chinese (Simplified) | China |
-| `zh_HK` | Chinese (Traditional) | Hong Kong |
-| `zh_TW` | Chinese (Traditional) | Taiwan |
-| `zu_ZA` | Zulu | South Africa |
+| `es-CL` | Spanish | Chile |
+| `es-CO` | Spanish | Colombia |
+| `es-ES` | Spanish | Spain |
+| `es-MX` | Spanish | Mexico |
+| `es-PE` | Spanish | Peru |
+| `es-VE` | Spanish | Venezuela |
+| `et-EE` | Estonian | Estonia |
+| `eu-ES` | Basque | Spain |
+| `fa-IR` | Persian | Iran |
+| `fi-FI` | Finnish | Finland |
+| `fr-BE` | French | Belgium |
+| `fr-CA` | French | Canada |
+| `fr-CH` | French | Switzerland |
+| `fr-FR` | French | France |
+| `gl-ES` | Galician | Spain |
+| `gu-IN` | Gujarati | India |
+| `he-IL` | Hebrew | Israel |
+| `hi-IN` | Hindi | India |
+| `hr-HR` | Croatian | Croatia |
+| `hu-HU` | Hungarian | Hungary |
+| `hy-AM` | Armenian | Armenia |
+| `id-ID` | Indonesian | Indonesia |
+| `is-IS` | Icelandic | Iceland |
+| `it-CH` | Italian | Switzerland |
+| `it-IT` | Italian | Italy |
+| `ja-JP` | Japanese | Japan |
+| `ka-GE` | Georgian | Georgia |
+| `kk-KZ` | Kazakh | Kazakhstan |
+| `km-KH` | Khmer | Cambodia |
+| `kn-IN` | Kannada | India |
+| `ko-KR` | Korean | South Korea |
+| `ky-KG` | Kyrgyz | Kyrgyzstan |
+| `lo-LA` | Lao | Laos |
+| `lt-LT` | Lithuanian | Lithuania |
+| `lv-LV` | Latvian | Latvia |
+| `mk-MK` | Macedonian | North Macedonia |
+| `ml-IN` | Malayalam | India |
+| `mn-MN` | Mongolian | Mongolia |
+| `mr-IN` | Marathi | India |
+| `ms-MY` | Malay | Malaysia |
+| `my-MM` | Burmese | Myanmar |
+| `ne-NP` | Nepali | Nepal |
+| `nl-BE` | Dutch | Belgium |
+| `nl-NL` | Dutch | Netherlands |
+| `no-NO` | Norwegian | Norway |
+| `pa-IN` | Punjabi | India |
+| `pl-PL` | Polish | Poland |
+| `pt-BR` | Portuguese | Brazil |
+| `pt-PT` | Portuguese | Portugal |
+| `ro-MD` | Romanian | Moldova |
+| `ro-RO` | Romanian | Romania |
+| `ru-RU` | Russian | Russia |
+| `si-LK` | Sinhala | Sri Lanka |
+| `sk-SK` | Slovak | Slovakia |
+| `sl-SI` | Slovenian | Slovenia |
+| `sq-AL` | Albanian | Albania |
+| `sr-RS` | Serbian | Serbia |
+| `sv-SE` | Swedish | Sweden |
+| `sw-KE` | Swahili | Kenya |
+| `ta-IN` | Tamil | India |
+| `te-IN` | Telugu | India |
+| `th-TH` | Thai | Thailand |
+| `tr-TR` | Turkish | Turkey |
+| `uk-UA` | Ukrainian | Ukraine |
+| `ur-PK` | Urdu | Pakistan |
+| `uz-UZ` | Uzbek | Uzbekistan |
+| `vi-VN` | Vietnamese | Vietnam |
+| `zh-CN` | Chinese (Simplified) | China |
+| `zh-HK` | Chinese (Traditional) | Hong Kong |
+| `zh-TW` | Chinese (Traditional) | Taiwan |
+| `zu-ZA` | Zulu | South Africa |
 
 <Note>
 Don't see your locale? SuprSend supports all standard ISO 639-1 language codes and ISO 3166-1 alpha-2 country codes. Contact support if you need help with a specific locale.
@@ -620,11 +407,11 @@ Don't see your locale? SuprSend supports all standard ISO 639-1 language codes a
 
 ## Best practices
 
-- 🔑 Keep keys short: `auth:login` > `authentication_login_button_text`
-- 🔢 Always define plural forms: `zero`, `one`, `other` for consistent behavior
-- 📄 Maintain `en.json` as your canonical source
-- 🏷️ Use translation keys everywhere — avoid raw text in templates
-- 🏢 Don't translate brand names — keep them consistent across locales
+- Keep keys short: `auth:login` > `authentication_login_button_text`
+- Always define plural forms wherever needed: `zero`, `one`, `other` for consistent behavior
+- Maintain `en.json` as the base language
+- Use translation keys everywhere — avoid raw text in templates
+- Whenever you're adding new variables and updating translation files, make sure you update it across locales.
 
 ## Troubleshooting
 
@@ -632,39 +419,15 @@ Even with proper setup, issues may be encountered. Here are common problems and 
 
 <Accordion title="Translation not showing up">
 **Possible causes:**
-- Changes not committed
-- Invalid JSON format
+- Latest translation files are not committed
 - User locale not set
-- Key missing in fallback files
-
-**Solutions:**
-1. **Check if changes are committed** - Uncommitted translations won't be used
-2. **Verify file format** - Ensure valid JSON syntax
-3. **Check user locale** - Confirm user profile has correct locale set
-4. **Review fallback chain** - Check if key exists in fallback files
+- Key missing in translation files
 </Accordion>
 
-<Accordion title="Wrong translation displaying">
-**Possible causes:**
-- Incorrect locale format
-- Case-sensitive key names
-- Outdated version
-
-**Solutions:**
-1. **Verify locale format** - Use `en_US`, not `en-us`
-2. **Check key name** - Keys are case-sensitive (`greeting` ≠ `Greeting`)
-3. **Review version history** - Ensure you're on the latest version
+<Accordion title="Template preview is not showing correct translation">
+Refresh the page and load preview again. If you were already on the template page and translation files got updated, you may need to reload the page to see the latest changes.
 </Accordion>
 
-<Accordion title="Template errors">
-**Possible causes:**
-- Incorrect syntax
-- Variable name mismatches
-- Wrong namespace format
-
-**Solutions:**
-1. **Syntax check** - Ensure proper `{{t "key"}}` format
-2. **Variable names** - Check variable names match translation file
-3. **Namespace format** - Use `namespace:key`, not `namespace.key`
+<Accordion title="Interpolation is not working">
+Check if the format of variable name is correct in the locale file. It should be added as `{{variable_name}}` in the translation file.
 </Accordion>
-
