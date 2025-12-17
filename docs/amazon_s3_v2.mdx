@@ -2,441 +2,351 @@
 title: "Amazon S3 v2.0"
 description: "Export your notification logs to Amazon S3 for analytics, debugging, and compliance."
 ---
- 
-Export your SuprSend notification data to your S3 bucket every 5 minutes in Parquet format. You maintain complete data ownership in your infrastructure for compliance audits, custom analytics dashboards, and detailed debugging workflows.
 
-**Key features:**
-- **5-minute sync frequency** - You export logs every 5 minutes, with initial sync taking up to 10 minutes for new or empty buckets
-- **Complete data ownership** - All notification logs stored in your infrastructure
-- **Encrypted** - TLS 1.2+ in transit, S3 server-side encryption at rest
-- **Automatic backfilling** - Historical data automatically synced when you resume sync
+<Note>
+**Using S3 v1.0?** [Migrate to v2.0](/connectors/amazon-s3-migration) for improved performance and data structure.
+</Note>
+
+Export your SuprSend notification data directly to your S3 bucket. Build custom analytics dashboards, debug delivery issues, surface errors to your customers, or maintain compliance audit trails—all with data you fully own and control.
 
 ---
 
-## Data points
+## How it works
 
-You export three data points individually or together. Choose based on your needs.
+Every 5 minutes, SuprSend syncs your notification data to S3 in Parquet format. Data lands in hourly partitions across three data points:
+
+```
+your-bucket/
+├── messages/
+│   └── year=2025/month=01/day=15/hour=14/data.parquet
+├── workflow_executions/
+│   └── year=2025/month=01/day=15/hour=14/data.parquet
+└── requests/
+    └── year=2025/month=01/day=15/hour=14/data.parquet
+```
+
+Data is encrypted with TLS 1.2+ in transit and SSE-S3/SSE-KMS at rest. The Parquet format and partition structure work natively with query engines like Athena, Spark, and Presto. If you pause sync, data from the pause period backfills automatically when you resume.
+
+
+---
+
+## What you can export
+
+You choose which data points to sync. Each one becomes a separate folder in your S3 bucket.
+
+| Data point | What's in it | Use it for |
+|---------|--------------|------------|
+| **Messages** | Delivery status, engagement, vendor info, failures | Analytics, delivery troubleshooting |
+| **Workflow Executions** | Step-by-step logs, node details, timing | Debugging workflow logic |
+| **Requests** | API payloads, responses, triggered workflows | API debugging, audit trails |
 
 ![Data Points Parameter on SuprSend Platform](/images/s3v2-types.png)
+
+**Recommended data points by use case:**
+| Use case | Data points to sync |
+|----------|---------------------|
+| Analytics & reporting | **Messages** |
+| Workflow debugging | **Workflow Executions** + **Requests** |
+| Delivery troubleshooting / surfacing errors to customers | **Messages** + **Requests** |
+
+### Connecting the dots
+
+These data points link together so you can trace any notification from API call to final delivery:
+
+```mermaid
+graph LR
+    A[Requests] -->|execution_id| B[Workflow Executions]
+    B -->|wf_execution_id| C[Messages]
+    A -->|idempotency_key| C
+    
+    style A fill:#60a5fa,stroke:#93c5fd,color:#000000
+    style B fill:#fbbf24,stroke:#fcd34d,color:#000000
+    style C fill:#34d399,stroke:#6ee7b7,color:#000000
+```
+
+| From → To | Join on |
+|-----------|---------|
+| Requests → Workflow Executions | `execution_id` |
+| Workflow Executions → Messages | `wf_execution_id` |
+| Requests → Messages (shortcut) | `idempotency_key` |
+
+### Schema
 
 <Tabs>
 <Tab title="Messages">
 
-Delivery status and engagement metrics for each message sent to users.
-
-**Key information:** Status (`triggered`, `delivered`, `seen`, `clicked`, `dismissed`, `failed`), timestamps, vendor information, failure reasons (execution and delivery level).
-
-**Use cases:**
-- Monitor delivery rates and identify failures
-- Track user engagement (opens, clicks)
-- Compare vendor performance
-- Maintain compliance audit trail
+| Column | Type | Description |
+|--------|------|-------------|
+| `message_id` | String | Primary key |
+| `wf_execution_id` | String | Links to Workflow Executions |
+| `recipient_distinct_id` | String | User or object ID |
+| `tenant_id` | String | Tenant ID |
+| `workflow_slug` | String | Workflow name |
+| `status` | String | `triggered`, `delivered`, `seen`, `clicked`, `dismissed`, `failed` |
+| `channel_slug` | String | `email`, `sms`, `push`, etc. |
+| `channel_info` | String | Email/phone/token |
+| `vendor_name` | String | Delivery vendor |
+| `triggered_at` | datetime | Sent to vendor |
+| `delivered_at` | datetime | Delivered by vendor |
+| `seen_at` | datetime | Opened by user |
+| `execution_failure_reason` | JSON | Why it failed (execution) |
+| `delivery_failure_reason` | String | Why it failed (vendor) |
+| `created_at` | datetime | Row created |
+| `updated_at` | datetime | Row last updated |
 
 </Tab>
 
 <Tab title="Workflow Executions">
 
-Step-by-step execution logs showing exactly how each workflow ran. Each workflow step becomes a separate row.
-
-**Key information:** Execution stages, node details, status (`info`, `warning`, `error`), performance timing, execution data (template rendering results, webhook responses, preference computations).
-
-**Use cases:**
-- Debug workflow failures
-- Identify performance bottlenecks
-- Analyze template rendering
-- Understand preference computation
+| Column | Type | Description |
+|--------|------|-------------|
+| `execution_id` | String | Primary key |
+| `idempotency_key` | String | Links to Requests |
+| `recipient_distinct_id` | String | User or object ID |
+| `tenant_id` | String | Tenant ID |
+| `workflow_slug` | String | Workflow name |
+| `workflow_version` | String | Version |
+| `node_id` | String | Current node |
+| `node_name` | String | Node label |
+| `node_type` | String | `email`, `condition`, `delay`, etc. |
+| `execution_stage` | String | `workflow_started`, `node_started`, `node_processing`, `node_finished` |
+| `status` | String | `info`, `error`, `warning` |
+| `message` | String | What happened |
+| `properties` | JSON | Extra context |
+| `created_at` | datetime | Row created |
+| `updated_at` | datetime | Row last updated |
 
 </Tab>
 
 <Tab title="Requests">
 
-Complete API request logs for every request sent to SuprSend, including request payloads, responses, and triggered workflows.
-
-**Key information:** API type, payload, response, status (`completed`, `failure`, `partial_failure`), errors, metadata (SDK version, machine details, location).
-
-**Use cases:**
-- Track API calls and success rates
-- Identify error patterns
-- Debug SDK integrations
-- Maintain API audit trail
+| Column | Type | Description |
+|--------|------|-------------|
+| `idempotency_key` | String | Primary key |
+| `api_type` | String | `event`, `workflow`, `user` |
+| `api_name` | String | Workflow/event name |
+| `distinct_id_list` | Array | Target users |
+| `tenant_id` | String | Tenant ID |
+| `payload` | JSON | Request body |
+| `response` | JSON | API response |
+| `errors` | Array | Any errors |
+| `executions` | Array | Triggered workflow IDs |
+| `status` | String | `completed`, `failure`, `partial_failure` |
+| `created_at` | datetime | Row created |
+| `updated_at` | datetime | Row last updated |
 
 </Tab>
 </Tabs>
 
-### Linking data
-
-The three data points connect to trace complete notification flows:
-
-```mermaid
-graph LR
-    A[Requests] -->|execution_id| B[Workflow Executions]
-    B -->|execution_id<br/>wf_execution_id| C[Messages]
-    A -->|idempotency_key| C
-    
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#e8f5e9
-```
-
-**Linking fields:**
-- `Requests.executions[].execution_id` → `Workflow Executions.execution_id`
-- `Workflow Executions.execution_id` → `Messages.wf_execution_id`
-- `Requests.idempotency_key` → `Messages.idempotency_key`
-
 ---
 
-## Quick start
+## Setup
 
-You complete setup in 4 steps (~15 minutes):
- 
-### Prerequisites
- 
-- **AWS account** with admin access (permissions to create S3 buckets and IAM roles/users)
-- SuprSend workspace
+### Step 1: Create your S3 bucket
 
----
- 
-### Step 1: Create S3 bucket
- 
-1. Open [AWS S3 Console](https://s3.console.aws.amazon.com/) → **Create bucket**
+Open [AWS S3 Console](https://s3.console.aws.amazon.com/) and create a bucket with these settings:
 
-   ![](/images/docs/c37cc40-image.png)
+![](/images/docs/c37cc40-image.png)
 
-2. Configure these settings:
-   - **Bucket name**: Unique name (e.g., `supersend-staging-s3-connector`) - **Save this name, you'll need it in Step 2**
-   - **Region**: Your preferred region
-   - **Bucket type**: General purpose
-   - **Object Ownership**: ACLs disabled (recommended)
-   - **Block all public access**: Enabled
-   - **Bucket versioning**: Disabled
-   - **Default encryption**: Server-side encryption with Amazon S3 managed keys (SSE-S3). For compliance-heavy use cases requiring audit trails and key management, use SSE-KMS instead.
-   - **Bucket Key**: Enabled
+- **Bucket name**: Something like `suprsend-logs-production` (save this—you'll need it)
+- **Region**: Pick one close to you
+- **Block all public access**: Yes
+- **Encryption**: SSE-S3 (or SSE-KMS for compliance)
 
-3. Click **Create bucket**
+![](/images/docs/4a07acb-Screenshot_2023-08-09_at_9.29.19_PM.png)
 
-   ![](/images/docs/4a07acb-Screenshot_2023-08-09_at_9.29.19_PM.png)
+### Step 2: Create an IAM policy
 
+This gives SuprSend permission to write to your bucket. In [IAM Console](https://console.aws.amazon.com/iam/), create a policy with this JSON:
 
----
- 
-### Step 2: Create IAM policy
- 
-1. Open [IAM Console](https://console.aws.amazon.com/iam/) → **Policies** → **Create Policy** → **JSON** tab
-2. Paste this policy (replace `YOUR_BUCKET_NAME` with the exact bucket name from Step 1):
- 
 ```json
 {
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllObjectActions",
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",     
-        "s3:ListBucket",    
-        "s3:GetObject"      
-      ],
-      "Resource": [
-        "arn:aws:s3:::YOUR_BUCKET_NAME/*",
-        "arn:aws:s3:::YOUR_BUCKET_NAME"
-      ]
-    }
-  ]
+  "Statement": [{
+    "Sid": "SuprSendS3ExportAccess",
+    "Effect": "Allow",
+    "Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject"],
+    "Resource": [
+      "arn:aws:s3:::YOUR_BUCKET_NAME/*",
+      "arn:aws:s3:::YOUR_BUCKET_NAME"
+    ]
+  }]
 }
 ```
- 
-Replace both instances of `YOUR_BUCKET_NAME` with your exact bucket name from Step 1. Keep the `/*` suffix on the first Resource ARN and ensure there are no extra spaces in the ARN.
 
-3. Name it (e.g., `suprsend_s3_policy`) → **Create Policy**
+Replace `YOUR_BUCKET_NAME` with your actual bucket name. Save it as something like `suprsend_s3_policy`.
 
----
- 
 ### Step 3: Set up authentication
- 
-**Which should you choose?**
 
-| Auth Scheme | When to Use | Pros | Cons |
-|-------------|-------------|------|------|
-| **IAM Role** | Enterprises, multi-account setups, production | Most secure, automates trust, no key rotation needed | Requires trust relationship setup |
-| **IAM User** | Quick tests, small projects, development | Simple setup, fewer steps | Less secure, needs key rotation every 90 days |
- 
+Two authentication methods are available:
+
+| Method | When to use | We recommend |
+|--------|-------------|--------------|
+| **IAM Role** | Production, enterprise, multi-account setups | ✅ Yes—credentials rotate automatically, no secrets to manage |
+| **IAM User** | Development, testing, quick POCs | Only if IAM Role isn't feasible. Requires manual key rotation every 90 days. |
+
 <Tabs>
-<Tab title="IAM Role">
+<Tab title="IAM Role (Recommended)">
 
-#### Step 3.1: Create role
+**Use IAM Role when:**
+- Running in production environments
+- Security compliance requires no long-lived credentials
+- You have multi-account AWS setups
+- You want zero credential management overhead
 
-1. IAM Console → **Roles** → **Create Role**
-2. Select **Trusted Entity Type** as **AWS Account**
-3. Select **Another AWS Account**
-4. Enter SuprSend account ID: `924219879248`
-5. Attach the policy from Step 2
-6. Name role (e.g., `suprsend_trust_role`) → **Create role**
+1. In IAM Console → **Roles** → **Create Role**
+2. Select **Another AWS Account** and enter SuprSend's account ID: `924219879248`
+3. Attach the policy you just created
+4. Name it (e.g., `suprsend_s3_role`)
 
-#### Step 3.2: Verify trust relationship
+Now configure the trust relationship. Generate an External ID at [uuidgenerator.net](https://www.uuidgenerator.net/), then update the trust policy:
 
-1. Generate an External ID using a [UUID Generator](https://www.uuidgenerator.net/) (recommended best practice to prevent "confused deputy" attacks). Save it securely—you'll need the same value in both AWS and SuprSend (case-sensitive).
-
-2. Select the role created above from IAM Console → **Roles** tab
-
-3. In **Trust Relationships** tab, verify this trust policy:
- 
 ```json
 {
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::924219879248:root"
-      },
-      "Action": "sts:AssumeRole",
-      "Condition": {
-        "StringEquals": {
-          "sts:ExternalId": "YOUR_EXTERNAL_ID_HERE"
-        }
-      }
-    }
-  ]
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "AWS": "arn:aws:iam::924219879248:root" },
+    "Action": "sts:AssumeRole",
+    "Condition": { "StringEquals": { "sts:ExternalId": "YOUR_EXTERNAL_ID" }}
+  }]
 }
 ```
 
-5. Replace `YOUR_EXTERNAL_ID_HERE` with the External ID you generated above
-
-6. Click **Update policy**
-
-#### Step 3.3: Save credentials
-
-- **Role ARN** (from Summary tab - copy exactly, no extra spaces)
-- **External ID** (the value you generated above - case-sensitive)
-- **Maximum session duration**
+**Save these for the next step:** Role ARN + External ID (case-sensitive, no extra spaces)
 
 </Tab>
 
 <Tab title="IAM User">
 
-#### Step 3.1: Create user
+**Use IAM User when:**
+- Setting up for development or testing
+- Quick proof-of-concept needed
+- IAM Role setup isn't feasible in your environment
 
-1. IAM Console → **Users** → **Add users**
-2. Enter username (e.g., `s3-bucket-suprsend`)
-3. Select **Provide access to AWS services and resources**
-4. Attach policy from Step 2
-5. Click **Next** → **Create user**
+<Warning>IAM User credentials require manual rotation every 90 days for security compliance.</Warning>
 
-#### Step 3.2: Get credentials
+1. In IAM Console → **Users** → **Add users**
+2. Name it (e.g., `suprsend-s3-connector`)
+3. Attach your policy
+4. Go to **Security credentials** → **Create access key** → **Third party service**
 
-1. Open user → **Security credentials** → **Create access key**
-2. Choose **Third party service**
-3. **Save immediately:** Access Key ID and Secret Access Key (AWS won't show secret again)
-
-#### Step 3.3: Save credentials
-
-- **Access Key ID** (copy exactly, no extra spaces)
-- **Secret Access Key** (copy exactly, no extra spaces)
+**Save immediately:** Access Key ID + Secret Access Key (AWS won't show the secret again)
 
 </Tab>
 </Tabs>
 
----
- 
-### Step 4: Configure in SuprSend
- 
-1. SuprSend → **Settings** → **Connectors** → **Amazon S3 v2.0** → **Add Connector**
+### Step 4: Connect in SuprSend
+
+Go to **Settings** → **Connectors** → **Amazon S3 v2.0** → **Add Connector**
 
 <Tabs>
 <Tab title="IAM Role">
- 
-<div style={{overflow: 'hidden', maxWidth: '100%'}}>
+
 ![S3 Connector IAM Role Configuration](/images/s3-iamrole.png)
-</div>
 
 </Tab>
-
 <Tab title="IAM User">
- 
-<div style={{overflow: 'hidden', maxWidth: '100%'}}>
+
 ![S3 Connector IAM User Configuration](/images/s3-iamuser.png)
-</div>
 
 </Tab>
 </Tabs>
 
-| Form Field | Description |
-|------------|-------------|
-| **Connector name*** | Descriptive name to identify the connector (for your reference) |
-| **Authentication Scheme*** | Select IAM Role or IAM User for authentication |
-| **AWS Region*** | AWS region where your S3 bucket is hosted (e.g., `us-east-1`, `ap-south-1`, `eu-west-2`). Must match Step 1 exactly. |
-| **Export Bucket*** | Name of the S3 bucket where Parquet files will be exported. Must match Step 1 exactly. |
-| **Data Points to export*** | Select which data points to sync: Messages, Workflow Executions, Requests, or all |
-| **Role ARN*** | (IAM Role only) The Amazon Resource Name (ARN) of the IAM Role that grants access to the S3 bucket. Copy exactly from AWS (no extra spaces). |
-| **External ID*** | (IAM Role only) The unique External ID you configured in the IAM Role's trust policy. Must match exactly (case-sensitive). |
-| **Duration Seconds** | (IAM Role only) How long credentials remain valid. Default: 3600 (1 hour), range: 900-43200 |
-| **Access Key ID*** | (IAM User only) The access key ID linked to the IAM user. Copy exactly from AWS (no extra spaces). |
-| **Secret Access Key*** | (IAM User only) The secret access key linked to the IAM user. Copy exactly from AWS (no extra spaces). |
+Enter your AWS credentials, select which data points to export, then **Save** and toggle **Enable sync**.
 
-2. Click **Save** → Toggle **Enable sync**
+### Step 5: Verify it's working
 
-Initial files appear within 5-10 minutes after enabling sync.
+Give it about 10 minutes, then check your S3 bucket. You should see folders like `messages/year=2025/month=01/...` appearing.
 
----
-
-## Troubleshooting
- 
-<AccordionGroup>
-<Accordion title="Files not appearing or connection test failed" defaultOpen={false}>
-
-**Check these in order:**
-
-1. **Wait time:** Initial sync takes 10+ minutes. Wait at least 10 minutes before troubleshooting.
-
-2. **Bucket name mismatch:** Double-check your bucket name—even one wrong character will break the connection.
-   - AWS Console: Copy exact bucket name (case-sensitive)
-   - SuprSend: Paste exact same name (no extra spaces)
-
-3. **Region mismatch:** AWS region must match exactly between Step 1 and Step 4.
-
-4. **IAM permissions (IAM Role):**
-   - Role ARN copied exactly (no extra spaces)
-   - External ID matches exactly (case-sensitive)
-   - Trust policy has correct Principal (`924219879248`)
-
-5. **IAM permissions (IAM User):**
-   - Access Key ID and Secret Access Key are correct
-   - Keys haven't been rotated/deleted
-
-6. **Policy configuration:**
-   - Policy includes `s3:PutObject`, `s3:ListBucket`, `s3:GetObject`
-   - Resource ARN has `/*` suffix on first entry
-   - Both Resource ARNs use exact bucket name
-
-7. **SuprSend configuration:**
-   - Sync is enabled (toggle is ON)
-   - At least one data point is selected
-   - Connector status shows "Active"
- 
-</Accordion>
- 
-<Accordion title="Missing data" defaultOpen={false}>
-
-**Common causes:**
-
-- **Data point not selected:** Verify the data point is selected in "Data Points to export"
-- **New data points:** New selections only export going forward, not retroactively
-- **No notifications sent:** Check that notifications were actually sent during that time period
-- **Sync was paused:** If sync was paused, data backfills automatically when resumed (may take time)
- 
-</Accordion>
- 
-<Accordion title="Backfill behavior" defaultOpen={false}>
-
-**How backfilling works:**
-
-- When you re-enable sync after pausing, all data from the pause period is automatically exported
-- You can add or remove data points anytime; new selections only export going forward
-- Backfill may take time depending on data volume
- 
-</Accordion>
-</AccordionGroup>
+<Warning>
+Nothing showing up? Jump to [FAQs](#faqs) for troubleshooting steps.
+</Warning>
 
 ---
 
 ## Best practices
 
 <AccordionGroup>
-<Accordion title="Security" defaultOpen={false}>
+<Accordion title="Security">
 
-- **Use IAM Role for production** - More secure than IAM User, no key rotation needed
-- **Rotate IAM User access keys every 90 days** - Required by AWS security standards
-- **Never share IAM credentials** - Don't commit credentials to code repositories
-- **Enable S3 bucket encryption** - Use SSE-S3 or SSE-KMS for compliance
-- **Keep bucket private** - Block all public access
-
-</Accordion>
-
-<Accordion title="IAM management" defaultOpen={false}>
-
-- **Assign policies to groups, not individual users** - Simplifies permission management
-- **Use External ID for IAM Roles** - Prevents "confused deputy" attacks
-- **Plan for key rotation** - Avoid service interruption by rotating IAM User keys proactively
+- Use IAM Role in production—no keys to manage
+- Never commit credentials to git
+- Keep your bucket private with encryption enabled (SSE-S3 or SSE-KMS)
+- Block all public access to your bucket
 
 </Accordion>
 
-<Accordion title="Data management" defaultOpen={false}>
+<Accordion title="Managing roles & permissions">
 
-- **Start with Messages data point** - Verify setup before adding other data points
-- **Monitor sync status** - Check connector status in SuprSend dashboard
-- **Understand backfill behavior** - When you re-enable sync, historical data is automatically exported
+- **Use IAM Role for production**—credentials rotate automatically, no secrets to manage
+- **Rotate IAM User keys every 90 days**—required for security compliance
+- **Use External ID for IAM Roles**—prevents "confused deputy" attacks
+- **Assign policies to groups, not users**—simplifies permission management
+
+</Accordion>
+
+<Accordion title="Data syncing & querying">
+
+- **Sync only what you need**—for analytics, Messages is often enough. Add Workflow Executions and Requests for debugging.
+- **Use `updated_at` for incremental queries**—filter by this field instead of scanning all data. Saves memory and query costs.
+- **Clean up old data regularly**—data accumulates fast. Keep 3-6 months, archive or delete the rest.
+- **Adjust data points anytime**—disable ones you don't need, re-enable to resync automatically.
 
 </Accordion>
 </AccordionGroup>
 
 ---
 
-## Reference
+## FAQs
 
-### Data schemas
+<AccordionGroup>
+<Accordion title="Files not appearing?">
 
-<Tabs>
-<Tab title="Requests">
+Work through this checklist:
 
-| Column | Description | Type | Example |
-|--------|-------------|------|---------|
-| `idempotency_key` | Unique request identifier | string | `req_abc123def456` |
-| `api_type` | Entity type for the API call | string | `event`, `workflow`, `user` |
-| `api_name` | Workflow/event name | string | `order_confirmation` |
-| `distinct_id_list` | List of user distinct_id or object type/id | Array of strings | `["user_123", "user_456"]` |
-| `tenant_id` | Tenant ID | string | `default` |
-| `payload` | Input payload with API call details | JSON object | `{"event": "order_placed", "amount": 99.99}` |
-| `response` | HTTP API response | JSON object | `{"status": 200, "execution_ids": ["exec_123"]}` |
-| `errors` | Request-level errors with message, severity, type, and code | Array of JSON objects | `[{"message": "Recipient not found", "severity": "error"}]` |
-| `executions` | Workflow/broadcast execution IDs and slugs triggered | Array of JSON objects | `[{"execution_id": "exec_123", "slug": "welcome_email"}]` |
-| `created_at` | Request timestamp (UTC) | datetime | `2025-01-15T14:23:45.123Z` |
-| `updated_at` | Last update timestamp | datetime | `2025-01-15T14:23:45.456Z` |
-| `status` | Request status | string | `completed`, `failure`, `partial_failure` |
+1. **Wait 10 minutes**—first sync takes time
+2. **Check bucket name**—must match exactly, case-sensitive
+3. **Check region**—must match in both AWS and SuprSend
+4. **Check IAM**—Role ARN or Access Keys correct? External ID matches?
+5. **Check policy**—has `PutObject`, `ListBucket`, `GetObject` on the right bucket?
 
-</Tab>
+</Accordion>
 
-<Tab title="Workflow Executions">
+<Accordion title="How do I know it's working?">
 
-| Column | Description | Type | Example |
-|--------|-------------|------|---------|
-| `execution_id` | Unique workflow execution identifier | String | `exec_abc123def456` |
-| `recipient_distinct_id` | User or object identifier | String | `user_123`, `team_developer` |
-| `tenant_id` | Tenant identifier | String | `default`, `acme_corp` |
-| `idempotency_key` | Request identifier | String | `req_abc123def456` |
-| `workflow_slug` | Workflow slug | String | `welcome_email`, `order_confirmation` |
-| `workflow_version` | Workflow version | String | `v1.2`, `v2.0` |
-| `node_id` | Node identifier | String | `node_email_1`, `node_condition_2` |
-| `node_name` | Node name | String | `Send Email`, `Check Condition` |
-| `node_type` | Node type | String | `email`, `condition`, `delay` |
-| `execution_stage` | Execution stage | String | `workflow_started`, `node_started`, `node_processing`, `node_finished` |
-| `status` | Log status | String | `info`, `error`, `warning` |
-| `message` | Description of what happened; error message if status is `error` | String | `Email sent successfully`, `Template rendering failed` |
-| `properties` | Additional data consumed or generated (input payload, webhook request/response, etc.) | JSON object | `{"template_rendered": true, "channel": "email"}` |
-| `created_at` | Workflow execution start time | datetime | `2025-01-15T14:23:45.123Z` |
-| `updated_at` | Last workflow step log update time | datetime | `2025-01-15T14:23:46.789Z` |
+In SuprSend → **Settings** → **Connectors** → **Amazon S3 v2.0**:
+- Sync toggle is ON
+- Status shows "Active"
+- At least one dataset selected
 
-</Tab>
+</Accordion>
 
-<Tab title="Messages">
+<Accordion title="Missing data?">
 
-| Column | Description | Type | Example |
-|--------|-------------|------|---------|
-| `message_id` | Message identifier (only present if no execution_error) | String | `msg_xyz789` |
-| `wf_execution_id` | Workflow execution identifier | String | `exec_abc123def456` |
-| `recipient_distinct_id` | User or object identifier | String | `user_123`, `team_developer` |
-| `tenant_id` | Tenant identifier | String | `default`, `acme_corp` |
-| `workflow_slug` | Workflow slug | String | `welcome_email`, `order_confirmation` |
-| `status` | Message delivery status | String | `triggered`, `delivered`, `seen`, `clicked`, `dismissed`, `failed` |
-| `channel_slug` | Communication channel | String | `email`, `sms`, `push` |
-| `channel_info` | Channel value (e.g., email address, phone number) | String | `user@example.com`, `+1234567890` |
-| `vendor_name` | Vendor nickname | String | `SendGrid`, `Twilio`, `AWS SES` |
-| `triggered_at` | When message was sent to vendor | datetime | `2025-01-15T14:23:45.123Z` |
-| `delivered_at` | When vendor sent the message | datetime | `2025-01-15T14:23:46.789Z` |
-| `seen_at` | When user saw the message | datetime | `2025-01-15T14:25:30.000Z` |
-| `execution_failure_reason` | Failure reason at execution level with severity (`error` or `warning`) | JSON object | `{"message": "Template rendering failed", "severity": "error"}` |
-| `delivery_failure_reason` | Failure reason from vendor | String | `Invalid recipient address` |
-| `created_at` | Entry creation time | datetime | `2025-01-15T14:23:45.123Z` |
-| `updated_at` | Last status update time | datetime | `2025-01-15T14:23:50.456Z` |
+- Data point might not be selected—check your export settings
+- New data points only export going forward (no historical backfill)
+- Were notifications actually sent during that time?
+- If sync was paused, data backfills when you resume
 
-</Tab>
-</Tabs>
+</Accordion>
+
+<Accordion title="How does backfilling work?">
+
+| What you did | What happens |
+|--------------|--------------|
+| Paused then resumed | Backfills everything from the pause |
+| Added a new dataset | Starts fresh, no historical data |
+| Re-enabled a dataset | Backfills from when it was disabled |
+
+</Accordion>
+
+<Accordion title="Can I change data points later?">
+
+Absolutely:
+- **Add one**: Starts exporting going forward
+- **Remove one**: Stops syncing, data stays in S3
+- **Re-enable**: Backfills automatically
+
+</Accordion>
+</AccordionGroup>
