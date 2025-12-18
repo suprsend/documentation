@@ -1,17 +1,17 @@
 ---
-title: "Type Generation"
-description: "Generate type-safe interfaces from SuprSend schemas to ensure type safety in your workflow triggers."
+title: "Type Safety"
+description: "Ensure Type Safety in Workflow Triggers with Schema-Driven Interfaces."
 keywords:
+  - type safety
   - type generation
   - generated types
-  - type safety
   - schema types
-  - suprsend types
 ---
 
 ## Overview
+Type generation automatically creates strongly-typed programming language interfaces from your SuprSend [JSON schemas](/docs/validate-workflow-payload). Instead of manually writing type definitions, you define your workflow payload structure once as a JSON schema in SuprSend, and the CLI generates type-safe interfaces for TypeScript, Python, Go, Java, Kotlin, Swift, or Dart. 
 
-Type generation automatically creates strongly-typed programming language interfaces from your SuprSend [JSON schemas](/docs/validate-workflow-payload). Instead of manually writing type definitions, you define your workflow payload structure once as a JSON schema in SuprSend, and the CLI generates type-safe interfaces for TypeScript, Python, Go, Java, Kotlin, Swift, or Dart.
+This ensures payloads sent to workflows always match the expected schema, catching errors at compile time instead of at runtime.
 
 <Note>
 Generated type files are auto-generated and should not be manually edited. Regenerate types when you update schemas in SuprSend.
@@ -24,54 +24,21 @@ Generated type files are auto-generated and should not be manually edited. Regen
 Without type generation, you work with plain objects that can lead to runtime errors. Type generation catches these errors during development with compile-time type safety and IDE autocomplete.
 
 ```typescript
-// ❌ Without types - errors caught at runtime
-const data = { invoice_amount: "5000" }; // Oops! Should be number
+// ❌ Without types - bug may show up only at runtime
+const data1 = { invoice_amount: "5000" };
+const total1 = data1.invoice_amount + 500; // "5000500" (string concat)
 
-// ✅ With generated types - errors caught during development
-const data: OrderCreatedEventData = { invoice_amount: 5000 };
+
+// ✅ With generated types - error caught during development
+type OrderCreatedEventData = {
+  invoice_amount: number;
+};
+const data2: OrderCreatedEventData = { invoice_amount: "5000" };
+//                         ^^^^^^^^^ TypeScript error:
+// Type 'string' is not assignable to type 'number'.
 ```
 
 You get early error detection, IDE autocomplete, immediate feedback when schemas change, and self-documenting code.
-
----
-
-## Quick Start
-
-Get started with type generation in 4 steps:
-
-<Steps>
-  <Step title="1. Install and Authenticate">
-    Ensure you have the [SuprSend CLI installed](/reference/cli-installation) and are [authenticated with your workspace](/reference/cli-authentication).
-  </Step>
-  
-  <Step title="2. Create a Schema">
-    Define your workflow payload structure as a [JSON schema](/docs/validate-workflow-payload) in SuprSend and ensure it's enabled.
-  </Step>
-  
-  <Step title="3. Generate Types">
-    Run the CLI command to generate types for your language:
-    
-    ```bash
-    suprsend generate-types typescript --output-file types.ts
-    ```
-    
-    This processes all enabled schemas in your workspace and generates type definitions.
-  </Step>
-  
-  <Step title="4. Use in Your Code">
-    Import and use the generated types in your workflow triggers:
-    
-    ```typescript
-    import { OrderCreatedEventData } from "./types";
-    
-    const data: OrderCreatedEventData = {
-      first_name: "User",
-      invoice_amount: 5000,
-      invoice_id: "Invoice-1234"
-    };
-    ```
-  </Step>
-</Steps>
 
 ---
 
@@ -86,113 +53,190 @@ Before generating types, ensure you have:
 3. ✅ Created and enabled schemas for your workflows ([see guide](/docs/validate-workflow-payload))
 
 ### Command Syntax
+Once you've completed all the prerequisites, you can generate types using the following command in CLI. It will create type definitions for all the live schemas in your workspace:
 
 ```bash
 suprsend generate-types <language> --output-file <output-file> [flags]
 ```
 
-### Supported Languages
-
-| Language | File Extension | Output Type |
-|----------|---------------|-------------|
-| TypeScript | `.ts` | Interfaces |
-| Python | `.py` | Pydantic Models |
-| Go | `.go` | Structs |
-| Java | `.java` | POJOs |
-| Kotlin | `.kt` | Data classes |
-| Swift | `.swift` | Structs |
-| Dart | `.dart` | Classes |
-
-For complete details on command arguments and flags, see the [CLI Generate Types Reference](/reference/cli-schema-generate-types).
-
-### Basic Examples
+Here's an example of how to generate types in all languages:
 
 <CodeGroup>
 
 ```bash TypeScript
+suprsend generate-types typescript
 suprsend generate-types typescript --output-file types.ts
 ```
 
 ```bash Python
+suprsend generate-types python
 suprsend generate-types python --output-file types.py
 ```
 
 ```bash Go
+suprsend generate-types go
 suprsend generate-types go --output-file types.go
 ```
 
 ```bash Java
+suprsend generate-types java
 suprsend generate-types java --output-file types.java
 ```
 
-```bash Kotlin
+```bash Kotlin  
+suprsend generate-types kotlin
 suprsend generate-types kotlin --output-file types.kt
 ```
 
 ```bash Swift
+suprsend generate-types swift
 suprsend generate-types swift --output-file types.swift
 ```
 
+```bash Dart
+suprsend generate-types dart
+suprsend generate-types dart --output-file types.dart
+```
 </CodeGroup>
 
-### Advanced Usage
+### Supported Languages
+
+| Language | File Extension | Default Output File |
+|----------|---------------|-------------|
+| TypeScript | `.ts` | suprsend-types.ts |
+| Python | `.py` | suprsend-types.py |
+| Go | `.go` | suprsend-types.go |
+| Java | `.java` | suprsend-types.java |
+| Kotlin | `.kt` | suprsend-types.kt |
+| Swift | `.swift` | suprsend-types.swift |
+| Dart | `.dart` | suprsend-types.dart |
+
+For complete details on command arguments and flags, see the [CLI Generate Types Reference](/reference/cli-schema-generate-types).
+
+### Output File Structure
+The output of the syntax generates a file with interfaces or definitions corresponding to all events and workflows that are linked to the schemas. So, there can't be a mismatch between the schema mapped to the event or workflow while writing the code.
+All events are suffixed with `Event` keyword and workflows are suffixed with `Workflow` keyword.
+
 
 <CodeGroup>
+```python suprsend-types.py
+from typing import Optional, List
+from pydantic import BaseModel
 
-```bash Generate from specific workspace
-suprsend generate-types typescript --output-file types.ts --workspace production
+class OrderCreatedEvent(BaseModel):
+    order_id: str
+    user_id: str
+    order_amount: float
+    currency: str
+    payment_status: str
+    discount_code: Optional[str] = None
+    items_count: int
+
+class SendInvoiceWorkflow(BaseModel):
+    invoice_id: str
+    invoice_amount: float
+    invoice_date: str
+    invoice_status: str
+    invoice_due_date: str
+    invoice_currency: str
+    invoice_items: List[InvoiceItem]
 ```
 
-```bash Custom build flags
-suprsend generate-types go --output-file types.go --build-flags "flag1,flag2"
+```typescript suprsend-types.ts
+export interface OrderCreatedEvent {
+    order_id: string;
+    user_id: string;
+    order_amount: number;
+    currency: string;
+    payment_status: string;
+    discount_code: string | null;
+    items_count: number;
+}
+
+export interface SendInvoiceWorkflow {
+    invoice_id: string;
+    invoice_amount: number;
+    invoice_date: string;
+    invoice_status: string;
+    invoice_due_date: string;
+    invoice_currency: string;
+    invoice_items: InvoiceItem[];
+}
 ```
 
-```bash Generate from draft schemas
-suprsend generate-types typescript --output-file types.ts --mode draft
+```go suprsend-types.go
+package main
+
+type OrderCreatedEvent struct {
+    OrderID string `json:"order_id"`
+    UserID string `json:"user_id"`
+    OrderAmount float64 `json:"order_amount"`
+    Currency string `json:"currency"`
+    PaymentStatus string `json:"payment_status"`
+    DiscountCode string `json:"discount_code"`
+    ItemsCount int `json:"items_count"`
+}
+
+type SendInvoiceWorkflow struct {
+    InvoiceID string `json:"invoice_id"`
+    InvoiceAmount float64 `json:"invoice_amount"`
+    InvoiceDate string `json:"invoice_date"`
+    InvoiceStatus string `json:"invoice_status"`
+    InvoiceDueDate string `json:"invoice_due_date"`
+    InvoiceCurrency string `json:"invoice_currency"`
+    InvoiceItems []InvoiceItem `json:"invoice_items"`
+}
+```
+
+```java suprsend-types.java
+package suprsend.types;
+
+public class OrderCreatedEvent {
+    private String orderID;
+    private String userID;
+    private double orderAmount;
+    private String currency;
+    private String paymentStatus;
+    private String discountCode;
+    private int itemsCount;
+}
+
+public class SendInvoiceWorkflow {
+    private String invoiceID;
+    private double invoiceAmount;
+    private String invoiceDate;
+    private String invoiceStatus;
+    private String invoiceDueDate;
+    private String invoiceCurrency;
+    private List<InvoiceItem> invoiceItems;
+}
 ```
 
 </CodeGroup>
-
 ---
 
 ## Use Generated Types
-
-After generating types, import them into your codebase and use them in your workflow triggers. The generated types match your JSON schema structure, ensuring type safety throughout your application.
+Once generated, you can **import the type definitions in your workflow or event triggers** to ensure type safety throughout your codebase.
 
 <CodeGroup>
 
 ```typescript TypeScript
-// ============================================
-// GENERATED TYPE (types.ts)
-// ============================================
-// This file is generated automatically by SuprSend based on available schema. DO NOT MODIFY IT.
-export interface OrderCreatedEventData {
-   first_name: string;
-   invoice_amount: number;
-   invoice_id: string;
-}
-
-// ============================================
-// USAGE IN YOUR CODE
-// ============================================
 import { Suprsend, WorkflowTriggerRequest } from "@suprsend/node-sdk";
-import { OrderCreatedEventData } from "./types";
+//Import the generated types
+import { SendInvoiceWorkflow, OrderCreatedEvent } from "./suprsend-types";
 
 const client = new Suprsend("workspace_key", "workspace_secret");
 
 // ✅ Type-safe data creation
-const triggerData: OrderCreatedEventData = {
-   first_name: "User",
-   invoice_amount: 5000,
-   invoice_id: "Invoice-1234",
+const triggerData: SendInvoiceWorkflow = {
+   order_id: "Order-1234",
+   user_id: "User-1234",
+   order_amount: 5000,
+   currency: "USD"
 };
 
 const body = {
-   workflow: "_workflow_slug_",
-   actor: {
-       distinct_id: "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-       name: "actor_1",
-   },
+   workflow: "send-invoice",
    recipients: [
        {
            distinct_id: "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
@@ -213,54 +257,33 @@ console.log("response", response);
 ```
 
 ```python Python
-# ============================================
-# GENERATED TYPE (types.py)
-# ============================================
-# This file is generated automatically by SuprSend based on available schema. DO NOT MODIFY IT.
-from pydantic import BaseModel
-
-class OrderCreatedEventData(BaseModel):
-   first_name: str
-   invoice_amount: int
-   invoice_id: str
-
-# ============================================
-# USAGE IN YOUR CODE
-# ============================================
 from suprsend import Suprsend, WorkflowTriggerRequest
-from .types import OrderCreatedEventData
+# Import the generated types
+from suprsend-types import SendInvoiceWorkflow, OrderCreatedEvent
 
 supr_client = Suprsend("workspace_key", "workspace_secret")
 
 # ✅ Type-safe data creation - Pydantic validates at runtime
-trigger_data = OrderCreatedEventData(
-   first_name="User",
-   invoice_amount=5000,
-   invoice_id="Invoice-1234",
+trigger_data = SendInvoiceWorkflow(
+   order_id="Order-1234",
+   user_id="User-1234",
+   order_amount=5000,
+   currency="USD"
 )
 
 w1 = WorkflowTriggerRequest(
    body={
-       "workflow": "_workflow_slug_",
-       "actor": {
-           "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-           "name": "actor_1",
-           "$skip_create": True,
-       },
+       "workflow": "send-invoice",
        "recipients": [
            {
                "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
                "$email": ["abc@example.com"],
-               "name": "recipient_1",
-               "$preferred_language": "en",
-               "$timezone": "America/New_York",
-               "$skip_create": True,
-           },
-           {"object_type": "teams", "id": "finance", "$skip_create": True},
+               "name": "recipient_1"
+           }
        ],
-       "data": trigger_data.model_dump(), # ✅ Convert Pydantic model to dict
+       "data": trigger_data.model_dump(), # ✅ Convert Pydantic model to dict in Pydantic v2. For Pydantic v1, use .dict() instead.
    },
-   tenant_id="tenant_id1",
+   tenant_id="tenant_id",
    idempotency_key="_unique_identifier_of_the_request_",
 )
 
@@ -269,21 +292,6 @@ print(response)
 ```
 
 ```go Go
-// ============================================
-// GENERATED TYPE (types.go)
-// ============================================
-// This file is generated automatically by SuprSend based on available schema. DO NOT MODIFY IT.
-package main
-
-type OrderCreatedEventData struct {
-   FirstName     string `json:"first_name"`
-   InvoiceAmount int    `json:"invoice_amount"`
-   InvoiceID     string `json:"invoice_id"`
-}
-
-// ============================================
-// USAGE IN YOUR CODE
-// ============================================
 package main
 
 import (
@@ -294,10 +302,16 @@ import (
 
 func triggerWorkflowAPI(suprClient *suprsend.Client) {
    // ✅ Type-safe struct creation
-   triggerData := OrderCreatedEventData{
-       FirstName:     "User",
-       InvoiceAmount: 5000,
-       InvoiceID:     "Invoice-1234",
+   triggerData := SendInvoiceWorkflow{
+       invoice_id: "Invoice-1234",
+       invoice_amount: 5000,
+       invoice_date: "2025-01-01",
+       invoice_status: "paid",
+       invoice_items: []InvoiceItem{
+           {
+               item_id: "Item-1234",
+           }
+       }
    }
 
    // Convert struct to map for workflow payload
@@ -306,25 +320,12 @@ func triggerWorkflowAPI(suprClient *suprsend.Client) {
    _ = json.Unmarshal(jsonData, &data)
 
    wfReqBody := map[string]interface{}{
-       "workflow": "_workflow_slug_",
-       "actor": map[string]interface{}{
-           "distinct_id":  "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-           "name":         "actor_1",
-           "$skip_create": true,
-       },
+       "workflow": "send-invoice",
        "recipients": []map[string]interface{}{
            {
                "distinct_id":         "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
                "$email":              []string{"abc@example.com"},
                "name":                "recipient_1",
-               "$preferred_language": "en",
-               "$timezone":           "America/New_York",
-               "$skip_create":        true,
-           },
-           {
-               "object_type":  "teams",
-               "id":           "finance",
-               "$skip_create": true,
            },
        },
        "data": data, // ✅ Type-safe struct converted to map
@@ -332,7 +333,7 @@ func triggerWorkflowAPI(suprClient *suprsend.Client) {
 
    w1 := &suprsend.WorkflowTriggerRequest{
        Body:           wfReqBody,
-       TenantId:       "tenant_id1",
+       TenantId:       "tenant_id",
        IdempotencyKey: "_unique_identifier_of_the_request_",
    }
 
@@ -345,35 +346,11 @@ func triggerWorkflowAPI(suprClient *suprsend.Client) {
 ```
 
 ```java Java
-// ============================================
-// GENERATED TYPE (OrderCreatedEventData.java)
-// ============================================
-// This file is generated automatically by SuprSend based on available schema. DO NOT MODIFY IT.
-package suprsend.types;
-
-public class OrderCreatedEventData {
-   private String firstName;
-   private Integer invoiceAmount;
-   private String invoiceId;
-
-   public String getFirstName() { return firstName; }
-   public void setFirstName(String firstName) { this.firstName = firstName; }
-   
-   public Integer getInvoiceAmount() { return invoiceAmount; }
-   public void setInvoiceAmount(Integer invoiceAmount) { this.invoiceAmount = invoiceAmount; }
-   
-   public String getInvoiceId() { return invoiceId; }
-   public void setInvoiceId(String invoiceId) { this.invoiceId = invoiceId; }
-}
-
-// ============================================
-// USAGE IN YOUR CODE
-// ============================================
 import org.json.JSONObject;
 import org.json.JSONArray;
 import suprsend.Suprsend;
 import suprsend.WorkflowTriggerRequest;
-import suprsend.types.OrderCreatedEventData;
+import suprsend.types.SendInvoiceWorkflow; //Import the generated type
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -398,41 +375,29 @@ public class Workflow {
        Suprsend suprClient = new Suprsend("workspace_key", "workspace_secret");
 
        // ✅ Type-safe data creation
-       OrderCreatedEventData triggerData = new OrderCreatedEventData();
-       triggerData.setFirstName("User");
+       SendInvoiceWorkflowData triggerData = new SendInvoiceWorkflowData();
+       triggerData.setInvoiceID("Invoice-1234");
        triggerData.setInvoiceAmount(5000);
-       triggerData.setInvoiceId("Invoice-1234");
+       triggerData.setInvoiceDate("2025-01-01");
+       triggerData.setInvoiceStatus("paid");
 
        JSONObject data = new JSONObject(toMap(triggerData));
 
        JSONObject body = new JSONObject()
-           .put("workflow", "_workflow_slug_")
-           .put("actor", new JSONObject()
-               .put("distinct_id", "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08")
-               .put("name", "actor_1")
-               .put("$skip_create", true)
-           )
+           .put("workflow", "send-invoice")
            .put("recipients", new JSONArray()
                .put(new JSONObject()
                    .put("distinct_id", "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09")
                    .put("$email", Arrays.asList("abc@example.com"))
                    .put("name", "recipient_1")
-                   .put("$preferred_language", "en")
-                   .put("$timezone", "America/New_York")
-                   .put("$skip_create", true)
-               )
-               .put(new JSONObject()
-                   .put("object_type", "teams")
-                   .put("id", "finance")
-                   .put("$skip_create", true)
                )
            )
            .put("data", data); // ✅ Type-safe
 
        WorkflowTriggerRequest wf = new WorkflowTriggerRequest(
            body, 
-           "_unique_request_identifier",
-           "tenant_id1"
+           "_unique_identifier_of_the_request_",
+           "tenant_id"
        );
 
        JSONObject resp = suprClient.workflows.trigger(wf);
@@ -451,60 +416,98 @@ With Pydantic models (Python), you get runtime validation. Invalid data types wi
 
 ## Best Practices
 
-- **Don't edit generated files** — Regenerate when schemas change
-- **Commit generated files** — Share type safety across your team
-- **Regenerate after updates** — Keep types in sync with schemas
-- **Add to CI/CD** — Automate type generation in your pipeline
-- **Use with schema validation** — Combine for end-to-end safety
-- **Separate by workspace** — Generate different files for staging/production
+- **Don’t edit generated files** — treat them as build artifacts and regenerate from schema changes.
+- **Regenerate on schema updates** — keep types in sync with SuprSend schemas (ideally in the same PR as schema changes).
+- **Automate in CI/CD** — run type generation in your pipeline and fail the build if generated output is out of date.
+- **Version your schemas** — evolve payloads safely without breaking existing producers/consumers.
+- **Use types at boundaries** — type the payload right before calling `workflows.trigger(...)` (and validate incoming webhook/event payloads).
 
 ---
 
-## Troubleshooting
+## Frequently Asked Questions
 
 <AccordionGroup>
-  <Accordion title="Types are outdated">
-    **Problem:** Generated types don't match your current schemas.
-
-    **Solution:** Regenerate types:
+    <Accordion title="My generated types are outdated. What should I do?">
+    If generated types don’t match your current schemas, regenerate them using the CLI:
     ```bash
     suprsend generate-types typescript --output-file types.ts
     ```
+    Always regenerate types after updating or committing schemas in SuprSend.
   </Accordion>
 
-  <Accordion title="Missing fields in generated types">
-    **Problem:** Expected fields aren't in the generated types.
+  <Accordion title="Why are some fields missing in my generated types?">
+    This usually happens when: 
+    - The schema is still in **draft** and not committed  
+    - Types were not regenerated after schema changes  
 
-    **Solution:** 
-    1. Check that the schema is **enabled** in SuprSend
-    2. Verify the schema has been **committed** (not just in draft)
-    3. Regenerate types after schema changes
+    Ensure the schema is committed and regenerate the types using the CLI.
   </Accordion>
 
-  <Accordion title="Type errors in IDE but code works">
-    **Problem:** TypeScript/Python shows errors, but the code runs fine.
+  <Accordion title="Why do I see type errors in my IDE but the code still runs?">
+    This typically means:
+    - Generated types are outdated  
+    - The schema was changed in SuprSend but types weren’t regenerated  
+    - You’re generating types from the wrong workspace  
 
-    **Solution:** This usually means:
-    - Types are outdated → Regenerate types
-    - Schema changed in SuprSend → Regenerate types
-    - Using wrong workspace → Check `--workspace` flag
+    Regenerate types and verify the `--workspace` flag if used.
   </Accordion>
 
-  <Accordion title="Command not found or authentication errors">
-    **Problem:** CLI command fails or returns authentication errors.
-
-    **Solution:**
-    1. Verify the CLI is installed: `suprsend --version`
-    2. Check authentication: `suprsend auth status`
-    3. Re-authenticate if needed: `suprsend auth login`
+  <Accordion title="What happens if I don’t use type safety?">
+    Without type safety:
+    - Errors surface only at runtime
+    - Invalid payloads may partially process
+    - Workflow conditions and templates can break silently
+    - Debugging becomes harder across environments
   </Accordion>
+
+  <Accordion title="Should I edit the generated type files?">
+    No. Generated files should not be edited manually. Any changes will be overwritten the next time types are regenerated. Always update schemas in SuprSend and regenerate types.
+  </Accordion>
+
+  <Accordion title="How often should I regenerate types?">
+    You should regenerate types whenever:
+    - A schema is added or updated
+    - A field is added, removed, or renamed
+    - A field’s datatype changes  
+
+    Many teams automate this in CI/CD.
+  </Accordion>
+
+  <Accordion title="Can I automate type generation in CI/CD?">
+    Yes. It’s recommended to add type generation to your CI/CD pipeline to ensure schemas and application code stay in sync across environments.
+  </Accordion>
+
+  <Accordion title="What does type safety mean in SuprSend workflows?">
+    Type safety ensures that the data you send when triggering workflows or events strictly matches the schema defined in SuprSend. This helps catch missing fields, wrong data types, or invalid payloads during development instead of at runtime.
+  </Accordion>
+
+  <Accordion title="Why should I use type-safe workflow triggers?">
+    Type-safe triggers help prevent production bugs caused by incorrect payloads, improve developer experience with autocomplete and validation, and ensure your workflow logic always receives valid and expected data.
+  </Accordion>
+
+  <Accordion title="How does SuprSend generate type-safe interfaces?">
+    SuprSend generates strongly typed interfaces directly from your JSON schemas. You define the schema once in SuprSend, and the CLI generates language-specific types (TypeScript, Python, Go, Java, Kotlin, Swift, Dart) that stay in sync with your workflows.
+  </Accordion>
+
+  <Accordion title="Which languages are supported for type generation?">
+    SuprSend supports type generation for:
+    - TypeScript
+    - Python
+    - Go
+    - Java
+    - Kotlin
+    - Swift
+    - Dart
+  </Accordion>
+
+  
+
 </AccordionGroup>
+
 
 ---
 
 ## Related Documentation
 
-- [Validate Trigger Payload](/docs/validate-workflow-payload) - Learn about JSON schemas
-- [CLI Generate Types Reference](/reference/cli-schema-generate-types) - Complete CLI command reference
-- [Trigger Workflow](/docs/trigger-workflow) - How to trigger workflows
-- [SuprSend CLI](/reference/cli-intro) - CLI overview and installation
+- [Validate Trigger Payload](/docs/validate-workflow-payload) - Learn about JSON schemas and how to link them to workflows or events
+- [CLI Generate Types Reference](/reference/cli-schema-generate-types) - Complete CLI command reference for generating types
