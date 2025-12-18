@@ -1,0 +1,304 @@
+---
+title: "Manage Categories and Preferences"
+description: "Set up and manage notification categories and preferences in SuprSend."
+---
+
+Categories are assigned to workflows and are used to manage notification preferences in SuprSend. For detailed concepts, see [Notification Categories](/docs/notification-category).
+
+---
+
+## Creating sections and sub-categories
+
+Go to [Developers → Notification categories](https://app.suprsend.com/en/staging/developers/preference-categories) and select a root-category (System, Transactional, or Promotional).
+- **System** is for critical account related notifications that users can't unsubscribe from.
+- **Transactional** is for notifications sent in response to user actions or transactions.
+- **Promotional** is for marketing notifications sent to promote products or re-engage users to your platform.
+
+### Creating a section
+
+Sections are optional and help organize sub-categories on the preference page. To create a section:
+
+1. Click `+Section`
+2. Add name and description for the section
+3. Click `Save Changes`
+
+You'll see the updated section inside the category and can edit it later by clicking on the Edit button against that section.
+
+![](/images/docs/7c1bb84-small-edit_section.png)
+
+### Adding sub-categories
+
+To add a sub-category:
+
+1. Click `+Sub-Category`
+2. Fill in:
+   - **Name**: What users see (slug (assigned to workflow) will be auto-generated from name)
+   - **Section**: Select the section where this sub-category will be grouped. Leave blank if you don't want to group it under any section.
+   - **Description (Optional)**: Description is used to describe the kind of notifications sent in the category. Helps users get more context about the category.
+
+![](/images/sub-category-optin.png)
+
+<Warning>
+  Don't change the sub-category name after using it in workflows—it updates the slug and can break existing workflows.
+</Warning>
+
+---
+
+## Configuring default preferences
+
+Select a sub-category and choose a default preference: **On**, **Off**, or **Can't Unsubscribe**. This determines the default behavior for users who haven't set their own preference.
+
+### Preference types
+
+- **On**: Users receive notifications by default (they can opt out)
+- **Off**: Users don't receive notifications by default (they can opt in)
+- **Can't Unsubscribe**: Users cannot fully opt out of these notifications (typically for critical system messages). Users can still opt out of specific channels, but at least one mandatory channel must remain active.
+
+
+### Recommended defaults by category type
+
+These defaults are recommendations—adjust them based on your product's requirements and user expectations.
+
+**System**
+- **Default:** `Can't Unsubscribe` — Set the channel most users have on as mandatory so they don't miss critical notifications even if they opt out of all channels.
+
+**Transactional**
+- **Default:** `Can't Unsubscribe` — These are notifications sent in response to user actions or transactions. You would generally not want users to opt out of these notifications. However, you can adjust the default preference based on the criticality of the notification.
+
+**Promotional**
+- **Default:** `ON` — Users receive notifications by default. For optional categories, set to `OFF` so users only receive notifications if they explicitly opt in
+
+---
+
+## Adding tags (Optional)
+
+Tags are used to filter categories on the preference page. **Common usecases** are to filter categories based on user role or department. They can be added to sections and sub-categories.
+
+1. Select a section or sub-category
+2. Add tags (e.g., `finance`, `manager`)
+3. Section-level tags apply to all sub-categories in that section
+
+<Frame caption="Tags within preference categories">
+  ![](/images/preference-tag-changelog.png)
+</Frame>
+
+You can filter categories using the tags query parameter in the [get user preference API](/reference/get-user-full-preference).
+
+  <Note>
+    Tags do not impact delivery logic or preference rules — they are only used for filtering and organizing the UI. Even if a category is hidden from the user on the preference page due to tag filters, the user can still opt in/out via API, and notifications will still be sent if the default preference is set to opt-in.
+  </Note>
+
+
+---
+
+## Preview and publish
+
+Before making your categories live, preview how they'll appear to users, then publish your changes. 
+
+**Category changes are version controlled and are not live until you publish them.** This is done to ensure that your users do not see intermittent changes when they are interacting with the preference page. 
+
+<Steps>
+  <Step title="Preview">
+    Click **Preview** to see how categories will appear to users on the preference page.
+  </Step>
+  <Step title="Publish">
+    Click **`Publish Changes`** to make categories live. Categories are only available in workflows after publishing and will not appear in workflow dropdowns until published.
+  </Step>
+  <Step title="Clone to production">
+    Use **`Clone`** to copy changes from staging to production workspace. Not required if you are directly doing changes in production workspace.
+  </Step>
+</Steps>
+
+<Warning>
+  **Categories changes are version controlled and need to be published**
+  
+  Categories will only appear in workflow dropdowns after they are published. If you don't see your category in the dropdown, make sure you've published your changes.
+</Warning>
+
+---
+
+## Assigning category to workflows
+
+<Tabs>
+  <Tab title="Via Dashboard">
+    In workflow editor, select any delivery node and choose the relevant category from the **Notification Category** dropdown.
+
+    <Frame caption="Assigning category to workflows">
+  ![](/images/workflow-notification-category.png)
+</Frame>
+    
+  </Tab>
+  <Tab title="in dynamic workflow API">
+    Add the category slug to the `notification_category` field in your workflow trigger.
+    
+    **To find the slug:** Click the sub-category name in the categories page to copy it.
+    <Frame caption="Copying category slug">
+      ![](/images/docs/5d5cebe-image.png)
+    </Frame>
+    
+    **Example:**
+    ```python python
+    from suprsend import Suprsend, WorkflowTriggerRequest
+    
+    supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
+    
+    w1 = WorkflowTriggerRequest(
+      body={
+        "workflow": "welcome-email",
+        "recipients": [{"distinct_id": "user-123"}],
+        "notification_category": "newsletter"  # sub-category slug
+      }
+    )
+    
+    response = supr_client.workflows.trigger(w1)
+    ```
+    
+    See [Trigger Workflow from API](/docs/trigger-workflow) for complete workflow payload example.
+  </Tab>
+  <Tab title="Via CLI or Management API">
+    Pass category-slug to `category` field in workflow payload while updating workflow through [management API](/reference/create-update-workflow) or [CLI](/reference/cli-workflow-overview).
+  </Tab>
+</Tabs>
+
+---
+
+## Managing category translations
+
+<Note>
+  This feature is only available for Enterprise plan customers or the ones who have enabled translation feature in their account.
+</Note>
+
+Upload and manage translations for category and section names and descriptions. Once uploaded, translations go live immediately. You can fetch preference translations by passing locale query parameter in the [get user preference API](/reference/get-user-full-preference). <br /><br/>
+For more details on what it does and how it works, see [Overview of category translations](/docs/notification-category#category-translations).
+
+<Tabs>
+  <Tab title="Via Dashboard">
+
+    <Steps>
+  <Step title="Click translation icon">
+    On the Preference categories page, click the translation icon in the top right corner to open the "Add / View Translation files" modal.
+    
+    ![](/images/tr-pref.png)
+  </Step>
+  <Step title="Add translation file">
+    Click **"+ Add Translation"**. Select a locale and upload the translated JSON file (e.g., `es.json`, `fr.json`), then click **"Save & Add"**.
+    
+    ![](/images/tr-add.png)
+    
+    **Translation file structure:**
+    
+    Translation files follow this JSON structure with `sections` and `categories` objects. Each section and category is identified by its slug.
+    
+    ```json
+    {
+      "sections": {
+        "section-slug": {
+          "name": "Translated section name",
+          "description": "Translated section description" // or null
+        }
+      },
+      "categories": {
+        "category-slug": {
+          "name": "Translated category name",
+          "description": "Translated category description" // or null
+        }
+      }
+    }
+    ```
+    
+    **Example:**
+    ```json
+    {
+      "sections": {
+        "billing": {
+          "name": "Facturation",
+          "description": "Notifications liées à la facturation"
+        }
+      },
+      "categories": {
+        "invoice-ready": {
+          "name": "Facture prête",
+          "description": "Vous recevrez une notification lorsque votre facture est prête"
+        },
+        "payment-reminder": {
+          "name": "Rappel de paiement",
+          "description": null
+        }
+      }
+    }
+    ```
+    
+    **Note:** The `en.json` file is automatically generated from your preference settings. Download it to use as a template for translations.
+  </Step>
+  <Step title="Preview translations">
+    Click the **Preview** button (next to the translations button) on the Preference categories page to see how if your preview is rendering correctly in different languages.
+    
+    <Frame caption="Embeddable preference page preview">
+    ![](/images/tr-embed.png)
+    </Frame>
+  </Step>
+  <Step title="Clone to production">
+    Use [CLI command](/reference/cli-category-translation-pull) `suprsend category translation pull` and [CLI command](/reference/cli-category-translation-push) `suprsend category translation push` to copy translations from staging to production workspace.
+    ```bash
+    suprsend category translation pull
+    suprsend category translation push --workspace production
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  English (`en.json`) is automatically created and cannot be overridden. It serves as the base language for all translations.
+</Note>
+  </Tab>
+  <Tab title="Via Management API">
+    Use Management API to programmatically add, update, or delete translations for specific locales.
+  
+  See [Category Translation API](/reference/list-category-translation) for complete API reference.
+  </Tab>
+  <Tab title="Via CLI">
+  See [CLI Category Translation documentation](/reference/cli-category-overview) for `category translation pull` and `category translation push` commands.
+  </Tab>
+</Tabs>
+
+---
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="When should I create sections?">
+    Create sections when:
+    - **Large number of categories**: If you have 10+ sub-categories, sections help users navigate the preference page
+    - **Similar categories**: If you have categories that are similar in nature, you can group them under a section
+  </Accordion>
+
+  <Accordion title="How many categories should I create?">
+    Don't add too many categories as it can drive users to use channel level opt-outs. Keep your category structure simple and focused on the most important notification types.
+  </Accordion>
+
+  <Accordion title="Why aren't user preferences working for my notifications?">
+    User preferences only work with **sub-categories** you create, not with top-level categories (System, Transactional, Promotional) alone.
+    
+    If you're sending notifications using only a top-level category (e.g., `notification_category: "promotional"`), preferences won't apply. You must:
+    
+    1. Create a sub-category (e.g., "Marketing", "Newsletter") under the top-level category
+    2. Use the sub-category slug in your workflows (e.g., `notification_category: "marketing"`)
+    
+    Once you use a sub-category, user preferences will be respected and unsubscribed users won't receive notifications.
+  </Accordion>
+  <Accordion title="My user has opted out of all categories, but they are still receiving promotional notifications">
+   User preferences only work with **sub-categories** you create, not with top-level categories (System, Transactional, Promotional) alone. So, you are sending notifications in root-category, user will continue to receive notifications even after complete opt-out.
+  </Accordion>
+  <Accordion title="How to show users only the categories relevant to their role?">
+    You can add tags to sections and sub-categories from preference categories page. Tags are used to filter categories on the preference page.
+    Read more about tags [here](/docs/managing-notification-categories#adding-tags-optional).
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Related documentation
+
+- [Notification Categories](/docs/notification-category) - Concepts and detailed explanations of notification categories
+- [User Preferences](/docs/user-preferences) - Overview of how users can set their Preferences
+- [Tenant Preferences](/docs/tenant-preference) - How to apply admin-level preference settings to all users belonging to a tenant
+- [Preference Evaluation](/docs/preference-evaluation) - How SuprSend evaluates preferences at runtime

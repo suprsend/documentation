@@ -85,7 +85,7 @@ You can get the detailed guide to design the template for each channel in their 
   </Card>
 </CardGroup>
 
-### Template versions
+## Template versions
 
 SuprSend creates a new version every time you publish a template. This is to ensure that you have historical reference to all the changes done in your template. Helps with audit trails and understanding which template content performed better in terms of user engagement.
 
@@ -95,24 +95,25 @@ SuprSend creates a new version every time you publish a template. This is to ens
 
 ![](/images/docs/7deea89-image.png)
 
-### Adding dynamic content
+## Adding variable content
+SuprSend supports dynamic templating so you can personalize notifications using data from your workflow, user profile, and tenant settings. Templates use two languages:
 
-We use  as the template variables language. You can learn about  [here.](/docs/handlebars-helpers)
+- Handlebars — Email, SMS, WhatsApp, and Inbox
+- JSONNET — Slack and MS Teams
 
-1. To add dynamic data, first add the variable data from your event and workflow request in the **mock data**.
+To start using dynamic variables, first add sample data in the **Mock Data** panel of the template editor.
 
-![](/images/docs/a647239-image.png)
+### 1. Add mock data
 
-2. Often times there is a mismatch between template variables and the data that come as part of payload of the trigger or event. Defining the JSON structure of variables before hand reduces the chances of error.
-3. The variables will show as auto-suggestions while designing the template, reducing the possibility of typo errors.
-4. Once declared, these variables can be used consistently across all channels for that particular template.
-5. The sample values are used to send test notification and show the preview of final notification.
+Mock data helps you:
+- Define the structure of variables up front, reducing mismatches between the template and actual payload.
+- Get auto-suggestions while designing templates, avoiding typos.
+- Consistently reuse the same variables across all channels within a template.
+- Preview the final rendered notification and send test messages using sample values.
 
 ![](/images/docs/d055e38-image.png)
 
-In the above screenshot, there are other elements in the mock data like [tenant](/docs/tenants) and [batching](/docs/batch). You can check their respective documentation to know more about it.
-
-You can copy below mock data for starters:
+Sample mock data:
 
 <CodeGroup>
 
@@ -138,15 +139,45 @@ You can copy below mock data for starters:
 
 </CodeGroup>
 
-### Using variables in the templates:
+### 2. Available data types and their syntax
+There are four primary sources of dynamic data you can pull into your templates.
 
-As a general rule, all the variables have to be entered within double curly brackets: . For URLs and links, we recommend using triple curly braces. This is to avoid escaping HTML entities in handlebars. You can also write transformations like date-time formatting, if-else statement inside your templates using [handlebar helpers](/docs/handlebars-helpers).
+#### Input Payload
+This includes:
+- Data from your trigger payload
+- Data added or modified during the workflow via data transform, batch/digest, webhook/fetch, etc.
 
-![](/images/docs/6f7c548-image.png)
+Referring this data in the template as:
+| Data Type | Handlebars | JSONNET |
+| -------- | ----------------- | -------------- |
+| Parent level keys | `{{var1}}` | `data.var1` |
+| Nested keys | `{{var1.var2.var3}}` | `data.var1.var2.var3` |
+| Array index | `{{var1.[0].name}}` | `data.var1[0].name` |
+| Keys with capital letters and spaces | `{{[first_name]}}` | `data['first_name']` |
+| Batching data | `{{$batched_events_count}}` | `data['$batched_events_count']` |
 
-Other than your workflow `data` variables, you can also add other type of variables in your templates like tenant properties. See a full list of possible variables here.
+For more advanced logic or complex functions, refer to the full set of available options in the [Handlebars Helpers documentation](/docs/handlebars-helpers).
+<Note>
+Please wrap URLs or variables that may contain special characters in **triple curly braces** (e.g., `{{{url}}}`). Using double braces triggers HTML-escaping in Handlebars, which may alter special characters.
+</Note>
 
-There are slight differences in variable format and placement for different templates. Checkout each channel template documentation for reference.
+#### User properties
+For per-user personalization, you can use user properties in your templates. These properties are automatically available from each user's profile and can be referenced using `$user`, `$actor` or `$recipient` variables.
+
+| Handlebars | JSONNET |
+| -------- | ----------------- |
+| `$user.name` | `data['$user'].name` |
+| `$recipient.name` | `data['$recipient'].name` |
+| `$actor.name` | `data['$actor'].name` |
+
+#### Tenant properties
+If you are using tenant branding, you can include tenant properties in your templates to dynamically display details such as logo, address, and colors. The email designer also provides a Tenant component with pre-designed header, footer, and button, making it easier for you to add tenant branding to your templates.
+
+| Handlebars | JSONNET |
+| -------- | ----------------- |
+| `$tenant.name` | `data['$tenant'].name` |
+| `$tenant.properties.address` | `data['$tenant'].properties.address` |
+
 
 ## Preview and publish
 
