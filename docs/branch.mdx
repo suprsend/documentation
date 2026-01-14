@@ -5,15 +5,25 @@ description: "Use branch to route notifications across different paths by applyi
 
 Branch is an `if/elseif/else` step used to route notification through different paths in a workflow based on conditions. Some common use cases could be to send multi-step reminder to users until payment is made and route notification on different paths based on user properties.
 
-You can add up to 10 branches in a workflow. The First branch satisfying the condition in the order will be executed.
+You can add up to 10 branches in a workflow. The first branch satisfying the condition in the order will be executed.
 
-## How branch works?
+## How Branch node works?
 
-There are 2 types of branches: Condition branch, Default branch
+The Branch node has 2 types of branches: Condition branch, Default branch
 
-1. **Condition branch**: User proceeds through this branch when a condition is met. The condition can be applied on recipient, actor, tenant properties and node input data. You can add up to 9 condition branches. If 2 branches satisfies the condition, the first branch in the order will be executed.
+1. **Condition branch**: User proceeds through this branch when a condition is met. The condition can be applied on recipient, actor, tenant properties and node input data. You can add up to 9 condition branches. If 2 branches satisfy the condition, the first branch in the order will be executed.
 
 2. **Default branch**: This is the fallback branch which is executed if no condition branch results in truthy value. 
+
+<Frame caption="Branch workflow example showing conditional routing">
+  <img src="/images/branch-wf.png" />
+</Frame>
+
+In the example above, the Branch node evaluates conditions and routes execution to either:
+- **Branch 1**: When the condition is met, the workflow proceeds through this path and executes the Inbox node (sending a notification using the specified template)
+- **Default**: When no condition branch is satisfied, the workflow follows this path
+
+Both paths eventually converge at the Exit node, completing the workflow execution. This demonstrates how branching enables conditional logic where different actions are taken based on the evaluated conditions.
 
    <Note>
      **Exit node connection**: If no node is added in the default branch, it will automatically connect to the exit node. If you have additional nodes under your branch that you want to execute, you can move them inside a condition branch instead.
@@ -21,7 +31,7 @@ There are 2 types of branches: Condition branch, Default branch
 
 ## Constructing a condition
 
-You can add conditions on data payload passed in the trigger, user properties and tenant properties. A condition is a combination of 3 parts: Data type, Key, operator and Value.
+You can add conditions on data payload passed in the trigger, user properties, tenant properties, and message status. A condition is a combination of 4 parts: Data type, Key, Operator and Value.
 
 ### Data type
 
@@ -32,13 +42,14 @@ You can apply conditions to all data available at the node's input. For instance
 | Input Payload  | This includes the data from your trigger payload and any data modified or added by nodes such as data transform, batch/digest, or webhook/fetch nodes before the branch node.                                                        | Specify key if you are adding this variable in key or value field.                                                     |
 | Actor          | Actor properties. In case of event trigger, `distinct_id` works both as actor and recipient and for inline workflow trigger, it is the `distinct_id` in actor object.                                                                | Directly specify key if you are adding this in key or add as `$actor.<property_key>` if you add it in value field.     |
 | Recipient      | Recipient properties. It is the `distinct_id` in your event trigger or the key value defined in [override recipient](/docs/override-recipient-list) field. For inline workflow trigger, it is the `distinct_id` in recipient object. | Directly specify key if you are adding this in key or add as `$recipient.<property_key>` if you add it in value field. |
-| Tenant | Tenant properties. It is all the properties of the tenant\_id in your workflow trigger.                                                                                                                                      | Directly specify key if you are adding this in key or add as`$brand.<property_key>` if you add it in value field.      |
+| Tenant | Tenant properties. It is all the properties of the tenant\_id in your workflow trigger.                                                                                                                                      | Directly specify key if you are adding this in key or add as `$brand.<property_key>` if you add it in value field.      |
+| Message Status | Derived from sent notification metadata. This data type represents the lifecycle state of a sent message and enables workflows to make decisions based on how the message was processed. It is available only when vendor tracking is enabled. | Use `message_status` as the key. When operator is `==` (is), status values: `"delivered"`, `"seen"`, `"clicked"`, or `"delivery_failed"`. When operator is `!=` (is not), status values: `"delivered"`, `"seen"`, or `"clicked"` (delivery_failed is not available). Each node within a workflow is assigned a unique slug that acts as a stable reference. You can reference a specific node using its slug to check the status of messages sent from that node. Message Status conditions are evaluated only after the referenced node has executed and delivery feedback has been received. |
 
 ### Key-Value pair
 
 1. **Key**: It is the variable key in your data input to apply condition on.
 
-2. **Operator**: you can use any of the below operators to compare key and value:
+2. **Operator**: You can use any of the below operators to compare key and value:
 
     | Operator           | Description                                                                                                                                                                                                                                                                               |
     | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -58,23 +69,59 @@ You can apply conditions to all data available at the node's input. For instance
     | `intersects`          | Evaluates to true if **any value** in the left array matches **any value** in the right array. Useful for checking overlaps between arrays.                                                                                                                                               |
     | `not intersects`      | Evaluates to true if **no values** in the left array match any values in the right array. It could be used in case of checking or filtering out any overlaps between arrays.                                                                                                                                              |
 
-3. **Value**: Value can be [**fixed**](/docs/branch#fixed-values) or [**dynamic**](/docs/branch#dynamic-values) (evaluated based on workflow input payload). Dynamic values are helpful when the comparison value is dynamic for each user. e.g., in case of payment reminder, the payment due date could vary for each user and is part of your trigger data. You can add condition in this case as`current_date >= payment_due_date`(where both timestamps are in epoch).
+   <Note>
+     **Message Status operators**: The `message_status` data type supports only `==` (is) and `!=` (is not) operators. All other operators are invalid for this data type. When using `==`, you can check for: `"delivered"`, `"seen"`, `"clicked"`, or `"delivery_failed"`. When using `!=`, you can check for: `"delivered"`, `"seen"`, or `"clicked"` (delivery_failed is not available).
+   </Note>
 
-#### Fixed values
+3. **Value**: Value can be [**fixed**](/docs/branch#fixed-and-dynamic-values) or [**dynamic**](/docs/branch#fixed-and-dynamic-values) (evaluated based on workflow input payload). Dynamic values are helpful when the comparison value is dynamic for each user. e.g., in case of payment reminder, the payment due date could vary for each user and is part of your trigger data. You can add condition in this case as `current_date >= payment_due_date` (where both timestamps are in epoch).
 
-Fixed values can be added as:
+   <Note>
+     **Message Status values**: For `message_status` data type, values are **fixed enums only**. No dynamic values or variables are allowed. When using `==` operator, you can select from: `"delivered"`, `"seen"`, `"clicked"`, or `"delivery_failed"`. When using `!=` operator, you can select from: `"delivered"`, `"seen"`, or `"clicked"` (delivery_failed is not available). Message Status condition construction is different from other data types.
+   </Note>
 
-* **string**: enclose within double inverted commas as`"string"`
+### Condition Structure
 
-* **number**:`1`,`1.2`
+Message Status conditions are constructed differently from other condition types due to their unique nature and evaluation requirements. This distinction is explicitly documented to help users understand why Message Status conditions are structured differently and how to use them correctly within branching logic.
 
-* **boolean**:`true`,`false`
+**Key differences in Message Status condition structure:**
 
+1. **Limited operator support**: Message Status conditions only support `==` and `!=` operators, unlike other data types that support a wide range of comparison operators (`>`, `<`, `contains`, etc.).
+
+2. **Fixed enum values only**: Message Status values must be fixed enum values. When using `==` operator: `"delivered"`, `"seen"`, `"clicked"`, or `"delivery_failed"`. When using `!=` operator: `"delivered"`, `"seen"`, or `"clicked"` (delivery_failed is not available). Dynamic values or variables are not supported, unlike other data types where you can use dynamic values from the workflow payload.
+
+3. **Node reference requirement**: Message Status conditions require referencing a specific node using its slug to check the status of messages sent from that node. This is different from other data types that can directly reference properties from the trigger payload or user profiles.
+
+4. **Post-delivery evaluation**: Message Status conditions evaluate based on the actual delivery state of previously sent notifications, not on input data. This means the condition is evaluated after a message has been sent and vendor feedback has been received.
+
+5. **Vendor tracking dependency**: Message Status conditions only work when vendor tracking is enabled, as they depend on vendor feedback to determine the delivery state. Other condition types do not have this dependency.
+
+**Message Status semantics**:
+
+| Condition | Behavior | Multi-Channel Mode |
+|-----------|----------|-------------------|
+| `== "delivered"` | Notification reached the user's device. Composite success state that includes delivered, seen, or clicked events | If message is delivered on **at least one channel**, overall status is **Delivered** |
+| `== "seen"` | User viewed or opened it (Android: also includes cleared notifications) | If **any channel** reports Seen, condition passes |
+| `== "clicked"` | User clicked the notification | If **any channel** reports Clicked, condition passes |
+| `== "delivery_failed"` | Couldn't be delivered due to a vendor error (requires vendor DLR webhook) | Requires **all channels to fail** |
+| `!= "delivered"` | Notification couldn't be delivered to user | If **any channel** reports Delivered/Seen/Clicked, the condition fails |
+| `!= "seen"` | User didn't view or open the notification | If **any channel** reports Seen, the condition fails |
+| `!= "clicked"` | User didn't click the notification | If **any channel** reports Clicked, the condition fails |
+
+**Example**: Send an initial notification (Node A with slug `initial-notification`), then branch based on message status: if `message_status` from `initial-notification` == `"delivered"` → Send follow-up notification; if `message_status` == `"delivery_failed"` → Send alternative notification via different channel; otherwise → Route to default branch.
+
+#### Fixed and Dynamic Values
+
+**Fixed values** can be added as:
+* **string**: enclose within double inverted commas as `"string"`
+* **number**: `1`, `1.2`
+* **boolean**: `true`, `false`
 * **datetime**: "2024-01-01T00:00:00Z", "now" (current timestamp), "now+1d", "now-1d" (current timestamp +/- interval). You can add only 1 of these interval units in the expression (y-year, M-month, w-week, d-day, h-hour, m-minute, s-second).
 
-#### Dynamic values
+**Dynamic values**: You can add input payload key directly as `key` with no prefix. All other properties should start with their respective `$` prefix. You can refer to all the data types available in workflow [in the above section](/docs/branch#data-type).
 
-You can add input payload key directly as `key` with no prefix. All other properties should start with their respective `$` prefix. You can refer to all the data types available in workflow [in the above section](/docs/branch#data-type).
+<Note>
+  **Message Status**: Dynamic values are not supported for Message Status data type. Only fixed enum values are allowed.
+</Note>
 
 ## Adding Multiple Conditions in a single branch
 
@@ -84,6 +131,60 @@ You can combine multiple conditions in a branch with `AND`, `OR` operator.
 
 * `OR`- Evaluation will pass if any of the conditions separated by`OR`is true.
 
-If you have a condition (a or b) and c, you can construct it as (a and b) or (b and c).
+If you have a condition (a OR b) AND c, you can construct it using grouped conditions to ensure correct evaluation order. For example: (a AND c) OR (b AND c).
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="How many branches can I add in a Branch node?" defaultOpen={false}>
+    You can add up to 10 branches in a Branch node. This includes up to 9 condition branches and 1 default branch. The first branch that satisfies its condition will be executed.
+  </Accordion>
+
+  <Accordion title="When are Message Status conditions evaluated?" defaultOpen={false}>
+    Message Status conditions are evaluated only after the referenced node has executed and delivery feedback has been received from the vendor. This means the condition checks the actual delivery state of previously sent notifications, not input data.
+  </Accordion>
+
+  <Accordion title="Why don't my Message Status conditions work?" defaultOpen={false}>
+    Message Status conditions require vendor tracking to be enabled. Without a configured vendor and tracking support, the system cannot determine delivery states. Make sure you have:
+    * A vendor added and configured in your workspace
+    * Tracking enabled for the channel (email requires tracking to be enabled)
+    * The referenced node has already executed and sent notifications
+  </Accordion>
+
+  <Accordion title="What's the difference between 'delivery_failed' and 'not delivered'?" defaultOpen={false}>
+    * **`delivery_failed`** (`== "delivery_failed"`): Requires **all channels** to fail delivery. If even one channel succeeds, the message is not considered failed. Partial channel failures do not trigger the `delivery_failed` condition.
+    * **`not delivered`** (`!= "delivered"`): Requires **no channel** to report a successful delivery. If any channel reports Delivered, Seen, or Clicked, the condition fails.
+    
+    **Common mistake**: `delivery_failed` ≠ "some channels failed". The `delivery_failed` status requires all channels to fail. In multi-channel mode, `delivery_failed` is stricter—it only triggers when all channels fail, while `not delivered` fails if any channel succeeds.
+  </Accordion>
+
+  <Accordion title="How does 'Delivered' status work in multi-channel mode?" defaultOpen={false}>
+    In multi-channel mode, if the message is delivered on **at least one channel**, the overall message status is considered **Delivered**. This means if you send via Email + WhatsApp + Push and only Email succeeds, the status is still "Delivered" and your workflow can proceed.
+  </Accordion>
+
+  <Accordion title="Can I use dynamic values with Message Status conditions?" defaultOpen={false}>
+    No. Message Status conditions only support fixed enum values: `"delivered"`, `"seen"`, `"clicked"`, or `"delivery_failed"`. Dynamic values or variables are not allowed for Message Status data type.
+  </Accordion>
+
+  <Accordion title="What operators can I use with Message Status?" defaultOpen={false}>
+    Message Status conditions only support `==` (equals) and `!=` (not equals) operators. All other operators (`>`, `<`, `contains`, etc.) are invalid for Message Status data type.
+  </Accordion>
+
+  <Accordion title="How do I reference a specific node in Message Status conditions?" defaultOpen={false}>
+    You can reference a specific node using its unique slug. Each node in a workflow is assigned a slug that acts as a stable reference. When constructing a Message Status condition, use the node's slug to check the status of messages sent from that particular node.
+  </Accordion>
+
+  <Accordion title="What happens if multiple condition branches are satisfied?" defaultOpen={false}>
+    If multiple condition branches satisfy their conditions, the **first branch in the order** will be executed. The order of branches matters, so place more specific conditions before general ones.
+  </Accordion>
+
+  <Accordion title="What happens if no condition branch is satisfied?" defaultOpen={false}>
+    If no condition branch results in a truthy value, the workflow proceeds through the **Default branch**. If no nodes are added in the default branch, it automatically connects to the exit node.
+  </Accordion>
+
+  <Accordion title="Can I combine Message Status conditions with other data types?" defaultOpen={false}>
+    Yes, you can combine multiple conditions in a single branch using `AND` and `OR` operators. For example, you could check both Message Status and user properties in the same branch condition.
+  </Accordion>
+</AccordionGroup>
 
 ***
