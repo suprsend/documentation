@@ -22,13 +22,9 @@ The Branch node supports two branch types:
 
 **Execution rules:**
 - Conditions are evaluated in order from first to last.
-- The first condition that evaluates to true executes its branch.
+- The first branch whose condition evaluates to true is executed.
 - If no condition evaluates to true, the default branch executes.
-- If the default branch has no nodes, it automatically connects to the exit node.
-
-<Note>
-  If you need to execute additional nodes, add them to a condition branch rather than the default branch.
-</Note>
+- If the branch has no nodes below it, it automatically connects to the exit node.
 
 ## Condition Syntax
 
@@ -36,55 +32,52 @@ Conditions evaluate data from trigger payloads, user properties, tenant properti
 
 ### Data Types
 
-Available data sources:
-
-| Data Type | What It Represents | How to Reference |
-|-----------|-------------------|------------------|
-| **Input Payload** | Data from trigger payload or nodes before the branch | Use key directly (e.g., `order_amount`) |
-| **Actor** | Properties of the user who performed the action | `$actor.<property_key>` (e.g., `$actor.role`) |
-| **Recipient** | Properties of the user receiving the notification | `$recipient.<property_key>` (e.g., `$recipient.plan`) |
-| **Tenant** | Properties of the tenant/brand | `$brand.<property_key>` (e.g., `$brand.timezone`) |
-| **Message Status** | Delivery status of previously sent notifications | `message_status` (reference node by slug, e.g., `message_status from node "welcome-email" == "seen"`) |
-
-<Note>
-  **Message Status**: Requires vendor tracking enabled and node slug reference. See [Message Status reference](#message-status-reference) below for available statuses, channel support, and behavior details.
-</Note>
+| Data Type | Description | What to pass in key | What to pass in dynamic value |
+|--------|-------------------|------------------|------------------|
+| **Input Payload** | Data from trigger payload or nodes before the branch | Directly specify as `key` with no prefix | Use key directly (e.g., `payment_due_date`) |
+| **Actor** | Properties of the user who performed the action | Add as `<property_key>` | Add as `$actor.<property_key>` |
+| **Recipient** | Properties of the user receiving the notification | Add as `<property_key>` | Add as `$recipient.<property_key>`|
+| **Tenant** | Properties of the tenant/brand | Add as `<property_key>` for reserved properties,  `properties.<property_key>` for custom properties | Add as `$brand.<property_key>` or `$brand.properties.<property_key>` |
+| **Message Status** | Delivery status of previously sent notifications | Pass the node slug whose message status you want to check, e.g., `message_status from node "welcome-email" == "seen"` | Pass the status you want to check, e.g., `"seen"` | Value can be one of `delivered`, `seen`, `clicked`, `delivery_failed` |
 
 ### Operators
 
-Available comparison operators:
-
-| Operator | Use Case | Example | Supported Data Types |
-|----------|----------|---------|---------------------|
-| `==` | Equal to (case sensitive) | `user_role == "admin"` | All |
-| `!=` | Not equal to (case sensitive) | `user_role != "guest"` | All |
-| `>`, `>=` | Greater than / greater than or equal | `order_amount >= 100` | Numbers, timestamps |
-| `<`, `<=` | Less than / less than or equal | `order_amount <= 50` | Numbers, timestamps |
-| `contains` | Substring or array item match | `tags contains "urgent"` | Strings, arrays |
-| `not contains` | No substring or array item match | `tags not contains "spam"` | Strings, arrays |
-| `is empty` | Missing, empty string, or null | `phone_number is empty` | All |
-| `is not empty` | Present and not empty/null | `phone_number is not empty` | All |
-| `datetime is` | Datetime equal to | `event_date datetime is "2024-01-01T00:00:00Z"` | Timestamps |
-| `datetime is before` | Datetime less than | `event_date datetime is before "now+1d"` | Timestamps |
-| `datetime is after` | Datetime greater than | `event_date datetime is after "now"` | Timestamps |
-| `intersects` | Any array value matches | `user_roles intersects ["admin", "manager"]` | Arrays |
-| `not intersects` | No array values match | `user_roles not intersects ["guest"]` | Arrays |
+| Operator | Usage | Supported Data Types |
+|----------|----------|---------------------|
+| `==` / `!=` | Equal to / not equal to (case sensitive) | All |
+| `>`, `>=` | Greater than / greater than or equal | Numbers, timestamps |
+| `<`, `<=` | Less than / less than or equal to | Numbers, timestamps |
+| `contains` / `not contains` | Substring or array item match / no substring or array item match | Strings, arrays |
+| `is empty` / `is not empty` | key is missing, empty or null / key is present, not empty or null | All |
+| `datetime is` / `datetime is before` / `datetime is after` | Datetime equal to / less than / greater than | Timestamps |
+| `intersects` / `not intersects` | Any array value matches / No array values match | Arrays |
 
 <Note>
   **Type constraints**: If a key's data type doesn't match the operator (e.g., using `>` on a string), the condition will always evaluate to false.
 </Note>
 
 ### Values
+You can either add a fixed value or a dynamic value to the condition.
 
-**Fixed values:**
-- String: `"admin"`
-- Number: `100`, `99.99`
-- Boolean: `true`, `false`
-- Datetime: `"2024-01-01T00:00:00Z"`, `"now+1d"`
+#### Fixed values
+| Type | Syntax |
+|------|---------|
+| String | Enclose within double inverted commas as `"string"` |
+| Number | Add without double inverted commas as `100`, `99.99` |
+| Boolean | Add without double inverted commas as `true`, `false` |
+| Datetime | Enclose within double inverted commas as `"2024-01-01T00:00:00Z"` or `"now+1d"` |
+| Message Status | Select from dropdown on frontend or pass as `$message.seen` in workflow API. Value can be one of `delivered`, `seen`, `clicked`, `delivery_failed` |
 
-**Dynamic values:**
-- Input payload: Use key directly (e.g., `payment_due_date`)
-- User/tenant properties: Use `$` prefix (e.g., `$recipient.plan`, `$brand.timezone`)
+#### Dynamic values
+Dynamic values are evaluated based on the data available at the node input along with actor, recipient or tenant properties. Refer below table for types of dynamic values and their respective syntax.
+
+| Type | Syntax |
+|------|---------|
+| Input payload | Add key directly (e.g., `payment_due_date`) |
+| Actor | Add as `$actor.<property_key>` (e.g., `$actor.role`) |
+| Recipient | Add as `$recipient.<property_key>` (e.g., `$recipient.plan`) |
+| Tenant | Add as `$brand.<property_key>` for reserved properties, add as `properties.<property_key>` for custom properties (e.g., `$brand.timezone`, `properties.timezone`) |
+
 
 ## Combining Conditions
 
@@ -99,22 +92,48 @@ Combine conditions using `AND` and `OR` logical operators:
   Nested grouping is not supported. Rewrite complex logic using equivalent expanded conditions. For example, `(a OR b) AND c` becomes `(a AND c) OR (b AND c)`.
 </Note>
 
-## Message Status Reference
+## Condition on Message Status
+Message Status is a special data type that lets you evaluate the delivery or engagement state of a previously sent notification. Common use cases include reminder and escalation workflows—for example, sending a follow-up notification if the user has not seen the earlier message.
 
-**Prerequisites:**
-- Vendor tracking enabled
-- Node slug reference (e.g., `message_status from node "welcome-email"`)
+When using message status checks, always add a delay before evaluating the status to allow sufficient time for vendors to report delivery or engagement events.
 
-**Statuses:**
+<br/>
+**Condition Syntax:**<br/>
+Condition on message status looks like this<br/> `<node slug> IS/ IS_NOT <message status>`. Eg. `message_status from node "welcome-email" is "seen"`.
 
-| Status | `==` | `!=` | Description |
+You can find node slug below node name in the workflow editor.
+```json
+  {
+      "op": "IS",
+      "ref": "multichannel_1", // node slug
+      "value": "$message.seen", // message status
+      "variable": "message_status", // fixed value
+      "variable_ns": "$ref" // fixed value
+  }
+```
+
+On UI, it looks like this:
+
+<Frame caption="Message Status condition on UI">
+  <img src="/images/branch-message-status.png" />
+</Frame>
+<br/>
+**Message Status and their meaning:**<br/>
+Here's a list of all message statuses, supported operators and their meaning.
+
+| Status | `IS` | `IS_NOT` | Description |
 |--------|------|------|-------------|
 | `delivered` | ✅ | ✅ | Notification reached user (includes delivered, seen, clicked) |
-| `seen` | ✅ | ✅ | User viewed/opened notification |
+| `seen` | ✅ | ✅ | User viewed/opened or clicked notification. For Android Push channel, user clearing the notification from tray is also considered as seen. |
 | `clicked` | ✅ | ✅ | User clicked notification |
-| `delivery_failed` | ✅ | ❌ | Vendor error prevented delivery |
+| `delivery_failed` | ✅ | ❌ | Vendor reported some error which prevented delivery |
 
-**Channel Support:**
+<Note>
+For multi-channel and smart channel routing, `delivered`, `seen` and `clicked` status requires at least one successful channel, while `delivery_failed` requires all channels to fail.
+</Note>
+<br/>
+**Per-Channel Message Status:**<br/>
+Following message statuses are currently tracked for each channel:
 
 | Channels | Delivered | Seen | Clicked |
 |----------|-----------|------|---------|
@@ -122,18 +141,8 @@ Combine conditions using `AND` and `OR` logical operators:
 | WhatsApp | ✅ | ✅ | ❌ |
 | SMS, Slack, MS Teams | ✅ | ❌ | ❌ |
 
-**Multi-Channel Rules:**
-
-| Condition | Result |
-|-----------|--------|
-| `== "delivered"` | At least one channel succeeds → `delivered` |
-| `== "delivery_failed"` | All channels must fail → `delivery_failed` |
-| `!= "delivered"` | No channel succeeds → condition passes |
-| `== "seen"` or `== "clicked"` | Any channel reports event → condition passes |
-| `!= "seen"` or `!= "clicked"` | No channel reports event → condition passes |
-
 <Note>
-  Evaluation occurs after the referenced node executes and vendor feedback is received. Only fixed enum values allowed.
+ To track message status for external channels like WhatsApp, SMS, and Email, you'll need to add suprsend tracking URL as webhook in your vendor dashboard.
 </Note>
 
 
@@ -145,7 +154,7 @@ Combine conditions using `AND` and `OR` logical operators:
   </Accordion>
 
   <Accordion title="What happens if multiple branches are satisfied?" defaultOpen={false}>
-    The first branch in order is executed (as mentioned in the intro). Place more specific conditions before general ones.
+    The first branch in order is executed (as mentioned in the intro). Place branch with more specificity before the branch with lesser condition if they have common condition set.
   </Accordion>
 
   <Accordion title="When are Message Status conditions evaluated?" defaultOpen={false}>
@@ -153,29 +162,23 @@ Combine conditions using `AND` and `OR` logical operators:
   </Accordion>
 
   <Accordion title="Why don't my Message Status conditions work?" defaultOpen={false}>
-    Message Status requires vendor tracking. Ensure you have:
-    * A vendor configured in your workspace
-    * Tracking enabled for the channel (email requires explicit tracking)
-    * The referenced node has already executed
+    Message Status requires vendor tracking to be setup. Ensure you have:
+    * SuprSend tracking URL added as webhook in your vendor dashboard.
+    * Proper SDK installation for Android Push and iOS Push channels.
+    * For Inbox, Slack, MS Teams, engagement status are automatically tracked.
+
+    In case all the above conditions met and still the condition is not evaluated, it could be due to delay in vendor reporting the status.
   </Accordion>
 
-  <Accordion title="What's the difference between 'delivery_failed' and 'not delivered'?" defaultOpen={false}>
-    * **`delivery_failed`** (`== "delivery_failed"`): Requires **all channels** to fail. If any channel succeeds, it's not considered failed.
-    * **`!= "delivered"`**: Requires **no channel** to succeed. If any channel reports Delivered/Seen/Clicked, the condition fails.
-    
-    **Common mistake**: `delivery_failed` ≠ "some channels failed". It requires all channels to fail.
+  <Accordion title="What's the difference between 'delivery_failed' and 'is_not delivered'?" defaultOpen={false}>
+    * **`IS delivery_failed`**: Evaluates to true only when the vendor explicitly reports a delivery failure. For multi-channel delivery nodes, this condition is met only if all channels fail.
+    * **`IS_NOT "delivered"`**: Indicates that a successful delivery status has not been received for the channel. This can also occur if the vendor has not yet reported the delivery status by the time the branch condition is evaluated.
   </Accordion>
 
-  <Accordion title="How does 'Delivered' work in multi-channel mode?" defaultOpen={false}>
-    If the message is delivered on **at least one channel**, the overall status is **Delivered**. For example, if you send via Email + WhatsApp + Push and only Email succeeds, the status is still "Delivered".
-  </Accordion>
-
-  <Accordion title="Can I use dynamic values with Message Status?" defaultOpen={false}>
-    No. Only fixed enum values are allowed: `"delivered"`, `"seen"`, `"clicked"`, or `"delivery_failed"`.
-  </Accordion>
-
-  <Accordion title="How do I reference a node for Message Status?" defaultOpen={false}>
-    Each node has a unique slug. Use the node's slug to check message status from that specific node (e.g., `message_status` from node with slug `"welcome-email"`).
+  <Accordion title="Where do I find the node reference for Message Status?" defaultOpen={false}>
+    Each node has a unique slug. You can see node slug below node name in the workflow editor. You can also edit node slug by clicking on navigation icon next to node name and selecting "Edit metadata".
+    <img src="/images/node-slug.png" />
+    <img src="/images/node-slug-edit.png" />
   </Accordion>
 </AccordionGroup>
 
