@@ -1,0 +1,599 @@
+---
+title: "Preference Management Guide"
+description: "Learn how to build user preference management in SuprSend with category-level controls, channel preferences, and admin configuration."
+---
+
+Preference management enables *granular notification control* for your users. Instead of an all-or-nothing approach, users can opt in or opt out of specific notification categories, choose preferred channels, and control notification frequency—reducing the chance they disable all notifications from your platform.
+
+This guide demonstrates how to implement preference management in SuprSend using **WorkVibe**, an employee engagement platform, as our example. WorkVibe enables customer organizations (like Uber) to send employee communications, and employees need to control which notifications they receive.
+
+<Note>
+**Example scenario:** **Sarah Chen** is an employee at **Uber**, which uses the WorkVibe platform. Sarah wants to:
+- Opt out of promotional notifications but stay opted in to critical system alerts
+- Receive payment reminders via SMS only, not email
+- Control when she receives digest notifications (daily at 9 AM)
+- Opt out of Slack notifications globally but keep email and SMS
+
+The preference system enables Sarah to manage these choices while respecting Uber's organizational policies (e.g., security alerts cannot be opted out of).
+
+*Tenant = customer organization (e.g., Uber)*
+</Note>
+
+---
+
+## How Preferences Work
+
+When a workflow triggers a notification, SuprSend evaluates preferences in a **four-layer hierarchy** to determine which channels will be used for delivery:
+
+<CardGroup cols={2}>
+  <Card title="User Preference" icon="user" href="/docs/user-preferences">
+    Individual user's explicit choices—highest override power
+  </Card>
+  <Card title="Tenant Defaults" icon="user-shield" href="/docs/tenant-preference">
+    Default preferences set by tenant administrators
+  </Card>
+  <Card title="Category Defaults" icon="layer-group" href="/docs/managing-notification-categories">
+    Default preferences set at the category level
+  </Card>
+  <Card title="Platform Restrictions" icon="globe">
+    Platform-level restrictions and channel availability
+  </Card>
+</CardGroup>
+
+**Evaluation formula:** `Final Channels = Platform Restrictions ∩ Category Defaults ∩ Tenant Defaults ∩ User Preferences`
+
+**Example: How Sarah's payment reminder is evaluated**
+
+| Layer | Email | SMS | Slack |
+|-------|-------|-----|-------|
+| **Platform Restrictions** | ✅ | ✅ | ✅ |
+| **Category Defaults** | ✅ | ✅ | ✅ |
+| **Tenant Defaults (Uber)** | ✅ | ✅ | ✅ |
+| **User Preference (Sarah)** | ❌ | ✅ | ❌ |
+| **Final result** | ❌ | **✅** | ❌ |
+
+<Note>
+**How preferences are evaluated:**
+
+**Evaluation order:** Platform Restrictions → Category Defaults → Tenant Defaults → User Preferences
+
+**Override power:** User Preferences > Tenant Defaults > Category Defaults (except when Platform Restrictions disable a category/channel or when channels are mandatory)
+
+Platform restrictions are evaluated first, but user preferences have the highest override power unless a channel or category is mandatory or disabled by platform admins.
+</Note>
+
+Users have three levels of control: **global channel preferences** (opt out of entire channels), **category-level preferences** (opt in/out of categories), and **channel preferences within categories** (opt in to category but opt out of specific channels).
+
+📘 [User Preferences →](/docs/user-preferences) | [Preference Evaluation →](/docs/preference-evaluation)
+
+---
+
+## Exposing Preferences to Users
+
+SuprSend provides three ways for users to manage their preferences. Choose the approach that best fits your product experience:
+
+<Tabs>
+  <Tab title="Embeddable Preference Center">
+    Embed the preference interface directly inside your product using SuprSend's ready-made UI components.
+    
+    <CardGroup cols={3}>
+      <Card title="Javascript" icon="js" iconType="solid" href="/docs/js-preferences">
+        Integrate preferences into web applications
+      </Card>
+      <Card title="React" icon="react" iconType="solid" href="/docs/preference-react-sdk">
+        React components for preference management
+      </Card>
+      <Card title="Angular" icon="angular" iconType="solid" href="/docs/preferences-angular">
+        Angular integration for preferences
+      </Card>
+    </CardGroup>
+    
+    **Quick setup:**
+    1. Add Embeddable Preference Page link in tenant settings on SuprSend dashboard
+    2. This automatically creates a variable with key `$embedded_preference_url`
+    3. Add this variable in your templates: `{{$embedded_preference_url}}`
+    
+    📘 [Embeddable Preference Center →](/docs/embedded-preference-centre)
+  </Tab>
+  
+  <Tab title="Preference Center APIs">
+    Use REST APIs to build custom preference interfaces or integrate preferences into your existing settings pages.
+    
+    **Key APIs:**
+    - [Get User Preference](/reference/get-user-full-preference) - Retrieve user's current preferences
+    - [Update User Category Preference](/reference/update-user-category-preference) - Update category-level preferences
+    - [Update User Channel Preference](/reference/update-user-channel-preference) - Update channel-level preferences
+  </Tab>
+  
+  <Tab title="Hosted Preference Page">
+    SuprSend automatically generates a dedicated preference webpage. Include `{{$hosted_preference_url}}` in your templates.
+    
+    > This page is currently hosted on a SuprSend domain, but you can reach out to [support@suprsend.com](mailto:support@suprsend.com) if you'd prefer it hosted on your own domain.
+  </Tab>
+</Tabs>
+
+### When to Use What
+
+| Scenario | Best Option |
+|----------|-------------|
+| Quick setup, minimal integration | Hosted Preference Page |
+| In-app settings page | Embeddable Preference Center |
+| Full control, existing UI | Preference Center APIs |
+
+📘 **API Reference Shortcuts:**
+- [Get User Preference](/reference/get-user-full-preference) | [Update Category Preference](/reference/update-user-category-preference) | [Update Channel Preference](/reference/update-user-channel-preference) | [Update Tenant Defaults](/reference/update-tenant-default-preference)
+
+---
+
+## Building Use Cases
+
+This section provides step-by-step guidance for implementing common preference scenarios using the SuprSend dashboard. Each use case includes detailed implementation instructions and real-world examples.
+
+<Note>
+**Other implementation methods:** All preference configurations can also be done via [REST APIs](/reference/overview), [Node.js SDK](/docs/node-create-user-profile), [Python SDK](/docs/python-create-user-profile), [Go SDK](/docs/tenants-go), and [Java SDK](/docs/java-create-user-profile). See [User Preferences](/docs/user-preferences) and [Tenant Preferences](/docs/tenant-preference) for API examples.
+</Note>
+
+### Digest Preferences with User-Controlled Timing
+
+**What you're building:** Allow users to control both whether they receive digest notifications and when they receive them.
+
+**WorkVibe example:** Employees can opt in/out of daily meeting reminder digests and set their preferred delivery time (e.g., 9 AM daily).
+
+<Steps>
+  <Step title="Create preference category">
+    Create a preference category for the digest notifications.
+    
+    <Warning>
+      **Important:** Preferences only work with sub-categories, not root categories (System, Transactional, Promotional). Always create sub-categories.
+    </Warning>
+    
+    1. Go to [Preference Categories](https://app.suprsend.com/en/staging/developers/preference-categories)
+    2. Select a root category (e.g., Engagement)
+    3. Create new sub-category: `engagement.meeting-reminders`
+    4. Set default preference to "On"
+    5. Configure opt-in channels: Email, SMS
+    6. Save changes
+  </Step>
+  <Step title="Create workflow with digest node">
+    Create a workflow that includes a digest node and link it to the preference category.
+    
+    **Workflow configuration:**
+    - Workflow slug: `daily_meeting_reminder`
+    - Category: `engagement.meeting-reminders` (use the sub-category slug)
+    - Digest node settings:
+      - Schedule type: Dynamic (user preference)
+      - Schedule reference: `."$recipient".meetingReminderTime`
+      - Min trigger count: 1
+    
+    <Note>
+      The digest node will only send if the user has opted in to the `engagement.meeting-reminders` category. If the user opts out, no digest is sent regardless of trigger count.
+    </Note>
+  </Step>
+  <Step title="Capture user time preference">
+    When users select their preferred reminder time in your application, store it as a custom property in their user profile.
+    
+    **Example: Sarah selects 9 AM daily reminder**
+    
+    Store the preference as a user property:
+    - Property name: `meetingReminderTime`
+    - Value: `{"frequency": "daily", "time": "09:00", "tz_selection": "recipient"}`
+    
+    This can be done via SDKs or REST API.
+  </Step>
+  <Step title="Configure digest node to use dynamic schedule">
+    In your workflow's digest node, configure it to reference the user property for scheduling.
+    
+    **Digest node configuration:**
+    - Schedule type: Dynamic
+    - Schedule path: `."$recipient".meetingReminderTime`
+    
+    This tells the digest node to:
+    1. Check if user has opted in to `engagement.meeting-reminders` category
+    2. If opted in, read the `meetingReminderTime` property from user profile
+    3. Schedule digest delivery at the specified time in user's timezone
+    
+    **Result:** Sarah receives her daily meeting reminder digest at 9 AM every day in her timezone, but only if she's opted in to the category.
+  </Step>
+  <Step title="Expose preference to users">
+    Make the preference category available to users so they can opt in or opt out.
+    
+    - Add `{{$embedded_preference_url}}` to your email templates
+    - Users click the link and can toggle `engagement.meeting-reminders` on/off
+    
+    Preferences can also be updated via Preference APIs.
+  </Step>
+</Steps>
+
+**Common issues:**
+- **Digest not sending:** Verify workflow is linked to the correct category slug (`engagement.meeting-reminders`)
+- **Wrong delivery time:** Check `tz_selection` is set to `"recipient"` to use user's timezone
+- **Preference toggle not visible:** Ensure category is set to `visible_to_subscriber: true` in category configuration
+
+📘 [Digest Node →](/docs/digest) | [Dynamic Schedule →](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
+
+---
+
+### Mandatory Channels for Critical Notifications
+
+**What you're building:** Ensure critical notifications are always delivered via at least one mandatory channel, even if users have opted out of that channel globally.
+
+**WorkVibe example:** Security alerts must always be delivered via email, even if employees have globally opted out of email notifications.
+
+<Steps>
+  <Step title="Create category with 'Can't Unsubscribe' preference">
+    Create a preference category and set it to "Can't Unsubscribe" to prevent users from fully opting out.
+    
+    1. Go to [Preference Categories](https://app.suprsend.com/en/staging/developers/preference-categories)
+    2. Select root category: System
+    3. Create new sub-category: `system.security-alert`
+    4. Set default preference to "Can't Unsubscribe"
+    5. Configure mandatory channels: Email
+    6. Configure opt-in channels: Email, SMS
+    7. Save changes
+    
+    <Note>
+      When "Can't Unsubscribe" is set, users cannot opt out of the mandatory channels. They can still control non-mandatory channels (e.g., SMS) if your settings allow it.
+    </Note>
+  </Step>
+  <Step title="Link workflow to category">
+    Create or update your workflow to link it to the `system.security-alert` category.
+    
+    **Workflow configuration:**
+    - Workflow slug: `security_alert`
+    - Category: `system.security-alert` (use the sub-category slug, not `system`)
+    - Delivery nodes: Email (mandatory), SMS (optional)
+    
+    **Important:** The workflow must use the sub-category slug (`system.security-alert`), not the root category (`system`).
+  </Step>
+  <Step title="Verify mandatory channels work">
+    When users view their preference center, mandatory channels should appear as disabled (grayed out) to indicate they cannot opt out.
+    
+    **Check preference center:**
+    - Navigate to user preference page
+    - Find `system.security-alert` category
+    - Verify email toggle is disabled/grayed out
+    - Verify SMS toggle is enabled (if user wants to opt out of SMS)
+  </Step>
+</Steps>
+
+**Common issues:**
+- **User can still opt out:** Verify category is set to "Can't Unsubscribe" and mandatory channels are configured
+- **Mandatory channel not working:** Ensure workflow is linked to the correct sub-category slug, not root category
+
+📘 [Manage Categories →](/docs/managing-notification-categories) | [Preference Evaluation →](/docs/preference-evaluation)
+
+---
+
+### Threshold-Based Digest Notifications
+
+**What you're building:** Only send digest notifications if there are enough events to warrant a notification (e.g., at least 5 new comments).
+
+**WorkVibe example:** Discussion digest only sends if there are at least 5 new comments, preventing unnecessary notifications for low-activity threads.
+
+<Steps>
+  <Step title="Create preference category">
+    Create a category for the digest notifications.
+    
+    1. Go to [Preference Categories](https://app.suprsend.com/en/staging/developers/preference-categories)
+    2. Select root category: Engagement
+    3. Create new sub-category: `engagement.discussion-digest`
+    4. Set default preference to "On"
+    5. Configure opt-in channels: Email, In-App Inbox
+    6. Save changes
+  </Step>
+  <Step title="Create workflow with digest node">
+    Create a workflow with a digest node that includes minimum trigger count.
+    
+    **Workflow configuration:**
+    - Workflow slug: `discussion_digest`
+    - Category: `engagement.discussion-digest`
+    - Digest node settings:
+      - Schedule: Daily at 6 PM
+      - Min trigger count: 5
+      - Max triggers: 50
+    
+    **How it works:**
+    - Digest only sends if at least 5 workflow triggers occurred
+    - If fewer than 5 triggers, no digest is sent
+    - If 5-50 triggers, digest includes all triggers
+    - If more than 50 triggers, digest includes only the first 50
+  </Step>
+  <Step title="Link workflow to events">
+    Trigger the workflow whenever a new comment is added to a discussion thread. Each comment triggers the workflow once, and the digest node batches these triggers.
+  </Step>
+  <Step title="Combine with user preferences">
+    Users can opt in/out of the digest category. The threshold only applies if user is opted in.
+    
+    **How it works:**
+    - If user opts out, no digest is sent regardless of trigger count
+    - If user opts in, digest only sends if min trigger count (5) is met
+    
+    **Example:** If Sarah opts in and 7 comments occur, she receives a digest at 6 PM with all 7 comments. If only 3 comments occur, no digest is sent (below threshold).
+  </Step>
+</Steps>
+
+**Common issues:**
+- **Digest sending with low trigger count:** Verify min trigger count is set correctly in digest node configuration
+- **Digest not sending with high trigger count:** Check user preference - user must be opted in to the category
+
+📘 [Digest Node →](/docs/digest) | [Min Trigger Count →](/docs/digest#min-trigger-count)
+
+---
+
+### List-Based Preferences for Segmented Users
+
+**What you're building:** Show different preference categories to different user segments (e.g., premium users see premium notification categories).
+
+**WorkVibe example:** Premium/enterprise employees see executive briefing categories, while regular employees don't.
+
+<Steps>
+  <Step title="Create categories with tags">
+    Create preference categories and tag them based on user segments.
+    
+    1. Go to [Preference Categories](https://app.suprsend.com/en/staging/developers/preference-categories)
+    2. Select root category: Engagement
+    3. Create new sub-category: `engagement.executive-briefing`
+    4. Add tags: `premium`, `enterprise`
+    5. Set default preference to "On"
+    6. Configure opt-in channels: Email
+    7. Save changes
+    
+    <Note>
+      Tags allow you to filter categories when fetching user preferences. Only categories matching the specified tags will be returned.
+    </Note>
+  </Step>
+  <Step title="Filter categories by tags in preference center">
+    When displaying the preference center, filter categories by user segment tags using the `tags` parameter.
+    
+    This shows only categories tagged with `premium`, so premium employees see executive briefings while regular employees don't.
+  </Step>
+  <Step title="Automatically set preferences when user enters list">
+    When users are added to premium lists, automatically enable premium categories.
+    
+    This can be done by:
+    - Setting up a webhook that triggers when `$USER_ENTERED_LIST` event occurs
+    - Creating a workflow that triggers on `$USER_ENTERED_LIST` event and updates user preferences
+  </Step>
+  <Step title="Update preferences when user leaves list">
+    When users are removed from premium lists, optionally disable premium categories or keep them enabled.
+    
+    This can be done via Preference APIs or by keeping preferences enabled but hiding categories from preference center by filtering by tags.
+  </Step>
+</Steps>
+
+**Common issues:**
+- **Premium categories not showing:** Verify tags are set correctly on category and filter includes matching tags
+- **User receives premium notifications without being in list:** Ensure workflow checks user list membership or use tags to filter categories
+
+📘 [Lists →](/docs/lists) | [List Events →](/docs/lists#list-events)
+
+---
+
+### Channel-Level Preferences (Global and Per-Category)
+
+**What you're building:** Users want to control preferences at the channel level—globally opt out of email, but receive payment reminders via SMS only.
+
+**WorkVibe example:** Sarah opts out of email globally but wants payment reminders via SMS only.
+
+<Steps>
+  <Step title="Set global channel preference">
+    Allow users to opt out of entire channels globally.
+    
+    **Example: Sarah opts out of email globally**
+    
+    Users can opt out of channels globally via the preference center or via Preference APIs.
+    
+    **What this means:**
+    - Sarah will not receive any email notifications
+    - Exception: Email notifications in categories where email is mandatory (e.g., security alerts)
+    - All other channels (SMS, Slack, etc.) continue to work normally
+  </Step>
+  <Step title="Set per-category channel preferences">
+    Allow users to opt in to a category but opt out of specific channels within that category.
+    
+    **Example: Sarah wants payment reminders via SMS only**
+    
+    Users can set per-category channel preferences via the preference center or via Preference APIs.
+    
+    **What this means:**
+    - User is opted in to payment reminders
+    - Email and Slack are opted out for this category
+    - SMS is still enabled
+    - Result: Payment reminders delivered via SMS only
+  </Step>
+</Steps>
+
+**Complete preference set example:**
+
+Here's how Sarah's complete preference set works together:
+
+```json
+{
+  "channel_preferences": [
+    {
+      "channel": "email",
+      "is_restricted": true  // global opt-out
+    },
+    {
+      "channel": "slack",
+      "is_restricted": true  // global opt-out
+    }
+  ],
+  "categories": [
+    {
+      "category": "promotional.weekly-newsletter",
+      "preference": "opt_out"  // category opt-out
+    },
+    {
+      "category": "transactional.payment-reminder",
+      "preference": "opt_in",
+      "opt_out_channels": ["email"]  // channel opt-out within category
+    },
+    {
+      "category": "system.security-alert",
+      "preference": "opt_in"  // email mandatory, so still delivered
+    }
+  ]
+}
+```
+
+**What this means for Sarah:**
+- ❌ No email notifications (global opt-out), except security alerts (mandatory)
+- ❌ No Slack notifications (global opt-out)
+- ❌ No promotional newsletters (category opt-out)
+- ✅ Payment reminders via SMS only (category opt-in, email opt-out)
+- ✅ Security alerts via email (category opt-in, email mandatory)
+
+**Common issues:**
+- **User still receives email despite global opt-out:** Check if email is mandatory for that category - mandatory channels override global opt-outs
+- **Channel opt-out not working:** Verify category preference is set to "opt_in" - channel opt-outs only work when category is opted in
+
+📘 [User Preferences →](/docs/user-preferences) | [Preference APIs →](/reference/get-user-full-preference)
+
+---
+
+### Platform Admin - Tenant-Level Category Restrictions
+
+**What you're building:** Control which notification categories and channels are available to different tenants.
+
+**WorkVibe example:** Uber doesn't use Slack, so WorkVibe disables Slack for Uber's tenant.
+
+<Steps>
+  <Step title="Access tenant preference settings">
+    Navigate to tenant details page on SuprSend dashboard.
+    
+    1. Go to [Tenants](https://app.suprsend.com/en/staging/tenants)
+    2. Select tenant (e.g., Uber)
+    3. Click "Tenant Preference" tab
+  </Step>
+  <Step title="Disable channels for tenant">
+    Disable channels that aren't valid for specific tenants.
+    
+    **Example: Disable Slack for Uber**
+    
+    1. In Tenant Preference tab, find channel settings
+    2. Toggle Slack to "Disabled"
+    3. Save changes
+    
+    **Result:** Slack won't appear as an option in Uber employees' preference centers, and no Slack notifications will be sent to Uber employees.
+  </Step>
+  <Step title="Disable categories for tenant">
+    Hide categories that aren't applicable to specific tenants.
+    
+    **Example: Disable weekly newsletter for Uber**
+    
+    1. In Tenant Preference tab, find category list
+    2. Toggle `promotional.weekly-newsletter` to "Hidden"
+    3. Save changes
+    
+    **Result:** Uber employees won't see `promotional.weekly-newsletter` in their preference center, and no weekly newsletters will be sent to Uber employees.
+  </Step>
+</Steps>
+
+**Common scenarios:**
+- **Hide entire sections:** Uber hides the Sales section because Uber doesn't use sales notifications
+- **Override channel requirements:** Uber makes email mandatory for System categories to ensure critical alerts are always delivered
+- **Hide specific categories:** Uber hides `promotional.weekly-newsletter` while keeping other promotional categories visible
+
+📘 [Tenant Preferences →](/docs/tenant-preference) | [Tenant API →](/reference/get-tenant-full-preference)
+
+---
+
+### Tenant Admin - Setting Default Preferences
+
+**What you're building:** Set default preferences for your users and hide categories that aren't applicable.
+
+**WorkVibe example:** Uber's HR team sets defaults so new employees receive onboarding notifications via email and SMS by default.
+
+<Steps>
+  <Step title="Set tenant default preferences">
+    Configure default preferences that apply to all users in the tenant.
+    
+    **Example: Set onboarding defaults for Uber**
+    
+    1. Go to Tenant Preference tab
+    2. Select category: `onboarding.new_hire_welcome`
+    3. Set preference to "On"
+    4. Configure mandatory channels: Email
+    5. Configure opt-in channels: Email, SMS
+    6. Save changes
+    
+    This can also be done via Tenant Preference API.
+    
+    **What this means:**
+    - New employees receive onboarding notifications by default
+    - Email is mandatory (cannot be opted out)
+    - SMS is enabled by default but can be opted out
+    - Other channels (Slack, WhatsApp) are disabled by default
+  </Step>
+  <Step title="Hide categories not applicable to tenant">
+    Hide categories that don't apply to the tenant's use case.
+    
+    **Example: Hide sales notifications for Uber**
+    
+    1. Go to Tenant Preference tab
+    2. Select category: `promotional.sales-updates`
+    3. Toggle visibility to "Hidden"
+    4. Save changes
+    
+    **Result:** Uber employees won't see sales update categories in their preference center.
+  </Step>
+  <Step title="Override category defaults">
+    Override platform-level category defaults with tenant-specific defaults.
+    
+    **Example: Make email mandatory for all system categories**
+    
+    1. Go to Tenant Preference tab
+    2. For each system category, configure:
+       - Mandatory channels: Email
+       - Opt-in channels: Email, SMS
+    3. Save changes
+    
+    This ensures all system notifications for Uber employees include email as a mandatory channel.
+  </Step>
+</Steps>
+
+**Preference precedence:**
+
+```
+Platform Restrictions (Highest)
+    ↓
+Tenant Default Preferences
+    ↓
+Category Default Preferences
+    ↓
+User Preferences (Lowest, but can override defaults)
+```
+
+<Note>
+  Platform restrictions override all—if a platform admin disables a category or channel for a tenant, users will not receive notifications in that category, even if they previously opted in.
+</Note>
+
+📘 [Tenant Preferences →](/docs/tenant-preference) | [Update Tenant Preference →](/reference/update-tenant-default-preference)
+
+---
+
+## Best Practices
+
+1. **Always use sub-categories:** Preferences only work with sub-categories, not root categories (System, Transactional, Promotional). Use slugs like `onboarding.new_hire_welcome` instead of `onboarding`.
+
+2. **Set appropriate defaults:** 
+   - System/Transactional: Use "Can't Unsubscribe" with mandatory channels for critical notifications
+   - Promotional: Use "On" for opt-in categories, "Off" for optional ones
+
+3. **Use tags for segmentation:** Filter categories by user roles, departments, or teams using tags (e.g., `premium`, `enterprise`)
+
+4. **Combine preferences with workflows:** Use preference categories in workflows to respect user choices automatically
+
+5. **Test preference evaluation:** Use the workflow execution debugger to verify preferences are evaluated correctly
+
+---
+
+## Related Documentation
+
+- [User Preferences](/docs/user-preferences) - Complete guide to user preferences
+- [Manage Categories and Preferences](/docs/managing-notification-categories) - Setting up categories & defaults
+- [Tenant Preferences](/docs/tenant-preference) - Managing tenant-level preferences
+- [Preference Evaluation](/docs/preference-evaluation) - How SuprSend evaluates preferences at runtime
+- [Digest](/docs/digest) - Building digest notifications with preferences
+- [Lists](/docs/lists) - Managing user lists and preferences
