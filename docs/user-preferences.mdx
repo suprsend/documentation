@@ -9,7 +9,7 @@ description: "Learn how user preferences work in SuprSend and how to capture the
 
 Preferences let users control which notifications they receive. Instead of an all-or-nothing approach, users can opt out of specific categories, choose preferred channels, and set notification frequency. This granular control reduces the chance that users disable all notifications from your platform.
 
-In SuprSend, you can use [ready-made UI](/docs/user-preferences#controlling-what-categories-to-show-on-ui) and [APIs](/reference/overview) to manage multi-tenant preference use cases. This includes letting admins set preferences for internal teams and handle notifications for enterprise customers, where companies, customers, and end users have distinct preferences.
+SuprSend provides [ready-made UI components](/docs/user-preferences#embed-in-your-product) and [APIs](/reference/overview) to build preference screens where users can opt in or opt out of different notification categories and channels. This works for both B2B and B2C applications.
 
 <CardGroup cols="2">
   <Card title="How It Works" icon="gears" iconType="solid">
@@ -135,9 +135,12 @@ Users can set their preferences through one of the following methods:
 
 Once you publish preference categories, **SuprSend automatically generates a dedicated unsubscription webpage for collecting user preferences**. Users can set channel-specific preferences from the hosted page. If the link is included in an email, the hosted page will show and save email preferences. <br /><br/> Include it in your templates using `{{$hosted_preference_url}}`.
 
-![](/images/docs/e46d21ae0de53196f50ba38f00ab208eb961ab96d2dbbf55b585a8dbbfa4ea27-hosted_page.svg)
+![](/images/hosted-preference-page.png)
 
 > This page is currently hosted on a SuprSend domain, but you can reach out to [support@suprsend.com](mailto:support@suprsend.com) if you'd prefer it hosted on your own domain.
+
+
+
 
 ### Embed in your product
 
@@ -204,9 +207,58 @@ For details on how tags work, see [Tags](/docs/notification-category#tags).
 
 ## Translating preference categories in user's locale
 
-You'll first need to upload translation files for the locale you want to translate to. See [How to manage Category translations](/docs/managing-notification-categories#managing-category-translations) for details.
+- Upload translation files for your category names and descriptions. See [How to manage Category translations](/docs/managing-notification-categories#managing-category-translations) for details.
 
-Once translation files are updated, pass a `locale` parameter (e.g., `es`, `fr`, `de`) when loading the [embeddable preference center](/docs/user-preferences#embed-in-your-product) or pass locale as query parameter in the [get user preference API](/reference/get-user-full-preference).
+- Once uploaded, pass a `locale` parameter (e.g., `es`, `fr`, `de`) when:
+  - Loading the [embeddable preference center](/docs/user-preferences#embed-in-your-product)
+  - As a query parameter in the [get user preference API](/reference/get-user-full-preference). 
+  - The [hosted preference page](/docs/user-preferences#hosted-preference-page) picks the locale from user's profile.
+
+- On hosted preference page,
+  - **Dynamic content (category names, descriptions)** is translated using translation files you upload.
+  - **Static content (CTA text, labels, buttons, etc.)** is translated automatically using SuprSend’s built-in i18n support for commonly used languages. You can see the list of supported languages below.
+
+<Accordion title="Supported languages" defaultOpen={false} id="supported-languages">
+<div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px'}}>
+<div>
+| Language | Code |
+|----------|------|
+| English | en |
+| Spanish | es |
+| French | fr |
+| German | de |
+| Italian | it |
+| Portuguese | pt |
+| Catalan | ca |
+| Russian | ru |
+| Dutch | nl |
+| Polish | pl |
+| Japanese | ja |
+| Vietnamese | vi |
+
+</div>
+
+<div>
+
+| Language | Code |
+|----------|------|
+| Indonesian | id |
+| Korean | ko |
+| Serbian | sr |
+| Norwegian | no |
+| Hebrew | he |
+| Chinese | zh |
+| Finnish | fi |
+| Swedish | sv |
+| Czech | cs |
+| Lithuanian | lt |
+| Arabic | ar |
+
+</div>
+
+</div>
+
+</Accordion>
 
 ---
 ## How preferences are evaluated
@@ -245,12 +297,16 @@ In addition to the preference center within SuprSend, communication channels pro
 ## FAQ
 
 <AccordionGroup>
-  <Accordion title="How do I set up a digest schedule?">
-    You can create sub-categories for different digest schedules or set the digest schedule in the user profile and pass a dynamic schedule in the workflow digest node. An option to set the digest schedule directly on your preference page will be available soon.
-  </Accordion>
-
-  <Accordion title="I have a use case where a company has multiple departments/roles, and the admin will set preferences for users in these departments.">
-    You can manage this with tenant preferences. In the SuprSend system, each tenant represents an organization, and the administrator sets which categories to send to their internal team using the [tenant preference API](/reference/update-tenant-default-preference).
+  <Accordion title="Can users control when they receive digest notifications?">
+    Users can opt in or opt out of digest notification categories using preference categories. To let users control the timing of digest notifications (e.g., daily at 9 AM), store their preferred schedule as a custom property in their user profile and reference it in your workflow's digest node. Checkout the [digest dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) documentation for more details.
+    ```json
+    user.set({
+      "digestSchedule": {
+        "frequency": "daily",
+        "time": "09:00"
+      }
+    })
+    ```
   </Accordion>
 
   <Accordion title="What happens to existing user preference view if I change default preference setting?">
@@ -258,7 +314,7 @@ In addition to the preference center within SuprSend, communication channels pro
   </Accordion>
 
   <Accordion title="I have multiple enterprise customers with various product offerings. Customers should only receive notifications for the products they have enabled, and the same should be visible on their preference page. How can I manage this in SuprSend?">
-    You can turn off categories for tenants from the tenant page on the SuprSend console. Turning off the preference for a category automatically removes it from the tenant preference APIs and UI view. To further apply this to the tenant's users, set `visible to subscriber` to `false` in the default tenant preferences to hide the category from the tenant's end users.
+    You can turn off categories for tenants from the `SuprSend dashboard -> tenant details page -> global preference settings`. Turning off the preference for a category automatically removes it from the tenant preference APIs, UI view and also from user's preference page.
   </Accordion>
 
   <Accordion title="Why don't I see the 'inbox' channel in my user preferences?">
@@ -270,10 +326,7 @@ In addition to the preference center within SuprSend, communication channels pro
     
     If you're sending notifications using a top-level category like `"promotional"` in your workflows, users cannot unsubscribe from those notifications through the preference center, even if they unsubscribe from all visible categories.
     
-    **Solution:** Create sub-categories under the Promotional category (e.g., "Marketing", "Newsletter", "Product Updates") and use those sub-category slugs in your workflows instead of the top-level category. This allows users to:
-    - See and control preferences for each notification type
-    - Opt out of specific sub-categories
-    - Have their preferences respected when you send notifications
+    **Solution:** Create sub-categories under the Promotional category (e.g., "Marketing", "Newsletter", "Product Updates") and use those sub-category slugs in your workflows.
     
     **Best practice:** Organize notifications into meaningful sub-categories rather than using top-level categories directly. This provides users with granular control and improves their experience.
   </Accordion>
@@ -281,32 +334,21 @@ In addition to the preference center within SuprSend, communication channels pro
   <Accordion title="Can I use user preferences in workflow branching to control which notifications are sent?">
     User preferences are **not** passed in the workflow payload, so you cannot directly access them in branch conditions or other workflow nodes.
     
-    **Workaround:** If you need to use preference-based logic in workflows (e.g., to route notifications based on user preferences or combine multiple notification scenarios in a single workflow), you can:
-    
-    1. Store the same preference data as custom properties in the user profile
-    2. Use those custom properties in [branch conditions](/docs/branch) to route notifications
-    
-    **Example use case:** If you want to combine multiple notification scenarios (e.g., "New Comment", "Reply on my comment", "I am mentioned") in a single workflow to avoid duplicate notifications, you can:
-    
-    - Store user preferences for each scenario as custom properties (e.g., `wants_new_comment_notifications: true`, `wants_mention_notifications: true`)
-    - Use branch conditions to check these properties and route notifications accordingly
-    - This allows you to have one workflow that handles all scenarios while respecting user preferences
-    
-    **Alternative approach:** Create separate workflows for each notification scenario with conditions in the Trigger node. Each workflow can use its own preference category, allowing users to control each scenario independently.
+    **Workaround:** If you need to use preference-based logic in workflows (e.g., to route notifications based on user preferences or combine multiple notification scenarios in a single workflow), we suggest creating different workflows for each notification scenario and adding invoke workflow node to trigger a different workflow from within another workflow.
   </Accordion>
 
-  <Accordion title="How do I let users control both notification on/off and the time they want to be reminded (e.g., medicine reminders)?">
+  <Accordion title="How do I let users control both notification on/off and the time they want to be reminded?">
     You can combine preference categories with dynamic digest schedules to achieve this:
 
     **1. Set up preference categories:**
-    - Create a preference category (e.g., "medicine-reminders") that users can opt in/out of using the [preference APIs](/reference/update-user-category-preference) or [preference center UI](/docs/user-preferences#capturing-user-preferences).
+    - Create a preference category (e.g., "meeting-reminders") that users can opt in/out of using the [preference APIs](/reference/update-user-category-preference) or [preference center UI](/docs/user-preferences#capturing-user-preferences).
 
     **2. Store time preference as user property:**
     - When users select their preferred reminder time, store it as a custom property in their user profile. For example:
     
     ```json
     user.set({
-      "medicineReminderTime": {
+      "meetingReminderTime": {
         "frequency": "daily",
         "time": "09:00",
         "tz_selection": "recipient"
@@ -315,13 +357,8 @@ In addition to the preference center within SuprSend, communication channels pro
     ```
 
     **3. Use dynamic schedule in digest node:**
-    - In your workflow's digest node, configure it to use a [dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) that references the user property (e.g., `."$recipient".medicineReminderTime`).
+    - In your workflow's digest node, configure it to use a [dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) that references the user property (e.g., `."$recipient".meetingReminderTime`).
     - The digest will only send if the user has opted in to the category, and it will send at their preferred time.
-
-    **Implementation flow:**
-    - **Client side (React Native)**: Capture user's time preference and call your backend API
-    - **Server side (Supabase Edge Function)**: Update both the user's preference (opt in/out) via SuprSend preference API and store the time preference as a user property
-    - **Workflow**: Use preference category to control on/off, and dynamic schedule to control timing
 
     For detailed information, see [Dynamic Schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) in the digest documentation.
   </Accordion>
