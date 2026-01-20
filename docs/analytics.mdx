@@ -1,510 +1,265 @@
 ---
 title: "Analytics"
-description: "Assess notification performance and measure engagement across workflows, channels, and templates."
+description: "Measure notification performance, track engagement, and optimize your messaging strategy with comprehensive analytics."
 ---
 
-SuprSend provides comprehensive analytics and observability features for your notifications, enabling you to track user engagement, monitor workflow performance, and understand how your messaging is performing across channels and templates.
+See how your notifications are performing and identify what's working—and what needs fixing—with SuprSend Analytics. Navigate to the [Analytics tab](https://app.suprsend.com/en/production/analytics/) to access your analytics.
 
 <Note>
-  **📘 Analytics vs Logs:**
+  **Analytics vs Logs:**
 
-  This page covers **aggregated analytics** (metrics, trends, performance dashboards). For raw event-level logs and detailed debugging information, see the [Logs documentation](/docs/logging). Analytics are derived from logs but provide aggregated insights rather than individual event inspection.
+  **Analytics** shows you the big picture—trends, patterns, and summaries across all your notifications. [**Logs**](/docs/logging) shows you individual events in detail. Think of Analytics as your dashboard showing overall health, and Logs as your detailed inspection tool for specific issues.
 </Note>
 
-## Analytics overview
+Analytics provides three main views to help you understand and optimize your notification performance:
 
-Analytics give you real-time insights into your notification system's performance at every level. Each analytics view highlights key metrics over your selected time range, helping you identify what's working, what needs improvement, and where to focus your optimization efforts.
+<CardGroup cols={3}>
+  <Card title="Performance Overview" icon="chart-line" iconType="solid" href="#performance-overview">
+    See how all your notifications are performing overall
+  </Card>
+  <Card title="Workflow Level Breakdown" icon="layer-group" iconType="solid" href="#workflow-level-breakdown">
+    Compare specific workflows and find what needs improvement
+  </Card>
+  <Card title="Errors" icon="exclamation" iconType="solid" href="#errors">
+    Find and fix problems quickly
+  </Card>
+</CardGroup>
 
-The key capabilities include:
+<Note>
+  **How to use these views together:**
 
-- **Real-time insights** → Trends update as messages go out. Track performance across channels and spot dips in engagement instantly.
-- **Workflow-level comparisons** → Compare workflows, templates, channels, and categories side by side to spot underperformers and validate experiments.
-- **Opt-out tracking** → See which channels/categories drive opt-outs so you can adjust before churn sets in.
-- **Over-messaging detection** → Track average notifications per user, find patterns by category, and identify fatigue triggers to keep communications helpful—not noisy.
-- **Granular filtering** → Multi-select filters for workflow, tenant, template, channel, category, and time range.
-- **Centralized error tracking** → All API, workflow, and provider delivery errors in one place. Filter by tenant/workflow/template/channel, open the exact log, and debug in seconds.
+  Use [**Performance Overview**](#performance-overview) to *spot* issues (low engagement, high opt-outs). Use [**Workflow Level Breakdown**](#workflow-level-breakdown) to *locate* which workflows are causing problems. Use [**Errors**](#errors) and [**Logs**](/docs/logging) to *debug* specific failures.
+</Note>
 
-## Key metrics
+---
 
-Analytics measure user interaction based on notification status. When using SuprSend's tracking, these status events are handled automatically based on channel capabilities and vendor callbacks.
+## Analytics Views
 
-### Metric definitions
+### Performance Overview
 
-Each metric is computed at the message level (one notification = one message) and aggregated for reporting. Here are the formal definitions:
+**Performance Overview shows you the big picture of your notification system's health.** This tab highlights three key signals that help you understand overall performance and user engagement across all your notifications.
 
-#### Delivered
+<Frame caption="Performance Overview dashboard">
+  ![](/images/channel-perf.png)
+</Frame>
 
-**Definition:** A notification is marked as "delivered" when the vendor confirms successful delivery to the user's device or inbox.
+**What you can see:**
 
-**Computation:**
-- **Source:** Vendor webhook callbacks to SuprSend's tracking URL (`https://hub.suprsend.com/webhook/*`)
-- **When emitted:** After vendor accepts the notification request and confirms delivery
-- **Aggregation:** Count of unique messages with delivered status within the time window
-- **Deduplication:** Each message is counted once, even if multiple delivery callbacks are received
+- **Channel performance** — Compare delivery, seen, and click rates across all channels (email, SMS, push, etc.)
+- **Average notifications per user per day** — Track how many notifications each user receives to avoid over-messaging
+- **Unsubscription trends** — Monitor opt-out rates by channel and category to understand what's driving users away
 
-**Channel-specific behavior:**
-- **Email:** Delivery confirmed when email service provider (ESP) accepts the message
-- **SMS:** Delivery confirmed when carrier confirms receipt
-- **Push (Android/iOS/Web):** Delivery confirmed when push service (FCM/APNs) confirms delivery to device
-- **Inbox:** Delivery confirmed when message is stored in user's inbox
+**What to watch for:**
 
-#### Seen
+| What you see | What it means | What to do |
+|--------------|---------------|------------|
+| High delivery, low seen | Messages are arriving but people aren't opening them | Improve subject lines, try different send times, or review content |
+| High seen, low click | People are viewing but not clicking | Improve your content or make your call-to-action clearer |
+| 10+ notifications per user per day | You might be sending too many notifications | Filter by category to find the culprit, then reduce frequency or batch notifications |
+| Opt-out rate above 0.5% | Too many people are unsubscribing | Check if it correlates with notification volume, investigate specific categories or channels |
 
-**Definition:** A notification is marked as "seen" when the user views or opens it, as defined by channel-specific engagement signals.
+**Navigate from here:**
+- **Channel underperforming?** → Go to [**Workflow Level Breakdown**](#workflow-level-breakdown) and filter by that channel
+- **High notification volume?** → Filter by category, then check [**Workflow Level Breakdown**](#workflow-level-breakdown) to find specific workflows
+- **Spike in opt-outs?** → Cross-reference with "Average notifications per user" metric—over-messaging is often the cause
 
-**Computation:**
-- **Source:** Vendor webhook callbacks or client-side tracking events
-- **When emitted:** Varies by channel (see table below)
-- **Aggregation:** Count of unique messages with seen status within the time window
-- **Uniqueness:** One "seen" event per message per user
+---
 
-**Channel-specific behavior:**
-- **Email:** Triggered when email client loads tracking pixel (opened)
-- **WhatsApp:** Triggered when message is read (double blue check)
-- **Push (Android/iOS/Web):** Triggered when notification is clicked/tapped
-- **Inbox:** Triggered when message is marked as read or clicked
+### Workflow Level Breakdown
 
-<Warning>
-  **Email open tracking limitations:**
+**Workflow Level Breakdown lets you compare performance across workflows, templates, channels, vendors, and categories side by side.** Use this table view to identify which notifications are working and which aren't.
 
-  Email "seen" metrics rely on tracking pixels. Some email clients (Apple Mail with Mail Privacy Protection, Gmail with image blocking) may not load tracking pixels, resulting in underreported seen rates. This is an industry-wide limitation, not a SuprSend issue.
-</Warning>
+<Frame caption="Workflow Level Breakdown view">
+  ![](/images/wf-level.png)
+</Frame>
 
-#### Clicked
+The table shows one row per unique workflow + delivery path combination with columns for workflow, template, channel, vendor, category, count, delivery rate, seen rate, and click rate.
 
-**Definition:** A notification is marked as "clicked" when the user interacts with a link, button, or actionable element within the notification.
+**How to use it:**
 
-**Computation:**
-- **Source:** Click tracking URLs in notification content or client-side interaction events
-- **When emitted:** When user clicks a tracked link or button
-- **Aggregation:** Count of unique messages with at least one click within the time window
-- **Uniqueness:** Multiple clicks on the same message are counted as one "clicked" event for the message
+1. **Apply filters** — Use the filters panel to narrow down by workflow, template, channel, vendor, category, or tenant
+2. **Sort columns** — Click on any column header to sort by that metric (e.g., sort by seen rate to find underperformers)
+3. **Compare rows** — Compare similar workflows side by side to identify what's working and what needs improvement
 
-**Channel-specific behavior:**
-- **Email:** Click tracking via URL parameters in email links
-- **Push (Android/iOS/Web):** Click event when notification is tapped/clicked
-- **Inbox:** Click event when user clicks links or buttons in inbox message
-- **SMS/WhatsApp:** Not tracked (no clickable elements)
+**What to watch for:**
 
-#### Opt-out
+| What you see | What it means | What to do |
+|--------------|---------------|------------|
+| One workflow has much lower engagement than others | That workflow needs attention | Investigate the [template](/docs/templates), timing, or content. Compare with high-performing workflows |
+| One vendor has lower delivery rates than others | That vendor might be having issues | Check vendor status page, verify [vendor configuration](/docs/vendors), or consider switching vendors |
 
-**Definition:** A user is marked as "opted out" when they unsubscribe from notifications via channel-specific opt-out mechanisms.
+**Navigate from here:**
+- **One channel underperforming?** → Filter by that channel to see which workflows are dragging it down
+- **Want to find best practices?** → Sort by seen/click rate to see top performers
+- **Need detailed debugging?** → Go to [**Errors**](#errors) tab or [**Logs**](/docs/logging) for event-level details
 
-**Computation:**
-- **Source:** User-initiated unsubscribe actions (clicking unsubscribe link, replying STOP, etc.)
-- **When emitted:** Immediately upon opt-out action
-- **Aggregation:** Count of unique users who opted out within the time window
-- **Uniqueness:** One opt-out event per user per channel/category combination
+---
 
-**Channel-specific behavior:**
-- **Email:** Unsubscribe link clicks or list-unsubscribe headers
-- **SMS:** Reply with STOP, UNSUBSCRIBE, or similar keywords
-- **Push:** User disables notifications in device settings (tracked separately)
-- **Inbox:** User preference changes in preference center
+### Errors
 
-### Average notifications per user
+**Errors tab helps you find and fix problems quickly.** All errors are organized in one place, making it easy to identify and resolve issues affecting your notifications.
 
-**Definition:** The mean number of notifications sent to each active user per day.
+<Frame caption="Errors view">
+  ![](/images/error.png)
+</Frame>
 
-**Computation:**
-- **Formula:** `Total notifications sent / Unique users who received notifications / Number of days`
-- **Aggregation window:** Daily, then averaged over selected time range
-- **Uniqueness:** Each notification is counted once, even if sent to multiple channels
-- **User scope:** Only users who received at least one notification in the time window
+**What you'll see:**
 
-### Channel performance percentages
+- **API Request Failures** — Your code isn't reaching SuprSend (authentication issues, invalid requests, etc.)
+- **Workflow Execution Failures** — Workflows are failing after they start (template errors, missing data, etc.)
+- **Notification Delivery Failures** — Vendors can't deliver notifications (invalid email addresses, vendor outages, etc.)
 
-**Definition:** Engagement rates calculated as percentages of delivered messages.
+**What to watch for:**
 
-**Computation:**
-- **Seen rate:** `(Messages with seen status / Messages with delivered status) × 100`
-- **Click rate:** `(Messages with clicked status / Messages with delivered status) × 100`
-- **Aggregation:** Calculated per channel, then aggregated over time window
-- **Precision:** Percentages are rounded to 2 decimal places for display
+| What you see | What it means | What to do |
+|--------------|---------------|------------|
+| Sudden spike in API Request Failures | Your integration might have an issue | Check API keys, verify request format, review recent code changes |
+| High Workflow Execution Failures | Workflows are failing during execution | Check [templates](/docs/templates) for errors, verify data payloads, review [workflow configuration](/docs/workflow-builder) |
+| Delivery Failures from one vendor | That vendor might be having problems | Check vendor status page, verify [vendor configuration](/docs/vendors), consider switching vendors |
+
+**Example:**
+
+A sudden spike in **Workflow Execution Failures** often happens after a template change where a required variable is missing. Filter by workflow to identify the affected workflow, then check the [template](/docs/templates) for missing variables.
+
+**Navigate from here:**
+- **Need detailed error information?** → Click on any error to see the exact message and context
+- **Want step-by-step debugging?** → Go to [**Logs**](/docs/logging) to see individual event details and execution traces
+- **Looking for solutions?** → Check [error guides](/docs/error-guides) for vendor-specific and error-type-specific resolution steps
+
+---
+
+## Understanding the Metrics
+
+### Metrics overview
+
+| Metric | What it means |
+|--------|---------------|
+| **Delivered** | Notification successfully sent to user's device |
+| **Seen** | Notification viewed or opened by the user. For Android push channel, this also includes the notifications cleared from the tray |
+| **Clicked** | User clicked on the notification |
+| **Opt-out** | The user unsubscribed from notifications |
 
 ### Metrics by channel
 
-Different channels track different metrics based on what's available from the channel and vendor:
-
-| Channel     | Delivered | Seen | Clicked | Notes                                    |
-| ----------- | --------- | ---- | ------- | ---------------------------------------- |
-| Email       | ✓         | ✓    | ✓       | Seen = opened                            |
-| SMS         | ✓         | -    | -       | Delivery only                             |
-| WhatsApp    | ✓         | ✓    | -       | Seen = read                               |
-| Android Push| ✓         | ✓    | ✓       | Seen = clicked, also tracks dismissed    |
-| iOS Push    | ✓         | ✓    | ✓       | Seen = clicked                           |
-| Web Push    | ✓         | ✓    | ✓       | Seen = clicked                           |
-| Inbox       | ✓         | -    | ✓       | Tracks read and clicked separately        |
-| Slack       | ✓         | -    | -       | Delivery only                             |
-| MS Teams    | ✓         | -    | -       | Delivery only                             |
+| Channel | Delivered | Seen | Clicked |
+|---------|-----------|------|---------|
+| Email | ✅ | ✅ | ✅ |
+| SMS | ✅ | ❌ | ❌ |
+| WhatsApp | ✅ | ✅ | ❌ |
+| Android Push | ✅ | ✅ | ✅ |
+| iOS Push | ✅ | ✅ | ✅ |
+| Web Push | ✅ | ✅ | ✅ |
+| Inbox | ✅ | ✅ | ✅ |
+| Slack | ✅ | ❌ | ❌ |
+| MS Teams | ✅ | ❌ | ❌ |
 
 <Check>
-  **👍 Set Callback URL in vendor account:**
+  **Important: Enable tracking first**
 
-  To track notification status post-trigger (delivery, seen, click), configure SuprSend tracking URL `https://hub.suprsend.com/webhook/*` in your vendor portal. You'll find details of the callback URL in respective [vendor integration documentation](/docs/vendors).
+  To see "seen" and "clicked" metrics, you need to set up tracking. Configure the SuprSend tracking URL `https://hub.suprsend.com/webhook/*` in your vendor account. See your [vendor integration docs](/docs/vendors) for details.
 </Check>
 
-<Note>
-  **📘 Metric Definitions:**
+---
 
-  Not sure which metrics are available for each channel? Look for the **Metric Definitions** icon on the right side, below the filter button. Hover over it to see which metrics (delivered, seen, clicked, etc.) are tracked for each channel.
-</Note>
+## Navigating Analytics Page
 
-## How analytics are computed
+### Refresh Interval
 
-Understanding the data pipeline helps you interpret metrics accurately and trust the numbers you see.
+Analytics data updates automatically, but you can click the refresh button to update it manually. Data refreshes as vendors send status updates to SuprSend.
 
-### Data flow
+### Filters
 
-Analytics are computed through the following pipeline:
+**Global filters** (date range, timezone) apply everywhere across all Analytics tabs.
 
-1. **Event generation** → When a notification is sent, SuprSend generates a message event
-2. **Vendor delivery** → Notification is sent to vendor (SendGrid, Twilio, FCM, etc.)
-3. **Vendor callbacks** → Vendor sends webhook callbacks to SuprSend's tracking URL with delivery/engagement status
-4. **Event processing** → SuprSend processes callbacks and updates message status
-5. **Aggregation** → Events are aggregated into time windows (hourly, daily) for analytics display
-6. **Dashboard display** → Aggregated metrics are displayed in real-time or near real-time
+**Tab-specific filters** (workflow, tenant, template, channel, category, vendor, notification status) only apply to the current view.
 
-### Data freshness and aggregation
+**Fastest ways to find something:**
+- **Looking for a specific workflow's performance?** → Filter by workflow name in [**Workflow Level Breakdown**](#workflow-level-breakdown)
+- **Checking one channel?** → Use the channel filter or click channel tabs in [**Performance Overview**](#performance-overview)
+- **Investigating errors?** → Go to [**Errors**](#errors) tab and filter by error type or vendor
+- **Comparing workflows?** → Use [**Workflow Level Breakdown**](#workflow-level-breakdown) with multiple filters
 
-**Real-time vs delayed:**
+### Time range
 
-- **Real-time updates:** Metrics update as vendor callbacks are received, typically within seconds to minutes of user engagement
-- **Aggregation delay:** Time-series charts aggregate data into hourly or daily buckets. Recent data (last hour) may be incomplete
-- **Eventual consistency:** Vendor callbacks may arrive out of order or with delays. Analytics reflect final state after all callbacks are processed
+Choose from relative ranges (Last 1 day, 7 days, 30 days, and additional presets) or select absolute date ranges with timezone-aware selection.
 
-**Aggregation windows:**
+**Absolute range:** Selecting in your timezone (e.g., Asia/Kolkata). You can view data for max 7 days at a time.
 
-- **Hourly:** Data aggregated into 1-hour buckets for time-series views
-- **Daily:** Daily totals calculated at end of day (UTC)
-- **Custom ranges:** Aggregated based on selected time range
+Recent data (last 24 hours) may still be updating as vendors send status updates. After 48 hours, data is considered final.
 
-**Deduplication:**
+### Data Retention
 
-- Each message is counted once per metric, even if multiple status updates are received
-- Late-arriving callbacks update historical data within the retention window
-- Duplicate events from vendor retries are automatically deduplicated
+Analytics default to "Last 7 days" when first opened. Older data is retained for a period of time based on your [pricing plan](https://www.suprsend.com/pricing).
 
-**Backfills:**
+For extended retention options, contact our [sales team](mailto:sales@suprsend.com).
 
-- If vendor callbacks are delayed, metrics are updated retroactively when callbacks arrive
-- Historical data may change slightly as late callbacks are processed
-- **Data finality:** Analytics are considered final after 48 hours. Data older than 48 hours should not change, as vendor callback windows have closed
+---
 
-**Data freshness expectations:**
+## Exporting Analytics
 
-- **Real-time (0-1 hour):** Metrics may be incomplete as callbacks are still arriving. Expect up to 5-10% variance.
-- **Near real-time (1-24 hours):** Most callbacks have arrived. Expect <2% variance from final numbers.
-- **Final (48+ hours):** Data is stable and should not change.
+Export your analytics data as CSV files directly from any Analytics tab.
 
-<Note>
-  **📘 Data accuracy:**
+<Frame caption="Export analytics dialog">
+  ![](/images/export-analytics.png)
+</Frame>
 
-  Analytics reflect vendor-reported status. If a vendor fails to send callbacks or sends incorrect status, analytics will reflect that. Always verify vendor callback configuration is working correctly.
-</Note>
+**Export types:**
+- **Aggregate user data** — Totals grouped by date and time, matching what you see in the charts
+- **Raw user data** — One row per user with timestamp of each action
 
-### SuprSend dashboard
+**Date range:** Choose relative range (e.g., "Last 7 days") or absolute range (specific date range).
 
-You can view analytics directly in the SuprSend dashboard:
+**Filters:** Apply filters for channel, template, notification status, workflow, category, tenant, or vendor before exporting. The CSV will only include data matching your current filters and date range.
 
-1. Navigate to **Analytics** in your environment.
-2. Use the tabs to switch between **Performance Overview** and **Workflow Level Breakdown**.
-3. Apply filters at the top to narrow down your view by workflow, tenant, template, channel, category, or time range.
+**How to export:**
+1. Navigate to the Analytics tab you want to export
+2. Click the three dots (⋯) in the top right of that section
+3. Click on "Export as CSV"
+4. Select your date range (relative or absolute)
+5. Choose your export type (aggregate or raw user data)
+6. Apply any filters you want to include
+7. Download the CSV file
 
-At the top of the Analytics page, you'll find:
+---
 
-- **Relative and absolute range filters** → Choose from preset time ranges (last 7 days, last 30 days) or set a custom date range.
-- **Refresh icon** → Manually refresh data to see the latest updates.
-- **Workflow and tenant filters** → Narrow down your view to specific workflows or tenants.
+## Frequently Asked Questions
 
-### Data export
+<AccordionGroup>
 
-Analytics data can be exported for deeper analysis:
+  <Accordion title="Why don't I see 'seen' or 'clicked' metrics?">
+    You need to enable tracking first. Set up the SuprSend tracking URL `https://hub.suprsend.com/webhook/*` in your vendor account. This lets SuprSend receive delivery and engagement updates from your vendor. See your [vendor integration docs](/docs/vendors) for step-by-step instructions.
+  </Accordion>
 
-- **Outbound webhooks** → Configure [outbound webhooks](/docs/outbound-webhook) to receive real-time analytics updates in your system.
-- **Amazon S3 sync** → Set up [Amazon S3 sync](/docs/amazon_s3_v2) to export analytics data to your data warehouse for analysis with tools like Athena, Redshift, Snowflake, or ClickHouse.
+  <Accordion title="How up-to-date is the data?">
+    Data updates in near real-time, usually within a few minutes. For the most recent hour, data might still be updating (expect some variance). For events from 1-24 hours ago, most data is in. After 48 hours, data is final and won't change. For immediate verification of a specific event, use [Logs](/docs/logging).
+  </Accordion>
 
-## Performance Overview
+  <Accordion title="What's the difference between Analytics and Logs?">
+    **Analytics** shows you trends and summaries across all your notifications (like "email has 45% open rate"). [**Logs**](/docs/logging) shows you individual events in detail (like "this specific email to user@example.com was delivered at 2:34 PM"). Use Analytics to spot patterns, then use [**Logs**](/docs/logging) to investigate specific events.
+  </Accordion>
 
-The Performance Overview tab gives you a high-level view of your notification system's health and user engagement patterns.
+  <Accordion title="How do I know if I'm sending too many notifications?">
+    Check the "Average notifications per user" metric in [**Performance Overview**](#performance-overview). If it's 10+ per day, that's often too much for most apps (users might get annoyed). Filter by category first—marketing notifications are usually the main driver. Also check if users receiving lots of notifications are unsubscribing.
+  </Accordion>
 
-### Channel performance
+  <Accordion title="My delivery rate is low—where do I start?">
+    Start with the [**Errors**](#errors) tab. Check API Request Failures first (are your requests even reaching SuprSend?), then Workflow Execution Failures (are workflows failing?), then Delivery Failures (are vendors rejecting notifications?). Filter by vendor or channel to spot patterns. For detailed debugging of specific events, use [**Logs**](/docs/logging).
+  </Accordion>
 
-Compare delivery and engagement across channels to see where users are most responsive.
+  <Accordion title="Why do my numbers keep changing?">
+    Analytics update as vendors send us status updates. If a vendor is slow to report (common with international SMS), the numbers will update when we receive the update. Data from the last 48 hours might change slightly. After 48 hours, data is final.
+  </Accordion>
 
-**How to read this chart:**
+  <Accordion title="Can I export my analytics data?">
+    Yes. You can export analytics data as CSV files directly from any Analytics tab. Choose between aggregate user data (totals grouped by date/time) or raw user data (one row per user with timestamps).
+  </Accordion>
 
-- Use the tabs above to switch between channels — the totals reflect overall delivery, seen, and click percentages for that channel.
-- Clicking a tab updates the line chart below to show the time series trend for that specific channel.
-- If any channel has tracking issues, a warning sign will appear next to it. Hover over it to understand and fix the warning.
+  <Accordion title="What timezone is the data shown in?">
+    Analytics use your browser's timezone by default. You can change it in the top navbar if needed.
+  </Accordion>
 
-This view helps you quickly identify which channels are driving the most engagement. For instance, if email shows a 45% seen rate while SMS shows 95% delivery, you might want to investigate why email engagement is lower or consider SMS for time-sensitive notifications.
+  <Accordion title="How long is data kept?">
+    Data retention depends on your plan. Check the [pricing page](https://www.suprsend.com/pricing) for details.
+  </Accordion>
 
-### Average notifications per user
-
-Track how often users receive notifications each day to catch over-messaging patterns early.
-
-**How to read this chart:**
-
-- The count reflects the average number of notifications a user receives per day.
-- Bar + heatmap shows how users are distributed across different notification volume ranges — darker areas indicate more users in that range.
-- If you notice darker areas higher on the y-axis, it means a segment of users is receiving a high volume of notifications. Consider drilling down by category or channel to identify what's contributing to this spike.
-
-This metric is crucial for preventing notification fatigue. If you see users receiving 10+ notifications per day, they're likely to start ignoring or unsubscribing from your messages. Use the category and channel filters to identify which types of notifications are contributing most to this volume.
-
-### Unsubscription trends
-
-Monitor unsubscription trends and track opt-outs by channel and category.
-
-**How to read this chart:**
-
-- The count shows the total number of users who opted out during the selected time range.
-- Heatmap visualizes opt-outs across different category and channel volume ranges — darker areas indicate higher concentrations of opt-outs.
-- If opt-out numbers are unusually low, it may mean that an accessible opt-out option is missing from some notifications.
-
-**Benchmark guidelines:**
-
-These benchmarks are based on industry observations across transactional and marketing notification programs. Your actual benchmarks may vary based on your industry, user base, and notification types.
-
-- **Below 0.2%** → Excellent opt-out rate (typical for well-targeted transactional notifications)
-- **0.2-0.5%** → Acceptable opt-out rate (common for marketing or promotional notifications)
-- **Above 0.5%** → Requires attention — investigate which channels or categories are driving opt-outs
-
-When you see a spike in opt-outs, drill down by category or channel to understand what's causing users to leave. This might indicate over-messaging, irrelevant content, or issues with notification timing.
-
-## Workflow Level Breakdown
-
-The Workflow Level Breakdown tab provides detailed performance metrics for individual workflows, helping you identify exactly where improvements are needed.
-
-### Workflow performance comparison
-
-Compare performance across workflows and templates to spot what's driving engagement and what needs fixing.
-
-This view gives you a comprehensive breakdown showing:
-
-- **Channel performance by workflow** → See how each workflow performs across different channels. For example, if your email channel isn't performing well overall, you can drill down to see which specific workflows are dragging down the average.
-- **Template-level insights** → Identify which templates are resonating with users and which need optimization.
-- **Vendor performance** → See which vendors are causing delivery issues or performing exceptionally well.
-- **Category analysis** → Understand how different notification categories (transactional, marketing, etc.) are performing.
-
-**Example use case:**
-
-If you notice that your email channel has a low seen rate (20%), you can:
-
-1. Filter by email channel in the Workflow Level Breakdown
-2. See that "Order Confirmation" workflow has 80% seen rate, but "Weekly Newsletter" has only 5%
-3. Investigate the newsletter template, timing, or content to improve engagement
-4. Compare with the order confirmation workflow to understand what's working
-
-This granular view helps you make data-driven decisions about where to invest your optimization efforts.
-
-### Error tracking
-
-The Workflow Level Breakdown includes centralized error tracking across three categories:
-
-#### API Request Failures
-
-Errors due to which API requests were not successfully completed.
-
-If you're actively making requests, this means your integration is working as expected. Any issues in API or SDK calls will appear here, helping you quickly identify integration problems.
-
-#### Workflow / Broadcast Execution Failures
-
-Errors encountered during workflow or broadcast run due to which one or more nodes in the flow would have failed.
-
-When no errors are found, you'll see: "All workflow and broadcast executions have completed without errors. If issues occur during execution in the future, they'll be listed here for investigation."
-
-This helps you catch workflow configuration issues, data transformation problems, or node-level failures before they impact too many users.
-
-#### Notification Delivery Failures
-
-Errors reported by vendors for failed notification deliveries.
-
-These are vendor-specific delivery failures. Click on any error to see detailed information and jump directly to the relevant log entry for debugging.
-
-## Message logs
-
-You can access message details through the [Logs page](/docs/logging) in the SuprSend dashboard. In the messages table, you can identify:
-
-- **Engagement status** → Current engagement state (delivered, seen, clicked, etc.) per recipient.
-- **Recipient information** → Which users received the notification and when.
-- **Message timeline** → Creation and engagement timestamps for each notification.
-
-<Note>
-  **📘 Data retention:**
-
-  Analytics data is subject to retention policy enforcement. Check the [pricing page](https://www.suprsend.com/pricing) to see log retention timeframe applicable for your plan.
-</Note>
-
-## Day-by-day performance
-
-Get a detailed day-by-day breakdown of your notification performance to understand trends and identify patterns.
-
-The detailed view shows:
-
-- **Daily contribution** → See how each day contributes to your overall metrics
-- **Trend analysis** → Spot upward or downward trends in engagement
-- **Anomaly detection** → Quickly identify days with unusual performance (spikes or drops)
-
-This granular view helps you correlate performance changes with:
-- Product launches or feature updates
-- Marketing campaigns
-- Template or workflow changes
-- Seasonal patterns
-
-## Limitations and caveats
-
-Understanding what analytics cannot tell you is crucial for accurate interpretation and decision-making.
-
-### Email tracking limitations
-
-**Email open tracking (seen metric):**
-
-- **Apple Mail Privacy Protection:** iOS 15+ and macOS 12+ users with Mail Privacy Protection enabled will show false "opened" events. Apple pre-loads tracking pixels, making it impossible to distinguish real opens from privacy-protected opens.
-- **Gmail image blocking:** Some Gmail clients don't load images by default, resulting in underreported seen rates.
-- **Email client variations:** Different email clients handle tracking pixels differently, leading to inconsistent seen rates across providers.
-
-**Impact:** Email "seen" rates may be artificially inflated (Apple Mail) or underreported (Gmail) depending on your user base. Use seen rates as directional indicators, not absolute truth.
-
-### Push notification limitations
-
-**Delivery vs display:**
-
-- **Delivered ≠ displayed:** Push delivery confirmation means the notification reached the device, not that it was displayed to the user.
-- **Do Not Disturb:** Notifications delivered during Do Not Disturb mode are delivered but may not be seen.
-- **App uninstalls:** If a user uninstalls your app, push delivery may still be marked as "delivered" by the push service, but the notification never reaches the user.
-
-**Impact:** Push "delivered" rates are higher than actual user visibility. "Seen" rates (clicked) are more accurate indicators of user engagement.
-
-### SMS limitations
-
-**Delivery confirmation:**
-
-- **Carrier delays:** SMS delivery confirmations may be delayed by hours or days, especially for international messages.
-- **No engagement tracking:** SMS only tracks delivery. There's no way to know if a user read the message unless they reply or click a link.
-- **Carrier filtering:** Some carriers filter or block SMS messages, which may not be reflected in delivery status.
-
-**Impact:** SMS analytics are limited to delivery metrics. Engagement must be measured through link clicks or user responses.
-
-### Inbox limitations
-
-**Read vs clicked:**
-
-- **Read tracking:** Inbox "read" status is based on explicit user actions (marking as read) or implicit actions (clicking). It may not capture all views.
-- **Offline viewing:** Users viewing inbox messages offline may not trigger read events until they reconnect.
-
-**Impact:** Inbox seen rates may underreport actual views if users don't explicitly mark messages as read.
-
-### Data accuracy limitations
-
-**Vendor callback dependency:**
-
-- Analytics accuracy depends entirely on vendor webhook callbacks. If vendors fail to send callbacks or send incorrect status, analytics will reflect that.
-- Some vendors have callback delays (hours to days), especially for international deliveries.
-- Vendor API outages may result in missing or delayed analytics data.
-
-**Sampling and aggregation:**
-
-- **Sampling threshold:** Time ranges exceeding 90 days may use sampled data for performance optimization. Sampling is applied only to time-series charts, not to summary totals.
-- **Sampling behavior:** When sampling is active, charts show directional trends rather than exact counts. Summary metrics (totals, percentages) always use full data.
-- **Data exports:** Exports via S3 sync or webhooks use raw, unsampled data regardless of time range.
-- Aggregation windows (hourly/daily) mean recent data may be incomplete.
-- Historical data may change as late-arriving callbacks are processed (within 48-hour window).
-
-### What analytics cannot tell you
-
-Analytics cannot answer:
-
-- **Why a user didn't engage:** Analytics show what happened, not why. User interviews and surveys are needed for qualitative insights.
-- **Content effectiveness:** Analytics show engagement rates, not whether content resonated or drove desired actions.
-- **Optimal send times:** Analytics show when you sent, not when users are most receptive. A/B testing is needed for timing optimization.
-- **User intent:** High click rates don't guarantee positive user sentiment. Users may click to unsubscribe or report spam.
-- **Cross-channel attribution:** Analytics show per-channel performance, not how channels work together in a user journey.
-
-### Best practices for accurate interpretation
-
-1. **Verify vendor callbacks:** Regularly check that vendor webhook callbacks are configured and working correctly
-2. **Account for channel limitations:** Understand that email seen rates and push delivery rates have inherent limitations
-3. **Use multiple metrics:** Don't rely on a single metric. Combine delivery, seen, and clicked rates for a complete picture
-4. **Compare relative trends:** Focus on trends and relative performance rather than absolute numbers
-5. **Correlate with business metrics:** Link notification analytics to business outcomes (conversions, revenue, retention) to validate effectiveness
-
-## Debugging with analytics
-
-When you spot anomalies in analytics, follow this systematic debugging flow:
-
-### Engagement drop
-
-**If you see:** Seen or click rates declining across channels
-
-**Debugging steps:**
-
-1. **Check channel performance** → Filter by channel to see if the drop is channel-specific
-2. **Review workflow breakdown** → Identify which workflows are driving the decline
-3. **Check vendor status** → Review delivery failures to see if vendor issues are causing delivery problems
-4. **Verify callback configuration** → Ensure vendor webhooks are configured correctly (see [vendor integration docs](/docs/vendors))
-5. **Review recent changes** → Check if template, workflow, or timing changes correlate with the drop
-
-### Delivery drop
-
-**If you see:** Delivery rates declining
-
-**Debugging steps:**
-
-1. **Check vendor errors** → Review "Notification Delivery Failures" in Workflow Level Breakdown
-2. **Filter by vendor** → Identify if a specific vendor is causing issues
-3. **Check API request failures** → Verify your integration isn't sending invalid requests
-4. **Review workflow execution failures** → Check for configuration errors in workflows
-5. **Jump to logs** → Click on specific errors to view detailed logs and execution traces
-
-### Vendor errors
-
-**If you see:** High delivery failure rates from a specific vendor
-
-**Debugging steps:**
-
-1. **Click on error** → Opens detailed error information and links to specific log entries
-2. **Review error message** → Check vendor-specific error codes and messages
-3. **Check vendor status page** → Verify vendor isn't experiencing outages
-4. **Review vendor credentials** → Ensure API keys and credentials are valid
-5. **Check vendor documentation** → Refer to [vendor-specific error guides](/docs/error-guides) for resolution steps
-
-### No errors but low engagement
-
-**If you see:** High delivery but low seen/click rates
-
-**Debugging steps:**
-
-1. **Account for channel limitations** → Review limitations section (email privacy protection, push display issues)
-2. **Check timing** → Review if notifications are being sent at optimal times
-3. **Compare workflows** → Identify high-performing workflows and compare templates/content
-4. **Review category performance** → Check if specific categories (marketing vs transactional) are underperforming
-5. **Consider A/B testing** → Test different templates, content, or send times
-
-### From analytics to logs
-
-When you need to investigate specific messages or events:
-
-1. **Use filters** → Narrow down to specific workflow, tenant, template, or channel in analytics
-2. **Identify time range** → Note the time period of the issue
-3. **Jump to logs** → Navigate to [Logs page](/docs/logging) and apply the same filters
-4. **Inspect individual messages** → Review detailed execution traces, payloads, and error details
-5. **Copy execution ID** → Use execution ID from logs to share with support for deeper investigation
-
-## Best practices
-
-1. **Regular monitoring** → Check analytics weekly to catch trends early
-2. **Compare workflows** → Use side-by-side comparisons to identify best practices from high-performing workflows
-3. **Filter strategically** → Start broad, then narrow down using filters to find specific issues
-4. **Track opt-out correlation** → When you see opt-out spikes, check the average notifications per user metric to see if over-messaging is the cause
-5. **Vendor performance** → Regularly review delivery failures by vendor to catch provider issues early
-6. **Category analysis** → Compare performance across notification categories to ensure transactional messages aren't being impacted by marketing volume
-7. **Account for limitations** → Understand channel-specific tracking limitations when interpreting metrics
-8. **Follow debugging flow** → Use the systematic debugging approach above when investigating issues
-
-## Related resources
-
-- Review [logs](/docs/logging) for detailed debugging information when you spot issues in analytics
-- Check [error guides](/docs/error-guides) to understand and resolve delivery failures
-- Set up [outbound webhooks](/docs/outbound-webhook) to receive real-time analytics updates
-- Configure [Amazon S3 sync](/docs/amazon_s3_v2) to export analytics data to your data warehouse
+</AccordionGroup>
