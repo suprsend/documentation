@@ -8,7 +8,7 @@ description: "Step-by-step guide to setup APNS iOSpush notifications in your flu
 
   If you are using an iOS version older than v1.0.0 and upgrading to the new version. Please ensure to use the latest integration steps, especially for below methods:
 
-  1. [Adding Background mode capability (point 3 of capabilities)](/docs/flutter-ios-push-integration#step-1-add-capabilities-in-ios-application)
+  1. [Adding Background mode capability](/docs/flutter-ios-push-integration#step-1-add-capabilities-in-ios-application)
 
   2. [Calling registerPush method](/docs/flutter-ios-push-integration#step-2-register-for-push-notification-in-appdelegateswift-file)
 
@@ -19,31 +19,31 @@ description: "Step-by-step guide to setup APNS iOSpush notifications in your flu
   Example flutter repository with this implementation can be found [here](https://github.com/suprsend/suprsend-flutter-sdk/tree/main/example)
 </Tip>
 
-<Steps>
-  <Step title="Add capabilities in iOS application" stepNumber="1">
-    1. Inside Targets select **signing and capabilities**
+## Step 1: Add capabilities in iOS application
 
-    2. Click on **+capabilities** and select **Push Notifications** and **Background Modes**
+1. Inside Targets select **signing and capabilities**
 
-    ![](/images/docs/29bafbe-Screenshot_2022-05-19_at_5.48.52_PM.png "Screenshot 2022-05-19 at 5.48.52 PM.png")In Background Modes, select **Remote Notifications** option. We use background notifications to receive delivery reports when your app is in quit and background state. Refer [doc](https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/pushing_background_updates_to_your_app) to know more about background notification
+2. Click on **+capabilities** and select **Push Notifications** and **Background Modes**
 
-    ![](/images/docs/75c5310-Screenshot_2022-09-27_at_1.48.11_PM.png)
-  </Step>
+![](/images/docs/29bafbe-Screenshot_2022-05-19_at_5.48.52_PM.png "Screenshot 2022-05-19 at 5.48.52 PM.png")In Background Modes, select **Remote Notifications** option. We use background notifications to receive delivery reports when your app is in quit and background state. Refer [doc](https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/pushing_background_updates_to_your_app) to know more about background notification
 
-  <Step title="Register for push notification in AppDelegate.swift file" stepNumber="2">
-    Call `registerForPushNotifications` method below the SuprSend SDK initialized code which will register the iOS device for push service
+![](/images/docs/75c5310-Screenshot_2022-09-27_at_1.48.11_PM.png)
 
-    <CodeGroup>
-      ```objectivec AppDelegate.swift
-      SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
-      var options: UNAuthorizationOptions = [.badge, .alert, .sound] // Add this
-      SuprSend.shared.registerForPushNotifications(options: options) // Add this
-      ```
-    </CodeGroup>
-  </Step>
+## Step 2: Register for push notification in AppDelegate.swift file
 
-  <Step title="Asking User to send push notifications" stepNumber="3">
-    There are 2 ways in which your app can prompt users to allow push notifications on their devices:
+Call `registerForPushNotifications` method below the SuprSend SDK initialized code which will register the iOS device for push service
+
+<CodeGroup>
+  ```objectivec AppDelegate.swift
+  SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
+  var options: UNAuthorizationOptions = [.badge, .alert, .sound] // Add this
+  SuprSend.shared.registerForPushNotifications(options: options) // Add this
+  ```
+</CodeGroup>
+
+## Step 3: Asking User to send push notifications
+
+There are 2 ways in which your app can prompt users to allow push notifications on their devices:
 
     <AccordionGroup>
       <Accordion title="Explicit Authorization" defaultOpen={false}>
@@ -78,93 +78,93 @@ description: "Step-by-step guide to setup APNS iOSpush notifications in your flu
         </CodeGroup>
       </Accordion>
     </AccordionGroup>
-  </Step>
 
-  <Step title="Enable sending and tracking of push notifications" stepNumber="4">
-    Receiving iOS APNS token sending to backend and listening for push notification and tracking user notification clicks can be done using the following snippet of code. Directly copy and paste it at end of the AppDelegate.swift file inside *AppDelegate* class.
+## Step 4: Enable sending and tracking of push notifications
 
-    <CodeGroup>
-      ```swift AppDelegate.swift
-      override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
-        let  token = tokenParts.joined()
-        SuprSend.shared.setPushNotificationToken(token: token)  // Send APNS Token to SuprSend
-      }
+Receiving iOS APNS token sending to backend and listening for push notification and tracking user notification clicks can be done using the following snippet of code. Directly copy and paste it at end of the AppDelegate.swift file inside *AppDelegate* class.
 
-      @available(iOS 10.0, *)
-      override func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-      ) {
-        if response.isSuprSendNotification() {
-          SuprSend.shared.userNotificationCenter(center, didReceive: response)
-        }
-        completionHandler()
-      }
+<CodeGroup>
+  ```swift AppDelegate.swift
+  override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
+    let  token = tokenParts.joined()
+    SuprSend.shared.setPushNotificationToken(token: token)  // Send APNS Token to SuprSend
+  }
 
-      override func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]){
-        SuprSend.shared.application(application, didReceiveRemoteNotification: userInfo)
-      }
+  @available(iOS 10.0, *)
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    if response.isSuprSendNotification() {
+      SuprSend.shared.userNotificationCenter(center, didReceive: response)
+    }
+    completionHandler()
+  }
 
-      @available(iOS 10.0, *)
-      override func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        if #available(iOS 14.0, *) {
-          completionHandler([.banner, .badge, .sound])
-        } else {
-          completionHandler([.alert, .badge, .sound])
-        }
-      }
-      ```
-    </CodeGroup>
+  override func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]){
+    SuprSend.shared.application(application, didReceiveRemoteNotification: userInfo)
+  }
 
-    <Warning>
-      iOS Push notifications only work on real devices so while developing/testing use real device to test it instead of simulators. From Xcode-15 push support can be tested in simulators as well.
-    </Warning>
-  </Step>
+  @available(iOS 10.0, *)
+  override func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .badge, .sound])
+    } else {
+      completionHandler([.alert, .badge, .sound])
+    }
+  }
+  ```
+</CodeGroup>
 
-  <Step title="Adding support for Notification service." stepNumber="5">
-    For better notification status (delivered, seen) tracking this step is needed.
+<Warning>
+  iOS Push notifications only work on real devices so while developing/testing use real device to test it instead of simulators. From Xcode-15 push support can be tested in simulators as well.
+</Warning>
 
-    <Steps>
-      <Step title="In Xcode go to File > New > Target." />
+## Step 5: Adding support for Notification service.
 
-      <Step title="Select Notification Service Extension from the template list." />
+For better notification status (delivered, seen) tracking this step is needed.
 
-      <Step title="Name your Notification Service" stepNumber="3">
-        Then in Next popup give it name to your notification service, select your team, select swift language and click finish.
+### Step 5.1: In Xcode go to File > New > Target.
 
-        ![](/images/docs/2545534-Screenshot_2022-09-27_at_8.23.30_PM.png)
-      </Step>
+### Step 5.2: Select Notification Service Extension from the template list.
 
-      <Step title="A folder will be created" stepNumber="4">
-        After clicking on `Finish`, a folder will be created with your given product name. Inside that there will be **`NotificationService.swift`** file like below.
+### Step 5.3: Name your Notification Service
 
-        ![](/images/docs/507d91a-Screenshot_2022-09-27_at_8.30.25_PM.png)
-      </Step>
+Then in Next popup give it name to your notification service, select your team, select swift language and click finish.
 
-      <Step title="Rename and Run the pod install" stepNumber="5">
-        In your project **`podFile`** add following snippet. Replace `<your notification service name>` with name you given to notification service while creating it. After that Run `pod install`.
+![](/images/docs/2545534-Screenshot_2022-09-27_at_8.23.30_PM.png)
 
-        <CodeGroup>
-          ```yaml PodFile
-          target '<your notification service name>' do
-            use_frameworks!
+### Step 5.4: A folder will be created
 
-            pod 'SuprsendCore'
-            pod 'SuprSendSdk'
+After clicking on `Finish`, a folder will be created with your given product name. Inside that there will be **`NotificationService.swift`** file like below.
 
-          end
-          ```
-        </CodeGroup>
+![](/images/docs/507d91a-Screenshot_2022-09-27_at_8.30.25_PM.png)
 
-        ![](/images/docs/8397e64-Screenshot_2024-08-14_at_4.34.21_PM.png)
-      </Step>
+### Step 5.5: Rename and Run the pod install
 
-      <Step title="Replace values with your Workspace Key and Workspace Secret.">
-        Replace the content in **`NotificationService.swift`** file with below code. In this snippet on line 11, 12 replace values with your workspace key and workspace secret.
+In your project **`podFile`** add following snippet. Replace `<your notification service name>` with name you given to notification service while creating it. After that Run `pod install`.
 
-        <CodeGroup>
+<CodeGroup>
+  ```yaml PodFile
+  target '<your notification service name>' do
+    use_frameworks!
+
+    pod 'SuprsendCore'
+    pod 'SuprSendSdk'
+
+  end
+  ```
+</CodeGroup>
+
+![](/images/docs/8397e64-Screenshot_2024-08-14_at_4.34.21_PM.png)
+
+### Step 5.6: Replace values with your Workspace Key and Workspace Secret.
+
+Replace the content in **`NotificationService.swift`** file with below code. In this snippet on line 11, 12 replace values with your workspace key and workspace secret.
+
+<CodeGroup>
           ```swift NotificationService.swift
           import UserNotifications
           import UIKit
@@ -291,18 +291,14 @@ description: "Step-by-step guide to setup APNS iOSpush notifications in your flu
           }
           }
           ```
-        </CodeGroup>
-      </Step>
+</CodeGroup>
 
-      <Step title="Final Step">
-        Runner Target inside Build Phases, drag **`Embedded Foundation Extensions`** section and drop it below th&#x65;**`Copy Bundle Resources`** section like in image.
+### Step 5.7: Final Step
 
-        ![](/images/docs/d90e08d-Screenshot_2024-08-14_at_4.47.35_PM.png)
-      </Step>
-    </Steps>
+Runner Target inside Build Phases, drag **`Embedded Foundation Extensions`** section and drop it below th&#x65;**`Copy Bundle Resources`** section like in image.
 
-    You are now all set to send push notifications. All you have to do is add iOS vendor configuration on SuprSend dashboard and your push notifications will be configured. Please refer [vendor integration guide](/docs/ios-push-vendor-integration) to integrate your apns push service.
-  </Step>
-</Steps>
+![](/images/docs/d90e08d-Screenshot_2024-08-14_at_4.47.35_PM.png)
+
+You are now all set to send push notifications. All you have to do is add iOS vendor configuration on SuprSend dashboard and your push notifications will be configured. Please refer [vendor integration guide](/docs/ios-push-vendor-integration) to integrate your apns push service.
 
 ***
