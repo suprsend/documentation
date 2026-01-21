@@ -1,6 +1,6 @@
 ---
-title: "Inbox and Feed"
-description: "How to integrate SuprSend inbox/feed components in Angular, Vue, VanillaJS, and other non-React frameworks."
+title: "Fullscreen Feed"
+description: "How to integrate SuprSend fullscreen feed component in Angular, Vue, VanillaJS, and other non-React frameworks."
 ---
 
 There are 2 ways in which you can implement inbox functionality:
@@ -8,7 +8,7 @@ There are 2 ways in which you can implement inbox functionality:
 - **Drop-in components:** Pre-built UI with many customizable options which require minimal effort to build.
 - **Headless implementation:** For more advanced use cases where you want to build UI/UX from scratch.
 
-This guide help you integrate drop-in components in your non-react frameworks (angular, vuejs, vanillajs etc). If you want to build your own UI (headless) instead of using drop-in components please refer [docs](https://docs.suprsend.com/docs/js-inapp-feed).
+This guide helps you integrate drop-in fullscreen feed component (feed without bell) in your non-react frameworks (angular, vuejs, vanillajs etc). If you want to use headless implementation instead of using drop-in components please refer [docs](https://docs.suprsend.com/docs/js-inapp-feed).
 
 ## Integration
 
@@ -17,9 +17,6 @@ This guide help you integrate drop-in components in your non-react frameworks (a
 This integration is used in Vanillajs, Django, Laravel, ruby etc where npm is not used.
 
 ```html
-<!-- for dropin inbox with bell -->
-<div id="suprsend-inbox"></div>
-
 <!-- for feed without bell as a fullscreen notification etc -->
 <div id="suprsend-feed"></div>
 
@@ -27,6 +24,9 @@ This integration is used in Vanillajs, Django, Laravel, ruby etc where npm is no
   window.suprsendConfig = {
     distinctId: "YOUR_DISTINCT_ID",
     publicApiKey: "YOUR_PUBLIC_API_KEY",
+    feed: {
+      theme: { notificationsContainer: { container: { height: "100vh" } } }, // add this to specify height
+    },
     userAuthenticationHandler: ({ response }) => {
       console.log("User Authentication Response", response);
     },
@@ -42,6 +42,8 @@ This integration is used in Vanillajs, Django, Laravel, ruby etc where npm is no
 </script>
 ```
 
+**NOTE:** If you are using `suprsend-feed`, specify height for the container for infinite scroll to work properly.
+
 ### Integrate as npm package
 
 This integration is used in framework based applications like angular, vuejs etc.
@@ -50,11 +52,10 @@ This integration is used in framework based applications like angular, vuejs etc
 npm install @suprsend/web-components@latest
 ```
 
+Install the package from [npm](https://www.npmjs.com/package/@suprsend/web-components).
+
 ```javascript
 import { initSuprSend, clearSuprSend } from "@suprsend/web-components";
-
-// for dropin inbox with bell
-<div id="suprsend-inbox"></div>
 
 // for feed without bell as a fullscreen notification etc
 <div id="suprsend-feed"></div>
@@ -62,6 +63,9 @@ import { initSuprSend, clearSuprSend } from "@suprsend/web-components";
 const suprsendConfig = {
   distinctId: "YOUR_DISTINCT_ID",
   publicApiKey: "YOUR_PUBLIC_API_KEY",
+  feed: {
+    theme: { notificationsContainer: { container: { height: "100vh" } } }, // add this to specify height
+  },
   userAuthenticationHandler: ({ response }) => {
     console.log("User Authentication Response", response);
   },
@@ -71,14 +75,37 @@ initSuprSend(suprsendConfig) // for creating instance and rendering component
 console.log("Instance created but user authentication pending", window.suprsend)
 ```
 
-**NOTE:** If you are using `suprsend-feed`, specify height for the container for infinite scroll to work properly.
+## Toast Notifications
+
+When you add fullscreen feed, toast notification functionality is automatically added. Toast notifications will appear when new notifications arrive.
+
+In case you want to show toast notification on receiving new notification you can use this listener:
+
+```javascript
+const feedClient = window.suprsend.client.feed.initialize();
+
+feedClient.emitter.on(
+  "feed.new_notification",
+  (notificationData) => {
+    // your logic to trigger toast with new notification data
+  }
+);
+```
+
+You can customize toast notifications by passing `toast` configuration in your `suprsendConfig`:
 
 ```javascript
 const suprsendConfig = {
   distinctId: "YOUR_DISTINCT_ID",
   publicApiKey: "YOUR_PUBLIC_API_KEY",
   feed: {
-    theme: { notificationsContainer: { container: { height: "100vh" } } }, // add this to specify height
+    theme: { notificationsContainer: { container: { height: "100vh" } } },
+  },
+  toast: {
+    position: "top-right", // "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right"
+    duration: 3000, // milliseconds toast should be shown default to 3sec
+    hideAvatar: false, // hide avatar on toast notification
+    themeType: "light", // dark or light mode
   },
 };
 ```
@@ -90,19 +117,16 @@ Components will be removed automatically if you navigate away from the page (on 
 <CodeGroup>
 ```javascript Using script tag
 window.suprsend.clearSuprSend(); // clears instance and remove all components
-window.suprsend.clearSuprSendInbox(); // unmount only inbox component
 window.suprsend.clearSuprSendFeed(); // unmount only feed component
 ```
 
 ```javascript Using npm package
 import {
   clearSuprSend,
-  clearSuprSendInbox,
   clearSuprSendFeed,
 } from "@suprsend/web-components";
 
 clearSuprSend(); // clears instance and remove all components
-clearSuprSendInbox(); // unmount only inbox component
 clearSuprSendFeed(); // unmount only feed component
 ```
 
@@ -112,9 +136,7 @@ clearSuprSendFeed(); // unmount only feed component
 
 ```javascript
 window.suprsend.updateSuprSendConfig(config: IUpdateSuprSendConfigOptions); // refresh userToken, change locale, translations dymanically
-window.suprsend.updateInboxConfig(config: IInbox);
 window.suprsend.updateFeedConfig(config: IFeed);
-window.suprsend.updateToastConfig(config: IToastNotificationProps);
 ```
 
 ## Accessing other instance methods
@@ -132,7 +154,7 @@ window.suprsend.client.user.preferences.getPreferences(args?: {tenantId?: string
 
 ## Config options
 
-To customise SuprSend components you can pass config object.
+To customise SuprSend feed component you can pass config object.
 
 <CodeGroup>
 ```typescript Config Options
@@ -148,34 +170,8 @@ interface ConfigProps {
   userAuthenticationHandler ? : ({
     response: ApiResponse
   }) => void;
-  inbox ? : IInbox; // inbox config options
   feed ? : IFeed; // feed config options
-  toast ? : IToastNotificationProps; // toast config options
   shadowRoot?: ShadowRoot; //shadowRoot reference
-}
-```
-
-```typescript Inbox Config Options
-interface IInbox {
-  tenantId?: string;
-  stores?: IStore[] | null;
-  host?: {
-    socketHost?: string;
-    apiHost?: string;
-  };
-  pageSize?: number;
-  pagination?: boolean;
-  theme?: ITheme;
-  themeType?: ThemeType;
-  popperPosition?: Placement;
-  hideAvatar?: boolean;
-  showUnreadCountOnTabs?: boolean; // hiding unread count in multi tab setup
-  hideToast?: boolean; // by default toast is shown on new notification. To stop it pass false
-  headerIconUrl?: string; // icon url to be shown on right side of mark all as read button on header
-  headerIconClickHandler?: () => void; // on the click of above mentioned icon this callback is called
-  notificationClickHandler?: (notification: IRemoteNotification) => void;
-  primaryActionClickHandler?: (notification: IRemoteNotification) => void;
-  secondaryActionClickHandler?: (notification: IRemoteNotification) => void;
 }
 ```
 
@@ -203,21 +199,11 @@ interface IFeed {
 }
 ```
 
-```typescript Toast Config Options
-interface IToastNotificationProps {
-  position?: ToastPosition; // "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right"
-  duration?: number; // milliseconds toast should be shown default to 3sec
-  hideAvatar?: boolean; // hide avatar on toast notification
-  themeType?: ThemeType; // dark or light mode
-  theme?: ToastNotificationCardTheme; // to customise css of toast notification
-}
-```
-
 </CodeGroup>
 
 | Parameter                                                         | Description                                                                                                                                                                                                                            |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| publicApiKey                                                      | Public API Key is mandatory field without which error will be thrown by SuprSendProvider. You can get this from [SuprSend Dashboard](https://app.suprsend.com/en/staging/developers/api-keys).                                         |
+| publicApiKey                                                      | Public API Key is mandatory field without which error will be thrown by SuprSendProvider. You can get this from [SuprSend Dashboard](https://app.suprsend.com/en/staging/developers/api-keys).                                         |
 | distinctId                                                        | Unique identifier to identify a user across platform. If a value is passed SDK will create user and authenticate user. If null value is passed authenticated user's instance data will be cleared in your application, kind of logout. |
 | [userToken](https://docs.suprsend.com/docs/client-authentication) | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](https://docs.suprsend.com/docs/client-authentication) to create userToken.                                            |
 | refreshUserToken                                                  | This function is called by SDK internally to get new userToken before existing token is expired. The returned JWT token string is used as the new userToken.                                                                           |
@@ -227,4 +213,5 @@ interface IToastNotificationProps {
 | swFileName                                                        | This key is needed only if you are implementing WebPush notifications and want to customise default `serviceworker.js` file name with your own service worker file name.                                                               |
 | shadowRoot                                                        | Shadow root reference to render components inside shadow dom                                                                                                                                                                           |
 
-For further component specific customisations please refer to the [docs](https://docs.suprsend.com/docs/web-components-integration#config-options).
+For further component specific customisations please refer to the [customisation docs](https://docs.suprsend.com/docs/web-components-customisations).
+
