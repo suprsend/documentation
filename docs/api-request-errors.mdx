@@ -1,6 +1,6 @@
 ---
 title: "API Request Errors"
-description: "Reference for API and SDK request-level errors shown in Request Logs. Use this when a trigger call fails before a workflow starts. Each entry explains the error pattern and how to fix it."
+description: "Reference for errors that occur during API or SDK request (before a workflow runs), with fixes."
 slug: api-request-errors
 keywords:
   - API request errors
@@ -16,22 +16,9 @@ keywords:
   - template not found
 ---
 
-## Overview
+## Understanding API request errors
 
-API request errors appear in **Request Logs** when the API or SDK rejects a request before any workflow runs.
-
-**How to use this page**
-
-- Search (Ctrl+F / ⌘+F) for the error text in the logs, or jump to a section below.
-- Match the pattern (e.g. "user … not found"). Placeholders such as [slug], [id], [name], [field] represent the actual value in the error (e.g. workflow name, user ID).
-
-<Tip>
-  Use the idempotency key from the failed request to trace the same call across logs. See [Logging](/docs/logging).
-</Tip>
-
-<Note>
-  A `200` response means the request was accepted only—not that a workflow ran. If no execution appears, check trigger conditions and schema. For failures after acceptance, see [Workflow & Execution Errors](/docs/error-guides) or Message Logs.
-</Note>
+When the API or SDK **rejects** a request (validation, auth, missing workflow, or invalid payload), the error is recorded in **Request Logs**—before any workflow runs. For the structure of logs, see [Logging](/docs/logging).
 
 <CardGroup cols={2}>
   <Card title="Request Logs" icon="code" iconType="solid" href="/docs/logging#requests">
@@ -42,8 +29,12 @@ API request errors appear in **Request Logs** when the API or SDK rejects a requ
   </Card>
 </CardGroup>
 
+<Tip>
+  Use the **idempotency key** from the failed request to trace the same call across logs. See [Logging](/docs/logging).
+</Tip>
+
 <Note>
-  Fixes are aligned with SuprSend product docs. If the error persists, refer to the linked docs or [contact support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) with the request ID and full error message.
+  A **`200`** response means the request was **accepted** only—not that a workflow ran. If no execution appears, check trigger conditions and schema. For failures after acceptance, see [Workflow & Execution Errors](/docs/error-guides) or Message Logs.
 </Note>
 
 ---
@@ -51,6 +42,8 @@ API request errors appear in **Request Logs** when the API or SDK rejects a requ
 ## Error reference
 
 ### Idempotency
+
+Duplicate `idempotency_key` in a short window.
 
 | Error | Fix |
 |-------|-----|
@@ -60,19 +53,22 @@ API request errors appear in **Request Logs** when the API or SDK rejects a requ
 
 ### Workflow & event
 
+Workflow slug, recipients, trigger conditions, or list issues.
+
 | Error | Fix |
 |-------|-----|
 | workflow not found / workflow with slug `'[slug]'` not found | The workflow in the request doesn’t exist or isn’t active. Open the [Workflows](https://app.suprsend.com/en/production/workflows) page, search for the workflow slug, and either fix the slug in the integration or [create the workflow](/docs/workflows#create-workflow). |
 | workflow with slug `'[slug]'` is disabled | The workflow exists but isn’t live. Open the workflow on the [Workflows](https://app.suprsend.com/en/production/workflows) page and commit + make it live if it’s in draft. |
-| no valid recipients found / \[workflow: [slug]\] no valid recipients found | No recipient could be resolved for the request.<br /><br />**Event API:** Create the user first or ensure the user exists; send the event with a valid `distinct_id`.<br /><br />**Workflow API:** Include a recipient (`distinct_id` or `object_type` + `id`) and channel data in the workflow call.<br /><br />Refer: [Create user](/docs/update-user-profile), [Trigger workflow](/docs/trigger-workflow). |
+| no valid recipients found / \[workflow: [slug]\] no valid recipients found | No recipient could be resolved for the request.<br /><br />**Event API:** Create the user first or ensure the user exists; send the event with a valid `distinct_id`.<br /><br />**Workflow API:** Include a recipient (`distinct_id` or `object_type` + `id`) and channel data in the workflow call.<br /><br />See [Create user](/docs/users#creating-user-profile-on-suprsend), [Trigger workflow](/docs/trigger-workflow). |
 | workflow missing / recipients: no valid value passed | The request is missing a valid workflow slug or at least one valid recipient. Include both in the payload. See [Trigger payload](/docs/trigger-workflow). |
 | No active workflow for this event | There is no live workflow for this event name. Create a workflow for that event on the [Workflows](https://app.suprsend.com/en/production/workflows) page and commit + make it live if it’s in draft. |
-| Trigger condition or schema mismatches (200 but no execution) | The request was accepted (200) but no workflow ran—trigger conditions or payload didn’t match. Compare the event payload and workflow trigger conditions; fix the payload to match the [linked schema](/docs/validate-workflow-payload). |
+| Trigger condition or schema mismatches (200 but no execution) | The request was accepted (200) but no workflow ran—trigger conditions or payload didn’t match. Follow the **Trigger/schema troubleshooting** checklist below. |
 | subscribers list is empty / list_id not found | The list has no subscribers, or the list ID doesn’t exist. Add subscribers to the list, or use a list ID that exists and has subscribers. |
-
 ---
 
 ### Tenant & brand
+
+**Log type:** Request Logs. Tenant ID missing, invalid, or duplicate; default tenant rules.
 
 | Error | Fix |
 |-------|-----|
@@ -88,34 +84,40 @@ API request errors appear in **Request Logs** when the API or SDK rejects a requ
 
 #### Recipient (user/object) errors
 
+Missing user/object, wrong identifier, or invalid recipient shape.
+
 | Error | Fix |
 |-------|-----|
-| user [distinct_id: '[id]'] not found / User not found with distinct_id | The user in the request doesn’t exist yet.<br /><br />**Event API:** Create the user profile first, then send the event with that `distinct_id`.<br /><br />**Workflow API:** Either create the user first, or pass full user + channel data in the workflow payload so SuprSend doesn’t need to look up the user.<br /><br />Refer: [Create user profile](/docs/update-user-profile), [Users](/docs/users#creating-user-profile-on-suprsend). |
+| user [distinct_id: '[id]'] not found / User not found with distinct_id | The user in the request doesn’t exist yet.<br /><br />**Event API:** Create the user profile first, then send the event with that `distinct_id`.<br /><br />**Workflow API:** Either create the user first, or pass full user + channel data in the workflow payload so SuprSend doesn’t need to look up the user.<br /><br />See [Create user profile](/docs/users#creating-user-profile-on-suprsend), [Users](/docs/users). |
 | object `'[type]/[id]'` not found / nid not found | The object or ID in the request doesn’t exist. Create the object first, or use an ID that exists (e.g. from logs or API response). |
 | one of [distinct_id, object_type/id] must be present | The payload doesn’t say who the recipient is. Add either `distinct_id` (for users) or both `object_type` and `id` (for objects). See [Trigger workflow](/docs/trigger-workflow), [Events](/docs/events). |
 | channel details missing for transient user | Channel identities are required for transient users. Set `is_transient: true` and include channel identities in the users object (e.g. `"$email": ["user@example.com"]`). See [Anonymous users](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user). |
 | error: must pass value for $identified_id / distinct_id / event or distinct_id/anonymous_id | A required identifier is missing. Add the field mentioned in the error (e.g. `$identified_id`, `distinct_id`, or `event` / `anonymous_id`) to the payload. |
 | from_user_id not found / actor: value must be string or map | The sender/actor user doesn’t exist, or `actor` has the wrong type. Create that user, or pass `actor` as a string (e.g. distinct_id) or a map as required by the API. |
-| Invalid API structure / Invalid recipient format | The request shape or recipient format is wrong.<br /><br />**Events:** Use `distinct_id` for the user.<br /><br />**Workflow API:** Pass user/channel data in the format the API expects; include all required fields.<br /><br />Refer: [Trigger workflow](/docs/trigger-workflow), [Events](/docs/events), [User channels](/docs/python-create-user-profile#1-add-user-channels). |
+| Invalid API structure / Invalid recipient format | The request shape or recipient format is wrong.<br /><br />**Events:** Use `distinct_id` for the user.<br /><br />**Workflow API:** Pass user/channel data in the format the API expects; include all required fields.<br /><br />See [Trigger workflow](/docs/trigger-workflow), [Events](/docs/events), [Add user channels](/docs/python-create-user-profile#1-add-user-channels). |
 
 #### Channel format (email, SMS, WhatsApp, push, Slack)
 
+Invalid type, format, or structure for a channel value.
+
 | Error | Fix |
 |-------|-----|
-| $email / $sms / $androidpush / $iospush: value must be of string type | Channel values must be strings (e.g. email address, phone number), not arrays or objects. |
+| `$email` / `$sms` / `$androidpush` / `$iospush`: value must be of string type | Channel values must be strings (e.g. email address, phone number), not arrays or objects. |
 | invalid email / invalid value for channel 'email' | The email value is invalid. Use a valid email format, 6–320 characters (e.g. `user@domain.com`). |
 | error while parsing number to E164 format / invalid value for channel 'sms' or 'whatsapp' | The phone number format is invalid. Use E.164 format with country code (e.g. `+15555555555`); no spaces or leading zero. |
 | invalid webpush subscription | The web push subscription payload is invalid or incomplete. Provide a subscription object with non-empty `auth` and `p256dh` keys. See [Web Push quick start](/docs/web-push-quick-start). |
 | invalid timezone / invalid locale/language | The timezone or locale value is invalid. Use a valid IANA timezone (e.g. `America/New_York`) and locale code (e.g. `en`, `en-US`). |
-| invalid value for channel 'slack' / $slack: value must be of dict/map type | The Slack channel value must be an object. Provide an object with `access_token` and `channel` (channel ID starting with `C`). See [Slack quick start](/docs/slack-quick-start). |
+| invalid value for channel 'slack' / `$slack`: value must be of dict/map type | The Slack channel value must be an object. Provide an object with `access_token` and `channel` (channel ID starting with `C`). See [Slack quick start](/docs/slack-quick-start). |
 
 ---
 
 ### Templates & payload
 
+Template/category not found, missing or invalid fields, schema violations.
+
 | Error | Fix |
 |-------|-----|
-| template `'[name]'` not found | The template in the request doesn’t exist or isn’t published for that channel. Use the template **slug** (from the template details page), not the display name, and ensure the template has a published version. See [Templates](/docs/templates). |
+| template `'[name]'` not found | The template in the request doesn’t exist or isn’t published for that channel. Use the template **slug** (from the 'template details' page), not the display name, and ensure the template has a published version. See [Templates](/docs/templates). |
 | TemplateGroup / category `'[name]'` not found or not applicable to tenant | The category doesn’t exist, isn’t published, or isn’t enabled for this tenant. Use the category slug from [Settings → Notification Categories](https://app.suprsend.com/en/staging/settings/notification-categories). If “not applicable to tenant,” enable the category for that tenant in the tenant’s default preferences. |
 | missing required property / [field]: missing required property | A required field is missing from the request body. Add the field named in the error. Check the API spec for the endpoint. |
 | Request body contains an invalid value for the "…" field / (at position [n]) | A field in the request JSON has the wrong type or format. Fix the value at the field or position mentioned in the error. See [Payload validation](/docs/validate-workflow-payload). |
@@ -130,6 +132,8 @@ API request errors appear in **Request Logs** when the API or SDK rejects a requ
 
 ### Auth & workspace
 
+Invalid or inactive API key, or wrong key type (e.g. env key vs service token).
+
 | Error | Fix |
 |-------|-----|
 | Authentication/Authorization errors | The API key is invalid or doesn’t have permission for this action. Use a valid key with the right permissions. For Management API, use a **service token**, not an environment API key. See [API keys](/docs/best-practices-for-api-keys-management). |
@@ -139,23 +143,23 @@ API request errors appear in **Request Logs** when the API or SDK rejects a requ
 
 ### Transient errors
 
-Temporary platform issues. Retry with the same idempotency key. If failures persist, contact support with the request ID.
+Temporary platform issues (DB, cache, network). **Retry** with the same **idempotency key**. If failures persist, contact support with the request ID.
 
 | Error | Fix |
 |-------|-----|
-| db_error (tcp timeout, lookup, etc.) / parent_object_properties: db_error | A temporary platform issue occurred. Retry the request (same idempotency key is allowed). If it keeps failing, [contact support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) with the request ID. |
+| db_error (tcp timeout, lookup, etc.) / parent_object_properties: db_error | Temporary platform issue. Retry with the **same idempotency key**. If it keeps failing, [contact support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ). **Include:** request_id, workspace_id, timestamp, idempotency_key, full error. |
 | datacache failure during GET | A temporary cache issue. Retry the request. |
-| not_found sql: no rows in result set | The referenced record does not exist (e.g. it was deleted). Verify the ID and retry with a valid one. |
+| not_found sql: no rows in result set | The referenced record does not exist (e.g. it was deleted). Use an ID that exists, or create the record first, then retry. |
 
 ---
 
 ### Retry behavior
 
-API request errors are not retried automatically. Correct the request and retry with a new or corrected idempotency key.
+API request errors are **not** retried automatically. For **validation or auth errors**, correct the request and retry with a new or corrected **idempotency key**. For **transient errors** (see above), retry with the **same** idempotency key.
 
 ---
 
-### Related docs
+## Related docs
 
 <CardGroup cols={2}>
   <Card title="Logging" icon="book" iconType="solid" href="/docs/logging">
@@ -172,6 +176,17 @@ API request errors are not retried automatically. Correct the request and retry 
   </Card>
 </CardGroup>
 
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Request returned 200 but no workflow ran. Why?" defaultOpen={false}>
+    A **`200`** response means the request was **accepted** only—not that a workflow ran. Common causes: (1) no active workflow is linked to the event name, (2) trigger conditions did not match the event payload, or (3) the workflow slug is wrong or the workflow is disabled. Check the **Workflows** page and your trigger conditions; for payload validation see [Validate trigger payload](/docs/validate-workflow-payload).
+  </Accordion>
+  <Accordion title="How do I trace a failed request across logs?" defaultOpen={false}>
+    Use the **idempotency key** from the failed request to find the same call in Request Logs, Workflow Execution Logs, and Message Logs. See [Logging](/docs/logging).
+  </Accordion>
+</AccordionGroup>
+
 <Note>
-  Error not listed? See [Workflow & Execution Errors](/docs/error-guides) for execution and delivery issues, or [contact support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) with the request ID and full error message.
+  Error not listed? See [Workflow & Execution Errors](/docs/error-guides) for execution and delivery issues, or [contact support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ).
 </Note>
