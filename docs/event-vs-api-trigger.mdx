@@ -1,41 +1,200 @@
 ---
-title: "Workflow Trigger: Event vs Workflow API"
-description: "Compare the methods to trigger workflow within SuprSend."
+title: "Workflow Triggers: Event vs Workflow API"
+description: "A decision guide for engineering teams to compare the methods to trigger workflows within SuprSend."
 ---
 
-## Event-Based triggers
+## Overview
 
-[Event-streaming](https://docs.suprsend.com/docs/trigger-workflow#event-based-trigger) is a loosely coupled SuprSend Integration where you can publish events to your event bus in a pub-sub model and build associated workflows within SuprSend. Whenever a notification needs to be sent, your system simply pushes an event containing the necessary data, while SuprSend handles all processing—such as determining which user to notify, fetching user profile and their preferences and computing target channels. This approach is ideal for notifications triggered in response to user-initiated actions.
+SuprSend provides two distinct methods to trigger notification workflows: **Event-Based Triggers** and **Workflow API Triggers**. Both ultimately invoke the same workflow engine, but they differ in coupling, control, flexibility, and failure semantics. Choosing the right approach (or mixing both) depends on your architecture, notification type, and operational requirements.
+
+This guide lays out how each method works, when to prefer one over the other, and what trade-offs to keep in mind.
+
+## How Each Method Works
+
+### Event-Based Trigger
+
+[Event-streaming](https://docs.suprsend.com/docs/trigger-workflow#event-based-trigger) is a loosely coupled SuprSend integration where you publish events to your event bus in a pub-sub model and build associated workflows within SuprSend. Your system publishes an event (e.g., `PAYMENT_RECEIVED`, `ORDER_SHIPPED`) to SuprSend via the backend SDK, frontend SDK, HTTP API, or a third-party CDP like Segment. The event carries a `distinct_id` (identifying the user), an `event_name`, and a `properties` payload with relevant data.
+
+SuprSend receives the event and checks if any live workflow is linked to that event name. If matched, SuprSend takes over — resolving the recipient from the user profile, computing target channels based on preferences, and executing the workflow.
+
+**Key characteristic:** Your code knows *what happened*, not *which workflow to run*. The mapping from event to workflow(s) lives entirely in the SuprSend dashboard.
+
+**Docs:** [Send and Track Events](https://docs.suprsend.com/docs/node-send-event-data)
 
 **Pros:**
 
 - **Decoupled integration**: Just connect your event bus or microservice to SuprSend, and the entire notification logic stays inside SuprSend.
-- **Single event can trigger multiple workflows.**
+- **Single event can trigger multiple workflows.** For example, an `ORDER_PLACED` event might trigger an order confirmation to the buyer, an alert to the seller, and an internal notification to the ops team — all from a single event.
 - **Flexible workflow logic**: You only need to pass the event name, actor, and relevant data. SuprSend determines the appropriate workflow, recipients, and notification channels.
-- Easily add new notifications without requiring engineering involvement.
+- **Easily add new notifications** without requiring engineering involvement. Product or ops teams can add new notification workflows, change routing logic, or adjust channels without requiring engineering deploys.
+- **Native CDP fit**: If you use Segment, Rudderstack, or similar platforms, you can route events from your CDP directly into SuprSend without adding another integration point in your backend.
 
 **Cons:**
 
-- **Users must be pre-created**; inline user creation within a workflow trigger isn't supported. Cannot send anonymous notifications.
-- No immediate response confirming whether the workflow was triggered.
+- **Users must be pre-created**; inline user creation within a workflow trigger isn't supported. Cannot send anonymous notifications. If the user doesn't exist in SuprSend, the event is silently discarded.
+- **No immediate response** confirming whether the workflow was triggered. Fire-and-forget model — you need to monitor logs or set up webhook callbacks to detect failures.
 - Requires a persistent connection to continuously send and listen for events.
-- Workflow control is managed via UI, meaning changes can be made without engineering oversight. For critical triggers where failure isn't an option, API-based triggers are recommended for immediate failure response.
+- **Dashboard drift risk**: Since anyone with dashboard access can modify event-to-workflow mappings, there's a risk of unintended changes to critical notification flows. For critical triggers where failure isn't an option, API-based triggers are recommended.
+- **Payload size limit**: Event payloads (including attachments) are capped at **800 KB**. Large payloads will need to reference external URLs instead of inlining data.
 
-Event-Based triggers are best suited for event streaming architectures, microservices orchestration, and service buses.
+Event-Based triggers are best suited for event-driven architectures, microservices orchestration, and service buses.
 
-## Workflow API
+### Workflow API Trigger
 
-With [API-based triggers](https://docs.suprsend.com/docs/trigger-workflow#triggering-workflow-via-api), you explicitly call a workflow using its workflow-slug, specifying the workflow and recipients directly in the API request. This approach provides tighter integration with SuprSend and is ideal for system-generated workflows, such as sending a daily digest to all users in a company or sending anonymous notifications to unidentified users. It’s also useful for cases where you don't want to setup a separate user sync and just want to pass user information within the trigger.
+With [API-based triggers](https://docs.suprsend.com/docs/trigger-workflow#triggering-workflow-via-api), you explicitly call a workflow using its `workflow_slug`, specifying the workflow and recipients directly in the API request. You control the full payload — including inline user and channel information if needed. This approach provides tighter integration with SuprSend and is ideal for system-generated workflows, such as sending a daily digest to all users in a company or sending anonymous notifications to unidentified users. It's also useful when you don't want to set up a separate user sync and just want to pass user information within the trigger.
+
+**Key characteristic:** Your code knows *exactly which workflow to run* and *who should receive it*. The mapping is explicit in code, not in the dashboard.
+
+**Docs:** [Trigger Workflow from API](https://docs.suprsend.com/docs/node-trigger-workflow-from-api)
 
 **Pros:**
 
-- Recipients and preferences can be [**<u>identified inline</u>**](https://docs.suprsend.com/docs/trigger-workflow#identifying-recipients-inline).
-- Supports sending to [**<u>anonymous users</u>**](https://docs.suprsend.com/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user).
-- Recommended approach to **send notification to non-user entities like **[**<u>object</u>**](https://docs.suprsend.com/docs/objects)
-- Ideal for critical notifications, as you receive an immediate response when the workflow is triggered.
+- **No separate user sync needed**: Supports defining recipients inline — it acts as an UPSERT function. Pass `distinct_id` with channel info, and SuprSend creates or updates the user as part of the trigger. No separate sync pipeline to build, monitor, or retry.
+- Recipients and preferences can be [identified inline](https://docs.suprsend.com/docs/trigger-workflow#identifying-recipients-inline).
+- Supports sending to [anonymous users](https://docs.suprsend.com/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) and transient recipients (pass `is_transient: true` with inline channel info).
+- Recommended approach to send notifications to non-user entities like [objects](https://docs.suprsend.com/docs/objects) — pass `object_type` and `object_id` directly in the recipients array.
+- **Immediate failure feedback**: Returns a synchronous HTTP response. If the payload is malformed or the workflow slug doesn't exist, you get an error immediately — enabling retry logic or fallback behavior for critical paths.
+- **Full engineering control**: Every trigger is an explicit API call in your codebase — goes through code review, is version-controlled, and can't be accidentally modified via the dashboard.
 
 **Cons:**
 
-- Tightly coupled integration: Any changes to notifications or recipient payloads require code-level updates.
+- **Tightly coupled integration**: Your code references specific `workflow_slug` values. If a workflow is renamed, moved, or restructured in the dashboard, your code breaks. Treat `workflow_slug` as a stable API contract.
+- **No fan-out**: Each API call triggers exactly one workflow. If a single business event should trigger multiple workflows, you need to make multiple API calls.
+- **More code changes for new notifications**: Adding a new notification type always requires a code change and deploy, even if the workflow logic in SuprSend is simple.
+- **Payload duplication risk**: Since you specify recipients and data inline, there's a risk of inconsistency between what's in SuprSend's user profiles and what you're passing at trigger time. The API payload supplements profile data.
 
-Workflow API is best for system-generated notifications where you need better control of triggers in your backend, or for sending to anonymous users or non-user entities like object.
+Workflow API is best for system-generated notifications where you need better control of triggers in your backend, or for sending to anonymous users or non-user entities like objects.
+
+## Comparison at a Glance
+
+| Dimension | Event-Based Trigger | Workflow API Trigger |
+|---|---|---|
+| **Coupling** | Loose — code emits events, SuprSend maps to workflows | Tight — code references workflow slugs directly |
+| **User pre-creation** | Mandatory — event is discarded if user doesn't exist | Not mandatory — supports defining recipient inline. Also supports anonymous/transient recipients |
+| **Recipient resolution** | SuprSend resolves from user profile via `distinct_id` | You can specify recipients inline (can include channel info & preferred channel list too) |
+| **Object triggers** | Supported via [override recipient](https://docs.suprsend.com/docs/override-recipient-list) — point to an event property containing the `object_type` and `object_id` | Supported natively — pass `object_type` and `object_id` directly in the recipients array |
+| **One event → multiple workflows** | Yes — a single event can fan out to many workflows | No — each API call targets one workflow |
+| **Response model** | Async — fire-and-forget; check logs for processing errors | Sync — immediate HTTP response on acceptance/rejection |
+| **Payload schema validation** | [Supported](https://docs.suprsend.com/docs/validate-workflow-payload) — define JSON schemas on dashboard | [Supported](https://docs.suprsend.com/docs/validate-workflow-payload) — define JSON schemas on dashboard |
+| **Who controls workflow mapping** | Product/ops team via dashboard | Engineering team via code |
+| **Adding new notifications** | Dashboard-only change; no deploy needed | Requires code change and deploy |
+| **CDP/Segment integration** | Native fit — events flow through your existing data pipeline | Not applicable |
+
+## When to Use Event-Based Triggers
+
+Event-based triggers are the right choice when:
+
+- **Your architecture is event-driven.** If you already publish domain events to a bus (Kafka, RabbitMQ, Segment) or use a microservices architecture where services communicate via events, adding SuprSend as a consumer is natural. You don't need to add notification-specific API calls into your service code.
+
+- **Notifications map cleanly to user actions.** For user-initiated events — `POST_LIKED`, `COMMENT_ADDED`, `ORDER_PLACED`, `FRIEND_REQUEST_SENT` — the event model is intuitive. The event already exists in your system; you just need to forward it to SuprSend.
+
+- **You're already syncing users to SuprSend.** If you have a separate user sync pipeline (e.g., for storing preferences, channel info), events are a clean fit. User creation/update is decoupled from the notification trigger.
+
+- **You want product teams to iterate independently.** Because the event-to-workflow mapping lives in the SuprSend dashboard, product or ops teams can add new notification workflows, change routing logic, or adjust channels without requiring engineering deploys.
+
+- **One event should fan out to multiple workflows.** For example, an `ORDER_PLACED` event might trigger an order confirmation to the buyer, an alert to the seller, and an internal notification to the ops team — all from a single event.
+
+- **You're integrating via a CDP.** If you use Segment, Rudderstack, or similar platforms, you can route events from your CDP directly into SuprSend. This avoids adding another integration point in your backend.
+
+### Watch Out For
+
+- **Silent failures.** If the user doesn't exist in SuprSend already, the event is silently discarded. There's no error returned to the caller. You'll need to monitor SuprSend logs or set up webhook callbacks to detect these.
+
+- **User sync reliability is critical.** If your user sync fails for a user, all future event-triggered workflows for that user will fail silently. Build retries with backoff into your user sync pipeline — treat it as a critical dependency, not a fire-and-forget job.
+
+- **Dashboard drift.** Since anyone with dashboard access can modify event-to-workflow mappings, there's a risk of unintended changes to critical notification flows. Consider establishing review processes or access controls for production workspace changes.
+
+- **Debugging complexity.** When a notification doesn't fire, the root cause could be at multiple layers: event not sent, event sent but user not found, or workflow not linked to the event. The indirection adds debugging surface area.
+
+- **Payload size limit.** Event payloads (including attachments) are capped at 800 KB. Large payloads will need to reference external URLs instead of inlining data.
+
+## When to Use Workflow API Triggers
+
+Workflow API triggers are the right choice when:
+
+- **You don't want to maintain a separate user sync.** This is the biggest advantage. You can define users inline — it acts as an UPSERT function. Pass `distinct_id` with channel info, and SuprSend creates or updates the user as part of the trigger. No separate sync pipeline to build, monitor, or retry.
+
+- **You're sending system-generated or scheduled notifications.** Daily digests, weekly reports, batch billing reminders, scheduled maintenance alerts — these originate from backend jobs, not user actions. There's no natural "event" to emit; you're programmatically deciding to notify.
+
+- **You need to send to anonymous or transient users.** OTP verification, magic link sign-in, or notifications to users who haven't signed up yet. The Workflow API lets you pass `is_transient: true` with inline channel info, so no prior user creation is needed.
+
+- **You need immediate failure feedback.** The Workflow API returns a synchronous HTTP response. If the payload is malformed or the workflow slug doesn't exist, you get an error immediately. For critical paths (e.g., OTP delivery, payment confirmation), this lets you implement retry logic or fallback behavior in your code.
+
+- **You're migrating existing notifications to SuprSend.** If you have an existing notification system and want to incrementally move workflows to SuprSend, the Workflow API is the path of least resistance. You replace your existing send calls with SuprSend API calls — no need to refactor your system into an event-driven model or set up user syncing first.
+
+- **You want engineering control over what triggers.** Every trigger is an explicit API call in your codebase. This means triggers go through code review, are version-controlled, and can't be accidentally modified via the dashboard.
+
+### Watch Out For
+
+- **Tight coupling.** Your code references specific `workflow_slug` values. If a workflow is renamed, moved, or restructured in the dashboard, your code breaks. You'll need coordination between dashboard changes and deploys. Treat `workflow_slug` as a stable API contract.
+
+- **No fan-out.** Each API call triggers exactly one workflow. If a single business event should trigger multiple workflows, you need to make multiple API calls. Consider creating a helper/wrapper to manage this.
+
+- **More code changes for new notifications.** Adding a new notification type always requires a code change and deploy, even if the workflow logic in SuprSend is simple.
+
+- **Payload duplication risk.** Since you're specifying recipients and data inline, there's a risk of inconsistency between what's in SuprSend's user profiles and what you're passing at trigger time. Be aware that the API payload supplements profile data.
+
+## Hybrid Approach: Using Both
+
+In practice, most teams end up using both methods. Here's a clean guideline:
+
+| Notification Type | Recommended Trigger |
+|---|---|
+| User action notifications (likes, comments, purchases) | Event |
+| Transactional notifications requiring immediate feedback (OTP, password reset) | Workflow API |
+| Scheduled / batch notifications (digests, reports) | Workflow API |
+| Notifications to anonymous users | Workflow API |
+| Notifications to objects (departments, teams, topics) | Either — Workflow API for direct targeting, Event via [override recipients](https://docs.suprsend.com/docs/override-recipient-list) when object ID is in event data |
+| Notifications integrated via CDP (Segment, Rudderstack) | Event |
+| Notifications where product team needs to iterate quickly | Event |
+| Critical-path notifications where silent failure is unacceptable | Workflow API |
+
+## Additional Engineering Considerations
+
+### Idempotency
+
+Both methods support `idempotency_key`. Always use it for critical notifications to prevent duplicate sends on retries. SuprSend deduplicates requests with the same key for 24 hours.
+
+### Payload Validation
+
+Both event properties and workflow API payloads support runtime validation via [JSON schemas](https://docs.suprsend.com/reference/upsert-schema). You can define schemas on the SuprSend dashboard to catch payload mismatches at the API level before the workflow executes. This works identically for both trigger methods. The difference is only in the response model — events won't return validation errors synchronously (you'll see them in logs), while the Workflow API will reject invalid payloads immediately.
+
+### Testing
+
+Both methods work with SuprSend's staging workspace. Design and test workflows in staging before cloning to production. For event-based triggers, verify that the event name and properties match what the workflow expects. For API triggers, validate the full payload shape against the workflow's template variables.
+
+### Observability
+
+All workflow executions appear in SuprSend's Logs section regardless of trigger method. For event-based triggers, also check for discarded events (due to missing users or unlinked workflows). Set up [outbound webhooks](https://docs.suprsend.com/docs/outbound-webhook) if you need real-time delivery status callbacks in your own systems.
+
+### Bulk Operations
+
+Both methods support bulk APIs for high-volume sends. For broadcasting to entire lists, use the Subscriber List Broadcast API instead of looping over individual triggers. SuprSend recommends lists and broadcast for audiences larger than 1,000 users.
+
+### Tenant-Aware Notifications
+
+Both methods support passing a `tenant_id` to customize notification content and apply per-tenant preferences — essential for multi-tenant SaaS applications with notification customizations per customer.
+
+## Decision Flowchart
+
+```
+Is this triggered by a user action on your platform?
+├── Yes → Is the user guaranteed to exist in SuprSend?
+│   ├── Yes → EVENT TRIGGER
+│   └── No → WORKFLOW API (with inline user info)
+└── No → Is this a scheduled/batch/system-generated notification?
+    ├── Yes → WORKFLOW API
+    └── No → Is the recipient anonymous or transient?
+        ├── Yes → WORKFLOW API
+        └── No → Do you need immediate failure feedback?
+            ├── Yes → WORKFLOW API
+            └── No → Either works — choose based on team ownership preference
+```
+
+## Summary
+
+**Event-based triggers** optimize for decoupling and agility — your code stays clean, product teams iterate independently, and your event-driven architecture extends naturally into notifications. The trade-off is less control over failure handling and a dependency on users being pre-created.
+
+**Workflow API triggers** optimize for control and reliability — synchronous feedback, no user sync needed, support for anonymous and object recipients, and full engineering ownership. The trade-off is tighter coupling and more code changes for notification updates.
+
+Use both, with clear team conventions on which method applies to which category.
