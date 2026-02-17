@@ -1,0 +1,150 @@
+---
+title: "Status Page React App"
+sidebarTitle: "Status Page"
+tag: "REACT"
+description: "Build a status page application with React, Vite, and SuprSend integration using ready-to-use prompts."
+---
+
+<Card title="Status Page" img="/images/status-page-example-app.png">
+  Status page built with React and Vite, with SuprSend integration.<br/>
+  [Try it out](https://status-page-example-app.vercel.app) | [GitHub code repository](https://github.com/suprsend/status-example-app)
+</Card>
+
+***
+
+Follow these steps in order. You’ll set up SuprSend, create dashboard assets, then run the prompts so your AI assistant can build the app. By the end you’ll have a working status page with subscribe, category selection, and incident reporting.
+
+---
+
+## Step 1: Setup SuprSend MCP Server
+
+Start by [setting up SuprSend MCP Server](/reference/mcp-quickstart) in your AI coding assistant. Once MCP Server is setup, you can just copy and paste the prompts below to build the entire application step by step.
+
+---
+
+## Step 2: Get Workspace and API Keys
+
+Your app’s backend will call SuprSend using your **workspace** and **API key**. Get these once and add them to `.env` when the project exists (after Prompt 1).
+
+1. Open [SuprSend Dashboard → Developers → API Keys](https://app.suprsend.com/en/staging/developers/api-keys).
+2. Note your **workspace key** (e.g. the workspace slug shown in the dashboard or API key section).
+3. Click **Generate API Key**, name it (e.g. "Status page backend"), then **copy the key**. You’ll see it only once—store it securely.
+4. When you have a project folder (after running Prompt 1), create a `.env` in the **backend** root with:
+
+```env
+SUPRSEND_WORKSPACE=your_workspace_key
+SUPRSEND_API_KEY=your_api_key
+```
+
+Use the same values in production and never commit `.env` to git. See [Authentication](/reference/authentication) for how SuprSend uses these keys.
+
+---
+
+## Step 3: Manual Setup in SuprSend Dashboard
+
+Workflows, templates, and categories are not created by the prompts. Create them manually in the [SuprSend dashboard](https://app.suprsend.com) in the **same workspace** you use in Step 2. You can do this before or right after running Prompt 1.
+
+### 3a. Create notification categories
+
+Follow SuprSend’s preference model: **root category → section → sub-category**. Preferences apply at the **sub-category** level. Create one root category for the status page (e.g. "Status updates"), then add sections and sub-categories (e.g. sections like "eSignature", "API" with sub-categories underneath).
+
+![Preference category structure](/images/pref-cat-example-app.png)
+
+Ensure each **section** and **sub-category** also exists as an **object** in SuprSend (same slugs/IDs as in categories), so the app can use them for tenant preference, object subscriptions, and trigger targeting.
+
+### 3b. Create the template
+
+Create a template named **`status-incident-email`** (or the slug your workflow will use). Add variants for **Email** and **SMS** so the same workflow can send to both channels. Use variables your trigger payload will send (e.g. `component_name`, incident message). Publish the template.
+
+### 3c. Create the workflow
+
+Create a workflow with slug **`status_incident`** (triggered via API from your app when someone reports an incident):
+
+1. **Trigger** – via API.
+2. **Email** node – template: `status-incident-email`.
+3. **SMS** node – template: `status-incident-email`.
+4. **Exit**.
+
+<img src="/images/wf-example-app.png" alt="Status incident workflow" width="420" style={{ display: 'block' }} />
+
+Commit and enable the workflow. Your backend will trigger it by workflow slug when a user reports an incident for a section or sub-category.
+
+**Note:** If a user has no SMS identity or has not opted in to SMS for that category, the SMS node can show "requested channels: [sms], no active/preferred channels found for user". Ensure users have the relevant channels (email/SMS) set and preferences configured if you want both channels to succeed.
+
+---
+
+## Step 4: Prompt 1 — Vite + React and Express Backend
+
+**When to use:** Start here. This sets up the full-stack project with frontend and backend. After this step, add the backend `.env` with `SUPRSEND_WORKSPACE` and `SUPRSEND_API_KEY` from Step 2.
+
+```
+Set up Vite + React and an Express backend. Proxy /api to the backend in dev.
+Run both and confirm the app can call the API.
+```
+
+---
+
+## Step 5: Prompt 2 — Backend Routes with SuprSend Preference Model
+
+**When to use:** After the app can call the API. This adds SuprSend-backed routes for tenant preference and objects.
+
+```
+Add backend routes using SuprSend. Follow SuprSend's preference model
+(root-category → section → sub-category; preferences apply at sub-category).
+Load tenant preference and return sections with sub-categories; ensure each
+section and sub-category exists as an object. Add health and tenants routes.
+Use SuprSend docs for tenant preference and objects.
+```
+
+---
+
+## Step 6: Prompt 3 — User Subscriptions and Trigger Routes
+
+**When to use:** After tenant and health routes work. This adds get-subscriptions, subscribe, and trigger routes. Ensure the `status_incident` workflow and `status-incident-email` template exist in the dashboard (Step 3).
+
+```
+Add routes for: (a) get user's selected section/sub-category slugs from their
+object subscriptions, (b) subscribe = upsert user, set sub-category opt_in/opt_out,
+and sync object subscriptions to the selected slugs, (c) trigger = send to that
+object's subscribers only. Use SuprSend docs for user preference and object
+subscription. Handle SMS-only and missing workflow with clear errors.
+```
+
+---
+
+## Step 7: Prompt 4 — Status Page UI and Modals
+
+**When to use:** After backend routes are ready. This builds the main status page and Subscribe / Report incident flows.
+
+```
+Build the status page: header (Subscribe, Report incident), main with status
+and uptime bars, footer. Subscribe modal: email or SMS, then go to category
+selection. Report incident modal: pick section or sub-category from backend,
+trigger. Wire to your API.
+```
+
+---
+
+## Step 8: Prompt 5 — Category Selection Page
+
+**When to use:** After the status page and modals work. This adds the category-selection page and URL sync.
+
+```
+Add the category-selection page. Sections with sub-categories; section checkbox
+selects section + all its sub-categories, sub-category checkbox toggles that slug.
+Load and save selectedIds via your backend. Back to status; same Report incident
+here. URL /subscribe?email= or ?sms=, in sync with state. Empty state if no
+categories (create in SuprSend dashboard).
+```
+
+---
+
+## Step 9: Run the app and verify
+
+1. **Backend:** In the project root, ensure `.env` has `SUPRSEND_WORKSPACE` and `SUPRSEND_API_KEY`. Start the Express server (e.g. `npm run dev` or `node server.js` in the backend folder, per what Prompt 1 generated).
+2. **Frontend:** Start the Vite dev server (e.g. `npm run dev` in the frontend or project root). The app should proxy `/api` to the backend.
+3. **Check:** Open the status page in the browser. Use **Subscribe** (email or SMS) and complete category selection, then **Report incident** for a section or sub-category. Confirm the workflow runs in [SuprSend Dashboard → Workflow Executions](https://app.suprsend.com) and that email (and SMS, if configured) is sent.
+
+If the backend can’t reach SuprSend, double-check workspace key and API key in `.env` and that the workflow slug is `status_incident` and the template is published.
+
+---
