@@ -85,8 +85,6 @@ Workflow API triggers are the right choice when:
 
 - **You need to send to anonymous or transient users.** OTP verification, magic link sign-in, or notifications to users who haven't signed up yet. The Workflow API lets you pass `is_transient: true` with inline channel info, so no prior user creation is needed.
 
-- **You need immediate failure feedback.** The Workflow API returns a synchronous HTTP response. If the payload is malformed or the workflow slug doesn't exist, you get an error immediately. For critical paths (e.g., OTP delivery, payment confirmation), this lets you implement retry logic or fallback behavior in your code.
-
 - **You're migrating existing notifications to SuprSend.** If you have an existing notification system and want to incrementally move workflows to SuprSend, the Workflow API is the path of least resistance. You replace your existing send calls with SuprSend API calls — no need to refactor your system into an event-driven model or set up user syncing first.
 
 - **You want engineering control over what triggers.** Every trigger is an explicit API call in your codebase. This means triggers go through code review, are version-controlled, and can't be accidentally modified via the dashboard.
@@ -110,7 +108,7 @@ In practice, most teams end up using both methods depending on the notification 
 | Notification Type | Recommended Trigger |
 |---|---|
 | User action notifications (likes, comments, purchases) | Event |
-| Transactional notifications requiring immediate feedback (OTP, password reset) | Workflow API |
+| Transactional notifications requiring tight coupling with code (OTP, password reset) | Workflow API |
 | Scheduled / batch notifications (digests, reports) | Workflow API |
 | Notifications to anonymous users | Workflow API |
 | Notifications to objects (departments, teams, topics) | Either — Workflow API for direct targeting, Event via [override recipients](https://docs.suprsend.com/docs/override-recipient-list) when object ID is in event data |
@@ -136,8 +134,6 @@ Design and test workflows in staging before cloning to production. For event-bas
 
 All workflow executions appear in Executions tab in SuprSend's logs regardless of trigger method and their corresponding messages appear in Messages tab. For event-based triggers, also check for discarded events (due to missing users or unlinked workflows) in requests logs. Check [logging](/docs/logging) doc for more details.
 
-Set up [S3 connector](/docs/amazon_s3_v2) to sync notification logs in your own data warehouse.
-
 ### Bulk Operations
 
 Use bulk APIs for high-volume sends. For broadcasting to a large list of users, use the Subscriber List [Broadcast API](/docs/broadcast) instead of looping over individual triggers. SuprSend recommends lists and broadcast for audiences larger than 1,000 users.
@@ -145,7 +141,7 @@ Use bulk APIs for high-volume sends. For broadcasting to a large list of users, 
 
 ## Summary
 
-**Event-based triggers** optimize for decoupling and agility — your code stays clean, product teams iterate independently, and your event-driven architecture extends naturally into notifications. The trade-off is less control over failure handling and a dependency on users being pre-created.
+**Event-based triggers** optimize for decoupling and agility — your code stays clean, product teams iterate independently, and your event-driven architecture extends naturally into notifications. The trade-off is less control in code and a dependency on users being pre-created.
 
 **Workflow API triggers** optimize for control and reliability — synchronous feedback, no user sync needed, support for anonymous and object recipients, and full engineering ownership. The trade-off is tighter coupling and more code changes for notification updates.
 
