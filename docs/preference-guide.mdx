@@ -1,258 +1,175 @@
 ---
-title: "Preference Management Guide"
-description: "Learn how to configure channel-level preferences, mandatory channels, digest, threshold, and dynamic-list preferences in SuprSend."
+title: "Designing Notification Preferences"
+description: "Design and implement notification preferences: channel and category controls, digest, threshold, tenant and tag filtering, and mandatory channels."
 ---
 
-SuprSend supports fine-grained control over notification delivery. This guide describes five concepts in the order they are typically applied:
+Your users want control over *which* notifications they get and *how*—by email, push, or SMS; by topic (billing, product updates); on a schedule (e.g. a daily digest); or filtered by their team or organization. SuprSend gives you **channel-level** and **category-level** preferences, **digest** and **threshold** (stored on the user profile), **tenant** and **tag** filtering, and **mandatory channels** for must-see messages.
 
-- **Channel-level preference** — where notifications go (channels)
-- **Mandatory channels** — what cannot be turned off
-- **Digest** — how events are batched into summaries
-- **Threshold** — when those summaries are sent
-- **Dynamic list** — who sees which preference options
+This guide walks you through each scenario: what your users see, what you set up in the SuprSend dashboard, and how to build the preference UI in your app using the linked APIs and docs.
 
+***
 
----
+## Implementing each scenario
 
-## Channel-level preference
+Below, each scenario is broken into: **what your users get**, **what you set up in SuprSend**, and **what you build in your app**. Use the links for detailed APIs and docs.
 
-Channel-level preferences determine **where** notifications are delivered—email, SMS, Slack, and other channels. SuprSend supports two levels of control:
+***
 
-- **Global:** A channel can be turned off for all notification categories (e.g. no email, no Slack for any category).
-- **Per category:** For a specific notification type (category), certain channels can be opted out while others remain enabled (e.g. reminders via SMS only).
+### 1. Channel level
 
-Global settings apply to all categories. Per-category settings apply only to that category. Both levels are evaluated together; per-category choices override global only for that category.
+**What your users get:** A global choice per channel (e.g. "All" vs "Only important"—you define the options in SuprSend) and, for each topic, the ability to pick which channel (Email, Push, SMS) receives that type of notification.
 
-**Example:** A user turns off email and Slack globally but wants one category (e.g. reminders or time-sensitive alerts) via SMS only. Result: most notifications are delivered only by SMS; that one category is also delivered by SMS only, consistent with the per-category choice.
+<Frame caption="Channel level — global options per channel and per-topic channel">
+  ![](/images/channel.png)
+</Frame>
 
-```mermaid
-flowchart LR
-  subgraph Choice["User choices"]
-    A["All notifications: no Email, no Slack"]
-    B["One category: SMS only"]
-  end
-  subgraph Result["Outcome"]
-    R1["Most notifications → SMS only"]
-    R2["That category → SMS only"]
-  end
-  A --> R1
-  B --> R2
-  style Choice fill:#e3f2fd,stroke:#1976d2
-  style Result fill:#e8f5e9,stroke:#388e3c
-```
+**Set up in SuprSend**
+- Go to **Developers → [Notification categories](/docs/managing-notification-categories)**.
+- Create sections and sub-categories, turn on channels (Email, Push, SMS, etc.) for each, and define the channel-level options (e.g. All, Only important) you want to offer.
+- Click **Publish Changes**.
 
-| Level | User choice | Email | SMS | Slack | Result |
-|-------|-------------|-------|-----|-------|--------|
-| **Global** | Off for Email & Slack | Off | On | Off | All notifications only by SMS (unless overridden per category) |
-| **One category** (e.g. reminders) | SMS only | Off | On | Off | That category delivered by SMS only |
+**Build in your app**
+1. Load preferences with your SDK or [Get user full preference](/reference/get-user-full-preference). You get global channel settings and per-topic channel data — see [User Preferences](/docs/user-preferences) for the response shape.
+2. **Block 1 — Global:** For each channel, show the options you configured. When the user changes one, call [Update user channel preference](/reference/update-user-channel-preference) to save the global preference.
+3. **Block 2 — Per topic:** List each topic and its current channel. Let the user change it; on change, call [Update user channel preference](/reference/update-user-channel-preference) for that category.
 
-**Configuration:**
+📘 [User Preferences →](/docs/user-preferences) | [Manage Categories →](/docs/managing-notification-categories) | [Update user channel preference →](/reference/update-user-channel-preference)
 
-- **Global channel opt-out:** Use [Update User Channel Preference](/reference/update-user-channel-preference) or the preference center to set channel-level opt-out for the user.
-- **Per-category channels:** Set the category to opt-in and specify `opt_out_channels` (e.g. `["email", "slack"]`) for that category so delivery is limited to the desired channel(s).
+***
 
-📘 [User Preferences →](/docs/user-preferences) | [Preference APIs →](/reference/get-user-full-preference)
+### 2. Category level
 
----
+**What your users get:** The ability to turn each notification type On or Off and to choose which channel (Email, Push, etc.) receives that type.
 
-## Mandatory channels
+<Frame caption="Category level — sections, sub-categories, and channel options">
+  ![](/images/categories.png)
+</Frame>
 
-For critical notification types (e.g. security, account safety, compliance), a channel can be marked as **mandatory**. Notifications in that category are always delivered on the mandatory channel—even when the user has turned that channel off globally. Other categories continue to respect the user’s channel preferences.
+**Set up in SuprSend**
+- Go to **Developers → [Notification categories](/docs/managing-notification-categories)**. Create sections and sub-categories, add channels to each, then click **Publish.**
 
-**Example:** A user has email turned off globally. The platform has a critical-alerts category (e.g. login from new device, password change, compliance notices) with email set as mandatory. Result: critical alerts are still delivered by email; all other categories respect the “no email” choice.
+**Build in your app**
+1. Load preferences with your SDK or [Get user full preference](/reference/get-user-full-preference). You get sections and sub-categories with current On/Off and channel data — see [User Preferences](/docs/user-preferences) for the response shape.
+2. Show each section as a heading; under it, each topic as a row with an On/Off toggle and channel options (Email, Push, etc.).
+3. When the user toggles On/Off, call [Update user category preference](/reference/update-user-category-preference).
+4. When the user changes the channel for a topic, call [Update user channel preference](/reference/update-user-channel-preference) for that category.
 
-```mermaid
-flowchart TD
-  U["User: Email OFF for all categories"] --> Q{"Is this category<br/>mandatory for Email?"}
-  Q -->|Critical alerts: Yes| Y["✅ Still delivered by Email"]
-  Q -->|Other categories: No| N["❌ No email (user choice)"]
-  style U fill:#fff3e0,stroke:#f57c00
-  style Y fill:#c8e6c9,stroke:#388e3c
-  style N fill:#e3f2fd,stroke:#1976d2
-```
+📘 [User Preferences →](/docs/user-preferences) | [Manage Categories →](/docs/managing-notification-categories) | [Update user category preference →](/reference/update-user-category-preference)
 
-| Category | User global setting | Platform rule | Result |
-|----------|---------------------|---------------|--------|
-| Critical alerts (e.g. security, account) | Email OFF | Email **mandatory** for this category | Delivered by email |
-| Other categories | Email OFF | No mandatory channel | No email (user’s choice) |
+***
 
-<Note>
-In the preference center, mandatory channels for that category are shown as disabled; the user cannot turn them off for that category.
-</Note>
+### 3. Digest
 
-**Configuration:**
+**What your users get:** Control over how often they receive a summary (daily, weekly, or off) and at what time—so they get one digest instead of a flood of separate notifications.
 
-<Steps>
-  <Step title="Create sub-category">
-    Create a sub-category for the critical notification type (e.g. `system.security-alert` or `system.account-alerts`).
-  </Step>
-  <Step title="Set mandatory behavior">
-    Set the category preference to **“Can’t Unsubscribe”** and configure **mandatory channels** (e.g. Email).
-  </Step>
-  <Step title="Link workflow">
-    Link the workflow to this sub-category so preference evaluation applies to the correct category.
-  </Step>
-</Steps>
+**Set up in SuprSend**
+- Add a **Digest** node in your workflow. Set the schedule to **Dynamic** and map it to user profile fields (e.g. `digest_frequency`, `digest_time`). See [Digest](/docs/digest) and [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference).
+
+**Build in your app**
+1. Add "How often?" (Daily / Weekly / Off) and "What time?" (e.g. 9:00 AM) controls.
+2. When the user saves, write those values to the **user profile** (e.g. via your SDK's user update). The Digest node reads them from the profile when it runs. See [Users](/docs/users) for profile fields.
+
+📘 [Digest →](/docs/digest) | [Dynamic schedule →](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
+
+***
+
+### 4. Tenant restriction
+
+**What your users get:** Each brand (tenant) sees only the notification categories you allow for that brand. You decide what’s visible in the dashboard; your app just passes the tenant when loading preferences.
+
+<Frame caption="Tenant categories — control which categories a tenant sees">
+  ![](/images/tenant%20categories.png)
+</Frame>
+
+**Set up in SuprSend**
+- Go to **Tenants → [your tenant] → [Tenant Preference](/docs/tenant-preference)**. Turn off any categories that tenant’s users should not see.
+
+**Build in your app**
+1. When loading preferences, pass the **tenant ID** (e.g. from the logged-in user) with your SDK or [Get user full preference](/reference/get-user-full-preference) using `tenantId`. You only get back categories you enabled for that tenant — see [User Preferences](/docs/user-preferences).
+2. Show the list and handle toggles/updates the same way as in Category level ([Update user category preference](/reference/update-user-category-preference), [Update user channel preference](/reference/update-user-channel-preference)).
+
+📘 [Tenant Preference →](/docs/tenant-preference) | [User Preferences →](/docs/user-preferences)
+
+***
+
+### 5. Filter by team
+
+**What your users get:** They pick their team (e.g. Engineering, Sales) and only see notification categories for that team—no clutter from other departments.
+
+<Frame caption="Filter by team — categories shown for the selected team">
+  ![](/images/department.png)
+</Frame>
+
+**Set up in SuprSend**
+- In **Developers → [Notification categories](/docs/managing-notification-categories)**, add **tags** to sections or sub-categories (e.g. `engineering`, `sales`). Click **Publish.** See [Lists](/docs/lists) for tag-based lists.
+
+**Build in your app**
+1. Add a team selector (tabs, dropdown, or pills). When the user picks a team, load preferences with that **tag** (e.g. `tags: ['engineering']`) via your SDK or [Get user full preference](/reference/get-user-full-preference). You only get categories for that tag — see [User Preferences](/docs/user-preferences).
+2. Show the list with On/Off toggles (and channel options if needed). Use [Update user category preference](/reference/update-user-category-preference) and [Update user channel preference](/reference/update-user-channel-preference) as in Category level.
+
+📘 [User Preferences →](/docs/user-preferences) | [Lists →](/docs/lists)
+
+***
+
+### 6. Filter by team and brand
+
+**What your users get:** Same as Filter by team, but scoped to the current brand. They pick their team and only see categories that are both allowed for that brand and relevant to that team.
+
+<Frame caption="Filter by team and brand — team selector with brand-scoped categories">
+  ![](/images/dept.png)
+</Frame>
+
+**Set up in SuprSend**
+- Add tags to categories (as in Filter by team above). In **Tenants → [tenant] → [Tenant Preference](/docs/tenant-preference)**, turn off categories that tenant’s users shouldn’t see. Click **Publish.**
+
+**Build in your app**
+1. When loading preferences, pass both **tenant ID** and **tags** (the selected department) via your SDK or [Get user full preference](/reference/get-user-full-preference). You only get categories allowed for that tenant and tag — see [User Preferences](/docs/user-preferences).
+2. Show the list and update the same way as in Category level and Tenant ([Update user category preference](/reference/update-user-category-preference), [Update user channel preference](/reference/update-user-channel-preference)).
+
+📘 [Tenant Preference →](/docs/tenant-preference) | [User Preferences →](/docs/user-preferences)
+
+***
+
+### 7. Filter by project
+
+**What your users get:** They pick a project (e.g. Project Alpha, Project Beta) and only see and manage preferences for that project’s notification categories—so each project stays focused.
+
+<Frame caption="Filter by project — project selector and its categories">
+  ![](/images/project/module.png)
+</Frame>
+
+**Set up in SuprSend**
+- In **Developers → [Notification categories](/docs/managing-notification-categories)**, tag sections or sub-categories per project (e.g. `project-alpha`). Click **Publish.**
+
+**Build in your app**
+1. Add a project selector. When the user picks a project, load preferences with that **tag** (e.g. `tags: ['project-alpha']`) via your SDK or [Get user full preference](/reference/get-user-full-preference). See [User Preferences](/docs/user-preferences).
+2. Show the list and update the same way as in Category level ([Update user category preference](/reference/update-user-category-preference), [Update user channel preference](/reference/update-user-channel-preference)).
+
+📘 [User Preferences →](/docs/user-preferences) | [Lists →](/docs/lists)
+
+***
+
+### 8. Threshold
+
+**What your users get:** They choose at what percentage they want to be alerted (e.g. 80% or 90%). Your workflow reads that value from their profile and sends the alert when the metric hits it—so they’re notified when it matters to them.
+
+<Frame caption="Threshold — user selects alert percentage (e.g. 80%, 90%)">
+  ![](/images/threshold.png)
+</Frame>
+
+**Set up in SuprSend**
+- In your workflow, add a **condition** that reads the user’s chosen percentage from their profile (e.g. `threshold_percent`). See [Workflows](/docs/workflows).
+
+**Build in your app**
+1. Add a screen with a short explanation and options (e.g. 80% “Earlier warning”, 90% “Closer to limit”).
+2. When the user saves, write the chosen value to the **user profile** (e.g. `threshold_percent`) via your SDK. The workflow condition reads it when evaluating. See [Users](/docs/users) for profile fields.
+
+📘 [Workflows →](/docs/workflows) | [Users →](/docs/users)
+
+***
+
 
 📘 [Manage Categories →](/docs/managing-notification-categories) | [Preference Evaluation →](/docs/preference-evaluation)
 
----
+***
 
-## Digest
-
-The Digest node batches multiple workflow triggers and sends **one** notification at a scheduled time—either a fixed schedule (e.g. daily at 6 PM) or a dynamic schedule derived from the user profile (e.g. daily at 9 AM in the user’s timezone). Users can opt in or out of the digest for that category.
-
-**Example:** An application generates many similar events (e.g. new comments, status changes, activity). Without a digest, 10 events produce 10 separate notifications. With a digest configured (e.g. daily at 9 AM), those 10 events are batched and one summary is sent at the scheduled time.
-
-```mermaid
-flowchart LR
-  subgraph Events["Events during the window"]
-    E1["Event 1"]
-    E2["Event 2"]
-    E3["Event 3"]
-  end
-  subgraph Batch["Digest ON"]
-    B["Batch window"]
-  end
-  subgraph Delivery["Delivery"]
-    D["One summary at schedule (e.g. 9 AM)"]
-  end
-  E1 --> B
-  E2 --> B
-  E3 --> B
-  B --> D
-  style Events fill:#e3f2fd,stroke:#1976d2
-  style Batch fill:#fff3e0,stroke:#f57c00
-  style Delivery fill:#c8e6c9,stroke:#388e3c
-```
-
-| What happens | User setting | Result |
-|--------------|--------------|--------|
-| 10 events during the day | Digest ON, daily at 9:00 | One summary at 9:00 (e.g. next day) |
-| Same 10 events | Digest OFF | 10 separate notifications when they occur |
-
-![Digest node batches events and sends at a schedule](/images/digest-node.png)
-
-**Configuration:**
-
-<Steps>
-  <Step title="Create sub-category">
-    Create a sub-category for the digest (e.g. `engagement.activity-summary`).
-  </Step>
-  <Step title="Add Digest node">
-    Add a **Digest** node in the workflow and link the workflow to this category.
-  </Step>
-  <Step title="Set schedule">
-    Configure a fixed schedule (e.g. daily 6 PM) or a **dynamic** schedule by referencing a user profile property (e.g. `."$recipient".digestTime`). The user’s preferred time can be stored in the profile and used for delivery in the user’s timezone.
-  </Step>
-</Steps>
-
-📘 [Digest Node →](/docs/digest) | [Dynamic Schedule →](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
-
----
-
-## Threshold
-
-The Digest node can be configured with a **minimum trigger count** (threshold). The digest is sent only when the number of events in the batch window meets or exceeds this minimum. Optionally, a **maximum trigger count** can be set to cap the number of items included in the digest.
-
-**Example:** A daily digest is configured with a minimum trigger count of 5. If 2 events occur in the window, no digest is sent. If 7 events occur, one digest is sent containing those 7 items. With a maximum of 10, 12 events result in a digest containing 10 items.
-
-```mermaid
-flowchart TD
-  E["Events in digest window"] --> C{"Count ≥ minimum?"}
-  C -->|"2 events, min 5"| No["❌ No digest sent"]
-  C -->|"7 events, min 5"| Yes["✅ One digest sent"]
-  style E fill:#e3f2fd,stroke:#1976d2
-  style No fill:#fff9c4,stroke:#f9a825
-  style Yes fill:#c8e6c9,stroke:#388e3c
-```
-
-| Events in window | Min trigger count | Digest sent? |
-|------------------|-------------------|--------------|
-| 2 | 5 | No |
-| 5 | 5 | Yes |
-| 12 | 5 (max 10) | Yes, with 10 items (capped) |
-
-<Note>
-The threshold is applied only when the user is opted in to the digest category. If the user is opted out, no digest is sent regardless of the event count.
-</Note>
-
-**Configuration:**
-
-<Steps>
-  <Step title="Configure Digest node">
-    In the **Digest** node, set **Min trigger count** (e.g. 5) and optionally **Max triggers** (e.g. 10).
-  </Step>
-  <Step title="Link workflow to category">
-    Link the workflow to the sub-category so opt-in/opt-out is respected during preference evaluation.
-  </Step>
-</Steps>
-
-📘 [Digest Node →](/docs/digest) | [Min Trigger Count →](/docs/digest#min-trigger-count)
-
----
-
-## Dynamic list
-
-Categories can be **tagged** (e.g. `premium`, `managers`). When preferences are fetched for the preference center, **tags** can be passed based on the user’s segment (e.g. list membership, role, or plan). Only categories whose tags match the request are returned—so different segments see different preference options. Categories can also be enabled or hidden when a user joins or leaves a list or segment via preference APIs.
-
-**Example:** A category “Weekly summary” is tagged `premium`. When the preference center is loaded for a user in the Premium list, the request includes `tags: ["premium"]`, and “Weekly summary” is included. For a user not in that list, the tag is omitted and the category is not returned.
-
-```mermaid
-flowchart LR
-  subgraph Who["User segment"]
-    A["User in list / segment (e.g. Premium)"]
-    B["User not in list / segment"]
-  end
-  subgraph See["Categories in preference center"]
-    SA["Standard categories + segment-specific"]
-    SB["Standard categories only"]
-  end
-  A --> SA
-  B --> SB
-  style Who fill:#e3f2fd,stroke:#1976d2
-  style See fill:#e8f5e9,stroke:#388e3c
-```
-
-| User segment | In list / segment? | Categories returned |
-|--------------|--------------------|----------------------|
-| In segment (e.g. Premium) | Yes | Standard + segment-specific |
-| Not in segment | No | Standard only |
-
-**Configuration:**
-
-<Steps>
-  <Step title="Tag sub-categories">
-    Add **tags** to sub-categories (e.g. `engagement.weekly-summary` with tag `premium`).
-  </Step>
-  <Step title="Pass tags when fetching preferences">
-    When loading the preference center, pass the tags that correspond to the user’s segment (from list membership, role, or plan).
-  </Step>
-  <Step title="Optional: sync with list events">
-    When a user is added to or removed from a list or segment, call the preference APIs to enable or disable the corresponding categories, or omit the tags so the category is no longer returned.
-  </Step>
-</Steps>
-
-📘 [Lists →](/docs/lists) | [List Events →](/docs/lists#list-events)
-
----
-
-## Summary
-
-| Concept | Description |
-|---------|-------------|
-| **Channel-level preference** | Notifications are delivered on the channels selected by the user—globally and/or per category. |
-| **Mandatory channels** | For critical categories, a channel is always used for delivery even when the user has turned it off globally. |
-| **Digest** | Multiple events are batched and one summary is sent at a scheduled time (fixed or from the user profile). |
-| **Threshold** | The digest is sent only when the number of events in the window meets the minimum (and optionally does not exceed the maximum). |
-| **Dynamic list** | Different segments see different categories in the preference center, based on tags (list, role, or segment). |
-
----
-
-## Related documentation
-
-- [User Preferences](/docs/user-preferences) — User-level preference controls
-- [Manage Categories and Preferences](/docs/managing-notification-categories) — Categories and defaults
-- [Preference Evaluation](/docs/preference-evaluation) — How preferences are evaluated at runtime
-- [Digest](/docs/digest) — Digest node and options
-- [Lists](/docs/lists) — Lists and list events
