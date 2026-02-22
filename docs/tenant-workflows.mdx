@@ -5,7 +5,7 @@ description: "How to trigger workflows and events with tenant_id to apply tenant
 
 ## Overview
 
-By default, notifications are triggered for the default tenant. Pass `tenant_id` in workflow or event calls to apply tenant-specific customizations.
+By default, notifications are triggered for the `default` tenant (represents your organization). Pass `tenant_id` in workflow or event calls to apply tenant-specific customizations.
 
 When `tenant_id` is passed:
 
@@ -20,13 +20,37 @@ When `tenant_id` is passed:
 ## Workflow Trigger
 
 <CodeGroup>
+  ```curl curl
+  curl --request POST \
+       --url https://hub.suprsend.com/trigger/ \
+       --header 'Authorization: Bearer __api_key__' \
+       --header 'accept: application/json' \
+       --header 'content-type: application/json' \
+       --data '{
+    "workflow": "_workflow_slug_",
+    "recipients": [
+      {
+        "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
+        "$email": ["user@example.com"]
+      }
+    ],
+    "data": {},
+    "tenant_id": "_tenant_id_",
+    "$idempotency_key": "_unique_identifier_"
+  }'
+  ```
+
   ```python Python
   from suprsend import Suprsend, WorkflowTriggerRequest
 
   supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
 
   w1 = WorkflowTriggerRequest(
-    body={...},
+    body={
+      "workflow": "_workflow_slug_",
+      "recipients": [{"distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09", "$email": ["user@example.com"]}],
+      "data": {}
+    },
     tenant_id="_tenant_id_",
     idempotency_key="_unique_identifier_"
   )
@@ -41,7 +65,11 @@ When `tenant_id` is passed:
   const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
 
   const w1 = new WorkflowTriggerRequest(
-    {...},
+    {
+      workflow: "_workflow_slug_",
+      recipients: [{ distinct_id: "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09", $email: ["user@example.com"] }],
+      data: {}
+    },
     {
       tenant_id: "_tenant_id_",
       idempotency_key: "_unique_identifier_"
@@ -50,6 +78,31 @@ When `tenant_id` is passed:
 
   const response = supr_client.workflows.trigger(w1);
   response.then((res) => console.log("response", res));
+  ```
+
+  ```java Java
+  import java.util.Arrays;
+
+  import org.json.JSONArray;
+  import org.json.JSONObject;
+
+  import suprsend.Suprsend;
+  import suprsend.SuprsendException;
+  import suprsend.WorkflowTriggerRequest;
+
+  Suprsend suprClient = new Suprsend("_workspace_key_", "_workspace_secret_");
+
+  JSONObject body = new JSONObject()
+    .put("workflow", "_workflow_slug_")
+    .put("recipients", new JSONArray()
+      .put(new JSONObject()
+        .put("distinct_id", "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09")
+        .put("$email", Arrays.asList("user@example.com"))))
+    .put("data", new JSONObject());
+
+  WorkflowTriggerRequest wf = new WorkflowTriggerRequest(body, "_tenant_id_", "_unique_identifier_");
+  JSONObject response = suprClient.workflows.trigger(wf);
+  System.out.println(response);
   ```
 
   ```go Go
@@ -67,8 +120,12 @@ When `tenant_id` is passed:
     }
 
     w1 := &suprsend.WorkflowTriggerRequest{
-      Body: map[string]interface{}{...},
-      TenantId: "_tenant_id_",
+      Body: map[string]interface{}{
+        "workflow":   "_workflow_slug_",
+        "recipients": []map[string]interface{}{{"distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09", "$email": []string{"user@example.com"}}},
+        "data":       map[string]interface{}{},
+      },
+      TenantId:       "_tenant_id_",
       IdempotencyKey: "_unique_identifier_",
     }
 
@@ -84,13 +141,29 @@ When `tenant_id` is passed:
 ## Event Trigger
 
 <CodeGroup>
+  ```curl curl
+  curl --request POST \
+       --url https://hub.suprsend.com/event/ \
+       --header 'Authorization: Bearer __api_key__' \
+       --header 'accept: application/json' \
+       --header 'content-type: application/json' \
+       --data '{
+    "distinct_id": "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+    "event": "new_user_signup",
+    "properties": {},
+    "tenant_id": "_tenant_id_"
+  }'
+  ```
+
   ```python Python
-  from suprsend import Event
+  from suprsend import Suprsend, Event
+
+  supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
 
   event = Event(
     distinct_id="0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-    event_name="product_purchased",
-    properties={...},
+    event_name="new_user_signup",
+    properties={},
     tenant_id="_tenant_id_"
   )
 
@@ -99,35 +172,69 @@ When `tenant_id` is passed:
   ```
 
   ```javascript Node.js
-  const { Event } = require("@suprsend/node-sdk");
+  const { Suprsend, Event } = require("@suprsend/node-sdk");
+
+  const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
 
   const event = new Event(
     "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-    "product_purchased",
-    {...},
-    {tenant_id: "_tenant_id_"}
+    "new_user_signup",
+    {},
+    { tenant_id: "_tenant_id_" }
   );
 
   const response = supr_client.track_event(event);
   response.then((res) => console.log("response", res));
   ```
 
-  ```go Go
-  ev := &suprsend.Event{
-    EventName:  "product_purchased",
-    DistinctId: "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
-    Properties: map[string]interface{}{...},
-    TenantId: "_tenant_id_",
-  }
+  ```java Java
+  import org.json.JSONObject;
 
-  _, err = suprClient.TrackEvent(ev)
-  if err != nil {
-    log.Fatalln(err)
+  import suprsend.Suprsend;
+  import suprsend.SuprsendException;
+  import suprsend.Event;
+
+  Suprsend suprClient = new Suprsend("_workspace_key_", "_workspace_secret_");
+
+  String distinctId = "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08";
+  String eventName = "new_user_signup";
+  JSONObject properties = new JSONObject();
+
+  Event e = new Event(distinctId, eventName, properties, null, "_tenant_id_");
+  JSONObject response = suprClient.trackEvent(e);
+  System.out.println(response);
+  ```
+
+  ```go Go
+  package main
+
+  import (
+    "log"
+    suprsend "github.com/suprsend/suprsend-go"
+  )
+
+  func main() {
+    suprClient, err := suprsend.NewClient("_workspace_key_", "_workspace_secret_")
+    if err != nil {
+      log.Fatalln(err)
+    }
+
+    ev := &suprsend.Event{
+      EventName:  "new_user_signup",
+      DistinctId: "0fxxx8f74-xxxx-41c5-8752-xxxcb6911fb08",
+      Properties: map[string]interface{}{},
+      TenantId:   "_tenant_id_",
+    }
+
+    _, err = suprClient.TrackEvent(ev)
+    if err != nil {
+      log.Fatalln(err)
+    }
   }
   ```
 </CodeGroup>
 
-## Next Steps
+## Related Documentation
 
 * **[Tenant Templates](/docs/tenant-templates)** — Use tenant properties in templates
 * **[Tenant Management](/docs/tenant-management)** — Create and update tenants
