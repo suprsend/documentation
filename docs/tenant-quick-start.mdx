@@ -3,157 +3,240 @@ title: "Quickstart"
 description: "Get started with tenants using a minimal working example."
 ---
 
-This guide shows a complete end-to-end example: creating a tenant, adding tenant variables to a template, and triggering a notification.
+This guide walks through creating a tenant, using tenant data in templates, and triggering a notification with tenant context.
 
 ## Step 1: Create a Tenant
 
-Create a tenant via the [dashboard](https://app.suprsend.com/tenants) or programmatically using SDKs.
+<Tabs>
+  <Tab title="MCP">
+    With the [SuprSend MCP server](/reference/mcp-overview) configured in your AI assistant (Claude, Cursor, etc.), you can create a tenant using natural language:
 
-[Learn how to create tenants in detail →](/docs/tenant-management#creating-a-tenant)
+    > *"Create a tenant with ID `acme-corp`, name `Acme Corp`, logo `https://acme.com/logo.png`, and primary color `#0055ff`"*
 
-## Step 2: Add Tenant Variables to Template
+    The MCP server calls the `tenants.upsert` tool under the hood. You can also invoke it directly:
 
-In your [email template](https://app.suprsend.com/templates), add tenant variables that will be automatically replaced with tenant-specific values at runtime.
+    ```json
+    {
+      "tool": "tenants.upsert",
+      "tenant_id": "acme-corp",
+      "tenant_properties": {
+        "tenant_name": "Acme Corp",
+        "logo": "https://acme.com/logo.png",
+        "primary_color": "#0055ff"
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Backend SDK">
+    <CodeGroup>
+      ```python Python
+      from suprsend import Suprsend
+
+      supr_client = Suprsend("workspace_key", "workspace_secret")
+
+      response = supr_client.tenants.upsert("acme-corp", {
+          "tenant_name": "Acme Corp",
+          "logo": "https://acme.com/logo.png",
+          "primary_color": "#0055ff",
+          "social_links": {
+              "website": "https://acme.com"
+          }
+      })
+      print(response)
+      ```
+
+      ```javascript Node.js
+      const { Suprsend } = require("@suprsend/node-sdk");
+
+      const supr_client = new Suprsend("workspace_key", "workspace_secret");
+
+      const response = supr_client.tenants.upsert("acme-corp", {
+          tenant_name: "Acme Corp",
+          logo: "https://acme.com/logo.png",
+          primary_color: "#0055ff",
+          social_links: {
+              website: "https://acme.com"
+          }
+      });
+      response.then((res) => console.log(res));
+      ```
+
+      ```java Java
+      import com.suprsend.Suprsend;
+      import com.suprsend.models.Tenant;
+
+      Suprsend suprClient = new Suprsend("workspace_key", "workspace_secret");
+
+      Tenant tenant = new Tenant()
+          .setTenantName("Acme Corp")
+          .setLogo("https://acme.com/logo.png")
+          .setPrimaryColor("#0055ff");
+
+      JSONObject response = suprClient.tenants.upsert("acme-corp", tenant);
+      System.out.println(response);
+      ```
+
+      ```go Go
+      suprClient, _ := suprsend.NewClient("workspace_key", "workspace_secret")
+
+      tenantPayload := &suprsend.Tenant{
+          TenantName:   suprsend.String("Acme Corp"),
+          Logo:         suprsend.String("https://acme.com/logo.png"),
+          PrimaryColor: suprsend.String("#0055ff"),
+      }
+
+      res, err := suprClient.Tenants.Upsert(context.Background(), "acme-corp", tenantPayload)
+      if err != nil {
+          log.Fatalln(err)
+      }
+      log.Println(res)
+      ```
+    </CodeGroup>
+
+    <Note>
+      `upsert` creates the tenant if it doesn't exist, or updates it if it does. The Tenant ID cannot be changed after creation.
+    </Note>
+  </Tab>
+
+  <Tab title="Dashboard">
+    <Steps>
+      <Step title="Open Tenants">
+        Go to **Tenants** in the side navigation or visit the [Tenants page](https://app.suprsend.com/tenants).
+      </Step>
+      <Step title="Create New Tenant">
+        Click **New Tenant**, enter a **Tenant ID** (e.g., `acme-corp`) and a **Tenant Name**, then confirm.
+
+        <Frame caption="New Tenant button on Tenants page">
+          ![](/images/add-tenant.png)
+        </Frame>
+      </Step>
+      <Step title="Configure Properties">
+        On the tenant detail page, set the logo, colors, social links, and any custom properties. Save when done.
+
+        <Frame caption="Configure tenant properties">
+          ![](/images/configure-tenant.png)
+        </Frame>
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Step 2: Use Tenant Data in Templates
+
+Open any template in the [template editor](https://app.suprsend.com/templates). Tenant variables follow the format `$tenant.<property>` and are replaced at send time based on the `tenant_id` you pass.
+
+### Inserting tenant variables
+
+Type `{` in the editor to see tenant variables in auto-suggestions. Here's a practical email template:
+
+```handlebars Email template
+<h2>Hello from {{$tenant.tenant_name}}!</h2>
+<p>Your account is now active. Visit us at {{$tenant.social_links.website}}.</p>
+<p style="color: {{$tenant.primary_color}};">We're glad to have you.</p>
+```
+
+When triggered with `tenant_id="acme-corp"`, the variables resolve to Acme Corp's actual values.
+
+### Showing or hiding sections per tenant
+
+Use custom properties to conditionally show content for specific tenants. Set a property (e.g., `show_trial_banner: true`) on the tenant, then reference it in the template:
+
+```handlebars Email template
+{% if $tenant.properties.show_trial_banner %}
+  <div style="background: #fff3cd; padding: 12px;">
+    🎉 You're on a free trial — <a href="{{$tenant.properties.upgrade_url}}">upgrade now</a>
+  </div>
+{% endif %}
+
+<p>Welcome to {{$tenant.tenant_name}}!</p>
+```
+
+The banner only appears for tenants where `show_trial_banner` is `true`.
+
+### Customizing header, footer, and buttons with tenant block
+
+For email templates, use the built-in **Tenant block** to automatically apply a tenant's logo, primary color, and social links to your header, footer, or button—without hardcoding anything.
+
+<Steps>
+  <Step title="Add a tenant block">
+    In the template editor, find **Tenant** in the right-side content panel and drag it into the email.
+  </Step>
+  <Step title="Choose block type">
+    Select **Header**, **Footer**, or **Button** from the right panel. The block auto-applies the tenant's branding at send time.
+
+    <Frame caption="Switch block type (header, footer, buttons)">
+      ![](/images/docs/9bb5a1b-image.png)
+    </Frame>
+  </Step>
+</Steps>
+
+<Note>
+  Tenant blocks are email-only. For SMS, Push, and other channels, use `$tenant.*` variables directly in the template body.
+</Note>
+
+## Step 3: Trigger a Workflow with tenant_id
+
+Pass `tenant_id` when triggering a workflow. SuprSend applies the matching tenant's branding and preferences automatically.
 
 <CodeGroup>
-```handlebars Template
-<div style="background-color: {{$tenant.primary_color}};">
-  <img src="{{$tenant.logo}}" alt="{{$tenant.tenant_name}}" />
-  <h1>Welcome to {{$tenant.tenant_name}}!</h1>
-</div>
-```
+  ```python Python
+  from suprsend import Suprsend, WorkflowTriggerRequest
 
-```text What Happens
-When tenant_id="tenant_01" is passed:
-- {{$tenant.tenant_name}} → "ABC Company"
-- {{$tenant.logo}} → "https://company_logo_image.png"
-- {{$tenant.primary_color}} → "#ff0000"
-```
+  supr_client = Suprsend("workspace_key", "workspace_secret")
+
+  w1 = WorkflowTriggerRequest(
+      body={
+          "workflow": "welcome_email",
+          "recipients": [{"distinct_id": "user_123", "$email": ["user@example.com"]}],
+      },
+      tenant_id="acme-corp"
+  )
+
+  response = supr_client.workflows.trigger(w1)
+  print(response)
+  ```
+
+  ```javascript Node.js
+  const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
+
+  const supr_client = new Suprsend("workspace_key", "workspace_secret");
+
+  const w1 = new WorkflowTriggerRequest(
+      {
+          workflow: "welcome_email",
+          recipients: [{ distinct_id: "user_123", $email: ["user@example.com"] }],
+      },
+      { tenant_id: "acme-corp" }
+  );
+
+  const response = supr_client.workflows.trigger(w1);
+  response.then((res) => console.log(res));
+  ```
+
+  ```go Go
+  w1 := &suprsend.WorkflowTriggerRequest{
+      Body: map[string]interface{}{
+          "workflow": "welcome_email",
+          "recipients": []map[string]interface{}{
+              {"distinct_id": "user_123", "$email": []string{"user@example.com"}},
+          },
+      },
+      TenantId: "acme-corp",
+  }
+
+  resp, err := suprClient.Workflows.Trigger(w1)
+  if err != nil {
+      log.Fatalln(err)
+  }
+  log.Println(resp)
+  ```
 </CodeGroup>
 
-[Learn more about tenant variables →](/docs/tenant-templates)
-
-## Step 3: Trigger with tenant_id
-
-Pass `tenant_id` when triggering a workflow or event to use that tenant's properties.
-
-### Workflow Trigger
-
-<CodeGroup>
-```python Python
-from suprsend import WorkflowTriggerRequest
-
-w1 = WorkflowTriggerRequest(
-  body={
-    "workflow": "welcome_email",
-    "recipients": [{"$email": ["user@example.com"]}],
-  },
-  tenant_id="tenant_01"
-)
-
-response = supr_client.workflows.trigger(w1)
-print(response)
-```
-
-```javascript Node.js
-const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
-
-const supr_client = new Suprsend("workspace_key", "workspace_secret");
-
-const w1 = new WorkflowTriggerRequest(
-  {
-    workflow: "welcome_email",
-    recipients: [{"$email": ["user@example.com"]}],
-  },
-  {tenant_id: "tenant_01"}
-);
-
-const response = supr_client.workflows.trigger(w1);
-response.then((res) => console.log("response", res));
-```
-
-```go Go
-w1 := &suprsend.WorkflowTriggerRequest{
-  Body: map[string]interface{}{
-    "workflow": "welcome_email",
-    "recipients": []map[string]interface{}{
-      {"$email": []string{"user@example.com"}},
-    },
-  },
-  TenantId: "tenant_01",
-}
-
-resp, err := suprClient.Workflows.Trigger(w1)
-if err != nil {
-  log.Fatalln(err)
-}
-log.Println(resp)
-```
-</CodeGroup>
-
-### Event Trigger
-
-<CodeGroup>
-```python Python
-from suprsend import Event
-
-event = Event(
-  distinct_id="user_123",
-  event_name="user_signed_up",
-  properties={"plan": "premium"},
-  tenant_id="tenant_01"
-)
-
-response = supr_client.track_event(event)
-print(response)
-```
-
-```javascript Node.js
-const { Event } = require("@suprsend/node-sdk");
-
-const event = new Event(
-  "user_123",
-  "user_signed_up",
-  {plan: "premium"},
-  {tenant_id: "tenant_01"}
-);
-
-const response = supr_client.track_event(event);
-response.then((res) => console.log("response", res));
-```
-
-```go Go
-ev := &suprsend.Event{
-  EventName:  "user_signed_up",
-  DistinctId: "user_123",
-  Properties: map[string]interface{}{"plan": "premium"},
-  TenantId: "tenant_01",
-}
-
-_, err = suprClient.TrackEvent(ev)
-if err != nil {
-  log.Fatalln(err)
-}
-```
-</CodeGroup>
-
-[Learn more about triggering with tenant_id →](/docs/tenant-workflows)
-
-## Result
-
-The notification uses the tenant's logo, colors, and other configured properties. One template works for all tenants—SuprSend applies the correct tenant's branding based on the `tenant_id` you pass.
-
-## Best Practices
-
-- **Use internal customer IDs for tenant_id** — Map directly to your customer IDs
-- **Use default tenant for base branding** — Set base branding in default tenant, override only what differs
-- **Keep tenant properties minimal** — Only configure properties that differ from default
-- **Add social links only if used** — Keep tenant data clean by adding only referenced links
-- **Test with default tenant first** — Verify templates work before adding custom tenants
-
+SuprSend resolves all `$tenant.*` variables using the properties of `acme-corp` before sending.
 
 ## Next Steps
 
-* **[Tenant Management](/docs/tenant-management)** — Learn how to manage tenants via dashboard
-* **[Tenant Templates](/docs/tenant-templates)** — Use tenant components and variables
-* **[Tenant Workflows](/docs/tenant-workflows)** — Explore advanced tenant features
+* **[Managing Tenants](/docs/tenant-management)** — View, update, and delete tenants
+* **[Tenant Templates](/docs/tenant-templates)** — Full reference for tenant variables and components
+* **[Tenant Workflows](/docs/tenant-workflows)** — Advanced triggering options
