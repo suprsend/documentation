@@ -1,114 +1,371 @@
 ---
 title: "Logs"
-description: "Learn how to track, debug, & audit notification logs on SuprSend."
+description: "Track, debug, and audit all your notification activity with comprehensive logging."
 ---
 
-SuprSend provides real-time notification logs of sent notifications for quick debugging and auditing. Navigate to the [Logs tab](https://app.suprsend.com/en/production/logs/) on the SuprSend dashboard to access notification logs.
+SuprSend provides end-to-end logging across requests, executions, broadcasts, and messages. Navigate to the [Logs tab](https://app.suprsend.com/en/production/logs/) to access your logs.
 
-![](/images/docs/745014e-image.png)
+Every request produces logs at upto 3 stages depending on the type of request.
 
-## Data Structure of Logs
+<CardGroup cols={2}>
+  <Card title="Requests" icon="code" iconType="solid" href="#request-logs">
+    All API/SDK requests made to SuprSend are logged here. You can see the input payload and request response here.
+  </Card>
+  <Card title="Workflow Executions" icon="sitemap" iconType="solid" href="#workflow-execution-logs">
+    Workflow trigger and event requests resulting in workflow execution are logged here. You can use this to see step by step workflow execution.
+  </Card>
+  <Card title="Broadcast Executions" icon="tower-broadcast" iconType="solid" href="#broadcast-execution-logs">
+    All broadcast executions are logged here. You can see the summarized step by step execution of the broadcast.
+  </Card>
+  <Card title="Messages" icon="envelope" iconType="solid" href="#message-logs">
+    Log of all delivery nodes (including webhooks) are tracked here along with their message status (delivered, seen, clicked).
+  </Card>
+</CardGroup>
 
-Every workflow request generates a common entry in the log, allowing developers to gain a holistic view of notifications sent across all channels. You can expand the log to track the entire notification flow of each channel, from request to user delivery and engagement (open, seen, and click).
+---
+
+## Log Types
+
+### Requests
+
+You can check the **request payload and response of all API/SDK requests made to SuprSend here**. Workflow errors which are detected before workflow execution are also logged here (eg. Trigger condition mismatch, workflow not found and recipient not found).
+
+
+<Frame caption="Request log entry details">
+  ![](/images/requestlogs-detailed.png)
+</Frame>
+
+Each request log entry includes these sections:
+
+| Section | Details |
+|---------|---------|
+| **Response** | Success response with status, or failure response with error code, description, type, severity, and context |
+| **Input** | HTTP method, endpoint (e.g., `/event/`, `/trigger/`), and complete JSON payload |
+| **Workflow Execution** | If the request is a workflow trigger or event request, you can see the workflow execution log here. Click on it to navigate to the linked workflow execution log. |
+| **Summary** | Other relevant information like Recipient (clickable link to user page), idempotency key (with copy button), received at timestamp, workflow name , and tenant ID (if applicable) |
+
+**Status indicators:**
+
+| Status | Log Level | Meaning |
+|--------|---------|---------|
+| 🟢 **Completed** | **INFO** | **Request was processed successfully.** In case of workflow trigger or event requests, this doesn't mean successful workflow execution. It just means that workflow run request was accepted by SuprSend. You can check the workflow execution log to see the status of the workflow execution. |
+| 🟠 **Partial Failure** | **WARNING** | **Request was not successful, and had warnings (non-actionable errors).** For example, workflow trigger condition mismatch. |
+| 🔴 **Failed** | **ERROR** | **Request failed to execute due to some errors.** You should continuously monitor these errors and fix it in real-time as these are critical errors that needs a fix. For example, invalid request payload, authentication failures, workflow not found, recipient not found, etc. |
+
+**Common errors captured:**
+
+| Error Type | Examples |
+|------------|----------|
+| **API-level errors** | Invalid requests, missing required fields, authentication failures |
+| **Workflow trigger errors** | Trigger condition mismatch, workflow not found, recipient not found |
+| **Schema validation errors** | If you have linked schema to the workflow or event and payload doesn't match the workflow schema |
+
+
+**Navigate from here:**
+- **Workflow trigger / event requests**: View execution details in the **Workflow Executions** log. The linked execution is available in the expanded request log.
+- **Broadcast requests**: View execution details in the **Broadcast Executions** log.
+- **Other requests**: The Request Logs show the final response status and error details.
+
+
+---
+
+### Workflow Executions
+
+**Workflow execution logs show how individual workflows are processed for each user and show step-by-step workflow execution details.** You can see how each node in the workflow is executed. All the errors that happen during workflow execution are logged here, except delivery errors since they are reported later by vendor and is tracked in Message Logs.
+
+<Frame>
+  ![](/images/workflow-detailed.png)
+</Frame>
+
+Each workflow execution log entry includes these sections:
+
+- **Overview**: Generic information about the workflow execution: 
+  - Workflow slug, tenant ID and Recipient (clickable)
+  - Execution ID (share this with SuprSend support if you need help in debugging the workflow or want to report an issue)
+  - Idempotency key (unique identifier of the request passed to SuprSend)
+  - Status (Completed, Partial Failure, Failed)
+  - Start time (workflow start timestamp)
+  - Notification category
+
+- **Workflow diagram**: Visual path of the execution and color coded status against each node. Check the failed nodes for error details.
+- **Execution history**: Chronological logs of workflow start, node execution, channel computation, template rendering, and notification triggers.
+
+**Status indicators:**
+| Status | Log Level | Meaning |
+|--------|---------|---------|
+| 🟢 **Completed** | **INFO** | **Workflow or node Execution completed successfully without failures**. It doesn't mean that all messages were delivered successfully. Check Message Logs for actual delivery status. |
+| 🟠 **Partial Failure** | **WARNING** | **Workflow or node Execution completed with some warnings** (non-actionable errors). For example, no active channels, user preference opt-outs, tenant preference opt-outs, etc. |
+| 🔴 **Failed** | **ERROR** | **Workflow execution failed for some nodes or some steps in the node execution failed.** You can check individual workflow log to see which node failed and the error details. For example, template rendering failures, variable evaluation errors, etc. |
+| 🔵 **In Progress** | **INFO** | **Workflow or node execution is still in progress.** Final status will result in one of the above 3 statuses. |
+
+**Common errors captured:**<br />
+Any error that can be evaluated within SuprSend are logged here, except for delivery errors which are tracked in Message Logs.
+
+| Error Type | Examples |
+|------------|----------|
+| **Template rendering failures** | Missing variables, syntax errors |
+| **Channel computation issues** | No active channels, User Preference opt-outs, Tenant Preference opt-outs |
+| **Node execution failures** | Condition mismatches, data validation errors |
+| **Variable evaluation errors** | Missing data, type mismatches |
+
+
+**Navigate from here:** If your workflow execution has delivery or webhook nodes, their corresponding logs are available in Message Logs. Click on view message logs in delivery nodes to navigate to the corresponding message log.
+
+<Warning>
+  "Completed" execution does not mean "Delivered". A workflow can complete successfully but still have message delivery failures. Check Message Logs for actual delivery status.
+</Warning>
+
+---
+
+### Broadcast Executions
+
+Broadcast execution logs track broadcast campaigns sent to user lists. Unlike workflow execution logs which are per-user, broadcast logs provide a summary of execution across a list of users, showing aggregate statistics and processing steps.
+
+<Frame>
+  ![](/images/broadcast-detailed.png)
+</Frame>
+
+Each broadcast execution log entry includes these sections:
+
+- **Overview**: Generic information about the broadcast execution: 
+  - Broadcast slug, tenant ID and List ID (clickable)
+  - Broadcast Execution ID (share this with SuprSend support if you need help in debugging the broadcast or want to report an issue)
+  - Idempotency key (unique identifier of the request passed to SuprSend)
+  - Status (Triggered, Skipped, Failed)
+  - Start time (broadcast start timestamp)
+  - Notification category
+- **Execution history**: Chronological logs of broadcast start, template loading, user profile fetching (with progress percentage), channel computation, template rendering, and notification triggering.
+- **Aggregate statistics**: Summary of the broadcast performance:
+  - Total users processed (percentage and count) at each stage of the broadcast execution
+  - At delivery stage: Preference evaluation, messages triggered and delivery status (delivered, seen, clicked)
+
+**Status indicators:**
+
+| Status | Meaning |
+|--------|---------|
+| 🟢 **Triggered** | Users who received notifications on at least one channel |
+| 🟠 **Skipped** | Excluded due to missing channels or opt-out |
+| 🔴 **Failed** | Trigger failed due to errors (e.g., template rendering failures) |
+
+**Common errors captured:**
+
+| Error Type | Examples |
+|------------|----------|
+| **Template rendering failures** | Missing variables, syntax errors |
+| **Channel computation issues** | No active channels, User Preference opt-outs, Tenant Preference opt-outs |
+| **Vendor Config issue** | Vendor not configured for the channel and notification category or broadcast not supported for that vendor |
+
+**Why execution is skipped:**
+
+| Reason | Description |
+|--------|-------------|
+| **Unsubscribed** | User has unsubscribed from that notification category or the required channel in the category |
+| **Missing channel** | User does not have that channel or that is marked inactive due to hard bounce in the past (e.g., no email address, no phone number) |
+
+**Navigate from here:** Successful broadcasts will have delivery logs available in Message Logs. Click "View all message logs" next to delivery step to navigate directly to individual message delivery status for all users in the broadcast.
+
+<Warning>
+  Broadcast logs show processing up to trigger. For delivery details, see message logs.
+</Warning>
+
+---
+
+### Messages
+
+**Message logs show individual notification messages, their delivery errors and engagement status**. You'll see 1 log entry corresponding to each delivery node or webhook node in the workflow or broadcast execution. Use this to track the delivery errors, notification engagement status, webhook request and response details or any other errors that happen for deivery node during the workflow or broadcast execution.
+
+<Frame>
+  ![](/images/messages-detailed.png)
+</Frame>
+
+Each message log entry includes:
+- **Overview**: Generic information about the message:
+  - Triggered at timestamp, workflow/broadcast name, node (e.g., Multi-Channel, Email, SMS, Mobile Push, Inbox), template, recipient ID, and tenant ID.
+- **Notification Status**: Triggered, Delivered, Seen, Clicked, Failed
+- **Delivery errors**: Delivery errors if any
+- **Delivery timeline**: Delivery timeline for the message
+- **Webhook request and response**: Webhook request and response details if any
+- **Execution Error**: Workflow execution error for delivery or webhook node if any
+
+**Status indicators:**
+
+| Status | Log Level | Meaning |
+|--------|---------|---------|
+| 🟢 **Completed** | **INFO** | **Notification was successfully delivered to user on all channels or handed off to the vendor if we're not able to track the delivery status** |
+| 🟠 **Partial Failure** | **WARNING** | **Notification was partially delivered on some channels or failed on other or message were not delivered due to warnings like preference opt-outs etc.** |
+| 🔴 **Failed** | **ERROR** | **Notification failed to be delivered to the end user on all channels or there was an error in workflow execution for some channels like template rendering failures ** |
+| 🔵 **In Progress** | **INFO** | **Notifications are still in progress.** Final status will result in one of the above 3 statuses. |
+
+**Notification Delivery and Engagement Status:**
+
+| Stage | Details |
+|-------|---------|
+| **Triggered** | ✅ (success) or ❌ (failed) - whether the notification was successfully handed off to the vendor |
+| **Delivered** | ✅ (success) or ❌ (failed) - whether the notification was delivered to the end user |
+| **Seen** | Whether the notification was seen/opened by the user |
+| **Clicked** | Whether the notification was clicked/interacted with |
+
+Hover over status indicators to see the timestamp of each stage and if failed, the reason for failure.
+
+**Engagement status tracked across channels:**
+| Channel  | Delivered | Seen | Clicked |
+|-------|---------|---------|---------|
+| Email | ✅ | ✅ | ✅ |
+| SMS | ✅ | ❌ | ❌ |
+| WhatsApp | ✅ | ✅ | ❌ |
+| Android Push | ✅ | ✅ | ✅ |
+| iOS Push | ✅ | ✅ | ✅ |
+| Web Push | ✅ | ✅ | ✅ |
+| Inbox | ✅ | ✅ | ✅ |
+| Slack | ✅ | ❌ | ❌ |
+| MS Teams | ✅ | ❌ | ❌ |
+
 
 <Note>
-  **📘 Set Callback URL in vendor account:**
-
-
-
-  To track notification failure, delivery, seen and click response in your logs, configure SuprSend tracking URL `https://hub.suprsend.com/webhook/*` in your vendor dashboard.&#x20;
-
-
-
-  This enables SuprSend to get delivery and failure response from your vendor and show the same in dashboard logs. You'll find details of the callback URL in individual [vendor integration](/docs/vendors) documentation.
-
-
-
-  You can also configure your [outbound webhook](/docs/webhook) to get the normalized vendor response back to your application.
+  Configure `https://hub.suprsend.com/webhook/*` in your vendor dashboard to track delivery, seen, and click events for email, SMS and WhatsApp.
 </Note>
 
-Notification log conveys all necessary information in a summarized view for easy debugging:
+**Common errors captured:**
 
-| Field         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflow      | Workflow name. You can click on it to see workflow configuration and summarized analytics on the workflow details page.                                                                                                                                                                                                                                                                                                                            |
-| Distinct ID   | `distinct_id` of the [user](/docs/users) receiving the message. Clicking on it provides direct access to the subscriber details page, where you can review user channels and profile properties. This will come in handy to debug notification failures caused by missing channel information on a user.                                                                                                                                           |
-| Delivery Type | `Send to All Channels` -will send notification on all available channels in user profile defined in workflow call.`Smart Delivery` -sequential sending of notifications on available channels one after the other with a delay where delivery stops if the success metric is achieved. [Read more](/docs/smart-delivery)                                                                                                                         |
-| User channel  | Trigger summary of all channels. (1) `Sent` count- notifications successfully sent by SuprSend to end vendor. This would also mean successful notification delivery to end user if callback URL tracking is set in vendor account. (2) `failed` count- SuprSend failed to send the notifications or if we got delivery failure error from vendor. (3) `in progress` count- Notifications in progress during [Smart Delivery](/docs/smart-delivery) |
-| Status        | `Success` if at least one of the notifications is sent in workflow.`Failed` if all notifications fail in the workflow.                                                                                                                                                                                                                                                                                                                             |
+| Error Type | Examples |
+|------------|----------|
+| **Delivery errors** | Delivery failures reported by vendor |
+| **Template rendering failures** | Missing variables, syntax errors |
+| **Channel computation issues** | No active channels, User Preference opt-outs, Tenant Preference opt-outs |
+| **Vendor Config issue** | Vendor not configured for the channel and notification category or broadcast not supported for that vendor |
 
-## Notification Status
+<Note>
+  **Delay in updating the status:** Some events (delivery/seen/click) depend on vendor callbacks and may appear with delay.
+</Note>
 
-You can see notification status in real-time as they are being sent by expanding the log. These are all the stages we track:
+**Navigate from here:** Use "View Execution" link to navigate to the corresponding workflow execution log.
 
-| Stage | Status            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Requested         | Notification request is accepted by SuprSend.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 2     | Processed         | SuprSend started processing the request.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 3     | Triggered         | Notification request is passed from SuprSend to channel vendor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 3     | Trigger Failed    | SuprSend encountered error in forwarding the notification request to the vendor. To understand the cause of the failure, simply hover over the 'i' icon within the failed log chip. Failures can be categorized into two types: 1. SuprSend was unable to process the request due to issues like template rendering failure or the user missing the relevant channel information. 2. SuprSend attempted to call vendor API, but vendor didn't accept the request. This can result from errors in the notification payload, such as template mismatches in WhatsApp, invalid vendor credentials, or incorrect channel values like an invalid mobile number or email. |
-| 3     | Failure by vendor | Vendor accepted the request but failed to deliver the notification to end user. To understand the cause of the failure, simply hover over the 'i' icon within the failed log chip. These errors originate from vendor's end, and for detailed insights into the reason for failure, refer the error guides of individual vendor.                                                                                                                                                                                                                                                                                                                                    |
-| 4     | Delivered         | Notification is successfully delivered to the end user.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 5     | Seen              | Seen is marked by different actions on each channel:**Email**: `opened`**Whatsapp**: `read`**Inbox**: `read (**on click of Mark all as read**) or clicked`**push(android, iOS, web)**: `clicked`**chat(Slack, Microsoft teams)**: *seen is not tracked for chat channels*                                                                                                                                                                                                                                                                                                                                                                                           |
-| 6     | Dismissed         | Dismiss is marked when user clicks on clear all and removes push notification from the tray. Tracked for **androidpush** channel only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 7     | Interacted        | Interacted is marked when someone clicks on the notification                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+---
 
-### Notification Statuses Tracked Per Channel
 
-**Requested, Processed, Triggered** is internal to SuprSend and tracked for all channels. Here is a list of all statuses tracked across channels from delivery onwards:
+## Navigating Logs Page
 
-| Channel     | Failure by vendor / Trigger Failed | Delivered | Seen | Dismissed | Interacted (Clicked) |
-| ----------- | ---------------------------------- | --------- | ---- | --------- | -------------------- |
-| Email       | yes                                | yes       | yes  | -         | yes                  |
-| SMS         | yes                                | yes       | -    | -         | -                    |
-| Whatsapp    | yes                                | yes       | yes  | -         | -                    |
-| Androidpush | yes                                | yes       | yes  | yes       | yes                  |
-| iOSpush     | yes                                | yes       | yes  | -         | yes                  |
-| Webpush     | yes                                | yes       | yes  | -         | yes                  |
-| Inbox       | yes                                | yes       | -    | -         | yes                  |
-| Slack       | yes                                | yes       | -    | -         | -                    |
-| MS Teams    | yes                                | yes       | -    | -         | -                    |
+### Refresh Interval
+Logs are auto-refreshed every 20 seconds by default. You can manually refresh the logs by clicking the refresh button. You can also pause auto-refresh if you're investigating a specific issue to prevent new logs from changing your view.
 
-<Check>
-  **👍 Set Callback URL in vendor account:**
+### Filters
+You have global filters to drill down logs like date range and then you have tab specific filters to filter logs by status, error severity, idempotency key, recipient, object, and tenant ID etc.
 
-  To track notification status post-trigger, like trigger failure, delivery, seen and click response in your logs, configure SuprSend tracking URL `https://hub.suprsend.com/webhook/*` in your vendor portal. You'll find details of the callback URL in respective [vendor integration documentation](/docs/vendors).
-</Check>
+**Fastest ways to find something:**
 
-## Getting Logs and Notification Status Back to your Database
+- **Looking for end-to-end trace of a particular request?** → Paste idempotency key in the filter to trace the notification end-to-end across all log types
+- **Looking for a recipient log history?** → Navigate to [Users](https://app.suprsend.com/en/staging/users) tab and check all users inside user details page or filter by recipient ID or email address in logs page
+- **Checking why a notification was not delivered?** → Check message logs for delivery errors. If not found, check workflow execution logs for any error in node execution. If still not found, check request logs and see if the workflow was triggered for the user.
+- **Tracing all executions for an object?** → Filter by object ID on workflow execution and messages logs.
 
-You can either configure [outbound webhook](/docs/outbound-webhook) to get instant alert of all notification statuses in a URL endpoint. You can use it for logging on a third party platform and internal alerting of failure cases.
-
-Setup [S3 sync](/docs/amazon_s3) for internal analytics or showing notification status to your customers within your product. With this, you can get a consolidated entry of each notification sent and their statues in your database. You can directly query on this data using Athena or import it to data warehouses like Redshift, Snowflake, ClickHouse etc. for analysis.
-
-** Trouble debugging? Reach out to Support **
-
-You can click on `**i**` icon at the end of logs to see more details related to workflow execution like `brand_id`, `idempotency_key`, `execution ID`. If you have trouble debugging the error, just copy the **execution ID** and share with us either through in-product chat or slack community. We'll be happy to help you debug the issue.
-
-![](/images/docs/a920b50-image.png)
-
-## Filtering Logs
-
-Pinpoint the required log faster with filters. You can narrow down your logs based on specific criteria such as user `distinct_id`, `worklow name`, `brand_id`, `idempotency_key`, `status` and `date-time`. To filter logs, click on filter icon in the top right side options on logs page. Select `Failure logs` to just filter records with errors.
-
-![](/images/docs/2b78f53-image.png)
-
-### Date Time Filter
-
-Date Time filter allows you to filter logs for a given time period. By default, logs for last 30 minutes is shown. You can change the filter to see logs for longer time span or select custom filter to see logs older than 2 days.
-
-> Please note that logs retention depends on pricing plan. Check [pricing page](https://www.suprsend.com/pricing) to see log retention timeframe applicable for your plan.
-
-<Frame caption="Logs Date Time filter">
-  <img src="/images/docs/9a2a480-image.png" />
+<Frame caption="Filters panel for narrowing logs">
+  <img src="/images/filters.png" alt="Filters panel" width="700" />
 </Frame>
 
-<Frame caption="Custom date-time filter">
-  <img src="/images/docs/c75bd22-image.png" />
+### Charts with drag-to-zoom capability
+The request logs page displays an interactive graph showing request volume over time. Hover over any point to see date/time range, total requests, and success/failed/partial failure percentages. Click or drag to zoom into specific time periods.
+
+<Frame caption="Interactive graph showing request volume with hover details">
+  ![](/images/graph-hover.png)
 </Frame>
 
-## Subscriber Logs
 
-You can also get easy reference of workflow logs on subscriber details page. This can be used for user level auditing and compliance checks, allowing you to reference all notifications sent to a user within a specified time period. You can also access subscriber specific logs directly on logs page by filtering on `distinct_id`.
 
-***
+### Log Retention
+
+Logs default to "Last 1 day" when first opened. Choose from relative ranges (Last 1 day, 7 days, 30 days, and additional presets) or select absolute date ranges with timezone-aware selection.
+Older logs are retained for a period of time based on your [pricing plan](https://www.suprsend.com/pricing).
+
+For extended retention options, contact our [sales team](mailto:sales@suprsend.com).
+
+
+
+## Exporting Logs
+
+Export logs and notification statuses to your own systems:
+
+<CardGroup cols={2}>
+  <Card title="Outbound Webhooks" icon="webhook" iconType="solid" href="/docs/outbound-webhook">
+    Get instant alerts of notification statuses after delivery in a URL endpoint. Use for third-party logging, internal alerting, and real-time updates.
+  </Card>
+  <Card title="S3 Sync" icon="database" iconType="solid" href="/docs/amazon_s3">
+    Sync all logs: requests, workflow executions and messages to your own data warehouse for internal analytics or to power analytics and logs on your product.
+  </Card>
+</CardGroup>
+
+---
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+
+  <Accordion title="What does each message stage mean in SuprSend?">
+    Each status represents a specific step in notification processing:
+    | Status | Meaning |
+    |--------|---------|
+    | **Triggered** | Request was sent to the vendor |
+    | **Trigger Failed** | SuprSend failed to send the request to the vendor |
+    | **Failure by Vendor** | Vendor accepted the request but could not deliver it |
+    | **Delivered** | Message reached the end user |
+    | **Seen** | User opened or viewed the message or user cleared the notification from tray in case of Android Push |
+    | **Clicked** | User clicked or interacted with the notification |
+  </Accordion>
+
+  <Accordion title="I don't see any error in message logs even though the notification was not delivered?">
+    There can be 2 reasons for the delivery failure to not get logged:
+    - You have not configured the callback URL in your vendor dashboard. This is why SuprSend is not getting delivery status updates from the vendor.
+    - If you've configured the webhook and still not seeing delivery status, there's a delay in delivery status by vendor.
+  </Accordion>
+
+  <Accordion title="Which message stages are tracked per channel?">
+    | Channel  | Delivered | Seen | Clicked |
+    |-------|---------|---------|---------|
+    | Email | ✅ | ✅ | ✅ |
+    | SMS | ✅ | ❌ | ❌ |
+    | WhatsApp | ✅ | ✅ | ❌ |
+    | Android Push | ✅ | ✅ | ✅ |
+    | iOS Push | ✅ | ✅ | ✅ |
+    | Web Push | ✅ | ✅ | ✅ |
+    | Inbox | ✅ | ✅ | ✅ |
+    | Slack | ✅ | ❌ | ❌ |
+    | MS Teams | ✅ | ❌ | ❌ |
+  </Accordion>
+
+  <Accordion title="Why don’t I see delivery, seen, or click events in logs?">
+    Delivery and engagement events require vendor callbacks for SMS, Email and WhatsApp. For push channels, there's a setup to enable delivery status tracking.
+
+    Ensure the callback URL  `https://hub.suprsend.com/webhook/*`  is set in your vendor dashboard or in case of push channels, see if the SDK setup is done correctly.
+  </Accordion>
+
+  <Accordion title="Why are some notification logs delayed or out of order?">
+    Log events can appear delayed because delivery, seen, and click updates depend on asynchronous vendor callbacks and there's a delay in webhook response from vendor.
+  </Accordion>
+
+  <Accordion title="What timezone are notification logs shown in?">
+    Notification logs are displayed in the browser’s local timezone by default. You can change the timezone from the top navbar to your desired timezone. You can also set relative timestamp if needed.
+  </Accordion>
+
+  <Accordion title="Why was a notification channel skipped for a user?">
+    A channel may be skipped due to user opt-outs, missing channel identifiers, or vendor and configuration constraints.
+
+    These decisions are recorded in broadcast execution and message logs.
+  </Accordion>
+
+  <Accordion title="Are there limits on searching or accessing notification logs?">
+    Logs have a retention period based on your pricing plan. Generally varies between 30 days to 90 days. Logs older than the retention period are not accessible.
+  </Accordion>
+
+</AccordionGroup>
+
+---
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Error Guides" icon="book" href="/docs/error-guides">
+    List of possible errors occurred and their resolutions.
+  </Card>
+  <Card title="Get Support" icon="life-ring">
+    If you need help debugging a workflow, copy Execution ID and contact SuprSend support via [in-product chat](https://app.suprsend.com), [email](mailto:support@suprsend.com), or [Slack community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ)
+  </Card>
+</CardGroup>

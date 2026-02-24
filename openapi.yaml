@@ -2911,6 +2911,16 @@ paths:
             tags={"exists":true}
           schema:
             type: string
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -3535,6 +3545,15 @@ paths:
           schema:
             type: string
           required: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch translated category and section names and descriptions. 
+            When provided, the API returns category and section names and descriptions in the specified language if translations are available. 
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       requestBody:
         content:
           application/json:
@@ -3548,6 +3567,11 @@ paths:
                 opt_out_channels:
                   type: array
                   description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  items:
+                    type: string
+                opt_in_channels:
+                  type: array
+                  description: You can either pass opt_out_channels when user opts out from a channel in the category or opt_in_channels when user opts in to a channel in the category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
       responses:
@@ -3674,16 +3698,31 @@ paths:
               properties:
                 preference:
                   type: string
-                  description: set `**opt_in**` to send notifications on all channels by default <br>  set `**opt_out**` to not send notifications in this category by default. For instance, **newsletter** <br>  set `**cant_unsubscribe**`if you do not want users to completely opt-out from this category. Notifications will always be sent on mandatory channels in this category.
-                  default: opt_in
+                  description: set `**opt_in**` to turn on notifications on all or selected channels by default, `**opt_out**` to turn-off notifications by default, `**cant_unsubscribe**`if you do not want users to completely opt-out from this category.
+                  enum: [opt_in, opt_out, cant_unsubscribe]
                 visible_to_subscriber:
                   type: boolean
                   description: set it `false` to hide a category from user's preference page
                 mandatory_channels:
                   type: array
-                  description: Add mandatory channels that the user can't unsubscribe from if preference is `cant_unsubscribe`. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  description: Add mandatory channels that the user can't unsubscribe from if preference is `cant_unsubscribe`.
                   items:
                     type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+                opt_in_channels:
+                  type: array
+                  nullable: true
+                  description: Add channels that should be opted-in by default when preference is either `On` or `Can't Unsubscribe`. Set to null or do not pass this parameter to set all channels as opted-in. In case of `Can't Unsubscribe`, mandatory channels are opted-in by default.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
+                blocked_channels:
+                  type: array
+                  nullable: true
+                  description: Pass channels which are not applicable for the tenant. This setting will apply to all categories and user will not be able to opt-in to these channels for the tenant.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
       responses:
         '202':
           description: '202'
@@ -3698,9 +3737,11 @@ paths:
                     "root_category": "transactional",
                     "default_preference": "opt_in",
                     "default_mandatory_channels": null,
+                    "default_opt_in_channels": ['email', 'sms'],
                     "visible_to_subscriber": true,
                     "preference": "opt_in",
                     "mandatory_channels": null,
+                    "opt_in_channels": null,
                     "blocked_channels": null
                   }
               schema:
@@ -3722,10 +3763,22 @@ paths:
                   default_preference:
                     type: string
                     enum: ["cant_unsubscribe", "opt_in", "opt_out"]
-                    description: default preference of the category
-                  mandatory_channels:
+                    description: default preference of the category set while updating the category.
+                  default_mandatory_channels:
                     type: array
-                    description: mandatory channels in case default preference is can't unsubscribe
+                    description: default mandatory channels set while updating the category in case default preference is can't unsubscribe
+                    items:
+                      type: string
+                  default_opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: default opt-in channels set to have selective opt-in channels instead of all channels while updating the category.
+                    items:
+                      type: string
+                  opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: opt-in channels overridden for this tenant.
                     items:
                       type: string
                   visible_to_subscriber:
@@ -3734,12 +3787,13 @@ paths:
                   preference:
                     type: string
                     enum: ["opt_in", "opt_out"]
-                    description: current preference setting for this category
+                    description: preference setting overridden for this tenant.
                   blocked_channels:
                     type: array
-                    description: channels blocked in the category from SuprSend dashboard -> tenants page
+                    description: channels which are opted-out across all categories for this tenant.
                     items:
                       type: string
+                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
         '404':
           description: '404'
           content:
@@ -3759,7 +3813,6 @@ paths:
                   message:
                     type: string
                     example: "tenant 'brand/tenant_id' not found"
-      deprecated: false
   /v1/subscriber_list/{list_id}/delete:
     patch:
       summary: Delete List
@@ -3835,6 +3888,16 @@ paths:
           schema:
             type: boolean
             default: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -3927,6 +3990,655 @@ paths:
                   message:
                     type: string
                     example: "category 'category_slug' not found"    
+      deprecated: true
+  /v1/tenant/{tenant_id}/preference/:
+    get:
+      summary: Get Tenant Full Preference
+      security:
+        - BearerAuth: []
+      description: API to fetch tenant preferences across all categories with translated names and descriptions.
+      operationId: get-tenant-full-preference
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to get preferences for
+          schema:
+            type: string
+          required: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "root_categories": [
+                      {
+                        "root_category": "system",
+                        "sections": [
+                          {
+                            "name": "section système",
+                            "slug": "system-section",
+                            "description": "section système",
+                            "tags": ["wwr"],
+                            "categories": [
+                              {
+                                "name": "Sous-catégorie",
+                                "category": "sub-category",
+                                "description": "Description de la sous-catégorie",
+                                "tags": ["gjhgjhfjfjgfdjthdhtdhdhdyrhdyrdyrdrh", "aaaaeeee"],
+                                "effective_tags": ["aaaaeeee", "gjhgjhfjfjgfdjthdhtdhdhdyrhdyrdyrdrh", "wwr"],
+                                "default_preference": "cant_unsubscribe",
+                                "default_mandatory_channels": ["email"],
+                                "default_opt_in_channels": ["inbox"],
+                                "enabled_for_tenant": true,
+                                "visible_to_subscriber": true,
+                                "preference": "opt_in",
+                                "mandatory_channels": null,
+                                "opt_in_channels": null,
+                                "blocked_channels": ["sms"],
+                                "updated_at": "2025-12-04T10:45:39.061095+00:00"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  root_categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        root_category:
+                          type: string
+                          enum: ["system", "transactional", "promotional"]
+                        sections:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                nullable: true
+                              slug:
+                                type: string
+                                nullable: true
+                              description:
+                                type: string
+                                nullable: true
+                              tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              categories:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                    category:
+                                      type: string
+                                    description:
+                                      type: string
+                                      nullable: true
+                                    tags:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    effective_tags:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    default_preference:
+                                      type: string
+                                      enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                                    default_mandatory_channels:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    default_opt_in_channels:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    enabled_for_tenant:
+                                      type: boolean
+                                    visible_to_subscriber:
+                                      type: boolean
+                                    preference:
+                                      type: string
+                                      nullable: true
+                                      enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                                    mandatory_channels:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    opt_in_channels:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    blocked_channels:
+                                      type: array
+                                      nullable: true
+                                      items:
+                                        type: string
+                                    updated_at:
+                                      type: string
+                                      format: date-time
+                                      nullable: true
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found"
+      deprecated: false
+  /v1/tenant/{tenant_id}/preference/category/:
+    get:
+      summary: Get Tenant Preference All Categories
+      security:
+        - BearerAuth: []
+      description: API to get tenant preferences for all categories with translated names and descriptions.
+      operationId: get-tenant-preference-all-categories
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to get preferences for
+          schema:
+            type: string
+          required: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
+        - name: limit
+          in: query
+          description: Number of results to return per page
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "meta": {
+                      "count": 29,
+                      "limit": 10,
+                      "offset": 0
+                    },
+                    "results": [
+                      {
+                        "name": "sreehari_test",
+                        "category": "sreehari_test",
+                        "description": null,
+                        "tags": null,
+                        "effective_tags": ["wwr"],
+                        "root_category": "system",
+                        "default_preference": "cant_unsubscribe",
+                        "default_mandatory_channels": ["email"],
+                        "default_opt_in_channels": ["slack"],
+                        "enabled_for_tenant": true,
+                        "visible_to_subscriber": true,
+                        "preference": null,
+                        "mandatory_channels": null,
+                        "opt_in_channels": null,
+                        "blocked_channels": null,
+                        "updated_at": null
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        category:
+                          type: string
+                        description:
+                          type: string
+                          nullable: true
+                        tags:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        effective_tags:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        root_category:
+                          type: string
+                          enum: ["system", "transactional", "promotional"]
+                        default_preference:
+                          type: string
+                          enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                        default_mandatory_channels:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        default_opt_in_channels:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        enabled_for_tenant:
+                          type: boolean
+                        visible_to_subscriber:
+                          type: boolean
+                        preference:
+                          type: string
+                          nullable: true
+                          enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                        mandatory_channels:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        opt_in_channels:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        blocked_channels:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        updated_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found"
+      deprecated: false
+  /v1/tenant/{tenant_id}/preference/category/{category}/:
+    get:
+      summary: Get Tenant Preference Single Category
+      security:
+        - BearerAuth: []
+      description: API to get tenant preference for a specific category.
+      operationId: get-tenant-preference-single-category
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to get preferences for
+          schema:
+            type: string
+          required: true
+        - name: category
+          in: path
+          description: notification category slug. You can get this from Notification Categories page on SuprSend dashboard -> Settings page
+          schema:
+            type: string
+          required: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "name": "tests",
+                    "category": "tests",
+                    "description": "asdf",
+                    "tags": [
+                      "asdasdasdasderrfjfsdihdaisjaisljdaskjdlkasdlkasdkasdlkasldajsldkajsdaksdasd",
+                      "checktag"
+                    ],
+                    "effective_tags": [
+                      "asdasdasdasderrfjfsdihdaisjaisljdaskjdlkasdlkasdkasdlkasldajsldkajsdaksdasd",
+                      "checktag"
+                    ],
+                    "root_category": "system",
+                    "default_preference": "cant_unsubscribe",
+                    "default_mandatory_channels": null,
+                    "default_opt_in_channels": null,
+                    "enabled_for_tenant": true,
+                    "visible_to_subscriber": true,
+                    "preference": null,
+                    "mandatory_channels": null,
+                    "opt_in_channels": null,
+                    "blocked_channels": null,
+                    "updated_at": null
+                  }
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  category:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  tags:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  effective_tags:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  root_category:
+                    type: string
+                    enum: ["system", "transactional", "promotional"]
+                  default_preference:
+                    type: string
+                    enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                  default_mandatory_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  default_opt_in_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  enabled_for_tenant:
+                    type: boolean
+                  visible_to_subscriber:
+                    type: boolean
+                  preference:
+                    type: string
+                    nullable: true
+                    enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                  mandatory_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  opt_in_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  blocked_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  updated_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found or category 'category' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found or category 'category' not found"
+      deprecated: false
+    patch:
+      summary: Update Tenant Preference Single Category
+      security:
+        - BearerAuth: []
+      description: API to update tenant preference for a specific category.
+      operationId: update-tenant-preference-single-category
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant you want to update preferences for
+          schema:
+            type: string
+          required: true
+        - name: category
+          in: path
+          description: notification category slug. You can get this from Notification Categories page on SuprSend dashboard -> Settings page
+          schema:
+            type: string
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preference:
+                  type: string
+                  enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                  description: set `opt_in` to turn on notifications on all or selected channels by default, `opt_out` to turn-off notifications by default, `cant_unsubscribe` if you do not want users to completely opt-out from this category
+                visible_to_subscriber:
+                  type: boolean
+                  description: set it `false` to hide a category from user's preference page
+                mandatory_channels:
+                  type: array
+                  description: Add mandatory channels that the user can't unsubscribe from if preference is `cant_unsubscribe`.
+                  items:
+                    type: string
+                opt_in_channels:
+                  type: array
+                  description: List of channels to opt-in for this category. Only applicable when preference is `opt_in`.
+                  items:
+                    type: string
+            examples:
+              Update Preference:
+                value: {
+                  "preference": "opt_in"
+                }
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "name": "tests",
+                    "category": "tests",
+                    "description": "asdf",
+                    "tags": [
+                      "asdasdasdasderrfjfsdihdaisjaisljdaskjdlkasdlkasdkasdlkasldajsldkajsdaksdasd",
+                      "checktag"
+                    ],
+                    "effective_tags": [
+                      "asdasdasdasderrfjfsdihdaisjaisljdaskjdlkasdlkasdkasdlkasldajsldkajsdaksdasd",
+                      "checktag"
+                    ],
+                    "root_category": "system",
+                    "default_preference": "cant_unsubscribe",
+                    "default_mandatory_channels": null,
+                    "default_opt_in_channels": null,
+                    "enabled_for_tenant": true,
+                    "visible_to_subscriber": true,
+                    "preference": "opt_in",
+                    "mandatory_channels": null,
+                    "opt_in_channels": null,
+                    "blocked_channels": null,
+                    "updated_at": "2025-12-06T10:54:46.630096Z"
+                  }
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  category:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  tags:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  effective_tags:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  root_category:
+                    type: string
+                    enum: ["system", "transactional", "promotional"]
+                  default_preference:
+                    type: string
+                    enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                  default_mandatory_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  default_opt_in_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  enabled_for_tenant:
+                    type: boolean
+                  visible_to_subscriber:
+                    type: boolean
+                  preference:
+                    type: string
+                    nullable: true
+                    enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                  mandatory_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  opt_in_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  blocked_channels:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                  updated_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'tenant_id' not found or category 'category' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "tenant 'tenant_id' not found or category 'category' not found"
       deprecated: false
   /v1/tenant/{tenant_id}/category/:
     get:
@@ -3942,6 +4654,16 @@ paths:
           schema:
             type: string
           required: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -3963,9 +4685,11 @@ paths:
                         "root_category": "transactional",
                         "default_preference": "opt_in",
                         "default_mandatory_channels": null,
+                        "default_opt_in_channels": null,
                         "visible_to_subscriber": true,
                         "preference": "opt_in",
                         "mandatory_channels": null,
+                        "opt_in_channels": null,
                         "blocked_channels": null
                       }
                     ]
@@ -3992,40 +4716,53 @@ paths:
                     items:
                       type: object
                       properties:
-                        name:
-                          type: string
-                          description: preference category name
-                        category:
-                          type: string
-                          description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
-                        description:
-                          type: string
-                          description: description of the notification category
-                        root_category:
-                          type: string
-                          description: root category this sub-category belongs to
-                          example: "transactional"
-                        default_preference:
-                          type: string
-                          enum: ["cant_unsubscribe", "opt_in", "opt_out"]
-                          description: default preference of the category
-                        mandatory_channels:
-                          type: array
-                          description: mandatory channels in case default preference is can't unsubscribe
-                          items:
-                            type: string
-                        visible_to_subscriber:
-                          type: boolean
-                          description: set it `false` to hide a category from user's preference page
-                        preference:
-                          type: string
-                          enum: ["opt_in", "opt_out"]
-                          description: current preference setting for this category
-                        blocked_channels:
-                          type: array
-                          description: channels blocked in the category from SuprSend dashboard -> tenants page
-                          items:
-                            type: string
+                  name:
+                    type: string
+                    description: preference category name
+                  category:
+                    type: string
+                    description: unique preference category slug. You can get it by clicking on category name on SuprSend dashboard -> preference page
+                  description:
+                    type: string
+                    description: description of the notification category
+                  root_category:
+                    type: string
+                    description: root category this sub-category belongs to
+                    example: "transactional"
+                  default_preference:
+                    type: string
+                    enum: ["cant_unsubscribe", "opt_in", "opt_out"]
+                    description: default preference of the category set while updating the category.
+                  default_mandatory_channels:
+                    type: array
+                    description: default mandatory channels set while updating the category in case default preference is can't unsubscribe
+                    items:
+                      type: string
+                  default_opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: default opt-in channels set to have selective opt-in channels instead of all channels while updating the category.
+                    items:
+                      type: string
+                  opt_in_channels:
+                    type: array
+                    nullable: true
+                    description: opt-in channels overridden for this tenant.
+                    items:
+                      type: string
+                  visible_to_subscriber:
+                    type: boolean
+                    description: set it `false` to hide a category from user's preference page
+                  preference:
+                    type: string
+                    enum: ["opt_in", "opt_out"]
+                    description: preference setting overridden for this tenant.
+                  blocked_channels:
+                    type: array
+                    description: channels which are opted-out across all categories for this tenant.
+                    items:
+                      type: string
+                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
         '404':
           description: '404 - Not Found'
           content:
@@ -4045,7 +4782,6 @@ paths:
                   message:
                     type: string
                     example: "tenant 'brand/tenant_id' not found"
-      deprecated: false
   /v1/subscriber_list/{list_id}/version/{version_id}/subscriber/add:
     post:
       summary: Add Users to Draft List
@@ -5024,6 +5760,22 @@ paths:
                             type: string
                             description: unique identifier of the user who needs to be notified
                             default: id1
+                          $channels:
+                            type: array
+                            items:
+                              type: string
+                              example: "email"
+                              description: channel to send notification to
+                              enum:
+                                - email
+                                - sms
+                                - inbox
+                                - androidpush
+                                - iospush
+                                - slack
+                                - ms_teams
+                                - webpush
+                                - whatsapp
                           $email:
                             type: array
                             items:
@@ -5361,6 +6113,12 @@ paths:
                         default: []
                         items:
                           type: string
+                      opt_in_channels:
+                        type: array
+                        description: You can either pass opt_out_channels when user opts out from a channel in the category or opt_in_channels when user opts in to a channel in the category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                        default: []
+                        items:
+                          type: string
                     type: object
       responses:
         '202':
@@ -5518,6 +6276,16 @@ paths:
 
           schema:
             type: string
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file.
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -5603,6 +6371,224 @@ paths:
                         is_restricted:
                           type: boolean
                           description: "True means notification will be sent in categories where this channel is marked as mandatory channel. False means opt_in on channel."
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "user [distinct_id: 'user1'] not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "user [distinct_id: 'user1'] not found"
+      deprecated: false
+    patch:
+      summary: Update User Full Preference
+      security:
+        - BearerAuth: []
+      description: API to update user preferences across all channels and categories with translated names and descriptions in the response.
+      operationId: update-user-full-preference
+      parameters:
+        - name: distinct_id
+          in: path
+          description: distinct_id of the user whose preferences should be updated
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: query
+          description: to update user preferences for a particular tenant
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_preferences:
+                  type: array
+                  description: Use this to update channel level user preferences. Set `is_restricted - true` if the channel is opted_out by the user. This will only send critical notifications to the user which can't be opted out
+                  items:
+                    type: object
+                    properties:
+                      channel:
+                        type: string
+                        description: Add channel as `email`, `inbox`, `sms`, `whatsapp`, `androidpush`, `slack`, `iospush`, `webpush`
+                      is_restricted:
+                        type: boolean
+                        description: set `is_restricted = true` if user wants to receive notification in mandatory categories on this channel. Mandatory categories are `can't unsubscribe` categories and the above channel is added as `mandatory channel` in that category
+                categories:
+                  type: array
+                  description: Use this to update user preference across categories and channels inside a category.
+                  items:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                        description: notification category slug
+                      preference:
+                        type: string
+                        enum: ["opt_in", "opt_out"]
+                        description: set `opt_in` to turn on notifications on all or selected channels, `opt_out` to turn-off notifications
+                      opt_out_channels:
+                        type: array
+                        description: List of channels to opt-out from this category. Only applicable when preference is `opt_in`
+                        items:
+                          type: string
+                      opt_in_channels:
+                        type: array
+                        description: List of channels to opt-in for this category. Only applicable when preference is `opt_in`
+                        items:
+                          type: string
+            examples:
+              Update Preferences:
+                value: {
+                  "channel_preferences": [
+                    {
+                      "channel": "email",
+                      "is_restricted": false
+                    }
+                  ],
+                  "categories": [
+                    {
+                      "category": "_category_slug_",
+                      "preference": "opt_in",
+                      "opt_out_channels": [],
+                      "opt_in_channels": []
+                    }
+                  ]
+                }
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "sections": [
+                      {
+                        "name": null,
+                        "slug": null,
+                        "subcategories": [
+                          {
+                            "name": "Promotion de remboursement",
+                            "category": "refund-promotion",
+                            "description": "mises à jour",
+                            "original_preference": null,
+                            "preference": "opt_in",
+                            "is_editable": false,
+                            "channels": [
+                              {
+                                "channel": "email",
+                                "preference": "opt_in",
+                                "is_editable": false
+                              },
+                              {
+                                "channel": "inbox",
+                                "preference": "opt_in",
+                                "is_editable": false
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "channel_preferences": [
+                      {
+                        "channel": "email",
+                        "is_restricted": false
+                      },
+                      {
+                        "channel": "inbox",
+                        "is_restricted": false
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                        slug:
+                          type: string
+                          nullable: true
+                        description:
+                          type: string
+                          nullable: true
+                        tags:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        subcategories:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              category:
+                                type: string
+                              description:
+                                type: string
+                                nullable: true
+                              tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              effective_tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              original_preference:
+                                type: string
+                                nullable: true
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              preference:
+                                type: string
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              is_editable:
+                                type: boolean
+                              channels:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    channel:
+                                      type: string
+                                    preference:
+                                      type: string
+                                      enum: ["opt_in", "opt_out"]
+                                    is_editable:
+                                      type: boolean
+                  channel_preferences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                        is_restricted:
+                          type: boolean
         '404':
           description: '404'
           content:
@@ -7094,6 +8080,11 @@ paths:
                   description: Add array of channels if user wants to unsubscribe from particular channels in this category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
                   items:
                     type: string
+                opt_in_channels:
+                  type: array
+                  description: You can either pass opt_out_channels when user opts out from a channel in the category or opt_in_channels when user opts in to a channel in the category. Add channels as `email`, `sms`, `whatsapp`, `androidpush`, `inbox`, `iospush`, `slack`, `webpush`
+                  items:
+                    type: string
       responses:
         '202':
           description: '202'
@@ -7111,7 +8102,7 @@ paths:
                     "channels":[
                        {
                           "channel":"email",
-                          "preference":"opt_in",
+                          "preference":"opt_out",
                           "is_editable":true
                        },
                        {
@@ -7121,7 +8112,7 @@ paths:
                        },
                        {
                           "channel":"slack",
-                          "preference":"opt_in",
+                          "preference":"opt_out",
                           "is_editable":true
                        }
                     ]
@@ -7410,6 +8401,16 @@ paths:
             tags={"exists":true}
           schema:
             type: string
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file.
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -7515,6 +8516,190 @@ paths:
                     type: string
                     example: "object 'object_type/id' not found"
       deprecated: false
+    patch:
+      summary: Update Object Full Preference
+      security:
+        - BearerAuth: []
+      description: API to update object preferences across all channels and categories with translated names and descriptions in the response.
+      operationId: update-object-full-preference
+      parameters:
+        - name: object_type
+          in: path
+          description: Used to group similar objects together. Give plural namespace like teams, organizations, and roles.
+          schema:
+            type: string
+          required: true
+        - name: id
+          in: path
+          description: Unique identifier of the object in your system
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: query
+          description: to update object preferences for a particular tenant
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_preferences:
+                  type: array
+                  description: Use this to update channel level object preferences. Set `is_restricted - true` if the channel is opted_out. This will only send critical notifications which can't be opted out
+                  items:
+                    type: object
+                    properties:
+                      channel:
+                        type: string
+                        description: Add channel as `email`, `inbox`, `sms`, `whatsapp`, `androidpush`, `slack`, `iospush`, `webpush`
+                      is_restricted:
+                        type: boolean
+                        description: set `is_restricted = true` if object wants to receive notification in mandatory categories on this channel. Mandatory categories are `can't unsubscribe` categories and the above channel is added as `mandatory channel` in that category
+            examples:
+              Update Preferences:
+                value: {
+                  "channel_preferences": [
+                    {
+                      "channel": "email",
+                      "is_restricted": false
+                    }
+                  ]
+                }
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "sections": [
+                      {
+                        "name": null,
+                        "slug": null,
+                        "subcategories": [
+                          {
+                            "name": "Promotion de remboursement",
+                            "category": "refund-promotion",
+                            "description": "mises à jour",
+                            "original_preference": null,
+                            "preference": "opt_in",
+                            "is_editable": false,
+                            "channels": [
+                              {
+                                "channel": "inbox",
+                                "preference": "opt_in",
+                                "is_editable": false
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "channel_preferences": [
+                      {
+                        "channel": "inbox",
+                        "is_restricted": false
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                        slug:
+                          type: string
+                          nullable: true
+                        description:
+                          type: string
+                          nullable: true
+                        tags:
+                          type: array
+                          nullable: true
+                          items:
+                            type: string
+                        subcategories:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              category:
+                                type: string
+                              description:
+                                type: string
+                                nullable: true
+                              tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              effective_tags:
+                                type: array
+                                nullable: true
+                                items:
+                                  type: string
+                              original_preference:
+                                type: string
+                                nullable: true
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              preference:
+                                type: string
+                                enum: ["opt_in", "opt_out", "cant_unsubscribe"]
+                              is_editable:
+                                type: boolean
+                              channels:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    channel:
+                                      type: string
+                                    preference:
+                                      type: string
+                                      enum: ["opt_in", "opt_out"]
+                                    is_editable:
+                                      type: boolean
+                  channel_preferences:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                        is_restricted:
+                          type: boolean
+        '404':
+          description: '404'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "object 'object_type/id' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "object 'object_type/id' not found"
+      deprecated: false
   /v1/object/{object_type}/{id}/preference/category/:
     get:
       summary: All Categories
@@ -7567,6 +8752,16 @@ paths:
             tags={"exists":true}
           schema:
             type: string
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -7719,6 +8914,16 @@ paths:
           schema:
             type: string
           required: true
+        - name: locale
+          in: query
+          description: >
+            Locale code (e.g., `es`, `fr`, `de`, `ja`, `es-AR`) to fetch preference translations in user's locale.
+            When provided, the API looks for category and section names and descriptions in the respective locale file. 
+            
+            If a translation is missing for the requested locale, the system automatically falls back in this order: `locale-region` (e.g., `es-AR`) → `locale` (e.g., `es`) → `en` (English - always available).
+          schema:
+            type: string
+          example: "es"
       responses:
         '200':
           description: '200'
@@ -10942,9 +12147,9 @@ paths:
                     type: string
                     description: JSON schema reference for preference category structure
                     example: "https://schema.suprsend.com/preference_category/v1/schema.json"
-                  categories:
+                  root_categories:
                     type: array
-                    description: Array of preference categories
+                    description: Array of root preference categories
                     items:
                       type: object
                       properties:
@@ -10971,36 +12176,43 @@ paths:
                                 description: Tags to organize and filter sections. Use lowercase, hyphenated values.
                                 items:
                                   type: string
-                              subcategories:
+                              categories:
                                 type: array
-                                description: Array of subcategories within this section. Can be empty if not yet configured.
+                                description: Array of categories within this section. Can be empty if not yet configured.
                                 items:
                                   type: object
                                   properties:
                                     category:
                                       type: string
-                                      description: Unique identifier for the subcategory
+                                      description: Unique identifier for the category
                                       example: "password-reset"
                                     name:
                                       type: string
-                                      description: Display name for the subcategory
+                                      description: Display name for the category
                                       example: "Password Reset"
                                     description:
                                       type: string
-                                      description: Description of what notifications this subcategory covers
+                                      description: Description of what notifications this category covers
                                     default_preference:
                                       type: string
-                                      description: Default preference setting for this subcategory
+                                      description: Default preference setting for this category
                                       example: "opt_in"
                                     default_mandatory_channels:
                                       type: array
-                                      description: Channels that are mandatory for this subcategory
+                                      description: Channels that are mandatory for this category
                                       items:
                                         type: string
                                       example: ["email"]
+                                    default_opt_in_channels:
+                                      type: array
+                                      nullable: true
+                                      description: Opt-in channels set to have selective opt-in channels instead of all channels when channel preference is opt_in or cant_unsubscribe.
+                                      items:
+                                        type: string
+                                      example: null
                                     tags:
                                       type: array
-                                      description: Tags to organize and filter subcategories. Use lowercase, hyphenated values (e.g., "user-management", "payment-alerts").
+                                      description: Tags to organize and filter categories. Use lowercase, hyphenated values (e.g., "user-management", "payment-alerts").
                                       items:
                                         type: string
                                         pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
@@ -11026,13 +12238,13 @@ paths:
                           type: string
               example:
                 $schema: "https://schema.suprsend.com/preference_category/v1/schema.json"
-                categories:
+                root_categories:
                   - root_category: "system"
                     sections: []
                   - root_category: "transactional"
                     sections:
                       - name: "Task Updates"
-                        subcategories:
+                        categories:
                           - category: "tagged-to-me"
                             name: "Tagged to Me"
                             description: "Status Update or mentions on tasks assigned by me or tagged to me"
@@ -11040,7 +12252,7 @@ paths:
                   - root_category: "promotional"
                     sections:
                       - name: "Product Updates"
-                        subcategories:
+                        categories:
                           - category: "newsletter"
                             name: "Newsletter"
                             default_preference: "opt_out"
@@ -11099,7 +12311,7 @@ paths:
               --header "Authorization: ServiceToken {token}" \
               --header "Content-Type: application/json" \
               --data '{
-                "categories": [
+                "root_categories": [
                   {
                     "root_category": "system"
                   },
@@ -11108,7 +12320,7 @@ paths:
                     "sections": [
                       {
                         "name": "Task Updates",
-                        "subcategories": [
+                        "categories": [
                           {
                             "category": "tagged-to-me",
                             "name": "Tagged to Me",
@@ -11124,7 +12336,7 @@ paths:
                     "sections": [
                       {
                         "name": "Product Updates",
-                        "subcategories": [
+                        "categories": [
                           {
                             "category": "newsletter",
                             "name": "Newsletter",
@@ -11160,9 +12372,9 @@ paths:
             schema:
               type: object
               properties:
-                categories:
+                root_categories:
                   type: array
-                  description: Array of preference categories. Include all three root categories (system, transactional, promotional) even if empty.
+                  description: Array of root preference categories. Include all three root categories (system, transactional, promotional) even if empty.
                   items:
                     type: object
                     properties:
@@ -11172,7 +12384,7 @@ paths:
                         enum: [system, transactional, promotional]
                       sections:
                         type: array
-                        description: Sections group related subcategories. Users cannot set preferences at section level.
+                        description: Sections group related categories. Users cannot set preferences at section level.
                         items:
                           type: object
                           properties:
@@ -11187,25 +12399,25 @@ paths:
                               description: Tags to organize and filter sections. Use lowercase, hyphenated values (e.g., "security", "billing").
                               items:
                                 type: string
-                            subcategories:
+                            categories:
                               type: array
-                              description: Subcategories that users can set preferences for.
+                              description: Categories that users can set preferences for.
                               items:
                                 type: object
                                 properties:
                                   category:
                                     type: string
-                                    description: Unique identifier for the subcategory. Use lowercase letters, numbers, and hyphens only.
+                                    description: Unique identifier for the category. Use lowercase letters, numbers, and hyphens only.
                                     pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
                                   name:
                                     type: string
-                                    description: Display name for the subcategory shown in the preference interface.
+                                    description: Display name for the category shown in the preference interface.
                                   description:
                                     type: string
-                                    description: Description of what notifications this subcategory covers.
+                                    description: Description of what notifications this category covers.
                                   default_preference:
                                     type: string
-                                    description: Default preference setting for this subcategory.
+                                    description: Default preference setting for this category.
                                     enum: [opt_in, opt_out, cant_unsubscribe]
                                   default_mandatory_channels:
                                     type: array
@@ -11213,9 +12425,16 @@ paths:
                                     items:
                                       type: string
                                       enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush]
+                                  default_opt_in_channels:
+                                    type: array
+                                    nullable: true
+                                    description: Add channels that should be opted-in by default when preference is either `On` or `Can't Unsubscribe`. Set to null or do not pass this parameter to set all channels as opted-in. In case of `Can't Unsubscribe`, mandatory channels are opted-in by default.
+                                    items:
+                                      type: string
+                                      enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
                                   tags:
                                     type: array
-                                    description: Tags to organize and filter subcategories. Use lowercase, hyphenated values (e.g., "user-management", "payment-alerts").
+                                    description: Tags to organize and filter categories. Use lowercase, hyphenated values (e.g., "user-management", "payment-alerts").
                                     items:
                                       type: string
                                       pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
@@ -11231,9 +12450,9 @@ paths:
                     type: string
                     description: JSON schema reference for preference category structure
                     example: "https://schema.suprsend.com/preference_category/v1/schema.json"
-                  categories:
+                  root_categories:
                     type: array
-                    description: Array of preference categories
+                    description: Array of root preference categories
                     items:
                       type: object
                       properties:
@@ -11251,30 +12470,37 @@ paths:
                                 type: string
                                 description: Name of the section
                                 example: "Account Updates"
-                              subcategories:
+                              categories:
                                 type: array
-                                description: Array of subcategories within this section
+                                description: Array of categories within this section
                                 items:
                                   type: object
                                   properties:
                                     category:
                                       type: string
-                                      description: Unique identifier for the subcategory
+                                      description: Unique identifier for the category
                                       example: "password-reset"
                                     name:
                                       type: string
-                                      description: Display name for the subcategory
+                                      description: Display name for the category
                                       example: "Password Reset"
                                     default_preference:
                                       type: string
-                                      description: Default preference setting for this subcategory
+                                      description: Default preference setting for this category
                                       example: "opt_in"
                                     default_mandatory_channels:
                                       type: array
-                                      description: Channels that are mandatory for this subcategory
+                                      description: Channels that are mandatory for this category
                                       items:
                                         type: string
                                       example: ["email"]
+                                    default_opt_in_channels:
+                                      type: array
+                                      nullable: true
+                                      description: Channels that are included in the default "On" state when default preference is opt_in
+                                      items:
+                                        type: string
+                                      example: null
                   status:
                     type: string
                     description: Current status of the preference category
@@ -11308,7 +12534,7 @@ paths:
                           type: string
               example:
                 $schema: "https://schema.suprsend.com/preference_category/v1/schema.json"
-                categories:
+                root_categories:
                   - root_category: "system"
                     sections: []
                   - root_category: "transactional"
@@ -11316,24 +12542,26 @@ paths:
                       - name: "Task Updates"
                         description: null
                         tags: null
-                        subcategories:
+                        categories:
                           - category: "tagged-to-me"
                             name: "Tagged to Me"
                             description: "Status Update or mentions on tasks assigned by me or tagged to me"
                             default_preference: "opt_in"
                             default_mandatory_channels: null
+                            default_opt_in_channels: null
                             tags: null
                   - root_category: "promotional"
                     sections:
                       - name: "Product Updates"
                         description: null
                         tags: null
-                        subcategories:
+                        categories:
                           - category: "newsletter"
                             name: "Newsletter"
                             description: null
                             default_preference: "opt_out"
                             default_mandatory_channels: null
+                            default_opt_in_channels: null
                             tags: null
                 version_no: 3
                 status: "draft"
@@ -11387,7 +12615,7 @@ paths:
         - lang: cURL
           label: Commit Category
           source: |
-            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/preference_category/commit/?commit_message=Added%20password-reset%20subcategory" \
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/preference_category/commit/?commit_message=Added%20password-reset%20category" \
               --header "Authorization: ServiceToken {token}" \
               --header "Content-Type: application/json"
       parameters:
@@ -11415,9 +12643,9 @@ paths:
                     type: string
                     description: JSON schema reference for preference category structure
                     example: "https://schema.suprsend.com/preference_category/v1/schema.json"
-                  categories:
+                  root_categories:
                     type: array
-                    description: Array of preference categories
+                    description: Array of root preference categories
                     items:
                       type: object
                       properties:
@@ -11435,23 +12663,23 @@ paths:
                                 type: string
                                 description: Name of the section
                                 example: "Account Updates"
-                              subcategories:
+                              categories:
                                 type: array
-                                description: Array of subcategories within this section
+                                description: Array of categories within this section
                                 items:
                                   type: object
                                   properties:
                                     category:
                                       type: string
-                                      description: Unique identifier for the subcategory
+                                      description: Unique identifier for the category
                                       example: "password-reset"
                                     name:
                                       type: string
-                                      description: Display name for the subcategory
+                                      description: Display name for the category
                                       example: "Password Reset"
                                     default_preference:
                                       type: string
-                                      description: Default preference setting for this subcategory
+                                      description: Default preference setting for this category
                                       example: "opt_in"
                   status:
                     type: string
@@ -11465,7 +12693,7 @@ paths:
                   commit_message:
                     type: string
                     description: Commit message describing the changes that were made live
-                    example: "Added password-reset subcategory"
+                    example: "Added password-reset category"
                   committed_at:
                     type: string
                     format: date-time
@@ -11473,46 +12701,49 @@ paths:
                     example: "2025-10-03T09:52:55.273317+00:00"
               example:
                 $schema: "https://schema.suprsend.com/preference_category/v1/schema.json"
-                categories:
+                root_categories:
                   - root_category: "system"
                     sections:
                       - name: "Alerts"
                         description: null
                         tags: null
-                        subcategories:
+                        categories:
                           - category: "critical-updates"
                             name: "Critical Updates"
                             description: "Important system alerts requiring immediate attention"
                             default_preference: "opt_in"
                             default_mandatory_channels: null
+                            default_opt_in_channels: null
                             tags: null
                   - root_category: "transactional"
                     sections:
                       - name: "Task Updates"
                         description: null
                         tags: null
-                        subcategories:
+                        categories:
                           - category: "tagged-to-me"
                             name: "Tagged to Me"
                             description: "Status updates or mentions on tasks assigned by me or tagged to me"
                             default_preference: "opt_in"
                             default_mandatory_channels: null
+                            default_opt_in_channels: null
                             tags: null
                   - root_category: "promotional"
                     sections:
                       - name: "Product Updates"
                         description: null
                         tags: null
-                        subcategories:
+                        categories:
                           - category: "newsletter"
                             name: "Newsletter"
                             description: null
                             default_preference: "opt_out"
                             default_mandatory_channels: null
+                            default_opt_in_channels: null
                             tags: null
                 version_no: 2
                 status: "active"
-                commit_message: "Added password-reset subcategory"
+                commit_message: "Added password-reset category"
                 committed_at: "2025-10-03T09:52:55.273317+00:00"
         '401':
           description: ServiceToken not found
@@ -11546,6 +12777,497 @@ paths:
               example:
                 code: 404
                 message: "workspace not found for slug/uid: workspace"
+
+  /v1/{workspace}/preference_category/translation/locale/:
+    get:
+      summary: List Category Translations
+      description: Returns all the locales for which translation is uploaded for preference categories.
+      operationId: list-category-translation-locales
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: List Translation
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/locale/" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json"
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+          example: "my-workspace"
+      responses:
+        '200':
+          description: Successfully retrieved list of translation locales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    description: Array of locale objects for which translations are available
+                    items:
+                      type: object
+                      properties:
+                        locale:
+                          type: string
+                          description: Locale code (e.g., en, es, es-AR)
+                          example: "es"
+              example:
+                results:
+                  - locale: "en"
+                  - locale: "en-NA"
+                  - locale: "es"
+                  - locale: "es-AR"
+                  - locale: "es-BO"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
+
+  /v1/{workspace}/preference_category/translation/content/{locale}/:
+    get:
+      summary: Get Category Translation
+      description: Fetch translation content for a given locale for preference categories and sections.
+      operationId: get-category-translation
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Translation
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/{locale}/" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json"
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+          example: "my-workspace"
+        - in: path
+          name: locale
+          required: true
+          schema:
+            type: string
+          description: Locale code (e.g., es, fr, de, ja)
+          example: "es"
+      responses:
+        '200':
+          description: Successfully retrieved translation content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: object
+                    description: Translations for sections, keyed by section slug
+                    additionalProperties:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                          description: Translated section name
+                          example: "Section Nik pour transactionnel"
+                        description:
+                          type: string
+                          nullable: true
+                          description: Translated section description
+                          example: "Description de la section Nik pour transactionnel"
+                  categories:
+                    type: object
+                    description: Translations for categories, keyed by category slug
+                    additionalProperties:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                          description: Translated category name
+                          example: "Sous-catégorie Nik"
+                        description:
+                          type: string
+                          nullable: true
+                          description: Translated category description
+                          example: "Sous-catégorie Nik 1"
+              example:
+                sections:
+                  new-5:
+                    name: "nouveau 5"
+                    description: null
+                  nik-section-for-transactional:
+                    name: "Section Nik pour transactionnel"
+                    description: "Description de la section Nik pour transactionnel"
+                categories:
+                  nik-sub-category:
+                    name: "Sous-catégorie Nik"
+                    description: "Sous-catégorie Nik 1"
+                  amount-refunded:
+                    name: "Montant remboursé"
+                    description: null
+        '400':
+          description: Invalid or unsupported locale
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "invalid/unsupported locale: 'apl'"
+              example:
+                code: 400
+                message: "invalid/unsupported locale: 'apl'"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace or translation not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "translation not found for locale: {locale}"
+              example:
+                code: 404
+                message: "translation not found for locale: es"
+
+    post:
+      summary: Add or Update Category Translation
+      description: Add or update translation content for a given locale for preference categories and sections.
+      operationId: add-category-translation
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Add Translation
+          source: |
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/{locale}/" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json" \
+              --data '{
+                "sections": {
+                  "account-updates": {
+                    "name": "Actualizaciones de Cuenta",
+                    "description": "Notificaciones importantes relacionadas con la cuenta"
+                  }
+                },
+                "categories": {
+                  "password-reset": {
+                    "name": "Restablecimiento de Contraseña",
+                    "description": "Notificaciones cuando se restablece la contraseña"
+                  }
+                }
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+          example: "my-workspace"
+        - in: path
+          name: locale
+          required: true
+          schema:
+            type: string
+          description: Locale code (e.g., es, fr, de, ja)
+          example: "es"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sections:
+                  type: object
+                  description: Translations for sections, keyed by section slug
+                  additionalProperties:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        nullable: true
+                        description: Translated section name
+                        example: "Section Nik pour transactionnel"
+                      description:
+                        type: string
+                        nullable: true
+                        description: Translated section description
+                        example: "Description de la section Nik pour transactionnel"
+                categories:
+                  type: object
+                  description: Translations for categories, keyed by category slug
+                  additionalProperties:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        nullable: true
+                        description: Translated category name
+                        example: "Sous-catégorie Nik"
+                      description:
+                        type: string
+                        nullable: true
+                        description: Translated category description
+                        example: "Sous-catégorie Nik 1"
+            example:
+              sections:
+                account-updates:
+                  name: "Actualizaciones de Cuenta"
+                  description: "Notificaciones importantes relacionadas con la cuenta"
+              categories:
+                password-reset:
+                  name: "Restablecimiento de Contraseña"
+                  description: "Notificaciones cuando se restablece la contraseña"
+      responses:
+        '200':
+          description: Successfully added or updated translation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sections:
+                    type: object
+                    description: Translations for sections, keyed by section slug
+                    additionalProperties:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                          description: Translated section name
+                        description:
+                          type: string
+                          nullable: true
+                          description: Translated section description
+                  categories:
+                    type: object
+                    description: Translations for categories, keyed by category slug
+                    additionalProperties:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          nullable: true
+                          description: Translated category name
+                        description:
+                          type: string
+                          nullable: true
+                          description: Translated category description
+              example:
+                sections:
+                  new-5:
+                    name: null
+                    description: null
+                  nik-section-for-transactional:
+                    name: null
+                    description: null
+                categories:
+                  nik-sub-category:
+                    name: null
+                    description: null
+                  amount-refunded:
+                    name: null
+                    description: null
+        '400':
+          description: Invalid or unsupported locale, or invalid translation data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "invalid/unsupported locale: 'apl'"
+              example:
+                code: 400
+                message: "invalid/unsupported locale: 'apl'"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "workspace not found for slug/uid: workspace"
+              example:
+                code: 404
+                message: "workspace not found for slug/uid: workspace"
+
+    delete:
+      summary: Delete Category Translation
+      description: Delete translation content for a given locale for preference categories and sections.
+      operationId: delete-category-translation
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delete Translation
+          source: |
+            curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/preference_category/translation/content/{locale}/" \
+              --header "Authorization: ServiceToken {token}" \
+              --header "Content-Type: application/json"
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (staging, production, etc.)
+          example: "my-workspace"
+        - in: path
+          name: locale
+          required: true
+          schema:
+            type: string
+          description: Locale code (e.g., es, fr, de, ja)
+          example: "es"
+      responses:
+        '204':
+          description: Successfully deleted translation
+        '400':
+          description: Invalid or unsupported locale
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "invalid/unsupported locale: 'apl'"
+              example:
+                code: 400
+                message: "invalid/unsupported locale: 'apl'"
+        '401':
+          description: ServiceToken not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "ServiceToken not found"
+              example:
+                code: 401
+                message: "ServiceToken not found"
+        '404':
+          description: Workspace or translation not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "translation not found for locale: {locale}"
+              example:
+                code: 404
+                message: "translation not found for locale: es"
 
   /v1/{workspace}/translation/:
     get:
