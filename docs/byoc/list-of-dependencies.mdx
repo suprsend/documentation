@@ -1,0 +1,138 @@
+---
+title: "List of Dependencies"
+description: "Infrastructure dependencies required to deploy and run SuprSend in self-hosted mode."
+---
+
+<Info>
+**Enterprise only.** Self-hosted deployment is available only for SuprSend **enterprise customers**.
+</Info>
+
+Before you deploy SuprSend in self-hosted mode, you need the infrastructure components below. Each section lists **version requirements**, **purpose**, and a link to the **setup guide**.
+
+---
+
+## Core infrastructure
+
+### Kubernetes cluster
+
+| Item | Details |
+|------|---------|
+| **Version** | v1.29+ |
+| **Purpose** | Container orchestration for SuprSend services |
+| **Deployment** | Any distribution (GKE, EKS, AKS, DigitalOcean, etc.) |
+| **Recommendation** | Use managed Kubernetes in production |
+
+### Storage
+
+| Item | Details |
+|------|---------|
+| **Persistent volumes** | Required for stateful services; support ReadWriteOnce |
+| **Recommended** | SSD; minimum 100–200 GB per database instance |
+| **Object storage** | Blob store for files and media (two buckets: private + public). Options: AWS S3, Azure Blob, GCS. Encryption at rest and access controls required. |
+
+### Temporal
+
+| Item | Details |
+|------|---------|
+| **Version** | v1.25+ |
+| **Purpose** | Workflow orchestration and state management |
+| **Deployment** | In-cluster or external |
+| **Setup** | [Temporal setup guide](/docs/byoc/setup-dependencies/temporal) |
+
+---
+
+## Databases
+
+### PostgreSQL
+
+| Item | Details |
+|------|---------|
+| **Version** | v17+ (required) |
+| **Purpose** | Primary data store for users, templates, workflows, notifications |
+| **Setup** | [PostgreSQL setup guide](/docs/byoc/setup-dependencies/postgres) |
+- **Configuration Requirements**:
+  ```conf
+  shared_preload_libraries = 'pg_stat_statements,pg_cron'
+  cron.database_name = 'defaultdb'
+  cron.max_running_jobs = 1
+  hot_standby_feedback = on
+  max_standby_archive_delay = -1
+  max_standby_streaming_delay = -1
+  wal_level = logical
+  ```
+- **Required Extensions**:
+  - `pg_cron` - For scheduled jobs
+  - `pgcrypto` - For cryptographic functions
+  - `pg_stat_statements` - For query performance monitoring
+  - `btree_gin` - For GIN indexes
+  - `btree_gist` - For GiST indexes
+- **Databases**: 6 databases required:
+  - `suprsend` - Main application database
+  - `defaultdb` - Default database for cron jobs
+  - `pronto` - Pronto service database
+  - `svix` - Svix webhook service database
+  - `temporal` - Temporal workflow database
+  - `temporal_visibility` - Temporal visibility database
+
+### ClickHouse
+
+| Item | Details |
+|------|---------|
+| **Version** | v24.9+ |
+| **Purpose** | Analytics and logs storage |
+| **Deployment** | Outside Kubernetes preferred; SSD recommended |
+| **Setup** | [ClickHouse setup guide](/docs/byoc/setup-dependencies/clickhouse) |
+
+### OpenSearch
+
+| Item | Details |
+|------|---------|
+| **Version** | v1.3+ |
+| **Purpose** | Full-text search; In-app notifications |
+| **Deployment** | External service recommended |
+| **Setup** | [OpenSearch setup guide](/docs/byoc/setup-dependencies/opensearch) |
+
+---
+
+## Data stores and messaging
+
+### Redis
+
+| Item | Details |
+|------|---------|
+| **Version** | v7.0+ |
+| **Purpose** | Cache + workflow state (two separate instances) |
+| **Instances** | **Shared Redis** (caching) + **Workflow state Redis** (execution state) |
+| **Setup** | [Redis setup guide](/docs/byoc/setup-dependencies/redis) |
+
+### NATS
+
+| Item | Details |
+|------|---------|
+| **Version** | v2.10+ |
+| **Purpose** | Message broker for event ingestion (JetStream enabled) |
+| **Deployment** | In-cluster or external |
+
+---
+
+## Object storage
+
+| Item | Details |
+|------|---------|
+| **Purpose** | Files, attachments, media assets |
+| **Providers** | AWS S3, Azure Blob Storage, Google Cloud Storage |
+| **Buckets** | Two required: **private** (sensitive files, uploads) and **public** (media, public content) |
+| **Setup** | [Blob store configuration guide](/docs/byoc/setup-dependencies/blob-store) |
+
+---
+
+## What's next
+
+<CardGroup cols="2">
+  <Card title="Getting Started" icon="list-check" iconType="solid" href="/docs/byoc/getting-started">
+    Deployment order and post-deployment checklist.
+  </Card>
+  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
+    Helm install, secrets, and values.
+  </Card>
+</CardGroup>

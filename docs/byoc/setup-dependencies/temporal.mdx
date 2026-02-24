@@ -1,0 +1,576 @@
+---
+title: "Temporal Setup Guide"
+description: "Set up Temporal for SuprSend BYOC deployment — PostgreSQL or Cassandra backend, search attributes, and Helm configuration."
+---
+
+Temporal is a distributed, scalable, durable, and highly available orchestration engine designed to execute asynchronous long-running business logic in a resilient way. This guide walks you through setting up Temporal for SuprSend's BYOC (Bring Your Own Cloud) deployment.
+
+## Overview
+
+This installation guide covers:
+- Setting up Temporal with PostgreSQL for standard workloads
+- Configuring Temporal with Cassandra for high-volume workloads (>0.5M workflows/day)
+- Enabling SSO authentication
+- Configuring required search attributes for SuprSend
+
+## Prerequisites
+
+Before installing Temporal, ensure you have:
+
+### System Requirements
+- **Kubernetes cluster** (AWS EKS, GKE, AKS, kind, or minikube)
+- **kubectl** configured to access your cluster
+- **Helm v3** (v3.8.0 or later recommended)
+- **Git** for cloning the Temporal repository
+
+### Database Requirements
+- **PostgreSQL 12+** instance accessible from your Kubernetes cluster. For smaller deployments you can use the same PostgreSQL database set up for SuprSend. For higher volume, you can set up a different PostgreSQL instance or move to a Cassandra-backed deployment.
+- Database credentials with sufficient privileges to create databases and schemas
+
+### Resource Requirements
+- **Minimum**: 4 CPU cores, 8GB RAM
+- **Recommended**: 8 CPU cores, 16GB RAM
+- **Storage**: At least 100GB for logs and data
+
+### Verify Prerequisites
+
+```bash
+# Check kubectl access
+kubectl cluster-info
+
+# Check Helm version
+helm version
+
+# Verify cluster resources
+kubectl top nodes
+```
+
+## Installation Options
+
+Temporal can be deployed with different storage backends depending on your workload requirements:
+
+| Workload Size | Primary Storage | Visibility Store | Use Case |
+|---------------|----------------|------------------|----------|
+| < 1M workflows/day | PostgreSQL | PostgreSQL | Standard deployments |
+| > 1M workflows/day | Cassandra | OpenSearch/PostgreSQL | High-volume deployments |
+
+## Database Setup
+
+Temporal requires two PostgreSQL databases:
+- **temporal**: Stores workflow execution data
+- **temporal_visibility**: Stores workflow visibility/search data
+
+### Step 1: Build the Temporal SQL Tool
+
+The `temporal-sql-tool` is required to initialize the database schemas. Build it from the official Temporal repository:
+
+```bash
+# Clone the Temporal repository
+git clone https://github.com/temporalio/temporal
+cd temporal
+
+# Build the temporal-sql-tool
+make temporal-sql-tool
+```
+
+### Step 2: Initialize PostgreSQL Databases
+
+Set up your PostgreSQL connection details and create the required databases:
+
+```bash
+# Set PostgreSQL connection details
+export SQL_PLUGIN=postgres12
+export SQL_HOST=your_postgresql_host
+export SQL_PORT=5432
+export SQL_USER=your_postgresql_user
+export SQL_PASSWORD=your_postgresql_password
+
+# Create and initialize the main temporal database
+./temporal-sql-tool --database temporal create-database
+SQL_DATABASE=temporal ./temporal-sql-tool setup-schema -v 0.0
+SQL_DATABASE=temporal ./temporal-sql-tool update -schema-dir schema/postgresql/v12/temporal/versioned
+
+# Create and initialize the visibility database
+./temporal-sql-tool --database temporal_visibility create-database
+SQL_DATABASE=temporal_visibility ./temporal-sql-tool setup-schema -v 0.0
+SQL_DATABASE=temporal_visibility ./temporal-sql-tool update -schema-dir schema/postgresql/v12/visibility/versioned
+```
+
+### Step 3: Verify Database Setup
+
+Verify that both databases were created successfully:
+
+```bash
+# Connect to PostgreSQL and list databases
+psql -h $SQL_HOST -U $SQL_USER -d postgres -c "\l" | grep temporal
+```
+
+You should see both `temporal` and `temporal_visibility` databases listed.
+
+### Step 4: Install Temporal
+
+Check out the Temporal Helm repository from [https://github.com/temporalio/helm-charts](https://github.com/temporalio/helm-charts):
+
+```bash
+git clone https://github.com/temporalio/helm-charts
+cd helm-charts/charts/temporal
+```
+
+Now modify `values/values.postgres.yaml` (or `values/values.postgresql.yaml` depending on the chart version).
+
+<details>
+<summary>Sample values/values.postgres.yaml</summary>
+
+```yaml
+server:
+  config:
+    persistence:
+      default:
+        driver: "sql"
+        sql:
+          driver: "postgres12"
+          host: YOUR_PG_INSTANCE_URL
+          port: PG_PORT
+          database: temporal
+          user: PG_USER
+          password: PG_PASSWORD
+          # for a production deployment use existingSecret and provision the secret beforehand
+          # existingSecret: temporal-default-store
+          maxConns: 20
+          maxIdleConns: 20
+          maxConnLifetime: "1h"
+          tls:
+            enabled: true
+            enableHostVerification: false
+
+      visibility:
+        driver: "sql"
+        sql:
+          driver: "postgres12"
+          host: YOUR_PG_INSTANCE_URL
+          port: PG_PORT
+          database: temporal_visibility
+          user: PG_USER
+          password: PG_PASSWORD
+          # existingSecret: temporal-visibility-store
+          maxConns: 20
+          maxIdleConns: 20
+          maxConnLifetime: "1h"
+          tls:
+            enabled: true
+            enableHostVerification: false
+
+cassandra:
+  enabled: false
+
+mysql:
+  enabled: false
+
+postgresql:
+  enabled: true
+
+prometheus:
+  enabled: false
+
+grafana:
+  enabled: false
+
+elasticsearch:
+  enabled: false
+
+schema:
+  createDatabase:
+    enabled: true
+  setup:
+    enabled: false
+  update:
+    enabled: false
+```
+
+</details>
+
+Then install Temporal using Helm:
+
+```bash
+# Add the Temporal Helm repository
+helm repo add temporal https://go.temporal.io/helm-charts
+helm repo update
+
+# Install Temporal (use the values file you edited, e.g. values.postgresql.yaml)
+helm install temporal temporal/temporal \
+  -f values/values.postgresql.yaml \
+  --timeout 900s \
+  --namespace temporal \
+  --create-namespace
+```
+
+### Alternative: Command Line Configuration
+
+Instead of modifying the values file, you can pass configuration directly via command line:
+
+```bash
+helm install temporal temporal/temporal \
+  --set elasticsearch.enabled=false \
+  --set server.config.persistence.default.sql.host=your_postgresql_host \
+  --set server.config.persistence.default.sql.user=your_postgresql_user \
+  --set server.config.persistence.default.sql.password=your_postgresql_password \
+  --set server.config.persistence.visibility.sql.host=your_postgresql_host \
+  --set server.config.persistence.visibility.sql.user=your_postgresql_user \
+  --set server.config.persistence.visibility.sql.password=your_postgresql_password \
+  --timeout 900s \
+  --namespace temporal \
+  --create-namespace
+```
+
+### Step 5: Verify Installation
+
+Check that all Temporal components are running:
+
+```bash
+# Check pod status
+kubectl get pods -n temporal
+
+# Check services
+kubectl get svc -n temporal
+
+# Check if Temporal UI is accessible
+kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
+```
+
+Open http://localhost:8080 in your browser to access the Temporal Web UI.
+
+### Step 6: Set Up Default Namespace for Temporal
+
+SuprSend needs a namespace in Temporal to store workflow state. Create one using the following commands:
+
+```bash
+# Get shell access inside temporal admintools
+kubectl exec -it deployment/temporal-admintools -n temporal -- /bin/bash
+
+# Create default namespace. Important: *DO NOT* change the namespace name.
+# Change retention period based on your need.
+temporal operator namespace create \
+  --retention 7d \
+  --namespace default
+```
+
+### Step 7: Configure SuprSend Search Attributes (Required)
+
+Verify that the namespaces are created properly:
+
+```bash
+# Check the namespaces; you should get two namespaces: temporal-system, default
+temporal operator namespace list --output jsonl | jq ".namespaceInfo.name"
+# "temporal-system"
+# "default"
+```
+
+Add the search attributes needed for SuprSend:
+
+```bash
+temporal operator search-attribute create --name SS_WorkspaceId --type Int
+temporal operator search-attribute create --name SS_TenantId --type Keyword
+temporal operator search-attribute create --name SS_SubscriberId --type Keyword
+temporal operator search-attribute create --name SS_WorkflowSlug --type Keyword
+temporal operator search-attribute create --name SS_BatchDigestGroupingKey --type Keyword
+temporal operator search-attribute create --name SS_BroadcastId --type Keyword
+temporal operator search-attribute create --name SS_HasBatchDigestNode --type Bool
+temporal operator search-attribute create --name SS_IsBatchDigestInProgress --type Bool
+```
+
+Verify that the attributes were set up correctly:
+
+```bash
+temporal operator search-attribute list
+```
+
+### Step 8: SuprSend Helm Configuration
+
+Once your Temporal cluster is set up and running with the required search attributes, configure SuprSend to connect to it.
+
+<Note>
+This section shows only the **Temporal-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
+</Note>
+
+#### Helm Values Configuration
+
+Add the following to your SuprSend values file (along with other required configuration — see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+
+```yaml
+# Temporal server host and port (e.g: temporal-frontend.temporal.svc.cluster.local:7233)
+temporalServerHostPort: "temporal-frontend.temporal.svc.cluster.local:7233"
+```
+
+<Note>
+The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
+</Note>
+
+### Step 9: Upsize Temporal Based on Your Need
+
+Scale Temporal components (frontend, history, matching, workers) according to your workflow volume and latency requirements using Helm upgrades or scaling deployments/StatefulSets.
+
+---
+
+## High-Volume Deployment with Cassandra (Optional)
+
+For workloads exceeding 1 million workflows per day, use Cassandra as the primary datastore with OpenSearch or PostgreSQL for visibility.
+
+### Prerequisites for High-Volume Setup
+
+- **Cassandra cluster** (3+ nodes recommended)
+- **OpenSearch cluster** or **PostgreSQL instance** for visibility store
+- **Sufficient resources**: 16+ CPU cores, 32+ GB RAM
+
+### Step 1: Initialize Cassandra Keyspaces
+
+If you have an existing Cassandra cluster, initialize the required keyspaces:
+
+```bash
+# Navigate to the temporal repository directory
+cd temporal
+
+# Set Cassandra connection details
+export CASSANDRA_HOST=your_cassandra_host
+export CASSANDRA_PORT=9042
+export CASSANDRA_USER=your_cassandra_user
+export CASSANDRA_PASSWORD=your_cassandra_password
+
+# Build the Cassandra tool
+make temporal-cassandra-tool
+
+# Create and initialize the temporal keyspace
+./temporal-cassandra-tool create-Keyspace -k temporal
+CASSANDRA_KEYSPACE=temporal ./temporal-cassandra-tool setup-schema -v 0.0
+CASSANDRA_KEYSPACE=temporal ./temporal-cassandra-tool update -schema-dir schema/cassandra/temporal/versioned
+```
+
+### Step 2: Configure High-Volume Deployment
+
+Download and configure the Cassandra values file:
+
+```bash
+# Download the Cassandra values file
+curl -o values.cassandra.yaml https://raw.githubusercontent.com/temporalio/helm-charts/main/temporal/values/values.cassandra.yaml
+```
+
+Edit `values.cassandra.yaml` to configure:
+
+```yaml
+# Cassandra configuration
+server:
+  config:
+    persistence:
+      default:
+        cassandra:
+          hosts: ["your_cassandra_host"]
+          port: 9042
+          user: your_cassandra_user
+          password: your_cassandra_password
+          keyspace: temporal
+      visibility:
+        # Use OpenSearch for visibility (recommended for high volume)
+        opensearch:
+          version: "v1"
+          indices:
+            visibility: temporal_visibility_v1_dev
+          url: "http://your_opensearch_host:9200"
+          username: your_opensearch_user
+          password: your_opensearch_password
+```
+
+### Step 3: Install High-Volume Temporal
+
+```bash
+# Install Temporal with Cassandra configuration
+helm install temporal temporal/temporal \
+  -f values.cassandra.yaml \
+  --timeout 900s \
+  --namespace temporal \
+  --create-namespace
+```
+
+### Use PostgreSQL for Visibility
+
+If you prefer PostgreSQL for the visibility store instead of OpenSearch:
+
+```yaml
+# In values.cassandra.yaml, replace the visibility section with:
+server:
+  config:
+    persistence:
+      visibility:
+        sql:
+          host: your_postgresql_host
+          port: 5432
+          user: your_postgresql_user
+          password: your_postgresql_password
+          databaseName: temporal_visibility
+```
+
+---
+
+## Configure SSO Authentication (Optional)
+
+Enable Single Sign-On (SSO) authentication for the Temporal Web UI to integrate with your identity provider.
+
+### Step 1: Create Kubernetes Secret
+
+Create a secret containing your SSO client secret:
+
+```bash
+kubectl create secret generic temporal-auth-secret \
+  --from-literal=TEMPORAL_AUTH_CLIENT_SECRET=your_client_secret \
+  --namespace temporal
+```
+
+### Step 2: Configure SSO Environment Variables
+
+Add SSO configuration to your Helm values file:
+
+```yaml
+# Add to your values.yaml file
+web:
+  additionalEnv:
+    - name: TEMPORAL_AUTH_ENABLED
+      value: "true"
+    - name: TEMPORAL_AUTH_PROVIDER_URL
+      value: "https://accounts.google.com"  # Replace with your provider
+    - name: TEMPORAL_AUTH_CLIENT_ID
+      value: "your_client_id"
+    - name: TEMPORAL_AUTH_CALLBACK_URL
+      value: "https://your-domain.com:8080/auth/sso/callback"
+  additionalEnvSecretName: temporal-auth-secret
+```
+
+### Step 3: Update Temporal Installation
+
+Upgrade your Temporal installation with SSO configuration:
+
+```bash
+helm upgrade temporal temporal/temporal \
+  -f values.yaml \
+  --namespace temporal
+```
+
+For more SSO configuration options, see [Temporal Web UI Server Environment Variables](https://docs.temporal.io/references/web-ui-server-env-vars).
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Search attributes already exist">
+    **Problem**: Error when adding search attributes that already exist.
+
+    **Solution**:
+    ```bash
+    # Check existing search attributes
+    tctl admin cluster get-search-attributes
+
+    # If attributes exist, you can skip adding them or remove and re-add
+    tctl admin cluster remove-search-attributes --name SS_WorkspaceId
+    ```
+  </Accordion>
+  <Accordion title="Pod startup issues (Pending / CrashLoopBackOff)">
+    **Problem**: Temporal pods stuck in Pending or CrashLoopBackOff state.
+
+    **Solution**:
+    ```bash
+    # Check pod status and events
+    kubectl describe pod -n temporal -l app.kubernetes.io/name=temporal
+
+    # Check resource constraints
+    kubectl top nodes
+    kubectl top pods -n temporal
+
+    # Check logs
+    kubectl logs -n temporal -l app.kubernetes.io/name=temporal
+    ```
+  </Accordion>
+  <Accordion title="Web UI not accessible">
+    **Problem**: Cannot access Temporal Web UI.
+
+    **Solution**:
+    ```bash
+    # Check service status
+    kubectl get svc -n temporal
+
+    # Port forward to access UI
+    kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
+
+    # Check if UI pod is running
+    kubectl get pods -n temporal -l app.kubernetes.io/component=frontend
+    ```
+  </Accordion>
+  <Accordion title="High memory usage">
+    **Problem**: Temporal components consuming excessive memory.
+
+    **Solution**:
+    ```yaml
+    # Add resource limits to your values.yaml
+    server:
+      resources:
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+    ```
+  </Accordion>
+  <Accordion title="Getting help">
+    **Temporal Documentation**: [https://docs.temporal.io](https://docs.temporal.io)  
+    **Temporal Community**: [https://community.temporal.io](https://community.temporal.io)  
+    **SuprSend Support**: Contact your SuprSend support team
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Monitoring Your Deployment
+
+### Check Cluster Status
+
+Monitor your Temporal deployment using standard Kubernetes tools:
+
+```bash
+# Check all Temporal services
+kubectl get svc -n temporal
+
+# Check pod status
+kubectl get pods -n temporal
+
+# Check resource usage
+kubectl top pods -n temporal
+```
+
+### Access Temporal Web UI
+
+```bash
+# Port forward to access the Web UI
+kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
+```
+
+Open http://localhost:8080 in your browser to access the Temporal Web UI.
+
+### Verify Search Attributes
+
+```bash
+# Access admin tools and verify search attributes
+kubectl exec -it deployment/temporal-admintools -n temporal -- tctl admin cluster get-search-attributes
+```
+
+You should see all the SuprSend-specific search attributes listed in the output.
+
+---
+
+## What's next
+
+<CardGroup cols="2">
+  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
+    Deploy SuprSend with Helm and configure the stack.
+  </Card>
+  <Card title="Generating Required Keys" icon="key" iconType="solid" href="/docs/byoc/generating-required-keys">
+    Generate deployment secret, NATS NKey pair, and AES cipher keys.
+  </Card>
+</CardGroup>

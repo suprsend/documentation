@@ -1,0 +1,286 @@
+---
+title: "Monitoring SuprSend"
+description: "Set up monitoring for SuprSend in your Kubernetes cluster with Prometheus, Grafana, Loki, and Promtail."
+---
+
+Monitor your SuprSend deployment with **Prometheus** (metrics), **Grafana** (dashboards), and **Loki** (logs), with **Promtail** shipping logs from the cluster. Follow the steps below in order.
+
+---
+
+## Overview
+
+| Component | Role |
+|-----------|------|
+| **Loki** | Log storage and querying |
+| **Promtail** | Ships logs from the cluster to Loki |
+| **Prometheus** | Metrics collection |
+| **Grafana** | Dashboards; datasources for Prometheus and Loki |
+
+---
+
+## Step 1: Create monitoring namespace
+
+```bash
+kubectl create namespace monitoring
+```
+
+---
+
+## Step 2: Set up Loki
+
+### Add Grafana Helm repo
+
+```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+### Prepare values for Loki
+
+Create a file `suprsend-loki-values.yaml` with:
+
+```yaml
+loki:
+  memcached:
+    chunk_cache:
+      enabled: false
+    result_cache:
+      enabled: false
+  auth_enabled: false
+  compactor:
+    compaction_interval: 10m
+    retention_enabled: true
+    retention_delete_delay: 2h
+    delete_request_store: s3
+    delete_request_cancel_period: 10m
+  commonConfig:
+    replication_factor: 1
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  pattern_ingester:
+    enabled: true
+  limits_config:
+    retention_period: 720h  # data retention; adjust as needed
+    allow_structured_metadata: true
+    volume_enabled: true
+  ruler:
+    enable_api: true
+
+chunksCache:
+  enabled: false
+
+resultCache:
+  enabled: false
+
+minio:
+  enabled: true
+
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    type: pvc
+    accessModes:
+      - ReadWriteOnce
+    size: 25Gi
+
+# Zero out replica counts of other deployment modes
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+ingester:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+queryScheduler:
+  replicas: 0
+distributor:
+  replicas: 0
+compactor:
+  replicas: 0
+indexGateway:
+  replicas: 0
+bloomCompactor:
+  replicas: 0
+bloomGateway:
+  replicas: 0
+```
+
+### Install Loki
+
+```bash
+helm install suprsend-loki grafana/loki --version 6.24.0 -f suprsend-loki-values.yaml -n monitoring
+```
+
+---
+
+## Step 3: Set up Promtail
+
+### Add Grafana repo (if not already added)
+
+```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+### Prepare values for Promtail
+
+Create a file `suprsend-promtail-values.yaml` with:
+
+```yaml
+daemonset:
+  enabled: true
+
+deployment:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+config:
+  clients:
+    - url: http://suprsend-loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+```
+
+### Install Promtail
+
+```bash
+helm install suprsend-promtail grafana/promtail --version 6.16.6 -f suprsend-promtail-values.yaml -n monitoring
+```
+
+---
+
+## Step 4: Set up Prometheus and Grafana
+
+### Add Prometheus Community repo
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+```
+
+### Prepare values for Prometheus and Grafana
+
+Create a file `suprsend-promgraf-values.yaml` with:
+
+```yaml
+grafana:
+  deploymentStrategy:
+    type: Recreate
+  service:
+    type: NodePort
+  persistence:
+    enabled: true
+    type: pvc
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://suprsend-promgraf-kube-prom-prometheus.monitoring.svc.cluster.local:9090
+        - name: Loki
+          type: loki
+          url: http://suprsend-loki-gateway.monitoring.svc.cluster.local/
+  grafana.ini:
+    feature_toggles:
+      angularDeprecationUI: false
+
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 25Gi
+```
+
+### Install the kube-prometheus-stack chart
+
+```bash
+helm install suprsend-promgraf prometheus-community/kube-prometheus-stack --version 58.0.0 -f suprsend-promgraf-values.yaml -n monitoring
+```
+
+---
+
+## Step 5: Expose Grafana via Ingress
+
+Create a file `grafana-ingress.yaml` with the following. Replace `<SUPRSEND_MAIN_HOST>` with the host you want for the Grafana dashboard (e.g., `monitor.yourdomain.com`). Ensure you have a ClusterIssuer such as `letsencrypt-prod` and that the Grafana service name matches what is deployed in your cluster.
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: "/"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # requires cert-manager and ClusterIssuer
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - monitor.<SUPRSEND_MAIN_HOST>
+      secretName: web-tls-monitoring
+  rules:
+    - host: monitor.<SUPRSEND_MAIN_HOST>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: suprsend-promgraf-grafana   # verify service name: kubectl get svc -n monitoring
+                port:
+                  number: 80
+```
+
+Apply the Ingress:
+
+```bash
+kubectl apply -f grafana-ingress.yaml -n monitoring
+```
+
+---
+
+<Note>
+Data retention is set to 30 days for Prometheus and 720h (30 days) for Loki in the examples above. Adjust in `suprsend-promgraf-values.yaml` and `suprsend-loki-values.yaml` as needed.
+</Note>
+
+---
+
+## What's next
+
+<CardGroup cols="2">
+  <Card title="BYOC Changelog" icon="code-branch" iconType="solid" href="/docs/byoc/changelog">
+    Self-hosted release history and upgrade notes.
+  </Card>
+  <Card title="Product docs" icon="book" iconType="solid" href="/docs/what-is-suprsend">
+    Workflows, templates, and APIs.
+  </Card>
+</CardGroup>

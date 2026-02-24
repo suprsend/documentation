@@ -1,0 +1,828 @@
+---
+title: "SuprSend Installation Guide"
+description: "Install SuprSend on Kubernetes with Helm — prerequisites, secrets, values, upgrades, rollbacks, and troubleshooting."
+---
+
+Install SuprSend on your Kubernetes cluster using Helm. This guide includes the commands you need, a starter `suprsend-values.yaml`, and how to upgrade, roll back, and troubleshoot.
+
+---
+
+## Step 1: Prerequisites
+
+- **Kubernetes**: A working cluster (managed or self-managed). Permissions to create namespaces, deployments, services, and ingress.
+- **kubectl**: Configured to point to the target cluster.
+- **Helm**: v3.9+ recommended.
+- **Ingress & TLS** (optional but recommended): Your ingress controller (e.g., NGINX, ALB, etc.) and a TLS secret if exposing public endpoints.
+- **Platform dependencies**: SuprSend components expect supporting services (you can bring your own or run them separately):
+  - **PostgreSQL** (v17+ recommended; with required extensions)
+  - **Redis / KV-compatible store**
+  - **Temporal**
+  - **OpenSearch**
+  - **NATS (JetStream enabled)** — can be installed via the included subchart (see below) or point to an existing NATS cluster.
+
+<Tip>
+For production, consider managed offerings from your cloud provider for critical data services.
+</Tip>
+
+---
+
+## Step 2: Obtain Your License Token
+
+1. **Request your license token** from SuprSend.
+2. One token can be reused across environments. You can also request **additional tokens** if needed.
+
+You'll use this token to authenticate to the private Helm repository.
+
+---
+
+## Step 3: Add the SuprSend Helm Repository
+
+```bash
+helm repo add suprsend \
+  https://byoc.suprsend.com/charts/suprsend \
+  --username license \
+  --password <REPLACE_WITH_YOUR_LICENSE_TOKEN>
+```
+
+<Note>
+If you need to rotate credentials later, re-run the above command with the new token.
+</Note>
+
+---
+
+## Step 4: Update Your Helm Repositories
+
+```bash
+helm repo update
+```
+
+---
+
+## Step 5: (Recommended) Create a Dedicated Namespace
+
+```bash
+kubectl create namespace suprsend || true
+```
+
+---
+
+## Step 6: Create SuprSend Secrets
+
+Fill in the following file with appropriate values:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: suprsend-secrets
+type: Opaque
+stringData:
+  # connection URL for Redis without database-number (e.g., `redis://user:password@host:port`)
+  redisConnBaseUrlKey: ""
+  # private/seed key used to authenticate the client using Nkey-Auth (starts with 'SU'). counterpart to `natsNkeyPub`
+  natsNkeyPriKey: ""
+  # username of ClickHouse database (e.g: default)
+  clickhouseConnUrlUserKey: ""
+  # public key part of the Nkey-Auth (starts with 'U')
+  natsNkeyPubKey: ""
+  # username of the PostgreSQL database
+  pgDbUserKey: ""
+  # password of the PostgreSQL database
+  pgDbPasswordKey: ""
+  # password of the clickhouse DB
+  clickhouseConnUrlPassKey: ""
+  # full connection url (with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (e.g., `redis://user:password@host:port/0`)
+  redisWorkercacheConnUrlKey: ""
+  # shared secret key for AES encryption/decryption. refer to docs
+  cryptoAesCipherSharedSecretKeyKey: ""
+  # static 16-byte Initialization Vector (IV) for the AES cipher. refer to docs
+  cryptoAesCipherSharedVectorKey: ""
+  # secret key to your deployment; must be a long, random, unique string, refer to docs
+  deploymentSecretKeyKey: ""
+  # username of SMTP mail server
+  mailerConfigSmtpUsernameKey: ""
+  # password of SMTP mail server
+  mailerConfigSmtpPasswordKey: ""
+  # if blobstore='azblob', access key of the Azure Storage Account
+  blobAzblobAccountKeyKey: ""
+  # if blobstore='s3', AWS S3 access key secret
+  blobS3SecretAccessKeyKey: ""
+  # if blobstore='s3', AWS S3 access key ID
+  blobS3AccessKeyIdKey: ""
+  # connection url for opensearch
+  opensearchConnUrlKey: ""
+```
+
+Then create the secret with:
+
+```bash
+kubectl apply -f suprsend-secrets.yaml -n suprsend
+```
+
+---
+
+## Step 7: Install the Chart
+
+### Install with a custom values file
+
+```bash
+helm install my-suprsend suprsend/suprsend \
+  -f suprsend-values.yaml \
+  -n suprsend
+```
+
+<Tip>
+Use `--dry-run --debug` to validate your configuration before a real install.
+</Tip>
+
+---
+
+## Step 8: Verify the Deployment
+
+```bash
+kubectl get pods -n suprsend
+kubectl get svc -n suprsend
+kubectl get ingress -n suprsend
+```
+
+Wait for all pods to be `Running` or `Completed`. Investigate any `CrashLoopBackOff` or `ImagePullBackOff` with `kubectl logs` and `kubectl describe`.
+
+---
+
+## Step 9: Configuration — `suprsend-values.yaml`
+
+Below is a **starter** `suprsend-values.yaml` you can copy and edit. Replace placeholders (hosts, TLS secrets, replicas, etc.) per your environment. The `license.token` should be set **before** install/upgrade.
+
+<details>
+<summary>Expand full suprsend-values.yaml</summary>
+
+```yaml
+license:
+  endpoint: "https://byoc.suprsend.com/licenses/charts/auth" # keep this as is
+  token: "" # Your license token
+
+serviceAccount: ""
+
+global:
+  podLabels: {}
+  podAnnotations: {}
+  config:
+    clickhouseConnUrlScheme: "clickhouse"
+    pgDbReplicaHost:
+    pgDbHost:
+    featureFlagOutboundWebhooksEnabled: "true"
+    debug: "false"
+    pgMaxPoolSize: "10"
+    clickhouseConnUrlDb: "default"
+    pgDbPort:
+    pgDbSslmode:
+    suprsendApiBaseUrl:
+    suprsendInboxServiceBaseUrl:
+    suprsendDashboardBaseUrl:
+    clickhouseConnUrlSecure:
+    clickhouseDeploymentType: "cloud"
+    temporalServerHostPort: ""
+    suprsendMgmtApiBaseUrl:
+    featureFlagAppInboxEnabled: "true"
+    clickhouseConnUrlPort:
+    clickhouseConnUrlHost:
+    suprsendHostedPreferenceDomain:
+    suprsendProntoApiBaseUrl:
+    suprsendGoapiBaseUrl:
+    suprsendHubBaseUrl:
+    suprsendJsonnetRendererApiBaseUrl:
+    suprsendWebhooksApiBaseUrl:
+  secret:
+    existingKubeSecret: "suprsend-secrets"
+    redisConnBaseUrlKey: "redisConnBaseUrlKey"
+    natsNkeyPriKey: "natsNkeyPriKey"
+    clickhouseConnUrlUserKey: "clickhouseConnUrlUserKey"
+    pgDbUserKey: "pgDbUserKey"
+    pgDbPasswordKey: "pgDbPasswordKey"
+    redisWorkercacheConnUrlKey: "redisWorkercacheConnUrlKey"
+    clickhouseConnUrlPassKey: "clickhouseConnUrlPassKey"
+    natsNkeyPubKey: "natsNkeyPubKey"
+    cryptoAesCipherSharedVectorKey: "cryptoAesCipherSharedVectorKey"
+    cryptoAesCipherSharedSecretKeyKey: "cryptoAesCipherSharedSecretKeyKey"
+    deploymentSecretKeyKey: "deploymentSecretKeyKey"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendapi:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  config:
+    gunicornWorkers: "4"
+    blobAzblobAccountName:
+    allowedHosts:
+    cookieDomain:
+    mailerConfigSmtpPort:
+    corsAllowedOriginRegexes:
+    mailerConfigFromEmail:
+    mailerConfigReplyToEmail:
+    mailerConfigSmtpHost:
+    blobAzblobEndpoint:
+    blobAzblobContainerPrivateFileUpload:
+    blobAzblobContainerPublicMedia:
+    suprsendHostAccountName:
+    mailerConfigFromName:
+    suprsendOrgSystemUserDomain:
+    suprsendRootAccountUserEmail:
+    suprsendHostAccountUserEmail:
+    blobS3BucketPublicMedia:
+    blobS3BucketPrivateFileUpload:
+    blobS3Endpoint:
+    blobS3Region:
+    blobStore:
+  secret:
+    existingKubeSecret: "suprsend-secrets"
+    mailerConfigSmtpUsernameKey: "mailerConfigSmtpUsernameKey"
+    mailerConfigSmtpPasswordKey: "mailerConfigSmtpPasswordKey"
+    blobAzblobAccountKeyKey: "blobAzblobAccountKeyKey"
+    blobS3SecretAccessKeyKey: "blobS3SecretAccessKeyKey"
+    blobS3AccessKeyIdKey: "blobS3AccessKeyIdKey"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerMixpanelCohortsEvents:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+temporalworkerDslWorkflow:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerListTrackingEvents:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerInboxNotification:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerSubscriberBulkSyncEvents:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendApp:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  config:
+    viteEmailEditorToken:
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+prontoCelery:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+prontoNatsListener:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+jsonnetrenderer:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerGenericEvents:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  config:
+    temporalWorkerActivityConcurrentExecution: "100"
+    gojaPoolSize: "200"
+    temporalWorkerActivityRateLimit: "10"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendapiCelerybeat:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+prontoCelerybeat:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+prontoapi:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+goapi:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  config:
+    corsAllowedOriginRegexes:
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerAsynqTasks:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendapiRqscheduler:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendapiRqworker:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+natshealth:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+chconnectorNotifications:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+chconnectorSubscribers:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+tesseract:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+managementService:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+chconnectorExecutionerrors:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+chconnectorLogsBroadcast:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerPrivateEvents:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+chconnectorLogsWorkflow:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+clickhouseMigration:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+consumerDlrAll:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendWebhooks:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+natsman:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  config:
+    natsStreamDefaultSizeInGb: "10"
+    natsStreamDefaultReplicas: "1"
+    natsStreamDefaultRetentionDays: "3"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+chconnectorLogsRequest:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+hub:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+temporalworkerDslDbheavy:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  config:
+    temporalWorkerActivityConcurrentExecution: "2"
+    temporalWorkerActivityRateLimit: "4"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendHostedPreference:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendInboxApi:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: ""
+    host: ""
+    tlsSecretKey: ""
+  secret:
+    existingKubeSecret: "suprsend-secrets"
+    opensearchConnUrlKey: "opensearchConnUrlKey"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+notifdbMigration:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+suprsendapiCelery:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+nats:
+  enabled: true
+  config:
+    httpPort: 8222
+    jetstream:
+      enabled: true
+      fileStore:
+        pvc:
+          size: 100Gi
+    monitor:
+      enabled: true
+      port: 8222
+    merge:
+      accounts:
+        REQUEST_EVENTS:
+          jetstream: enabled
+          users:
+            - nkey: ""
+              permissions:
+                publish:
+                  - "$JS.API.>"
+                  - "$JS.ACK.>"
+                  - "requests.>"
+                  - "internal.>"
+                  - "dlrs.>"
+                  - "logs.>"
+                  - "clickhouse.>"
+                  - "$SYS.REQ.USER.INFO"
+                  - "_INBOX.>"
+                subscribe:
+                  - "$JS.API.>"
+                  - "$JS.ACK.>"
+                  - "requests.>"
+                  - "internal.>"
+                  - "dlrs.>"
+                  - "logs.>"
+                  - "clickhouse.>"
+                  - "logs_request_vector.>"
+                  - "_INBOX.>"
+          exports:
+            - { stream: "$JS.API.>" }
+            - { stream: "requests.>" }
+            - { stream: "internal.>" }
+            - { stream: "dlrs.>" }
+            - { stream: "logs.>" }
+            - { stream: "clickhouse.>" }
+            - { stream: "$SYS.REQ.USER.INFO" }
+```
+
+</details>
+
+### Notes on common fields
+
+- **`license.endpoint`** and **`license.token`**: Set both to enable license verification and chart pulls.
+- **`serviceAccount`**: Provide a name to bind specific RBAC, or leave empty to use the default.
+- **`global.secret.existingKubeSecret`**: Reference to the Kubernetes secret containing sensitive configuration (e.g., `suprsend-secrets`).
+- **`global.secret.*Key`**: Keys in the secret that point to actual secret values (should match keys in your Kubernetes secret).
+- **`*-api`**, **`*-app`**, and **`consumer-*` sections**: Each component supports `replicaCount`, `podLabels`, `podAnnotations`, `nodeSelector`, `tolerations`, and `affinity`.
+- **`ingress`**: For public-facing components, configure:
+  - **`annotations`**: Object for ingress annotations (e.g., cert-manager, load balancer config)
+  - **`ingressClassName`**: Ingress controller class (e.g., `nginx`, `alb`)
+  - **`host`**: Public hostname
+  - **`tlsSecretKey`**: Name of existing TLS secret
+- **`nats`**: Enable the included subchart if you don't manage NATS externally. Configure:
+  - **`nkey`**: The public part of your NATS NKey authentication (starts with 'U'). This must match the `natsNkeyPubKey` in your secrets.
+  - JetStream storage size (default: 20Gi)
+  - Retention settings via `natsman.config`
+
+### Advanced Pod Scheduling and Metadata Configuration
+
+Control how each component is deployed within your Kubernetes cluster. These Helm chart values map to core Kubernetes concepts.
+
+#### Pod Metadata
+
+- **`podLabels`**: Custom labels for each component's pods (e.g., team, environment).
+- **`podAnnotations`**: Custom annotations for tooling (e.g., Prometheus scrape, Vault inject).
+
+#### Pod Scheduling and Placement
+
+- **`nodeSelector`**: Constrain pods to nodes with specific labels.
+- **`tolerations`**: Allow pods to be scheduled on tainted nodes.
+- **`affinity`**: Define pod-to-node and pod-to-pod placement rules (e.g., spread across nodes, colocate services).
+
+#### Example: High-Availability Production Configuration
+
+```yaml
+suprsendapi:
+  replicaCount: 3
+  podLabels:
+    tier: "backend"
+    version: "v1.2.3"
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+  nodeSelector:
+    node-role: "application"
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "suprsend"
+      effect: "NoSchedule"
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: suprsendapi
+          topologyKey: kubernetes.io/hostname
+```
+
+<Note>
+**Affinity rules:** **`requiredDuringSchedulingIgnoredDuringExecution`** is a hard requirement; the pod will not be scheduled unless the rule is met. **`preferredDuringSchedulingIgnoredDuringExecution`** is a soft preference; the scheduler will try to meet it but may still schedule the pod elsewhere.
+</Note>
+
+---
+
+## Step 10: Subchart Dependencies
+
+SuprSend's Helm chart includes **NATS** as an optional dependency:
+
+```yaml
+dependencies:
+  - name: nats
+    version: 1.3.14
+    repository: https://nats-io.github.io/k8s/helm/charts
+    condition: nats.enabled
+```
+
+- To **install NATS via subchart**, keep `nats.enabled: true` (default).
+- To **use an external NATS**, set `nats.enabled: false` and configure your services to point at the external endpoint.
+
+---
+
+## Step 11: Upgrades & Rollbacks
+
+### Upgrade to the latest chart
+
+```bash
+helm repo update
+helm upgrade my-suprsend suprsend/suprsend -n suprsend -f suprsend-values.yaml
+```
+
+### Upgrade to a specific version
+
+```bash
+helm upgrade my-suprsend suprsend/suprsend \
+  --version 1.0.10 \
+  -n suprsend \
+  -f suprsend-values.yaml
+```
+
+### Roll back to a previous release
+
+```bash
+helm history my-suprsend -n suprsend
+helm rollback my-suprsend <REVISION> -n suprsend
+```
+
+---
+
+## Step 12: Uninstall
+
+```bash
+helm uninstall my-suprsend -n suprsend
+# (Optional) Remove the namespace after verifying that shared resources are not in use
+kubectl delete namespace suprsend
+```
+
+<Note>
+If you installed the NATS subchart and want to preserve JetStream data, ensure you have backups or snapshots before cleanup.
+</Note>
+
+---
+
+## Step 13: Troubleshooting
+
+- **401/403 when adding repo or installing**: Validate the `--username license` and `--password` (token) passed to `helm repo add`. Ensure the token is correct and not expired/rotated.
+- **Chart not found / old index**: Run `helm repo update` and retry.
+- **Pods stuck in ImagePullBackOff**: Check image registry reachability, imagePullSecrets (if any), and network egress policies.
+- **CrashLoopBackOff**: Run `kubectl logs <pod> -n suprsend` and check dependent services (Postgres, Redis, Temporal, OpenSearch, NATS). Verify connection URLs and credentials passed via environment/values.
+- **Ingress not reachable**: Verify DNS points to your ingress controller, `ingressClassName` is correct, and TLS secret exists in the `suprsend` namespace.
+- **NATS JetStream storage**: Adjust `nats.config.jetstream.fileStore.pvc.size` (default: 20Gi) and retention settings in `natsman.config`; monitor PVC usage.
+
+---
+
+## Step 14: Security & Ops Best Practices
+
+<AccordionGroup>
+  <Accordion title="Credentials and backups">
+    **Limit repo credentials** to CI/CD or admins. Rotate tokens periodically. **Back up stateful services** (NATS JetStream, Postgres, OpenSearch) using your platform's snapshot/backup tooling.
+  </Accordion>
+  <Accordion title="Namespaces and resources">
+    **Use separate namespaces** per environment (dev/stage/prod). **Resource tuning**: Set requests/limits and HPA as you observe load.
+  </Accordion>
+  <Accordion title="Ingress and observability">
+    **Ingress**: Enforce TLS everywhere; prefer DNS-validated certs via cert-manager. **Observability**: Enable centralized logs/metrics and set alerts on queue depth, request latency, and error rates.
+  </Accordion>
+</AccordionGroup>
+
+## What's next
+
+<CardGroup cols="2">
+  <Card title="Setting up Ingress" icon="network-wired" iconType="solid" href="/docs/byoc/setting-up-ingress">
+    Expose SuprSend with Nginx Ingress and TLS.
+  </Card>
+  <Card title="SuprSend CLI Setup" icon="terminal" iconType="solid" href="/docs/byoc/suprsend-cli-setup">
+    Install the CLI to promote assets and automate deployments.
+  </Card>
+  <Card title="Monitoring SuprSend" icon="chart-line" iconType="solid" href="/docs/byoc/monitoring-suprsend">
+    Prometheus, Grafana, and Loki for logs and metrics.
+  </Card>
+  <Card title="Product docs" icon="book" iconType="solid" href="/docs/what-is-suprsend">
+    Workflows, templates, and APIs once your instance is running.
+  </Card>
+</CardGroup>

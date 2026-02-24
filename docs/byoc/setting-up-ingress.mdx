@@ -1,0 +1,194 @@
+---
+title: "Setting up Ingress"
+description: "Expose SuprSend services using Nginx Ingress, DNS, Cert Manager, and Let's Encrypt TLS."
+---
+
+Expose SuprSend services to the internet by setting up **Nginx Ingress**, **DNS**, and **Cert Manager** (Let's Encrypt) for TLS. Follow the steps below in order.
+
+---
+
+## Overview
+
+<Steps>
+  <Step title="Nginx Ingress Controller" stepNumber="1">
+    Install in its own namespace; note the LoadBalancer hostname for DNS.
+  </Step>
+  <Step title="DNS records" stepNumber="2">
+    Point each SuprSend hostname (A or CNAME) to the load balancer. Required before certificates.
+  </Step>
+  <Step title="Cert Manager + ClusterIssuer" stepNumber="3">
+    Install Cert Manager and create a Let's Encrypt ClusterIssuer.
+  </Step>
+  <Step title="SuprSend ingress values" stepNumber="4">
+    Set ingress host, TLS secret name, and annotations in values; install/upgrade chart.
+  </Step>
+</Steps>
+
+---
+
+## Step 1: Nginx Ingress Controller
+
+### Create namespace
+
+```bash
+kubectl create namespace ingress-nginx
+```
+
+### Install Helm chart
+
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+```
+
+Then install the chart:
+
+```bash
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --version 4.12.1 \
+  --set controller.publishService.enabled=true
+```
+
+Verify it's deployed and running:
+
+```bash
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx
+```
+
+You should see a **LoadBalancer** service named `ingress-nginx-controller`.
+
+### Get the load balancer hostname
+
+Use this as the target for your DNS records:
+
+```bash
+kubectl get svc ingress-nginx-controller -n ingress-nginx \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+Keep this hostname handy — you'll need it for DNS and certificate validation.
+
+---
+
+## Step 2: DNS (required first)
+
+For each hostname required by SuprSend, create an **A** or **CNAME** record (depending on your load balancer type) in your DNS zone. Each record should point to the load balancer hostname from the step above.
+
+<Note>
+This is a prerequisite before configuring Cert Manager. Cert Manager will not create or renew SSL certificates unless the DNS records point to the load balancer address.
+</Note>
+
+---
+
+## Step 3: Cert Manager
+
+### Create namespace
+
+```bash
+kubectl create namespace cert-manager
+```
+
+### Install chart
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+helm install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --version v1.17.1 \
+  --set installCRDs=true
+```
+
+Check that all pods are running:
+
+```bash
+kubectl get pods -n cert-manager
+```
+
+### Create Let's Encrypt ClusterIssuer
+
+Create a file named `cluster-issuer.yaml`:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: <your-email@example.com> # replace with your work email
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+```
+
+Apply it:
+
+```bash
+kubectl apply -f cluster-issuer.yaml
+```
+
+Verify that it was created:
+
+```bash
+kubectl get clusterissuer letsencrypt-prod -o yaml
+```
+
+---
+
+## Step 4: Configure ingress for each SuprSend service
+
+In the SuprSend chart values, under each service's `ingress` section, set:
+
+```yaml
+<service-name>:
+  ingress:
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: "/"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    ingressClassName: "nginx"
+    host: <hostname-of-the-service>
+    tlsSecretKey: <unique-key-for-each-service>
+```
+
+| Field | Description |
+|-------|-------------|
+| **annotations** | Required for Cert Manager to issue and renew certificates. |
+| **ingressClassName** | Use `"nginx"` for Nginx Ingress. |
+| **host** | Domain for the service (must match DNS). |
+| **tlsSecretKey** | Unique secret name per ingress (e.g. `suprsend-api-tls`, `suprsend-dashboard-tls`). |
+
+Install or upgrade the SuprSend chart with the updated `values.yaml`. The chart will create Ingress resources for each service with these settings. Cert Manager will then issue certificates, complete HTTP-01 challenges, and attach the certificates to the ingresses. It will also renew certificates automatically before expiry as long as the DNS records remain pointing at the load balancer.
+
+After installing or upgrading, verify that certificates are provisioned:
+
+```bash
+kubectl get certificate -A
+```
+
+Check ingresses:
+
+```bash
+kubectl get ingress -n <namespace-of-chart-installation>
+```
+
+Replace `<namespace-of-chart-installation>` with your SuprSend namespace (e.g. `suprsend`).
+
+---
+
+## What's next
+
+<CardGroup cols="2">
+  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
+    Configure ingress in values and install/upgrade the chart.
+  </Card>
+  <Card title="Monitoring SuprSend" icon="chart-line" iconType="solid" href="/docs/byoc/monitoring-suprsend">
+    Set up Prometheus, Grafana, and Loki for observability.
+  </Card>
+</CardGroup>
