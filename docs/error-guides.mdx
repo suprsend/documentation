@@ -1,24 +1,30 @@
 ---
 title: "Execution Errors"
-description: "List of possible errors occurred during workflow or broadcast execution and their resolutions."
+description: "Reference for errors that occur during workflow and broadcast execution, with fixes."
+slug: error-guides
+keywords:
+  - execution errors
+  - workflow execution
+  - template rendering
+  - jq expression
+  - Jsonnet
+  - broadcast errors
+  - message logs
+  - vendor errors
 ---
 
-## Pre-Requisite
+## Understanding error locations
 
-[Understanding the data structure of logs](/docs/logging)
-
-## Understanding Error Locations
-
-Errors appear in different log types depending on when they occur in the notification pipeline:
+Errors appear in different **log types** depending on when they occur. For the structure of logs, see [Logging](/docs/logging). Use the table below to pick the right guide; then use the cards to see which log type your error comes from.
 
 <CardGroup cols={2}>
-  <Card title="Request Logs" icon="code" iconType="solid">
+  <Card title="Request Logs" icon="code" iconType="solid" href="/docs/api-request-errors">
     **Before workflow starts** — API structure errors, validation errors, authentication failures, trigger condition mismatches
   </Card>
   <Card title="Workflow Execution Logs" icon="sitemap" iconType="solid">
     **During workflow processing** — Variable/data errors, template rendering failures, node processing errors, channel computation issues
   </Card>
-  <Card title="Broadcast Execution Logs" icon="broadcast-tower" iconType="solid">
+  <Card title="Broadcast Execution Logs" icon="tower-broadcast" iconType="solid">
     **Broadcast processing** — Template fetch errors, user profile fetch errors, pre-trigger processing errors
   </Card>
   <Card title="Message Logs" icon="envelope" iconType="solid">
@@ -26,139 +32,241 @@ Errors appear in different log types depending on when they occur in the notific
   </Card>
 </CardGroup>
 
+<Note>
+  Workflow Execution Logs capture errors before a message is handed off to a vendor. Message Logs capture errors after SuprSend attempts delivery via a vendor.
+</Note>
+
 <Tip>
   Use the **idempotency key** to trace errors across all log types. If you don't see a log at one level, check the level above using the idempotency key.
 </Tip>
 
-## API Errors (Request Logs)
-
-These errors occur at the API/SDK request level, before workflow processing begins. They appear in **Request Logs**.
-
-### Idempotency Key Errors
-
-| Error | Solution |
-|-------|----------|
-| **2 API requests have the same idempotency key** | Try passing another idempotency key in your workflow or event payload. SuprSend supports idempotency to ensure that requests can be retried safely without duplicate processing. If SuprSend receives more than one request with the same idempotency_key in a 24 hour window, it will only process the first request and skip all other requests. Learn more about idempotency key [here](/docs/python-trigger-workflow-from-api#idempotent-requests). |
-
-### Workflow/Event Errors
-
-| Error | Solution |
-|-------|----------|
-| **If workflow is triggered via event and there is no active workflow associated with that event** | Check if there is an active workflow created on SuprSend dashboard with the given event name. If not, [create a workflow](/docs/workflows#create-workflow) on SuprSend dashboard. |
-| **Non-existent workflow slug** | Verify the workflow slug exists in your workspace. You can search with `template_slug` using global search `⌘ + K` on dashboard. |
-| **Trigger condition or schema mismatches** | If your API request returns 200 but you don't see a workflow execution, it usually means trigger conditions didn't match. Check your event properties against workflow trigger conditions. |
-
-### Request Structure Errors
-
-| Error | Solution |
-|-------|----------|
-| **Invalid API structure or missing required fields** | Check your request payload structure. Ensure all required fields are present and properly formatted. |
-| **Invalid recipient format** | Ensure you're using the correct format. For events, use `distinct_id` instead of `recipient`. For workflows, pass user channel information correctly. |
-| **Non-existent distinct_id or user ID** | If triggering via event, create the user profile first. If triggering via workflow API, pass user channel information in the user instance. [Create user profile via API or SDK](/docs/users#creating-user-profile-on-suprsend) |
-
-### Authentication Errors
-
-| Error | Solution |
-|-------|----------|
-| **Authentication/Authorization Errors** | Verify your API keys are valid and have sufficient permissions. |
+---
 
 ## Workflow Processing Errors (Workflow Execution Logs)
 
-These errors occur during workflow processing, after the request has been accepted. They appear in **Workflow Execution Logs**.
+**Log type:** Workflow Execution Logs
+
+These errors occur **during** workflow processing—after the request has been accepted. They appear in **Workflow Execution Logs**.
 
 ### User-Related Errors
 
-| Error | Solution |
-|-------|----------|
-| **no user found with distinct_id: `&lt;distinct_id&gt;`** | If triggering notification via event, user needs to be created beforehand. [Create user profile via API or SDK](/docs/users#creating-user-profile-on-suprsend). If triggering workflow directly via API, pass user channel information in the user instance of your workflow call. Refer [workflow documentation](/docs/trigger-workflow#triggering-workflow-via-api) of your respective backend SDK. |
-| **no active/preferred channels found for user with distinct_id:`&lt;distinct_id&gt;`** | User doesn't have any applicable active channels in their profile. Applicable channel is the subset of `template group channel`, `channels specified in workflow $channels key`. This could happen for 2 major reasons: (1) User doesn't have that channel set in their profile. If the workflow is triggered via event, user's channel is derived from the existing user profile. [Create user profile via API or SDK](/docs/users#creating-user-profile-on-suprsend). (2) All identities for that channel are `inactive` in user profile. Channel can be marked inactive using `unset` or `remove` function via [SDK or API](/docs/users#via-sdk). SuprSend also marks the channel identity inactive for email and WhatsApp in case of hard errors from vendor end, such as bounced email addresses, unregistered WhatsApp numbers. This is done to safeguard your email domain authority or WhatsApp rating if you continue to send notifications to users who have reported or marked your email or messages as spam. Additionally, this helps in WhatsApp cost saving, as vendor charges for every processed request. Inactive marking period by SuprSend is 15 days for WhatsApp and 90 days for email. |
-| **template: live channels: [channel_array], but no respective user (subscribed-)channels present** | User profile doesn't have any active channel from the channels available in template group. This could happen for 2 major reasons: - User doesn't have that channel set in their profile. If the workflow is triggered via event, user's channel is derived from the existing user profile. [Create user profile via API or SDK](/docs/users#creating-user-profile-on-suprsend). - All identities for that channel are `inactive` in user profile. Channel can be marked inactive using `unset` or `remove` function via [SDK or API](/docs/users#via-sdk). SuprSend also marks the channel identity inactive for email and WhatsApp in case of hard errors from vendor end, such as bounced email addresses, unregistered WhatsApp numbers. This is done to safeguard your email domain authority or WhatsApp rating if you continue to send notifications to users who have reported or marked your email or messages as spam. Additionally, this helps in WhatsApp cost saving, as vendor charges for every processed request. Inactive marking period by SuprSend is 15 days for WhatsApp and 90 days for email. |
-| **all channel identities provided for user are invalid** | Check channel format. Supported formats: - SMS, WhatsApp: `+15555555555` (country code is mandatory) - Email: `support@suprsend.com` [Refer here](/docs/python-create-user-profile#1-add-user-channels) for other channel formats. |
-| **user's distinct_id must be present if it's not transient** | Include `distinct_id` in your [workflow](/docs/python-trigger-workflow-from-api#trigger-workflow-from-api) or [event](/docs/python-send-event-data#send-event) payload. If sending to anonymous users, include user channels and set `is_transient: True`. [Learn more](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) |
-| **users - no valid value passed** | Pass `distinct_id` key in your [workflow](/docs/python-trigger-workflow-from-api#trigger-workflow-from-api) or [event](/docs/python-send-event-data#send-event) payload. |
-| **channel details missing for transient user** | Pass channel identities in users key if sending notification to anonymous user with `is_transient: True` set. Add channel identity as `"$email":["abc@example.com"]` in your users object. [Learn more](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) |
+Errors about missing users, missing or inactive channels, or invalid channel format.
+
+<Note>
+  **Inactive channels** — SuprSend automatically marks email/WhatsApp identities inactive after hard vendor errors (bounced emails, unregistered numbers) to protect deliverability and costs. WhatsApp: 15 days; Email: 90 days. You can also mark a channel inactive via [SDK or API](/docs/users#via-sdk) using `unset` or `remove`.
+</Note>
+
+| Error | Fix |
+|-------|-----|
+| no user found with distinct_id: `[distinct_id]` | If triggering via event, create the user first. [Create user profile via API or SDK](/docs/users#creating-user-profile-on-suprsend). If triggering via workflow API, pass user channel information in the user instance. See [workflow documentation](/docs/trigger-workflow#triggering-workflow-via-api). |
+| user(actor) doesn't exist with distinct_id: `[distinct_id]` | The actor is not a known user. Ensure the actor's `distinct_id` is created as a user profile before the workflow runs, or pass actor channel information in the workflow payload. |
+| no active/preferred channels found for user with distinct_id:`[distinct_id]` | User has no applicable active channels (template group channel or workflow `$channels` key). Either the channel isn't set in their profile—[create/update user](/docs/users#creating-user-profile-on-suprsend)—or all identities for that channel are inactive. See Inactive channels note above. |
+| template: live channels: [channel_array], but no respective user (subscribed-)channels present | User profile has no active channel from the template group's channels. Add the channel to the user profile or see Inactive channels note above. [Create user profile](/docs/users#creating-user-profile-on-suprsend). |
+| all channel identities provided for user are invalid | Check channel format. SMS, WhatsApp: `+15555555555` (country code mandatory). Email: `support@suprsend.com`. See [Add user channels](/docs/python-create-user-profile#1-add-user-channels) for all channel formats. |
+| user's distinct_id must be present if it's not transient | Include `distinct_id` in your [workflow](/docs/python-trigger-workflow-from-api#trigger-workflow-from-api) or [event](/docs/python-send-event-data#send-event) payload. If sending to anonymous users, include user channels and set `is_transient: True`. [Learn more](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) |
+| users - no valid value passed | Pass `distinct_id` key in your [workflow](/docs/python-trigger-workflow-from-api#trigger-workflow-from-api) or [event](/docs/python-send-event-data#send-event) payload. |
+| channel details missing for transient user | Pass channel identities in users key if sending notification to anonymous user with `is_transient: True` set. Add channel identity as `"$email":["abc@example.com"]` in your users object. [Learn more](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) |
 
 ### Template Errors
 
-| Error | Solution |
-|-------|----------|
-| **TemplateGroup `&lt;template_slug&gt;` not found** | This error occurs when, (1) the template with given template_slug is not present in your workspace. You can search with `template_slug` using global search `⌘ + K` on dashboard to verify this. (2) there is no published template version available for the channel (3) you have mistakenly passed template name instead of template slug in your workflow payload. You can get template_slug by clicking on copy icon next to template name on template details page. |
-| **`&lt;channel&gt;`: template rendering failed error: "`&lt;variable_key&gt;`" not defined in [object Object]** | Certain variables with `variable_key` exist in the template but are not added in workflow data or event properties. Add the missing variable in your workflow data or event properties. |
-| **`&lt;channel_slug&gt;`: template rendering error error: Cannot read properties of undefined (reading '0')** | This error generally occurs when you are using handlebars helpers in your template on a nested object and the variable referenced inside the helper has parent key missing. For instance, if you have `{{default location.city "your place"}}` helper in your template, and the workflow data has `location` key missing, this error will occur. Ensure parent keys exist in your data. |
+Template or variable issues when rendering content for a channel.
+
+| Error | Fix |
+|-------|-----|
+| TemplateGroup `[template_slug]` not found | **Causes:** (1) Template not in workspace, (2) no published version for the channel, or (3) template **name** passed instead of **slug**. **Fix:** Open dashboard → search with `template_slug` (⌘+K). Use the **slug** from the template details page (copy icon). Publish a version for the channel if needed. |
+| `[channel]`: template rendering failed error: "[variable_key]" not defined in [object Object] | The template uses a variable (e.g. in `{{variable_key}}` or similar) that is not present in the workflow data or event properties sent with the request. This applies to all channels (email, sms, whatsapp, slack, androidpush, iospush, webpush, inbox).<br /><br />**To fix:** Add the missing variable to your workflow data or event properties so the key exists when the template is rendered. Match the key name and nesting (e.g. `data.userName` vs `userName`) to what the template expects. Refer to [Trigger workflow](/docs/trigger-workflow) and your workflow’s data shape. |
+| `[channel]`: template rendering failed error: "[variable_key]" not defined in undefined | The template references a variable whose parent object is missing—e.g. `$user.name` when `$user` is undefined, so the whole path cannot be resolved.<br /><br />**To fix:** Ensure the parent object and the variable exist in workflow data or event properties (e.g. include a `user` object with `name`). Alternatively, use a default in the template (e.g. `{{default user.name "Guest"}}`) or wrap the block in `{{#if user}}...{{/if}}` so the template does not access the property when the parent is absent. |
+| `[channel]`: template rendering error: Cannot read properties of undefined (reading '0') | A Handlebars helper or expression is used on a value that is undefined (e.g. accessing index `0` or a property on something that is not an object/array). Often the parent key is missing in the data.<br /><br />**To fix:** Ensure parent keys exist in your workflow/event data. For example, if the template has `{{default location.city "your place"}}` but `location` is missing, add `location` (and optionally `location.city`) to the payload, or use `{{#if location}}{{default location.city "your place"}}{{/if}}`. Check the template for any access on possibly undefined values. |
+| template rendering failed: Parse error on line X: Expecting 'CLOSE_UNESCAPED', 'OPEN_SEXPR', 'ID', ... got 'CLOSE' | The Handlebars parser hit a `}}` or similar where it did not expect it—often an unescaped or mismatched brace (e.g. `{{{title}}'` with a stray quote, or a single `}}` that closes too early).<br /><br />**To fix:** Use `{{{var}}}` for raw (unescaped) output and `{{var}}` for escaped output. Ensure every `{{` has a matching `}}` and that you did not break a tag with a quote or extra character. Review the template line number in the error and fix the syntax. |
+| template rendering failed: Parse error ... Expecting 'ID', 'STRING', ... got 'INVALID' | The Handlebars expression contains an invalid character or fragment (e.g. HTML like `<span>` inside `{{...}}`), so the parser cannot interpret it as a valid ID, string, or number.<br /><br />**To fix:** Move HTML or special characters outside the Handlebars expression, or use a block helper. Keep expressions to variable names, strings, numbers, and supported helpers. Fix or remove the invalid part at the line/position indicated. |
+| template rendering failed: TypeError: Cannot read property 'X' of undefined | The template or a Handlebars helper tried to read a property (e.g. `user`, `order`, `deep_link`, `data`, `length`) on a value that is undefined.<br /><br />**To fix:** Ensure the object exists in workflow or event data when the template runs, or guard the access in the template (e.g. `{{#if user}}{{user.name}}{{/if}}` or `{{#if order}}{{order.id}}{{/if}}`). Check the exact property name in the error and add the data or conditional. |
+| template rendering failed: TypeError: Value is not an object: ... | A Handlebars helper or expression expected an object but received something else (e.g. a string or number).<br /><br />**To fix:** Pass the correct type from workflow data (e.g. an object for a helper that expects one), or change the template so you are not passing a string/number where an object is required. Check the helper’s expected arguments in your template documentation. |
 
 ### Category & Preference Errors
 
-| Error | Solution |
-|-------|----------|
-| **NotificationCategory `&lt;category_slug&gt;` not found** | The notification category passed in workflow payload is not present on SuprSend dashboard or you have mistakenly added category name rather than its slug. Click on Notification category name to copy the slug. Please note only published categories can be used in workflows. If you have your category available in draft version, publish the changes before triggering the workflow. Navigate to [Settings -> Notification Categories](https://app.suprsend.com/en/staging/settings/notification-categories) to see all available categories. Click on Category name to copy slug. |
-| **user not subscribed to category: `&lt;category_slug&gt;`** | User has opted_out from this category. This could happen either if the default user preference for this category is `opt_out` or if the default preference is `opt_in`, then user has explicitly opted_out of this category. You can get user preference setting for that particular category using [HTTP API](/reference/user-category-preference). |
-| **user has unsubscribed from all-channels for category: ** | User has opted_out from this category. This could happen either if the default user preference for this category is `opt_out` or if the default preference is `opt_in`, then user has explicitly opted_out of this category. You can get user preference setting for that particular category using [HTTP API](/reference/user-category-preference). |
-| **no (subscribed-)channels found for user. category: `&lt;category_slug&gt;`** | User has opted_out from this category. This could happen either if the default user preference for this category is `opt_out` or if the default preference is `opt_in`, then user has explicitly opted_out of this category. You can get user preference setting for that particular category using [HTTP API](/reference/user-category-preference). |
-| **user has unsubscribed from channels `&lt;channel_array&gt;` for category: `&lt;category_slug&gt;`** | User has opted_out from the given channel list for `category_slug`. You can get user preference setting for that particular category using [HTTP API](/reference/user-category-preference). |
-| **NotificationCategory `&lt;category_slug&gt;` not applicable to tenant/brand `&lt;brand_id&gt;`** | This means that brand's default preference for the `category_slug` is turned off for `brand_id`. To check default preference setting of each brand [now called tenant], navigate to [default preferences tab](https://develop.suprsend-app.pages.dev/en/staging/brands/default/brand_preference) on brand details page. |
+**Log type:** Workflow Execution Logs. Notification category missing, or user/tenant preferences blocking send.
 
-### Tenant/Brand Errors
+| Error (variants) | Root cause | Fix |
+|------------------|------------|-----|
+| user not subscribed to category / user has unsubscribed from all-channels / no (subscribed-)channels found for user. category / user has unsubscribed from channels `[channel_array]` for category | User preferences block delivery (opt_out for category or channels). | 1. Check user's category/channel preference via [user category preference API](/reference/user-category-preference). 2. If the user should receive: set opt_in via [update user category preference](/reference/update-user-category-preference) or your preference center. 3. For tenant-specific issues, verify the category is enabled in [tenant default preferences](/reference/update-tenant-default-preference). |
+| NotificationCategory `[category_slug]` not found | Category not in workspace, or name used instead of slug; or category not published. | Use category **slug** (copy from [Settings → Notification Categories](https://app.suprsend.com/en/staging/settings/notification-categories)). Publish the category if it’s in draft. |
+| NotificationCategory `[category_slug]` not applicable to tenant `[tenant_id]` | Category is turned off for this tenant. | Enable the category: dashboard → tenant details → default preferences, or [tenant default preference API](/reference/update-tenant-default-preference). |
 
-| Error | Solution |
-|-------|----------|
-| **brand doesn't exist with id: `&lt;brand_id&gt;`** | The `brand_id` doesn't exist in the given SuprSend Workspace. Check for available brands [now called tenants] on [SuprSend dashboard -> tenants page](https://app.suprsend.com/en/production/tenants/). You can create this brand/tenant from [SuprSend dashboard or via your backend SDK / API](/docs/tenants#creating--updating-tenant-on-suprsend-platform). |
+### Tenant (brand) Errors
+
+Tenant ID missing or invalid in the workspace.
+
+| Error | Fix |
+|-------|-----|
+| tenant doesn't exist with id: `[tenant_id]` | The tenant doesn't exist in your workspace. Check [SuprSend dashboard → Tenants](https://app.suprsend.com/en/production/tenants/). [Create or update a tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform) via dashboard or API. |
 
 ### Configuration Errors
 
-| Error | Solution |
-|-------|----------|
-| **recipient: error evaluating jq-expression `&lt;recipient_expression&gt;`, could not be resolved from event properties** | This error occurs when you have overridden the recipient configuration in your workflow, and the jq-expression added in the recipient field is throwing an error or returning null value. To troubleshoot: 1. Navigate to the workflow details page by clicking on the workflow name in the logs. 2. Check the jq-expression added in the recipient field. 3. The recipient jq-expression utilizes event properties JSON for parsing. Validate the output of your jq-expression by adding property JSON [here](https://www.devtoolsdaily.com/jq_playground/). |
-| **invalid duration-format [TTL duration]. valid format [xx]d[xx]h[xx]m[xx]s** | This error occurs when TTL format in the [smart delivery](/docs/smart-delivery) block is incorrect. The correct TTL format is `[xx]d[xx]h[xx]m[xx]s` where d = day, h = hour, m = minute, s = second. e.g. - `1d2h30m` would indicate a Time to live (TTL) is 1 day 2 hours 30 minutes. |
-| **invalid duration-format . valid format [xx]d[xx]h[xx]m[xx]s** | This error occurs when time-duration format in the delay block is incorrect. The correct format is `[xx]d[xx]h[xx]m[xx]s` where d = day, h = hour, m = minute, s = second. e.g. - `1d2h30m` would indicate a delay of 1 day 2 hours 30 minutes. |
-| **no vendor configured for channel: and category: `&lt;notification_category&gt;` and id-provider:** | This happens when vendor configuration for the given channel and notification category is missing. Navigate to vendor page on SuprSend dashboard to setup vendor. You can find integration guidelines for all vendors [here](/docs/vendors). |
+Recipient override, duration format (TTL/delay), or vendor configuration.
+
+| Error | Fix |
+|-------|-----|
+| recipient: error evaluating jq-expression `[recipient_expression]`, could not be resolved from event properties | The recipient override uses a jq expression that errors or returns null. jq operates on event/workflow JSON. **Fix:** Open the workflow from the logs → check the recipient jq expression → validate with your payload in a [jq playground](https://www.devtoolsdaily.com/jq_playground/). |
+| invalid duration-format … valid format [xx]d[xx]h[xx]m[xx]s (TTL in smart delivery or delay block) | Use format `[xx]d[xx]h[xx]m[xx]s` (d=day, h=hour, m=minute, s=second). Example: `1d2h30m`. See [Smart delivery](/docs/smart-delivery) for TTL; same format for delay nodes. |
+| no vendor configured for channel: and category: `[notification_category]` and id-provider: | Vendor not set up for this channel and notification category. Open dashboard → Vendors → configure the channel and category. See [Vendors](/docs/vendors) for integration guidelines. |
+
+### jq-Expression Errors
+
+**Log type:** Workflow Execution Logs. jq expressions evaluate against event or workflow payload; empty or invalid paths cause these errors. **How to validate:** Use a [jq playground](https://www.devtoolsdaily.com/jq_playground/) with your payload and expression.
+
+| Error | Fix |
+|-------|-----|
+| jq-expression (for pivot_expr): '`.[path]`' evaluated to empty value | The jq path (e.g. `.payment_due_date`, `.startsAt`) returned no value when evaluated against the event or workflow payload.<br /><br />**To fix:** Ensure the payload you send (event properties or workflow data) includes the key at that path and that it has a value at runtime. If the field is optional, add a fallback in the workflow or use a jq default (e.g. `.payment_due_date // ""`). Validate the expression with your payload in a [jq playground](https://www.devtoolsdaily.com/jq_playground/). |
+| jq-expression for dynamic duration key '`.[path]`' resulted in empty value | The delay or TTL is computed from a jq expression that evaluated to empty, so the workflow cannot resolve the duration.<br /><br />**To fix:** Provide the field in event properties or workflow data (e.g. the key referenced in the expression), or configure a fallback duration in the delay/smart-delivery node so the workflow does not depend on a missing value. |
+| error evaluating jq-expression (`.$actor.delay_lifestyle`). unexpected token "$actor" | jq parses the expression against the input JSON; it does not use `$` for field names. The parser saw `.$actor` and failed.<br /><br />**To fix:** Use a path from the root input, e.g. `.actor.delay_lifestyle` instead of `.$actor.delay_lifestyle`. The leading `.` reads from the current input object. |
+| error evaluating jq-expression (actor.delay_lifestyle). function not defined: actor/0 | jq interpreted `actor` as a function call. In jq, paths from the input must start with `.` (e.g. `.actor.delay_lifestyle`).<br /><br />**To fix:** Change the expression to `.actor.delay_lifestyle` so it reads the `actor` key from the input object, not a function named `actor`. |
+| override channels jq-expression '...' evaluation error: ... timeout 500ms. context deadline exceeded | The jq expression used for override channels took longer than the allowed time (500ms) to run.<br /><br />**To fix:** Simplify the expression (e.g. avoid heavy filters or multiple passes over large arrays). If the event payload is very large, consider reducing the data passed into the workflow or moving complex logic elsewhere. If timeouts persist, contact support with the execution ID. |
+| override channels jq-expression '...' resulted in empty channels | The jq expression for override channels returned no valid channel list, so the workflow could not determine which channels to use.<br /><br />**To fix:** Check the expression in the workflow’s override channels configuration. Ensure the event/workflow data contains the paths you reference. In jq, keys with `$` must be quoted (e.g. `."$recipient".deliveryChannels`). The result must be a non-empty array of valid channel slugs. Validate with your payload in a [jq playground](https://www.devtoolsdaily.com/jq_playground/). |
+
+### Jsonnet Evaluation Errors
+
+**Log type:** Workflow Execution Logs. Jsonnet is used in workflow nodes (e.g. webhook body, Slack blocks); missing fields, wrong types, or syntax cause these errors. **How to validate:** Copy the node body → run it against a sample payload (e.g. in a local Jsonnet evaluator or [Jsonnet playground](https://jsonnet.org/)) → verify the output type (string, object, or array) matches what the node expects.
+
+| Error | Fix |
+|-------|-----|
+| JsonnetEvaluateError: RUNTIME ERROR: Field does not exist: [field] | The template or workflow node (e.g. Slack block, webhook body, notification title) references a field (e.g. `email`, `uniqueCreatedComment`, `fpo_id`, `courseTitle`, `newValue`) that is not present in the data object available at that step.<br /><br />**To fix:** Add the missing field to your workflow data or event properties so it is available when the node runs. Alternatively, change the Jsonnet or template to use only keys that exist (e.g. from `data` or `data["$recipient"]`), or add a conditional so the template does not access the field when it is absent. |
+| JsonnetEvaluateError: RUNTIME ERROR: ... is not a base 10 integer | A Jsonnet function or operation (e.g. `formatPrice` or string indexing) expected an integer but received a float (e.g. `19.66`) or a string.<br /><br />**To fix:** Ensure the value passed to the function is an integer—e.g. round or truncate before use, or supply an integer from workflow data. If the template uses a custom formatter, adjust it to accept the type you are passing or convert the value in Jsonnet before calling the function. |
+| JsonnetEvaluateError: Unknown variable: [name] | The Jsonnet expression references a variable (e.g. `batched_events`, `recipient`, `productionMembers`) that is not defined in that scope. In workflow nodes, data is usually provided under a single input (e.g. `data`).<br /><br />**To fix:** Use the correct key from the data object. For SuprSend workflow data, top-level keys like `$recipient` and `$batched_events` must be accessed with bracket notation: `data["$recipient"]`, `data["$batched_events"]`. Ensure the key name and structure match what the workflow supplies at that node. |
+| JsonnetEvaluateError: Expected token IDENTIFIER but got "$" | Jsonnet does not allow identifiers to start with `$`. Expressions like `$recipient` or `$batched_events` are invalid as bare names.<br /><br />**To fix:** Use bracket notation to read from the data object, e.g. `data["$recipient"]` or `data["$batched_events"]`, so the `$` is part of a string key, not an identifier. |
+| JsonnetEvaluateError: Expected , or ; but got (IDENTIFIER, "…") | The Jsonnet expression has a syntax error, often a missing comma between fields or a missing semicolon in a local block.<br /><br />**To fix:** Open the workflow node or template body where the expression is defined and fix the syntax: add the missing comma or semicolon at the position indicated in the error. See [Jsonnet documentation](https://jsonnet.org/learning/tutorial.html) for correct syntax. |
+| JsonnetEvaluateError: Unexpected "&#123;" while parsing field definition | The parser hit a `&#123;` where it did not expect one. This often happens when Handlebars syntax `{{...}}` is embedded inside a Jsonnet string or expression; Jsonnet then tries to parse `&#123;` as part of its own syntax.<br /><br />**To fix:** Do not mix Handlebars delimiters inside Jsonnet. Build the string in Jsonnet using string concatenation and data fields (e.g. `"Hello, " + data["$recipient"].name + "!"`), or keep Handlebars only in the template body and use Jsonnet only where the product expects Jsonnet. |
+| 1 error occurred: / 6 errors occurred: * JsonnetEvaluateError: ... | One or more Jsonnet evaluations failed in this node. The message lists each error.<br /><br />**To fix:** Resolve each reported error in order: missing field (add to data or use existing keys), wrong type (convert or fix the expression), or syntax (fix commas, semicolons, or mixed Handlebars/Jsonnet). Re-run the workflow after correcting the node definition. |
+
+### Recipient and Payload Errors
+
+The recipient override (jq or Jsonnet) must evaluate to a **single** `distinct_id` string; objects, arrays, or invalid JSON cause these errors.
+
+| Error | Fix |
+|-------|-----|
+| invalid 'recipient'. error: json: cannot unmarshal object into Go value of type string | The recipient override is configured to resolve the recipient from event/workflow data, but the expression evaluated to a JSON object instead of a single string (the distinct_id).<br /><br />**To fix:** Change the recipient jq or Jsonnet expression so that its result is exactly one string value (the recipient’s distinct_id). For example, if the expression returns `&#123;"distinct_id": "user_123"&#125;`, extract the string: in jq use `.distinct_id`, and in Jsonnet ensure the expression evaluates to `data["$recipient"].distinct_id` or the equivalent string, not the whole object. |
+| invalid 'recipient'. error: json: cannot unmarshal array into Go value of type string | The recipient override expression returned an array (e.g. a list of IDs), but the system expects a single recipient string (one distinct_id).<br /><br />**To fix:** Ensure the expression returns exactly one distinct_id string. If you are selecting from a list, pick one element (e.g. first item) and output that string, not the full array. |
+| invalid 'recipient'. error: invalid character 's' / 'C' looking for beginning of value | The recipient value is not valid JSON. The parser expected a JSON value (e.g. a quoted string) but saw a raw token (e.g. an identifier like `slack_C08...`).<br /><br />**To fix:** The expression that produces the recipient must output a valid JSON value. If you are returning a literal distinct_id (e.g. a Slack user ID), it must be a quoted string in the expression output (e.g. in Jsonnet, `"slack_C08R0DUUK51"`), not an unquoted identifier. Check the workflow’s recipient override configuration and fix the expression so its evaluated result is a JSON string. |
+| rendering of 'recipient' failed. JsonnetEvaluateError: ... Expected token ")" but got ":" | The Jsonnet expression in the recipient override has a syntax error: the parser expected `)` but found `:`, which often means a key-value pair was written where a single value is expected.<br /><br />**To fix:** The recipient override must evaluate to a single value (the distinct_id string). If you wrote something like `"distinct_id": "slack_C08R0DUUK51"`, that is an object fragment. Use an expression that returns just the string, e.g. `"slack_C08R0DUUK51"` or `data["$recipient"].distinct_id`. |
+| rendering of 'recipient' failed. JsonnetEvaluateError: Unknown variable: slack_C08... | The Jsonnet expression uses `slack_C08...` as a variable name, but that name is not defined; it is likely the literal Slack channel or user ID you meant to pass as a string.<br /><br />**To fix:** Quote it as a string so Jsonnet treats it as data, not a variable: e.g. `"slack_C08R0DUUK51"`. If the ID comes from data, reference it from the data object (e.g. `data.someField` or `data["$recipient"].slack_id`) instead of as a bare identifier. |
+| rendering of 'recipient' failed. JsonnetEvaluateError: Unterminated String | A string in the Jsonnet expression is missing a closing (or opening) quote, so the parser reached the end of the string without finding the end delimiter.<br /><br />**To fix:** Open the recipient override configuration and fix the expression: ensure every string has matching quotes and that you did not typo the key (e.g. `"distint_id"` → `"distinct_id"`). Check for missing or extra quotes around the distinct_id value. |
+
+### Webhook and Body/URL Rendering Errors
+
+Webhook URL or body is built with Jsonnet; the result must be valid JSON and reference only fields present in workflow data.
+
+| Error | Fix |
+|-------|-----|
+| evaluation of 'url' failed. invalid character 'h' looking for beginning of value | The webhook URL field is evaluated as JSON, but the result starts with a raw character such as `h` (e.g. from `https://...`), so the parser fails.<br /><br />**To fix:** Ensure the expression that produces the URL outputs a valid JSON value. If the URL is a string, the evaluated result must be a quoted string (e.g. the Jsonnet expression should evaluate to `"https://example.com/webhook"`). Check the webhook node’s URL configuration and ensure the expression returns a JSON string, not an unquoted URL. |
+| rendering of 'body' failed. JsonnetEvaluateError: RUNTIME ERROR: Field does not exist: [field] | The webhook body template (Jsonnet) references a field (e.g. `courseTitle`, `email`, `eventName`, `collaborators`, `recipient`) that is not present in the workflow data available at that node.<br /><br />**To fix:** Add the missing field to your workflow data or event properties so it is available when the webhook runs. Alternatively, change the body template to use only fields that exist, or add conditionals so the template does not reference the field when it is absent. Ensure nested paths (e.g. `data["$recipient"].email`) match the actual data shape. |
+| rendering of 'body' failed. JsonnetEvaluateError: ... Field "to". During manifestation | The webhook body is being built (e.g. for an email or API payload) and a required field such as `to` is missing from the structure you are constructing.<br /><br />**To fix:** Provide the value for that field in workflow data (e.g. recipient email or user ID) and reference it in the body template, or change the template to supply a default when the value is absent. Ensure the body template produces a complete structure that includes all required fields expected by the webhook or downstream API. |
+| unexpected end of JSON input | The webhook body or a response from the downstream service was parsed as JSON but was cut off or empty, so parsing failed.<br /><br />**To fix:** Ensure the body template always produces valid, complete JSON (no trailing commas, all strings and brackets closed). If the error refers to a response, the external service may be returning an empty body or truncated response; check the service’s health and response format, and add error handling or retries if appropriate. |
+
+### Outbound request errors (vendor & webhook)
+
+Errors in this section appear in **Workflow Execution Logs** when the workflow sends a request to a vendor or webhook (timeouts, connection failures, or vendor API responses).
+
+| Error | Fix |
+|-------|-----|
+| Post "https://...": context deadline exceeded (Client.Timeout exceeded while awaiting headers) | The request to the vendor or webhook URL did not receive a response within the allowed time.<br /><br />**To fix:** Check that the external service is up and responding. If the service is slow, consider optimizing it or using a longer timeout if your plan supports it. For webhooks, ensure the endpoint is reachable from SuprSend’s infrastructure. Retry the workflow; if timeouts persist, contact the vendor or [SuprSend support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ). **Include:** execution_id, workspace_id, timestamp, idempotency_key, full error. |
+| Post "https://...": read tcp ... read: connection reset by peer | The TCP connection to the vendor or webhook host was closed unexpectedly (reset by the server or a device in between).<br /><br />**To fix:** Retry the workflow; transient network issues often resolve. If it keeps happening, check the vendor’s status page, your firewall and proxy settings, and TLS/SSL compatibility. For custom webhooks, ensure the server accepts the connection and does not close it prematurely. |
+| Post "https://...": dial tcp: lookup ... on ...:53: read udp ... i/o timeout | The DNS lookup for the hostname in the URL failed or timed out, so the connection could not be established.<br /><br />**To fix:** Verify the hostname in the webhook or vendor URL is correct and that the domain resolves (e.g. test with `nslookup` or from another network). If the host is internal or on a private network, ensure it is reachable from SuprSend’s environment or use a publicly reachable endpoint. |
+| Request: POST https://.../single-send, Status: 401, Message: ... Authentication credentials not found / INVALID_AUTHENTICATION | The vendor (e.g. HubSpot) rejected the request because authentication was missing or invalid.<br /><br />**To fix:** In the SuprSend dashboard, open the vendor configuration for the channel in use and set up or refresh the credentials (OAuth or API key). Ensure tokens are not expired and have the scopes required for the operation. Refer to the vendor’s auth docs (e.g. [HubSpot OAuth](https://developers.hubspot.com/docs/methods/auth/oauth-overview)) and to [SuprSend vendors](/docs/vendors). |
+| Request: POST https://.../single-send, Status: 409, Message: error code: 1018 | The vendor returned 409 (e.g. HubSpot error code 1018), which often indicates a conflict or rate limit.<br /><br />**To fix:** Check the vendor’s documentation for the exact meaning of the code (e.g. rate limits, duplicate send). If it is rate limiting, reduce send frequency or batch size and retry with backoff. If it is a conflict (e.g. duplicate), adjust your workflow or idempotency so you do not send the same request twice. |
+| Request: POST https://..., Status: 400, Message: &#123;"error":"... The 'To' number ... is not a valid phone number."&#125; | The vendor rejected the request because the destination phone number format is invalid.<br /><br />**To fix:** Use E.164 format for SMS and WhatsApp: country code plus number, with a leading `+`, no spaces or leading zero (e.g. `+15555555555`). Ensure the user’s phone in the profile or workflow data is in this format. See [user channels](/docs/python-create-user-profile#1-add-user-channels). |
+| Request: POST https://..., Status: 400, Message: &#123;"message":"Invalid request body.", "errors":&#123;...&#125;&#125; | The vendor accepted the request but rejected the body (wrong or missing fields, wrong types).<br /><br />**To fix:** Align the payload with the vendor’s API schema: check the `errors` object in the response for the exact fields and fix your template or workflow data. Ensure required fields are present and types match (e.g. string vs number, array vs object). Refer to the vendor’s API docs and your template mapping. |
+| Request: POST https://..., Status: 403, Message: &#123;"detail":"Invalid API key"&#125; | The vendor or webhook endpoint rejected the request because the API key (or other credential) is wrong or revoked.<br /><br />**To fix:** In SuprSend, open the vendor configuration for the channel and update the API key (or other credentials) with a valid value from the vendor’s dashboard. If the key was rotated or revoked, generate a new one and update SuprSend. |
+
+### Handlebars helper errors
+
+Handlebars helpers in templates (e.g. `datetime-format`, `compare`, `unique`, `#if`) have specific argument requirements.
+
+| Error | Fix |
+|-------|-----|
+| Handlebars helper "datetime-format" first/second argument should be valid datetime / moment.js format | The `datetime-format` helper expects a valid date value as the first argument and a valid moment.js format string as the second (e.g. `YYYY-MM-DD`, `HH:mm`).<br /><br />**To fix:** Ensure the first argument is a date string or value the helper can parse (e.g. ISO date from workflow data), and the second is a [moment.js format string](https://momentjs.com/docs/#/displaying/format/). Fix or remove any invalid or missing arguments in the template. |
+| Handlebars helper 'compare' doesn't know the operator eq / [object Object] | The `compare` helper was called with an operator it does not support, or one side of the comparison is an object instead of a primitive.<br /><br />**To fix:** Use a supported operator (e.g. `'eq'`, `'=='`, `'!='`, `'gt'`, `'lt'`) as specified in your template docs. Ensure both sides of the comparison are primitives (string, number, boolean); if one side is an object, compare a specific property (e.g. `user.id`) or convert to a string/number. |
+| In Handlebars helper "unique", if array item is object then pass key string as third parameter | The `unique` helper is used on an array of objects, but it needs to know which property to use for uniqueness.<br /><br />**To fix:** Pass the key (property name) as the third argument to the helper, e.g. the name of the field that uniquely identifies each item (e.g. `id` or `email`). Check the template documentation for the exact signature of the `unique` helper. |
+| #if requires exactly one argument | The `{{#if}}` block helper was used with zero or more than one argument.<br /><br />**To fix:** Provide exactly one argument to `{{#if}}`, e.g. `{{#if user}}` or `{{#if (eq status "active")}}`. Remove extra spaces, commas, or arguments that might be parsed as a second argument. |
 
 ### Internal Errors
 
-| Error | Solution |
-|-------|----------|
-| **500: xxxx** | SuprSend Internal server error. Reach out to us on [Slack community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) for assistance with this issue. |
+SuprSend-side errors; need support to resolve.
+
+| Error | Fix |
+|-------|-----|
+| 500: xxxx | SuprSend internal error. [Reach out on Slack community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ). **Include:** execution_id, workspace_id, timestamp, idempotency_key, full error message. |
+
+---
 
 ## Broadcast Processing Errors (Broadcast Execution Logs)
 
-These errors occur during broadcast processing. They appear in **Broadcast Execution Logs**.
+**Log type:** Broadcast Execution Logs. These errors occur during broadcast processing (list, template, user profile, or config).
 
 ### List Errors
 
-| Error | Solution |
-|-------|----------|
-| **SubscriberList Broadcast API: subscribers list is empty for list_id:`&lt;list_id&gt;`** | List doesn't have any users added. You can either sync users programmatically [via SDK / API](/docs/lists#1-programmatically-using-sdk--api) or [directly via csv upload](/docs/lists#3-from-ui-using-csv-upload) from [dashboard -> Lists page](https://app.suprsend.com/en/staging/subscribers/subscriber-list/). |
-| **SubscriberList Broadcast API: list_id: `&lt;list_id&gt;` not found** | `&lt;list_id&gt;` doesn't exist in SuprSend. You can create list programmatically [via SDK / API](/docs/lists#1-programmatically-using-sdk--api) or directly by clicking on **"New List"** button on [SuprSend dashboard -> Lists page](https://app.suprsend.com/en/staging/subscribers/subscriber-list/). |
+Empty list or missing `list_id`.
+
+| Error | Fix |
+|-------|-----|
+| SubscriberList Broadcast API: subscribers list is empty for list_id:`[list_id]` | List doesn't have any users added. You can either sync users programmatically [via SDK / API](/docs/lists#1-programmatically-using-sdk--api) or [directly via csv upload](/docs/lists#3-from-ui-using-csv-upload) from [dashboard -> Lists page](https://app.suprsend.com/en/staging/subscribers/subscriber-list/). |
+| SubscriberList Broadcast API: list_id: `[list_id]` not found | `[list_id]` doesn't exist in SuprSend. You can create list programmatically [via SDK / API](/docs/lists#1-programmatically-using-sdk--api) or directly by clicking on "New List" button on [SuprSend dashboard -> Lists page](https://app.suprsend.com/en/staging/subscribers/subscriber-list/). |
 
 ### Template Errors
 
-| Error | Solution |
-|-------|----------|
-| **SubscriberList Broadcast API: TemplateGroup `&lt;template_slug&gt;` not found** | This error occurs when, - the template with given template_slug is not present in your workspace. You can search with `template_slug` using global search `⌘ + K` on dashboard to verify this. - there is no published template version available for the channel - you have mistakenly passed template name instead of template slug in your workflow payload. You can get template_slug by clicking on copy icon next to template name on template details page. |
-| **SubscriberList Broadcast API: template: broadcast channels: `&lt;channel_array&gt;` are not live** | This error occurs when none of the channels mentioned in broadcast `channels` key is published in the template group. |
-| **SubscriberList Broadcast API: `&lt;channel&gt;`: template rendering failed error: "`&lt;variable_key&gt;`" not defined in [object Object]** | Certain variables with `variable_key` exist in the template but not part of broadcast data or user properties if you are using `$user` variable in the template. |
+Missing template, unpublished channel, or missing variables in broadcast data.
+
+| Error | Fix |
+|-------|-----|
+| SubscriberList Broadcast API: TemplateGroup `[template_slug]` not found | This error occurs when, - the template with given template_slug is not present in your workspace. You can search with `template_slug` using global search `⌘ + K` on dashboard to verify this. - there is no published template version available for the channel - you have mistakenly passed template name instead of template slug in your workflow payload. You can get template_slug by clicking on copy icon next to template name on template details page. |
+| SubscriberList Broadcast API: template: broadcast channels: `[channel_array]` are not live | This error occurs when none of the channels mentioned in broadcast `channels` key is published in the template group. |
+| SubscriberList Broadcast API: `[channel]`: template rendering failed error: "`[variable_key]`" not defined in [object Object] | Variables in the template are missing from broadcast data or user properties (e.g. when using `$user`). Add the missing variable to your broadcast data or to the user profile so the template can render. |
 
 ### User Profile Errors
 
-| Error | Solution |
-|-------|----------|
-| **SubscriberList Broadcast API: template: broadcast applicable live channels: [channel_list], but no respective user channels present** | User profile doesn't have any active channel from the channels available in template group. This could happen for 2 reasons: - User doesn't have that channel set in their profile. If the workflow is triggered via event, user's channel is derived from the existing user profile. [Create user profile via API or one of our SDKs](/docs/users#creating-user-profile-on-suprsend). - All identities for that channel are `inactive` in user profile. Channel can be marked inactive using `unset` or `remove` function via [SDK or API](/docs/users#via-sdk). SuprSend also marks the channel identity inactive for email and WhatsApp in case of hard errors from vendor end, such as bounced email addresses, unregistered WhatsApp numbers. This is done to safeguard your email domain authority or WhatsApp rating if you continue to send notifications to users who have reported or marked your email or messages as spam. Additionally, this helps in WhatsApp cost saving, as vendor charges for every processed request. Inactive marking period by SuprSend is 15 days for WhatsApp and 90 days for email. |
+User has no active channel for the template group.
+
+| Error | Fix |
+|-------|-----|
+| SubscriberList Broadcast API: template: broadcast applicable live channels: [channel_list], but no respective user channels present | User profile has no active channel from the template group. Add the channel to the user profile ([create user](/docs/users#creating-user-profile-on-suprsend)) or see Inactive channels note in [User-Related Errors](#user-related-errors) above. |
 
 ### Configuration Errors
 
-| Error | Solution |
-|-------|----------|
-| **SubscriberList Broadcast API: trigger_at must be in ISO 8601 format....** | This error occurs when time-duration format in the `trigger_at` key is incorrect. The correct format ISO 8601 timestamp. e.g. - `2024-01-01T05:30:00Z` indicates that the notification will be triggered at 1 Jan, 2024 5:30 AM UTC. |
-| **SubscriberList Broadcast API: no vendor configured for channel: `&lt;channel_name&gt;` and category: `&lt;notification_category&gt;` and id-provider: `&lt;vendor_name&gt;`** | This happens when vendor configuration for the given channel and notification category is missing. Navigate to vendor page on SuprSend dashboard to setup vendor. You can find integration guidelines for all vendors [here](/docs/vendors). |
+Invalid `trigger_at` format or missing vendor configuration.
+
+| Error | Fix |
+|-------|-----|
+| SubscriberList Broadcast API: trigger_at must be in ISO 8601 format.... | The `trigger_at` value is not in ISO 8601 format. Use an ISO 8601 timestamp, e.g. `2024-01-01T05:30:00Z` (1 Jan 2024, 5:30 AM UTC). |
+| SubscriberList Broadcast API: no vendor configured for channel: `[channel_name]` and category: `[notification_category]` and id-provider: `[vendor_name]` | This happens when vendor configuration for the given channel and notification category is missing. Navigate to vendor page on SuprSend dashboard to setup vendor. You can find integration guidelines for all vendors [here](/docs/vendors). |
 
 ## Notification Trigger Errors (Message Logs)
 
-These errors occur after a notification is triggered. They appear in **Message Logs**.
+**Log type:** Message Logs. These errors occur after a notification is triggered—when SuprSend attempts delivery via a vendor. Execution and broadcast errors are not retried automatically; fix the cause and re-trigger. For vendor/delivery failures, retry may succeed; if not, check vendor status or contact support.
 
-### Vendor Errors
+### Failure by Vendor (Message Log statuses)
 
-| Error | Solution |
-|-------|----------|
-| **Trigger failed or Failure by Vendor** | **Trigger Failed** occurs in two scenarios: (1) **SuprSend internal failures** — missing channel info, template rendering failures; (2) **Vendor rejections** — invalid template, credential errors, bad email/phone format. **Failure by Vendor** occurs when the vendor accepted the request but failed to deliver. You'll see `Trigger failed` or `Failure by Vendor` status in the logs. Hover over the 'i' icon to view the error message. For detailed troubleshooting, refer to individual vendor guides. Check vendor-specific error documentation. |
+Statuses like **Trigger failed** or **Failure by Vendor** indicate why a message did not deliver. Hover over the **'i'** icon in the log row for the exact error message.
+
+| Error | Fix |
+|-------|-----|
+| Trigger failed or Failure by Vendor | Trigger Failed: (1) SuprSend internal failures — missing channel info, template rendering failures; (2) Vendor rejections — invalid template, credential errors, bad email/phone format. Failure by Vendor: the vendor accepted the request but failed to deliver. Check status in the logs and hover over the 'i' icon for the message. See individual vendor guides for troubleshooting. |
+
+---
+
+## Related docs
+
+<CardGroup cols={2}>
+  <Card title="Logging" icon="book" iconType="solid" href="/docs/logging">
+    Request, Workflow Execution, Broadcast, and Message logs.
+  </Card>
+  <Card title="API Request Errors" icon="code" iconType="solid" href="/docs/api-request-errors">
+    Errors before workflow starts (validation, auth, recipient).
+  </Card>
+  <Card title="Trigger workflow" icon="play" iconType="solid" href="/docs/trigger-workflow">
+    Payload and data shape for workflows.
+  </Card>
+  <Card title="Vendors" icon="plug" iconType="solid" href="/docs/vendors">
+    Channel and vendor configuration.
+  </Card>
+</CardGroup>
 
 ## Frequently Asked Questions
 
@@ -174,13 +282,13 @@ These errors occur after a notification is triggered. They appear in **Message L
   <Accordion title="I added channels to the user profile, but they are not reflected in subscriber profile on SuprSend dashboard?" defaultOpen={false}>
     Check the format of value passed in user channels. Channel will not be updated in profile if the format is incorrect. Supported format for each channel:
 
-    - **SMS, WhatsApp**: `+15555555555` (country code is mandatory)
-    - **Email**: `abc@example.com`
+    - SMS, WhatsApp: `+15555555555` (country code is mandatory)
+    - Email: `abc@example.com`
     
-    [Refer here](/docs/python-create-user-profile#1-add-user-channels) for other channel formats.
+    See [Add user channels](/docs/python-create-user-profile#1-add-user-channels) for all channel formats.
   </Accordion>
 </AccordionGroup>
 
 <Note>
-  If you are facing an issue which is not covered above, reach out to us on [Slack community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) or via email: [support@suprsend.com](mailto:support@suprsend.com)
+  Error not listed? See [API Request Errors](/docs/api-request-errors) for request-level issues, or [contact support](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ). **Include:** request_id or execution_id, workspace_id, timestamp, idempotency_key, full error string.
 </Note>
