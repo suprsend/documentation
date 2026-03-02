@@ -1,29 +1,27 @@
 ---
 title: "PostgreSQL Setup Guide"
-description: "Provision, configure, and validate PostgreSQL for SuprSend self-hosted deployment."
+description: "Provision, configure, and validate PostgreSQL for a SuprSend self-hosted deployment."
 ---
 
-Provision, configure, and validate **PostgreSQL** for your SuprSend self-hosted deployment. You can use **managed PostgreSQL** (recommended) or run it on **VMs or Kubernetes**.
+This guide helps your team provision, configure, and validate PostgreSQL for a **SuprSend self-hosted deployment**.  
+You can use a **managed PostgreSQL** (recommended for ease of maintenance) or deploy it on your own **VMs/Kubernetes**.
 
-<Note>
-**Version Requirement**: PostgreSQL **v17 or newer**  
-**Required Extensions**: `pg_cron`, `pgcrypto`, `pg_stat_statements`, `btree_gin`, `btree_gist`  
-**Required Parameters** (in `postgresql.conf` or DB parameter group):
-
-```
-shared_preload_libraries = 'pg_stat_statements,pg_cron'
-cron.database_name = 'defaultdb'
-cron.max_running_jobs = 1
-hot_standby_feedback = on
-max_standby_archive_delay = -1
-max_standby_streaming_delay = -1
-wal_level = logical
-```
-</Note>
+> **Version Requirement**: PostgreSQL **v17 or newer**  
+> **Required Extensions**: `pg_cron`, `pgcrypto`, `pg_stat_statements`, `btree_gin`, `btree_gist`  
+> **Required Parameters (in `postgresql.conf` or DB parameter group):**
+> ```
+> shared_preload_libraries = 'pg_stat_statements,pg_cron'
+> cron.database_name = 'defaultdb'
+> cron.max_running_jobs = 1
+> hot_standby_feedback = on
+> max_standby_archive_delay = -1
+> max_standby_streaming_delay = -1
+> wal_level = logical
+> ```
 
 ---
 
-## Step 1: Topology & Sizing
+## Topology & Sizing
 
 | Component | Recommended Configuration |
 |------------|---------------------------|
@@ -35,7 +33,7 @@ wal_level = logical
 
 ---
 
-## Step 2: Managed PostgreSQL (Recommended)
+## Managed PostgreSQL (Recommended)
 
 Managed services simplify upgrades, backups, and high availability.
 
@@ -62,15 +60,13 @@ Managed services simplify upgrades, backups, and high availability.
 2. Apply the parameters above.
 3. Enable required extensions.
 
-<Note>
-Verify `pg_cron` availability. If unavailable, consider self-hosted deployment.
-</Note>
+> **Note**: Verify `pg_cron` availability. If unavailable, consider self-hosted deployment.
 
 ---
 
-## Step 3: Self-Hosted on VMs
+## Self-Hosted on VMs
 
-1. Install PostgreSQL 17+ (from PGDG or distro repos).
+1. Install PostgreSQL 17+ (from PGDG or distro repos).  
 2. Edit `postgresql.conf`:
    ```conf
    shared_preload_libraries = 'pg_stat_statements,pg_cron'
@@ -86,7 +82,7 @@ Verify `pg_cron` availability. If unavailable, consider self-hosted deployment.
 
 ---
 
-## Step 4: Self-Hosted on Kubernetes
+## Self-Hosted on Kubernetes
 
 You can deploy PostgreSQL using a **Postgres Operator** or **Helm chart**.
 
@@ -112,7 +108,7 @@ Mount this ConfigMap into your container or operator-managed config.
 
 ---
 
-## Step 5: Create Required Databases
+## Create Required Databases
 
 Run the following SQL on your instance:
 
@@ -127,15 +123,15 @@ CREATE DATABASE temporal_visibility;
 
 ---
 
-## Step 6: Enable Required Extensions
+## Enable Required Extensions
 
-Enable `pg_cron` on `defaultdb` database:
+Enable `pg_cron` on `defaultdb` database
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-Run the following **in each of the six databases**:
+Run the following commands **in each of the six databases**:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -144,13 +140,12 @@ CREATE EXTENSION IF NOT EXISTS btree_gin;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 ```
 
-<Tip>
-`cron.database_name = 'defaultdb'` means scheduled jobs run by default in the `defaultdb` database.
-</Tip>
+> **Tip:**  
+> `cron.database_name = 'defaultdb'` means scheduled jobs run by default in the `defaultdb` database.
 
 ---
 
-## Step 7: Create Roles & Grant Access
+## Create Roles & Grant Access
 
 Create an application role for SuprSend:
 
@@ -167,13 +162,11 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 
 Repeat equivalent grants for other databases as needed.
 
-<Note>
-For high concurrency, use **PgBouncer** in transaction pooling mode.
-</Note>
+> For high concurrency, use **PgBouncer** in transaction pooling mode.
 
 ---
 
-## Step 8: Replication, HA & Backups
+## Replication, HA & Backups
 
 - Enable **streaming replication** with 1–2 replicas.
 - Ensure `hot_standby_feedback=on` and `wal_level=logical`.
@@ -187,7 +180,7 @@ For high concurrency, use **PgBouncer** in transaction pooling mode.
 
 ---
 
-## Step 9: Observability & Maintenance
+## Observability & Maintenance
 
 - `pg_stat_statements`: helps analyze query performance.
 - Monitor:
@@ -202,7 +195,7 @@ For high concurrency, use **PgBouncer** in transaction pooling mode.
 
 ---
 
-## Step 10: Security & Networking
+## Security & Networking
 
 - Enforce **TLS** for connections.
 - Restrict access to VPC/VNet or private subnets.
@@ -211,7 +204,7 @@ For high concurrency, use **PgBouncer** in transaction pooling mode.
 
 ---
 
-## Step 11: Validation Checklist
+## Validation Checklist
 
 ```sql
 -- Check version
@@ -235,17 +228,15 @@ All checks should return expected values.
 
 ---
 
-## Step 12: SuprSend Helm Configuration
+## SuprSend Helm Configuration
 
 Once your PostgreSQL instance is configured with all required databases and extensions, configure SuprSend to use it.
 
-<Note>
-This section shows only the **PostgreSQL-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
-</Note>
+> **Important**: This section shows only the **PostgreSQL-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 
 ### Kubernetes Secret Configuration
 
-First, add the PostgreSQL-specific secrets to your SuprSend secrets file (see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide) for the full secrets template):
+First, add the PostgreSQL-specific secrets to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
 
 ```yaml
 # ============================================
@@ -259,7 +250,7 @@ pgDbPasswordKey: "YOUR_PASSWORD"
 
 ### Helm Values Configuration
 
-Then add the following to your SuprSend values file (along with other required configuration—see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
 
 ```yaml
 # hostname of PostgreSQL database instance
@@ -274,13 +265,28 @@ pgMaxPoolSize: "10"
 pgDbReplicaHost: ""
 ```
 
-<Note>
-SuprSend will automatically connect to the required databases (`suprsend`, `pronto`, `svix`, `defaultdb`) using the same host and credentials. Ensure all databases are created on the same PostgreSQL instance. The above configuration goes under `global.config` section.
-</Note>
+> **Note**: SuprSend will automatically connect to the required databases (`suprsend`, `pronto`, `svix`, `defaultdb`) using the same host and credentials. Ensure all databases are created on the same PostgreSQL instance. The above configuration goes under `global.config` section.
 
 ---
 
-## Step 13: FAQ
+## Final Steps
+
+✅ Provision PostgreSQL **17+**  
+✅ Apply **configuration parameters**  
+✅ Create **six databases**  
+✅ Enable **required extensions**  
+✅ Set up **roles and access**  
+✅ Configure **replication & backups**  
+✅ Run **validation checklist**
+
+---
+
+**Next Steps:**  
+Once PostgreSQL is ready, proceed with deploying the rest of the SuprSend stack using the Helm charts provided in the deployment documentation.
+
+---
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Do we need all extensions in every database?">
@@ -293,28 +299,3 @@ SuprSend will automatically connect to the required databases (`suprsend`, `pron
     You can use external schedulers (like CloudWatch, GCP Cloud Scheduler, or Kubernetes CronJobs) as a fallback.
   </Accordion>
 </AccordionGroup>
-
----
-
-## Step 14: Final Steps
-
-- [ ] Provision PostgreSQL **17+**
-- [ ] Apply **configuration parameters**
-- [ ] Create **six databases**
-- [ ] Enable **required extensions**
-- [ ] Set up **roles and access**
-- [ ] Configure **replication & backups**
-- [ ] Run **validation checklist**
-
----
-
-## What's next
-
-<CardGroup cols="2">
-  <Card title="Redis setup" icon="database" iconType="solid" href="/docs/byoc/setup-dependencies/redis">
-    Configure the two Redis instances (cache + workflow state).
-  </Card>
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Deploy the rest of the stack with Helm.
-  </Card>
-</CardGroup>

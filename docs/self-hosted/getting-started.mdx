@@ -3,120 +3,98 @@ title: "Getting Started"
 description: "Complete step-by-step guide to deploy SuprSend in your own infrastructure."
 ---
 
-<Info>
-**Enterprise only.** This guide is for SuprSend **enterprise customers** with access to Self-Hosted deployment.
-</Info>
-
-Follow this guide to set up SuprSend in your own infrastructure. You'll install dependencies in order, then deploy the SuprSend Helm chart and verify the deployment.
+This comprehensive guide will walk you through setting up SuprSend in your own infrastructure.
 
 <Tip>
 For production deployments, we recommend using managed services for databases and queues to ensure high availability and performance.
 </Tip>
 
----
+## Deployment Checklist
 
-## Deployment overview
+### Flowchart
 
-Deploy in this order: install each dependency, then the SuprSend chart. After install, run through the verification checklist.
+<div className="row">
+  <div className="col col--6">
 
-<CardGroup cols="2">
-  <Card title="Installation order" icon="layer-group" iconType="solid">
-    **1** → PostgreSQL · **2** → Redis · **3** → OpenSearch · **4** → Temporal · **5** → SuprSend Helm chart
-  </Card>
-  <Card title="After install — verify" icon="circle-check" iconType="solid">
-    DB connections → Temporal workers → Health checks → Test notification → Backups & monitoring
-  </Card>
-</CardGroup>
+**Installation Steps**
 
-**Installation flow**
+```mermaid
+%%{init: {"themeVariables": { "fontSize": "16px", "nodeSpacing": 50, "rankSpacing": 70 }}}%%
+flowchart TB
+    A1([1️⃣ Install PostgreSQL])
+    A2([2️⃣ Install Redis])
+    A3([3️⃣ Install OpenSearch])
+    A4([4️⃣ Set up Temporal])
+    A5([5️⃣ Install SuprSend])
 
-| Component | What to do |
-|-----------|------------|
-| **PostgreSQL** | Primary data store. [Setup guide →](/docs/self-hosted/setup-dependencies/postgres) |
-| **Redis** (×2) | Cache + workflow state. [Setup guide →](/docs/self-hosted/setup-dependencies/redis) |
-| **OpenSearch** | Inbox / search. [Setup guide →](/docs/self-hosted/setup-dependencies/opensearch) |
-| **Temporal** | Workflow engine. [Setup guide →](/docs/self-hosted/setup-dependencies/temporal) |
-| **SuprSend** | [Helm chart](https://self-hosted.suprsend.com/install/suprsend) — then dashboard & test |
+    A1 --> A2 --> A3 --> A4 --> A5
+```
 
-**Post-install checks**
+  </div>
+  <div className="col col--6">
 
-1. Verify DB connections (Postgres, Redis, OpenSearch)
-2. Confirm Temporal workers are running
-3. Run SuprSend health checks
-4. Send a test workflow notification
-5. Set up backups and monitoring
+**Final Checklist**
 
-Details for each step are in the sections below.
+```mermaid
+%%{init: {"themeVariables": { "fontSize": "16px", "nodeSpacing": 50, "rankSpacing": 70 }}}%%
+flowchart TB
+    F1(["1️⃣ Verify DB connections"])
+    F2(["2️⃣ Confirm Temporal workers"])
+    F3(["3️⃣ Run SuprSend health checks"])
+    F4(["4️⃣ Send test workflow notification"])
+    F5(["5️⃣ Set up backups & monitoring"])
 
----
+    F1 --> F2 --> F3 --> F4 --> F5
+```
 
-## Step-by-step: Install dependencies
+  </div>
+</div>
 
-<Steps>
-  <Step title="PostgreSQL" stepNumber="1">
-    Primary data store for SuprSend. Use a managed PostgreSQL service in production, or deploy with Helm for dev/test.  
-    **[→ PostgreSQL setup guide](/docs/self-hosted/setup-dependencies/postgres)**
-  </Step>
-  <Step title="Redis (two instances)" stepNumber="2">
-    **Shared Redis** — caching across services. **Workflow state Redis** — execution state. Keep them separate so delays in one don't affect delivery.  
-    **[→ Redis setup guide](/docs/self-hosted/setup-dependencies/redis)**
-  </Step>
-  <Step title="OpenSearch" stepNumber="3">
-    Data store for Inbox notifications. Prefer managed (AWS OpenSearch, GCP Elastic, Azure Elastic) in production; for air-gapped setups, use the OpenSearch Operator in Kubernetes.  
-    **[→ OpenSearch setup guide](/docs/self-hosted/setup-dependencies/opensearch)**
-  </Step>
-  <Step title="Temporal" stepNumber="4">
-    Workflow execution engine and state management.  
-    **[→ Temporal setup guide](/docs/self-hosted/setup-dependencies/temporal)**
-  </Step>
-  <Step title="SuprSend application" stepNumber="5">
-    Install via the [SuprSend Helm chart](https://self-hosted.suprsend.com/install/suprsend). Then access the dashboard and start testing.
-  </Step>
-</Steps>
+### Step 1: PostgreSQL Installation
 
----
+PostgreSQL serves as the primary data store for SuprSend. For production deployments, we recommend using a managed PostgreSQL service. For development or testing, you can deploy PostgreSQL using Helm. Refer [setup guide](/docs/self-hosted/setup-dependencies/postgres).
 
-## Post-deployment checklist
+### Step 2: Redis Setup
 
-<Steps>
-  <Step title="Access dashboard and create admin" stepNumber="1">
-    Open `https://your-domain.com/dashboard` and set up your first admin user.
-  </Step>
-  <Step title="Configure channels and webhooks" stepNumber="2">
-    Add email, SMS, and push providers; set webhook endpoints in vendors for real-time logs in the dashboard.
-  </Step>
-  <Step title="Send a test notification" stepNumber="3">
-    Create a workflow and trigger a test from the dashboard or API to verify the flow.
-  </Step>
-</Steps>
+Redis provides high-performance caching and session management. You'll have to setup 2 redis instances (both external):
+- **Shared Redis**: Shared across all SuprSend services for cahing purpose
+- **Workflow state management Redis**: Keeps cache of workflow execution details and its execution history
 
-**Verify these are working:**
+This is done to ensure that delay in any service doesn't impact your notifications delivery. Refer [setup guide](/docs/self-hosted/setup-dependencies/redis).
 
-| Check | Description |
-|-------|-------------|
-| Dashboard | Accessible via HTTPS |
-| API | Endpoints responding |
-| Databases | Postgres, Redis, OpenSearch connections OK |
-| Temporal | Workflows executing |
-| Channels | Email (and SMS if configured) sending |
+### Step 3: OpenSearch Installation
 
-Once everything is green, use the same [workflows](/docs/workflows), [templates](/docs/templates), and [APIs](/reference/overview) as in the main docs.
+OpenSearch acts as DB store for Inbox notifications. SuprSend recommends using a managed OpenSearch service (AWS OpenSearch, GCP Elastic, or Azure Elastic) for production environments to reduce operational overhead and ensure high availability.
+
+However, for self‑managed or air‑gapped environments, you can deploy OpenSearch directly in Kubernetes using the OpenSearch Operator. Refer [Installation guide](/docs/self-hosted/setup-dependencies/opensearch).
+
+### Step 4: Temporal Installation
+
+Temporal is your workflow exection engine and interim state management layer. Refer [Setup Guide](/docs/self-hosted/setup-dependencies/temporal).
+
+### Step 5: SuprSend Application Deployment
+
+You can install and setup SuprSend Application in your host using the helm chart provided [here](https://byoc.suprsend.com/install/suprsend). This will install suprsend package and it's bundled dependencies in your infra. Once setup, you can access SuprSend dashboard and start testing the product.
 
 ---
 
-## What's next
+## Post-Deployment Checklist
 
-<CardGroup cols="2">
-  <Card title="List of Dependencies" icon="server" iconType="solid" href="/docs/self-hosted/list-of-dependencies">
-    Version requirements and sizing for each component.
-  </Card>
-  <Card title="Generating Required Keys" icon="key" iconType="solid" href="/docs/self-hosted/generating-required-keys">
-    Deployment secret, NATS NKey, and AES cipher keys.
-  </Card>
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/self-hosted/suprsend-installation-guide">
-    Helm install, secrets, and values.yaml.
-  </Card>
-  <Card title="Setting up Ingress" icon="globe" iconType="solid" href="/docs/self-hosted/setting-up-ingress">
-    Expose SuprSend with Nginx Ingress and TLS.
-  </Card>
-</CardGroup>
+1. **Access the Dashboard**: Navigate to `https://your-domain.com/dashboard`
+2. **Create Admin Account**: Set up your first admin user
+3. **Configure Channels**: Set up email, SMS, and push notification providers
+4. **Configure Webhooks**: Set up webhook endpoints in your vendor for getting real-time logs in SuprSend dashboard
+4. **Test Notifications**: Create your first workflow and send a test notification from the dashboard or API to test a notification flow.
+
+#### Verify if the following services or connections are properly working
+
+- [ ] Dashboard accessible via HTTPS
+- [ ] API endpoints responding correctly
+- [ ] Database connections established
+- [ ] Redis caching working
+- [ ] OpenSearch indexing notifications
+- [ ] Temporal workflows executing
+- [ ] Email notifications sending
+- [ ] SMS notifications sending (if configured)
+
+Once your setup is working, you can navigate SuprSend dashboard and start testing your product usecases.

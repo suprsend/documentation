@@ -1,95 +1,87 @@
 ---
 title: "Generating Required Keys"
-description: "Generate deployment secret, NATS NKey pair, and AES cipher keys for SuprSend self-hosted installation."
+description: "Generate the deployment secret, NATS NKey pair, and AES cipher keys required before installing SuprSend."
 ---
 
-Before installing SuprSend, generate **three keys**. They are used for authentication, messaging, and encryption across components.
+Before installing SuprSend, you need to generate **three essential
+keys** for your deployment. These keys ensure secure communication and
+encryption between different components of SuprSend.
 
-| Key | Purpose |
-|-----|---------|
-| **Deployment secret** | Authenticates and secures your SuprSend installation |
-| **NATS NKey pair** | Signs and validates messages (NATS) |
-| **AES cipher secret + IV** | Encrypts sensitive payloads |
+## Generate Deployment Secret Key
 
----
+This key is a unique random string used to authenticate and secure your
+SuprSend installation.
 
-## Step 1: Deployment secret key
+Run the following Python script to generate a strong secret key:
 
-A unique random string that authenticates and secures your installation.
-
-**Run a Python shell:**
-
-```bash
+``` bash
 python3
 ```
 
 Then, in the interactive shell:
 
-```python
+``` python
 import secrets
 "".join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)") for i in range(50))
 ```
 
-Copy the **50-character** output and store it securely.
+This will output a **50-character random secret string** --- copy and
+store it securely.\
+Example output:
 
-**Example output:**
-
-```
-x2#e9ahb!@1d3f_4g5jklmn6opq7rstuv8wxyz
-```
-
-<Tip>
-Keep this key private. It should never be committed to version control or shared publicly.
-</Tip>
-
----
-
-## Step 2: NATS NKey pair
-
-SuprSend uses **NATS** for messaging. Generate a **public/private key pair** for signing and validation.
-
-**Step 1 — Install the `nk` CLI:**
-
-   ```bash
-   go install github.com/nats-io/nkeys/nk@latest
-   ```
-
-**Step 2 — Generate a user key pair:**
-
-```bash
-nk -gen user -pubout
-```
-
-You get two keys: **Private** (starts with `SU...`) and **Public** (starts with `U...`).
-
-**Example output:**
-
-```
-SUAGC2U8QYUZ7A... (Private Key)
-UAGB2UZJBNFJZ3... (Public Key)
-```
+`x2#e9ahb!@1d3f_4g5jklmn6opq7rstuv8wxyz`
 
 <Warning>
-**Important:**
+Keep this key private. It should never be committed to version control or shared publicly.
+</Warning>
+
+## Generate NATS NKey Pair
+
+SuprSend uses **NATS** as its internal messaging backbone.\
+You'll need to generate a **public/private key pair** for secure message
+signing and validation.
+
+
+1.  Install the `nk` CLI tool for generating NATS keys:
+
+    ``` bash
+    go install github.com/nats-io/nkeys/nk@latest
+    ```
+
+2.  Generate a new user key pair:
+
+    ``` bash
+    nk -gen user -pubout
+    ```
+
+You'll get two keys: - **Private Key** → starts with `SU...` - **Public
+Key** → starts with `U...`
+
+Example output:
+
+    SUAGC2U8QYUZ7A... (Private Key)
+    UAGB2UZJBNFJZ3... (Public Key)
+
+<Warning>
 - Store the private key securely — it must not be exposed or shared.
 - The public key can be shared with your SuprSend deployment configuration.
 </Warning>
 
----
+## Generate AES Cipher Secret and Vector
 
-## Step 3: AES cipher secret and vector
+SuprSend uses AES encryption for sensitive payloads.\
+You'll need to generate a **shared AES key** and an **initialization
+vector (IV)**.
 
-Used for AES encryption of sensitive payloads. Generate a **32-byte shared secret** and a **16-byte IV**.
+Run the following Python script:
 
-**Run a Python shell:**
-
-```bash
+``` bash
 python3
 ```
 
 Then, inside the interactive shell:
 
-```python
+``` python
 def aes_cipher():
     import os
     shared_secret = os.urandom(32)
@@ -100,24 +92,13 @@ def aes_cipher():
 aes_cipher()
 ```
 
-**Example output:**
+You'll get two hex-encoded values:
 
 ```
-Shared Secret (AES Key): 3f2a9e5b1d0a6c4d4e7f9b1c2d3a4b5c6d7e8f90123456789abcdef1234567890
-Vector (IV): 1a2b3c4d5e6f70819283746556473829
+Shared Secret (AES Key): `3f2a9e5b1d0a6c4d4e7f9b1c2d3a4b5c6d7e8f90123456789abcdef1234567890`
+Vector (IV): `1a2b3c4d5e6f70819283746556473829`
 ```
 
-<Note>
-Save both values safely. You'll add them to your SuprSend secrets when configuring the [SuprSend installation](/docs/byoc/suprsend-installation-guide) (Create SuprSend Secrets section).
-</Note>
-
-## What's next
-
-<CardGroup cols="2">
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Create secrets and install SuprSend with Helm.
-  </Card>
-  <Card title="List of Dependencies" icon="server" iconType="solid" href="/docs/byoc/list-of-dependencies">
-    Review infrastructure components before installing.
-  </Card>
-</CardGroup>
+<Info>
+Save both values safely. They'll be required in your SuprSend configuration under encryption settings.
+</Info>

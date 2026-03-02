@@ -1,33 +1,31 @@
 ---
 title: "Redis Setup Guide"
-description: "Provision and operate the two Redis-compatible stores (cache and worker state) for SuprSend self-hosted deployments."
+description: "Provision and operate the two Redis-compatible stores SuprSend needs in self-hosted deployments."
 ---
 
 This document explains how to provision and operate the key-value stores SuprSend needs in self-hosted deployments. It covers **two separate stores** (both Redis-compatible), high availability options, Kubernetes/VM installs, configuration, performance, observability, and backups.
 
 ---
 
-## Step 1: Architecture Overview
+## Architecture
 
 SuprSend uses Redis-compatible stores in two distinct roles:
 
-1. **Cache Store (non-clustered Redis)**
-   - **Purpose:** Idempotency keys caching, short-lived/ephemeral data, cross-service temporary data, and uses service-level isolation via **database numbers**.
-   - **Important:** Do **not** run this in Redis Cluster mode (Cluster mode doesn't support database numbers).
-   - **Eviction:** If needed can be set to `volatile-lru`
+1) **Cache Store (non-clustered Redis)**  
+   - Purpose: idempotency keys caching, short-lived/ephemeral data, cross-service temporary data, and uses service-level isolation via **database numbers**.  
+   - **Important:** Do **not** run this in Redis Cluster mode (Cluster mode doesn’t support database numbers).  
+   - Eviction: If needed can be set to `volatile-lru`
 
-2. **Worker State Store (Redis or KV-Rocks)**
-   - **Purpose:** Queue/worker progress, workflow step state emitted during Temporal-driven execution, retry bookkeeping, etc.
-   - **Durability:** Recommended (AOF or SSD-backed KV).
+2) **Worker State Store (Redis or KV-Rocks)**  
+   - Purpose: queue/worker progress, workflow step state emitted during Temporal-driven execution, retry bookkeeping, etc.  
+   - Durability: recommended (AOF or SSD-backed KV).  
    - You may use **Redis (standalone/Sentinel/Cluster)** or **KV-Rocks** (Redis-compatible, SSD-optimized) to reduce cost for larger datasets.
 
-<Note>
-We *strongly* recommend using a **managed** service (e.g., AWS ElastiCache, GCP Memorystore, Azure Cache for Redis) for both roles in production. If that's not possible, you can run them on Kubernetes or VMs (guides below).
-</Note>
+> We *strongly* recommend using a **managed** service (e.g., AWS ElastiCache, GCP Memorystore, Azure Cache for Redis) for both roles in production. If that’s not possible, you can run them on Kubernetes or VMs (guides below).
 
 ---
 
-## Step 2: Minimum Requirements & Versioning
+## Minimum Requirements & Versioning
 
 - **Redis ≥ 7.0** (stable stream), or **KV-Rocks latest stable**.
 - TLS support recommended in production.
@@ -36,49 +34,37 @@ We *strongly* recommend using a **managed** service (e.g., AWS ElastiCache, GCP 
 
 ---
 
-## Step 3: Instance Sizing (Starting Points)
+## Instance Sizing
 
-<Note>
-Adjust after observing real traffic. Use `keys`, `memory`, `latency`, and hit/miss ratios to tune.
-</Note>
+> Adjust after observing real traffic. Use `keys`, `memory`, `latency`, and hit/miss ratios to tune.
 
 | Role | CPU | RAM | Storage | Notes |
-|------|---:|---:|---:|---|
+|---|---:|---:|---:|---|
 | Cache Store | 1–2 vCPU | 2–8 GB | 0–10 GB | Disable or minimize persistence, enable eviction. |
 | Worker State (Redis) | 2–4 vCPU | 8–32 GB | 50–200 GB SSD | Enable AOF (appendfsync everysec), or use Cluster. |
 | Worker State (KV-Rocks) | 2–4 vCPU | 8–32 GB | 200–1000 GB SSD | Designed for large state at lower RAM cost. |
 
 ---
 
-## Step 4: Connection & App Configuration
+## Connection & App Configuration
 
 Set the following environment variables in SuprSend services:
 
-<Note>
-Since we use DB numbers for isolation, only pass redis url without `/` and database number for the Cache Store.
-</Note>
-
+> Since we use DB numbers for isolation, only pass redis url without `/` and database number
 - **Cache Store**
   - `REDIS_CONN_BASE_URL` — e.g., `redis://:<password>@redis-cache:6379`
-
+  
 - **Worker State Store**
-
-<Note>
-You can pass full redis connection URL including database number if not running in cluster mode.
-</Note>
-
+> You can pass full redis connection URL including database number if not running in cluster mode
   - `REDIS_WORKERCACHE_CONN_URL` — e.g., `redis://:<password>@redis-state:6379/0` (Redis) or `redis://kvrocks-state:6666/0` (KV-Rocks defaults vary)
-
-<Note>
-**Do not** point both roles to the same instance. Keep credentials and ACLs separate.
-</Note>
+  
+> **Do not** point both roles to the same instance. Keep credentials and ACLs separate.
 
 ---
 
-## Step 5: Recommended Configurations
+## Recommended Configurations
 
-### Step 5.1: Cache Store (Standalone Redis, non-cluster)
-
+### Cache Store (Standalone Redis, non-cluster)
 Key goals: low latency, predictable eviction, minimal persistence.
 
 ```
@@ -91,8 +77,7 @@ timeout 0
 aclfile /etc/redis/users.acl  # configure users/ACLs
 ```
 
-### Step 5.2: Worker State Store (Redis)
-
+### Worker State Store (Redis)
 Key goals: durability, predictable recovery, optional scaling via Cluster.
 
 ```
@@ -105,33 +90,32 @@ timeout 0
 # If Cluster: 3+ primaries with replicas; mind client-side routing compatibility
 ```
 
-### Step 5.3: Worker State Store (KV-Rocks)
-
+### Worker State Store (KV-Rocks)
 - Use SSD volumes and ensure adequate IOPS.
 - Configure compaction and rate-limits per KV-Rocks recommendations.
 - Keep memory baseline for memtables/Block cache; rely on SSD for depth.
 
 ---
 
-## Step 6: High Availability Options
+## High Availability Options
 
 - **Managed:** choose Multi-AZ, automatic failover.
-- **Kubernetes (Redis Sentinel):** one StatefulSet for primary, another for replicas, and a Sentinel Deployment (or use community/Bitnami Helm charts).
-- **Redis Cluster:** shard keys across the cluster; validate client library support (SuprSend components use standard Redis clients — Cluster is fine for **Worker State**, not for **Cache** due to DB numbers requirement).
+- **Kubernetes (Redis Sentinel):** one StatefulSet for primary, another for replicas, and a Sentinel Deployment (or use community/Bitnami Helm charts).  
+- **Redis Cluster:** shard keys across the cluster; validate client library support (SuprSend components use standard Redis clients—Cluster is fine for **Worker State**, not for **Cache** due to DB numbers requirement).
 - **KV-Rocks:** run as a StatefulSet with anti-affinity across nodes and regular snapshots.
 
 ---
 
-## Step 7: Security
+## Security
 
 - **Auth:** require passwords or ACL users (disable `default` or set strong ACL).
-- **TLS:** enable TLS at the endpoint (managed services: turn on "in-transit encryption").
+- **TLS:** enable TLS at the endpoint (managed services: turn on “in-transit encryption”).
 - **Network:** allowlist only SuprSend namespaces/VMs; use NetworkPolicies/NSGs/SGs.
 - **Backups (Worker State):** store encrypted snapshots in object storage; rotate credentials.
 
 ---
 
-## Step 10: Observability and Backup
+## Observability and Backup
 
 - Monitor with **redis-exporter** (Prometheus + Grafana).
 - Backup Redis AOF/RDB or KV-Rocks snapshots nightly.
@@ -139,7 +123,7 @@ timeout 0
 
 ---
 
-## Step 11: Managed Services (Recommended)
+## Managed Services (Recommended)
 
 - AWS ElastiCache (Multi-AZ, in-transit encryption, auto failover)
 - GCP Memorystore / Azure Cache equivalents.
@@ -147,7 +131,7 @@ timeout 0
 
 ---
 
-## Step 12: Cost Optimization Tips
+## Cost Optimization Tips
 
 - Keep **Cache** ephemeral (disable persistence, small RAM, TTLs).
 - Use **KV-Rocks** for large Worker State stores.
@@ -155,17 +139,15 @@ timeout 0
 
 ---
 
-## Step 13: SuprSend Helm Configuration
+## SuprSend Helm Configuration
 
 Once your Redis instances are set up and running, configure SuprSend to use them.
 
-<Note>
-This section shows only the **Redis-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
-</Note>
+> **Important**: This section shows only the **Redis-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 
 ### Kubernetes Secret Configuration
 
-First, add the Redis-specific secrets to your SuprSend secrets file (see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide) for the full secrets template):
+First, add the Redis-specific secrets to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
 
 ```yaml
 # ============================================
@@ -179,22 +161,20 @@ redisWorkercacheConnUrlKey: "redis://user:password@redis-state.infra.svc.cluster
 
 ### Helm Values Configuration
 
-Then add the following to your SuprSend values file (along with other required configuration — see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
 
 ```yaml
-# connection URL for Redis without database-number (e.g., `redis://user:password@host:port`)
+# connection URL for Redis without database-number(e.g., `redis://user:password@host:port`)
 redisConnBaseUrlKey: "redisConnBaseUrlKey"
-# full connection url (with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (e.g., `redis://user:password@host:port/0`)
+# full connection url(with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (e.g., `redis://user:password@host:port/0`)
 redisWorkercacheConnUrlKey: "redisWorkercacheConnUrlKey"
 ```
 
-<Note>
-Redis connection is configured entirely via connection URLs in the secrets. The `redisConnBaseUrlKey` should NOT include a database number (SuprSend will append different DB numbers for service isolation). The `redisWorkercacheConnUrlKey` should include the database number (e.g., `/0`). The above configuration goes under `global.secret` section.
-</Note>
+> **Note**: Redis connection is configured entirely via connection URLs in the secrets. The `redisConnBaseUrlKey` should NOT include a database number (SuprSend will append different DB numbers for service isolation). The `redisWorkercacheConnUrlKey` should include the database number (e.g., `/0`). The above configuration goes under `global.secret` section.
 
 ---
 
-## Step 14: FAQ
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Can I run both roles in one Redis?">
@@ -204,16 +184,3 @@ Redis connection is configured entirely via connection URLs in the secrets. The 
     Optional for **Worker State** only.
   </Accordion>
 </AccordionGroup>
-
----
-
-## What's next
-
-<CardGroup cols="2">
-  <Card title="OpenSearch Setup Guide" icon="magnifying-glass" iconType="solid" href="/docs/byoc/setup-dependencies/opensearch">
-    Set up OpenSearch for search and analytics.
-  </Card>
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Deploy the rest of the stack with Helm.
-  </Card>
-</CardGroup>

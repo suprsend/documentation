@@ -1,138 +1,182 @@
 ---
 title: "List of Dependencies"
-description: "Infrastructure dependencies required to deploy and run SuprSend in self-hosted mode."
+description: "All infrastructure dependencies required to deploy and run SuprSend in self-hosted mode."
 ---
 
-<Info>
-**Enterprise only.** Self-hosted deployment is available only for SuprSend **enterprise customers**.
-</Info>
+This document outlines all the infrastructure dependencies required to deploy and run SuprSend in self-hosted mode.
 
-Before you deploy SuprSend in self-hosted mode, you need the infrastructure components below. Each section lists **version requirements**, **purpose**, and a link to the **setup guide**.
+## At a Glance
+
+| Component | Version | Purpose | Recommended Deployment |
+|-----------|---------|---------|------------------------|
+| Kubernetes | v1.29+ | Container orchestration | Managed (GKE, EKS, AKS) |
+| PostgreSQL | v17+ | Primary data store | Outside Kubernetes |
+| ClickHouse | v24.9+ | Analytics and logs | Outside Kubernetes |
+| Redis (×2) | v7.0+ | Cache and state management | Dedicated deployment |
+| OpenSearch | v1.3+ | Full-text search | External service |
+| Temporal | v1.25+ | Workflow orchestration | In-cluster or external |
+| NATS | v2.10+ | Message broker | In-cluster or external |
+| Object Storage | — | Files, attachments, media | AWS S3 / Azure Blob / GCS |
 
 ---
 
-## Core infrastructure
+## Core Infrastructure
 
-### Kubernetes cluster
+### Kubernetes Cluster
 
-| Item | Details |
-|------|---------|
-| **Version** | v1.29+ |
-| **Purpose** | Container orchestration for SuprSend services |
-| **Deployment** | Any distribution (GKE, EKS, AKS, DigitalOcean, etc.) |
-| **Recommendation** | Use managed Kubernetes in production |
+- **Version**: Kubernetes v1.29+
+- **Purpose**: Container orchestration for SuprSend services
+- **Deployment**: Can be deployed on any Kubernetes distribution (GKE, EKS, AKS, DigitalOcean, etc.)
 
-### Storage
+<Tip>
+Use managed Kubernetes services for production deployments.
+</Tip>
 
-| Item | Details |
-|------|---------|
-| **Persistent volumes** | Required for stateful services; support ReadWriteOnce |
-| **Recommended** | SSD; minimum 100–200 GB per database instance |
-| **Object storage** | Blob store for files and media (two buckets: private + public). Options: AWS S3, Azure Blob, GCS. Encryption at rest and access controls required. |
+### Storage Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Persistent Volumes** | Required for stateful services |
+| **Storage Classes** | Must support ReadWriteOnce access mode |
+| **Recommended** | SSD storage for optimal performance |
+| **Size** | Minimum 100–200 GB per database instance |
 
 ### Temporal
 
-| Item | Details |
-|------|---------|
-| **Version** | v1.25+ |
-| **Purpose** | Workflow orchestration and state management |
-| **Deployment** | In-cluster or external |
-| **Setup** | [Temporal setup guide](/docs/byoc/setup-dependencies/temporal) |
+- **Version**: Temporal v1.25+
+- **Purpose**: Workflow orchestration and state management
+- **Deployment**: Can be deployed in-cluster or as external service
+- **Use Case**: Reliable workflow execution and state management
 
 ---
 
-## Databases
+## Database Dependencies
 
 ### PostgreSQL
 
-| Item | Details |
-|------|---------|
-| **Version** | v17+ (required) |
-| **Purpose** | Primary data store for users, templates, workflows, notifications |
-| **Setup** | [PostgreSQL setup guide](/docs/byoc/setup-dependencies/postgres) |
-- **Configuration Requirements**:
-  ```conf
-  shared_preload_libraries = 'pg_stat_statements,pg_cron'
-  cron.database_name = 'defaultdb'
-  cron.max_running_jobs = 1
-  hot_standby_feedback = on
-  max_standby_archive_delay = -1
-  max_standby_streaming_delay = -1
-  wal_level = logical
-  ```
-- **Required Extensions**:
-  - `pg_cron` - For scheduled jobs
-  - `pgcrypto` - For cryptographic functions
-  - `pg_stat_statements` - For query performance monitoring
-  - `btree_gin` - For GIN indexes
-  - `btree_gist` - For GiST indexes
-- **Databases**: 6 databases required:
-  - `suprsend` - Main application database
-  - `defaultdb` - Default database for cron jobs
-  - `pronto` - Pronto service database
-  - `svix` - Svix webhook service database
-  - `temporal` - Temporal workflow database
-  - `temporal_visibility` - Temporal visibility database
+- **Version**: PostgreSQL v17+ (required)
+- **Purpose**: Primary data store for users, templates, workflows, and notifications
+
+**Configuration Requirements:**
+
+```conf
+shared_preload_libraries = 'pg_stat_statements,pg_cron'
+cron.database_name = 'defaultdb'
+cron.max_running_jobs = 1
+hot_standby_feedback = on
+max_standby_archive_delay = -1
+max_standby_streaming_delay = -1
+wal_level = logical
+```
+
+**Required Extensions:**
+
+| Extension | Purpose |
+|-----------|---------|
+| `pg_cron` | Scheduled jobs |
+| `pgcrypto` | Cryptographic functions |
+| `pg_stat_statements` | Query performance monitoring |
+| `btree_gin` | GIN indexes |
+| `btree_gist` | GiST indexes |
+
+**Databases** — 6 databases required:
+
+| Database | Purpose |
+|----------|---------|
+| `suprsend` | Main application database |
+| `defaultdb` | Default database for cron jobs |
+| `pronto` | Pronto service database |
+| `svix` | Svix webhook service database |
+| `temporal` | Temporal workflow database |
+| `temporal_visibility` | Temporal visibility database |
 
 ### ClickHouse
 
-| Item | Details |
-|------|---------|
-| **Version** | v24.9+ |
-| **Purpose** | Analytics and logs storage |
-| **Deployment** | Outside Kubernetes preferred; SSD recommended |
-| **Setup** | [ClickHouse setup guide](/docs/byoc/setup-dependencies/clickhouse) |
+- **Version**: ClickHouse v24.9+
+- **Purpose**: Analytics and logs storage
+- **Deployment**: Recommended outside Kubernetes for better performance
+- **Storage**: High-performance storage recommended (SSD)
+- **Configuration**: Single-node or clustered setup based on scale requirements
 
 ### OpenSearch
 
-| Item | Details |
-|------|---------|
-| **Version** | v1.3+ |
-| **Purpose** | Full-text search; In-app notifications |
-| **Deployment** | External service recommended |
-| **Setup** | [OpenSearch setup guide](/docs/byoc/setup-dependencies/opensearch) |
+- **Version**: OpenSearch v1.3+
+- **Purpose**: Full-text search and advanced query capabilities
+- **Deployment**: External service recommended
+- **Use Case**: Advanced search and log analysis features
 
 ---
 
-## Data stores and messaging
+## Data Stores and Messaging
 
 ### Redis
 
-| Item | Details |
-|------|---------|
-| **Version** | v7.0+ |
-| **Purpose** | Cache + workflow state (two separate instances) |
-| **Instances** | **Shared Redis** (caching) + **Workflow state Redis** (execution state) |
-| **Setup** | [Redis setup guide](/docs/byoc/setup-dependencies/redis) |
+- **Version**: Redis v7.0+
+- **Purpose**: Cache and short-term state management
+- **Deployment**: Dedicated deployment preferred (outside Kubernetes)
+- **Configuration**: High availability setup recommended
+
+**Instances** — 2 Redis stores required:
+
+| Instance | Purpose |
+|----------|---------|
+| **Redis 1** | Short-term load management |
+| **Redis 2** | Workflow states and data processing |
 
 ### NATS
 
-| Item | Details |
-|------|---------|
-| **Version** | v2.10+ |
-| **Purpose** | Message broker for event ingestion (JetStream enabled) |
-| **Deployment** | In-cluster or external |
+- **Version**: NATS v2.10+
+- **Purpose**: Message broker for scalable event ingestion
+- **Deployment**: Can be deployed in-cluster or as external service
+- **Use Case**: High-volume event processing scenarios
 
 ---
 
-## Object storage
+## Object Storage
 
-| Item | Details |
-|------|---------|
-| **Purpose** | Files, attachments, media assets |
-| **Providers** | AWS S3, Azure Blob Storage, Google Cloud Storage |
-| **Buckets** | Two required: **private** (sensitive files, uploads) and **public** (media, public content) |
-| **Setup** | [Blob store configuration guide](/docs/byoc/setup-dependencies/blob-store) |
+- **Purpose**: Object storage for files, attachments, and media assets
+- **Supported Providers**:
+  - **AWS S3** — Amazon Simple Storage Service
+  - **Azure Blob Storage** — Microsoft Azure object storage
+  - **Google Cloud Storage** — Google Cloud object storage
+
+**Bucket Configuration** — Two buckets required:
+
+| Bucket | Purpose |
+|--------|---------|
+| **Private Bucket** | Sensitive files, user uploads, and internal assets |
+| **Public Bucket** | Publicly accessible content and media files |
+
+**Use Cases:**
+- Template assets and media files
+- User-uploaded attachments
+- Backup storage for database dumps
+
+**Requirements:**
+- **Access Control**: IAM policies for secure access to private bucket
+- **Public Access**: Public read access for public bucket
 
 ---
 
-## What's next
+## Setup Guides
 
-<CardGroup cols="2">
-  <Card title="Getting Started" icon="list-check" iconType="solid" href="/docs/byoc/getting-started">
-    Deployment order and post-deployment checklist.
+<CardGroup cols="3">
+  <Card title="PostgreSQL" icon="database" iconType="solid" href="/docs/self-hosted/setup-dependencies/postgres">
+    Primary data store setup and configuration.
   </Card>
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Helm install, secrets, and values.
+  <Card title="Redis" icon="bolt" iconType="solid" href="/docs/self-hosted/setup-dependencies/redis">
+    Cache and worker state store setup.
+  </Card>
+  <Card title="ClickHouse" icon="chart-bar" iconType="solid" href="/docs/self-hosted/setup-dependencies/clickhouse">
+    Analytics and logs storage setup.
+  </Card>
+  <Card title="OpenSearch" icon="magnifying-glass" iconType="solid" href="/docs/self-hosted/setup-dependencies/opensearch">
+    Full-text search and indexing setup.
+  </Card>
+  <Card title="Temporal" icon="clock" iconType="solid" href="/docs/self-hosted/setup-dependencies/temporal">
+    Workflow orchestration engine setup.
+  </Card>
+  <Card title="Blob Store" icon="cloud" iconType="solid" href="/docs/self-hosted/setup-dependencies/blob-store">
+    Object storage configuration.
   </Card>
 </CardGroup>

@@ -1,17 +1,15 @@
 ---
 title: "OpenSearch Setup Guide"
-description: "Set up OpenSearch in Kubernetes for SuprSend self-hosted deployments — operator, cluster, dashboards, and Helm configuration."
+description: "Set up OpenSearch in Kubernetes for search, analytics, and in-app notifications in SuprSend."
 ---
 
-This guide walks you through setting up **OpenSearch** in Kubernetes for SuprSend's self-hosted deployments. OpenSearch provides the backbone for search, analytics, and observability features in SuprSend.
+This guide walks you through setting up **OpenSearch** in Kubernetes for SuprSend’s self‑hosted deployments. OpenSearch provides the backbone for search, analytics, and observability features in SuprSend.
 
 ---
-
-## Overview
 
 SuprSend recommends using a **managed OpenSearch service** (AWS OpenSearch, GCP Elastic, or Azure Elastic) for production environments to reduce operational overhead and ensure high availability.
 
-However, for self-managed or air-gapped environments, you can deploy OpenSearch directly in Kubernetes using the **OpenSearch Operator**.
+However, for self‑managed or air‑gapped environments, you can deploy OpenSearch directly in Kubernetes using the **OpenSearch Operator**.
 
 ---
 
@@ -34,7 +32,7 @@ helm install opensearch-operator opensearch-operator/opensearch-operator \
   --namespace opensearch-operator
 ```
 
-This installs the OpenSearch Operator, which manages OpenSearch clusters declaratively.
+This installs the OpenSearch Operator which manages OpenSearch clusters declaratively.
 
 ---
 
@@ -66,7 +64,7 @@ docker run --rm httpd:2.4-alpine htpasswd -nbBC 10 admin 'SuperStrong#Passw0rd' 
 
 Create a Kubernetes secret `os-internal-users.secret.yaml` with the generated hash:
 
-```yaml
+```yaml title="os-internal-users.secret.yaml"
 apiVersion: v1
 kind: Secret
 metadata:
@@ -98,7 +96,7 @@ kubectl apply -f os-internal-users.secret.yaml
 
 Create a cluster definition file `suprsend-opensearch.yaml`:
 
-```yaml
+```yaml title="suprsend-opensearch.yaml"
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
@@ -176,16 +174,11 @@ kubectl get OpenSearchCluster -n opensearch
 
 The status should show **green** once all nodes are ready.
 
-You can also try making a curl request from within the cluster:
+You can also try making a curl request from with cluster
 
 ```bash
-# Replace the password with the one you configured
+# make sure to replace password with the password that you generated
 curl https://suprsend-opensearch-cluster.opensearch.svc.cluster.local:9200/_cluster/health?pretty=true -u "admin:SuperStrong#Passw0rd"
-```
-
-Example response:
-
-```json
 {
   "cluster_name" : "suprsend-opensearch",
   "status" : "green",
@@ -206,13 +199,12 @@ Example response:
 }
 ```
 
-Ensure the status is `green`.
-
+Make sure status is `green`
 ---
 
 ## Step 6: Access OpenSearch Dashboards
 
-You can port-forward to the dashboard service:
+You can port‑forward to the dashboard service:
 
 ```bash
 kubectl port-forward svc/suprsend-opensearch-dashboards 5601:5601 -n opensearch
@@ -262,13 +254,11 @@ kubectl delete ns opensearch-operator
 
 Once your OpenSearch cluster is operational, configure SuprSend to use it.
 
-<Note>
-This section shows only the **OpenSearch-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
-</Note>
+> **Important**: This section shows only the **OpenSearch-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 
 ### Kubernetes Secret Configuration
 
-First, add the OpenSearch-specific secret to your SuprSend secrets file (see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide) for the full secrets template):
+First, add the OpenSearch-specific secret to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
 
 ```yaml
 # ============================================
@@ -280,50 +270,39 @@ opensearchConnUrlKey: "https://admin:SuperStrong#Passw0rd@suprsend-opensearch-cl
 
 ### Helm Values Configuration
 
-Then add the following to your SuprSend values file (along with other required configuration — see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
 
 ```yaml
-# connection url for opensearch (key name in secret)
+# connection url for opensearch
 opensearchConnUrlKey: "opensearchConnUrlKey"
 ```
 
-<Note>
-The OpenSearch connection is configured via the full connection URL in the secret, which includes the host, port, credentials, and scheme. The above configuration goes under `suprsendInboxApi.secret` section.
-</Note>
+> **Note**: The OpenSearch connection is configured via the full connection URL in the secret, which includes the host, port, credentials, and scheme. The above configuration goes under `suprsendInboxApi.secret` section.
 
 ---
 
 ## Best Practices
 
-<AccordionGroup>
-  <Accordion title="Storage and scaling">
-    Use **dedicated storage classes** (e.g., SSD-backed volumes). Enable **auto-scaling** and **snapshot policies**.
-  </Accordion>
-  <Accordion title="High availability">
-    Run OpenSearch in **HA mode** with 3+ nodes for redundancy.
-  </Accordion>
-  <Accordion title="Access and TLS">
-    Use **Ingress or LoadBalancer** for external access with TLS termination. Configure proper **TLS certificates** for production deployments.
-  </Accordion>
-</AccordionGroup>
-
----
-
-## What's next
-
-<CardGroup cols="2">
-  <Card title="Temporal Setup Guide" icon="clock" iconType="solid" href="/docs/byoc/setup-dependencies/temporal">
-    Set up Temporal for workflow orchestration.
-  </Card>
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Deploy the rest of the stack with Helm.
-  </Card>
-</CardGroup>
+<Accordion title="Best Practices">
+  - Use **dedicated storage classes** (e.g., SSD-backed volumes)
+  - Enable **auto-scaling** and **snapshot policies**
+  - Run OpenSearch in **HA mode** with 3+ nodes for redundancy
+  - Use **Ingress or LoadBalancer** for external access with TLS termination
+  - Configure proper **TLS certificates** for production deployments
+</Accordion>
 
 ---
 
 ## References
 
-- [OpenSearch Operator GitHub](https://github.com/opensearch-project/opensearch-k8s-operator)
-- [SuprSend Docs](https://docs.suprsend.com)
-- [OpenSearch Configuration Reference](https://opensearch.org/docs/latest/)
+<CardGroup cols="3">
+  <Card title="OpenSearch Operator" icon="github" iconType="solid" href="https://github.com/opensearch-project/opensearch-k8s-operator">
+    Official Kubernetes operator for OpenSearch.
+  </Card>
+  <Card title="SuprSend Docs" icon="book" iconType="solid" href="https://docs.suprsend.com">
+    SuprSend product documentation.
+  </Card>
+  <Card title="OpenSearch Reference" icon="magnifying-glass" iconType="solid" href="https://opensearch.org/docs/latest/">
+    OpenSearch configuration and API reference.
+  </Card>
+</CardGroup>

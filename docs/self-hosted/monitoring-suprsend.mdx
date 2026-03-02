@@ -1,43 +1,36 @@
 ---
 title: "Monitoring SuprSend"
-description: "Set up monitoring for SuprSend in your Kubernetes cluster with Prometheus, Grafana, Loki, and Promtail."
+description: "Set up Prometheus, Grafana, and Loki to monitor your self-hosted SuprSend deployment on Kubernetes."
 ---
 
-Monitor your SuprSend deployment with **Prometheus** (metrics), **Grafana** (dashboards), and **Loki** (logs), with **Promtail** shipping logs from the cluster. Follow the steps below in order.
+To monitor SuprSend chart that is running within the cluster, you can setup open source prometheus, grafana and loki by following these steps in sequence.
 
----
+First create a new namespace to install the monitoring stack.
 
-## Overview
-
-| Component | Role |
-|-----------|------|
-| **Loki** | Log storage and querying |
-| **Promtail** | Ships logs from the cluster to Loki |
-| **Prometheus** | Metrics collection |
-| **Grafana** | Dashboards; datasources for Prometheus and Loki |
-
----
-
-## Step 1: Create monitoring namespace
+## Setup a new namespace
 
 ```bash
 kubectl create namespace monitoring
 ```
 
----
+## Set up Loki
 
-## Step 2: Set up Loki
-
-### Add Grafana Helm repo
+### Add Grafana repo
 
 ```bash
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 ```
 
-### Prepare values for Loki
+### Prepare values.yaml for Loki
 
-Create a file `suprsend-loki-values.yaml` with:
+Create a new file suprsend-loki-values.yaml:
+
+```bash
+touch suprsend-loki-values.yaml
+```
+
+Then paste these values to start with:
 
 ```yaml
 loki:
@@ -52,7 +45,7 @@ loki:
     retention_enabled: true
     retention_delete_delay: 2h
     delete_request_store: s3
-    delete_request_cancel_period: 10m
+    delete_request_cancel_period: 10m 
   commonConfig:
     replication_factor: 1
   schemaConfig:
@@ -65,9 +58,9 @@ loki:
           prefix: loki_index_
           period: 24h
   pattern_ingester:
-    enabled: true
+      enabled: true
   limits_config:
-    retention_period: 720h  # data retention; adjust as needed
+    retention_period: 720h #data retention period. change it as you like.
     allow_structured_metadata: true
     volume_enabled: true
   ruler:
@@ -100,6 +93,7 @@ read:
   replicas: 0
 write:
   replicas: 0
+
 ingester:
   replicas: 0
 querier:
@@ -126,20 +120,26 @@ bloomGateway:
 helm install suprsend-loki grafana/loki --version 6.24.0 -f suprsend-loki-values.yaml -n monitoring
 ```
 
----
+## Setup Promtail
 
-## Step 3: Set up Promtail
+Setup promtail agent in the cluster to stream logs to Loki.
 
-### Add Grafana repo (if not already added)
+### Add Grafana repo, if not done yet
 
 ```bash
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 ```
 
-### Prepare values for Promtail
+### Prepare values.yaml for Promtail
 
-Create a file `suprsend-promtail-values.yaml` with:
+Create a new file suprsend-promtail-values.yaml:
+
+```bash
+touch suprsend-promtail-values.yaml
+```
+
+Then paste these values to start with base level config:
 
 ```yaml
 daemonset:
@@ -148,7 +148,8 @@ daemonset:
 deployment:
   enabled: false
 
-resources:
+# -- Resource requests and limits
+resources: 
   limits:
     cpu: 200m
     memory: 128Mi
@@ -167,20 +168,27 @@ config:
 helm install suprsend-promtail grafana/promtail --version 6.16.6 -f suprsend-promtail-values.yaml -n monitoring
 ```
 
----
 
-## Step 4: Set up Prometheus and Grafana
+## Setup Prometheus and Grafana
 
-### Add Prometheus Community repo
+Setup Prometheus and Grafana together to record and visualise metrics. Configure a datasource in grafana to read logs from Loki. 
 
-```bash
+### Add Prometheus community repo
+
+```bash 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 ```
 
-### Prepare values for Prometheus and Grafana
+### Prepare values.yaml for Prometheus and grafana
 
-Create a file `suprsend-promgraf-values.yaml` with:
+Create a new file suprsend-promgraf-values.yaml:
+
+```bash
+touch suprsend-promgraf-values.yaml
+```
+
+Then paste these values to start with base level config:
 
 ```yaml
 grafana:
@@ -204,6 +212,7 @@ grafana:
         - name: Loki
           type: loki
           url: http://suprsend-loki-gateway.monitoring.svc.cluster.local/
+
   grafana.ini:
     feature_toggles:
       angularDeprecationUI: false
@@ -218,19 +227,24 @@ prometheus:
           resources:
             requests:
               storage: 25Gi
+
 ```
 
-### Install the kube-prometheus-stack chart
+### Install Prometheus grafana chart
 
 ```bash
 helm install suprsend-promgraf prometheus-community/kube-prometheus-stack --version 58.0.0 -f suprsend-promgraf-values.yaml -n monitoring
 ```
 
----
+## Final: Setup an Ingress to expose Grafana dashboard
 
-## Step 5: Expose Grafana via Ingress
+Create this ingress spec:
 
-Create a file `grafana-ingress.yaml` with the following. Replace `<SUPRSEND_MAIN_HOST>` with the host you want for the Grafana dashboard (e.g., `monitor.yourdomain.com`). Ensure you have a ClusterIssuer such as `letsencrypt-prod` and that the Grafana service name matches what is deployed in your cluster.
+```bash
+touch grafana-ingress.yaml
+```
+
+And paste in this configuration spec:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -240,47 +254,31 @@ metadata:
   namespace: monitoring
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: "/"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # requires cert-manager and ClusterIssuer
+    cert-manager.io/cluster-issuer: "letsencrypt-prod" # assuming you have this cert issue in place in your cluster
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - monitor.<SUPRSEND_MAIN_HOST>
-      secretName: web-tls-monitoring
+        - monitor.<SUPRSEND_MAIN_HOST>      # replace <SUPRSEND_MAIN_HOST> or entire host string with actual host you want the grafana dashboard to run on
+      secretName: web-tls-monitoring # assuming certbot exists in cluster to create and keep the ssl keys in this key
   rules:
-    - host: monitor.<SUPRSEND_MAIN_HOST>
+    - host: monitor.<SUPRSEND_MAIN_HOST>     # replace <SUPRSEND_MAIN_HOST> or entire host string with actual host you want the grafana dashboard to run on
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: suprsend-promgraf-grafana   # verify service name: kubectl get svc -n monitoring
+                name: suprsend-promgraf-grafana   # replace with name of actual grafana service running in cluster
                 port:
                   number: 80
 ```
 
-Apply the Ingress:
+and apply on your Kubernetes cluster and monitoring namespace:
 
 ```bash
 kubectl apply -f grafana-ingress.yaml -n monitoring
 ```
-
----
-
-<Note>
-Data retention is set to 30 days for Prometheus and 720h (30 days) for Loki in the examples above. Adjust in `suprsend-promgraf-values.yaml` and `suprsend-loki-values.yaml` as needed.
-</Note>
-
----
-
-## What's next
-
-<CardGroup cols="2">
-  <Card title="BYOC Changelog" icon="code-branch" iconType="solid" href="/docs/byoc/changelog">
-    Self-hosted release history and upgrade notes.
-  </Card>
-  <Card title="Product docs" icon="book" iconType="solid" href="/docs/what-is-suprsend">
-    Workflows, templates, and APIs.
-  </Card>
-</CardGroup>
+<Info>
+Data retention period is set to 30 days for all components of the stack. If needed, you can increase it in the appropriate values.yaml configuration.
+</Info>

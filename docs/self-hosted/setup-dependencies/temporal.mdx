@@ -1,11 +1,9 @@
 ---
 title: "Temporal Setup Guide"
-description: "Set up Temporal for SuprSend BYOC deployment — PostgreSQL or Cassandra backend, search attributes, and Helm configuration."
+description: "Set up Temporal as the workflow execution engine for your SuprSend self-hosted deployment."
 ---
 
-Temporal is a distributed, scalable, durable, and highly available orchestration engine designed to execute asynchronous long-running business logic in a resilient way. This guide walks you through setting up Temporal for SuprSend's BYOC (Bring Your Own Cloud) deployment.
-
-## Overview
+Temporal is a distributed, scalable, durable, and highly available orchestration engine designed to execute asynchronous long-running business logic in a resilient way. This guide walks you through setting up Temporal for SuprSend's Self-Hosted deployment.
 
 This installation guide covers:
 - Setting up Temporal with PostgreSQL for standard workloads
@@ -17,22 +15,22 @@ This installation guide covers:
 
 Before installing Temporal, ensure you have:
 
-### System Requirements
+**System Requirements**
 - **Kubernetes cluster** (AWS EKS, GKE, AKS, kind, or minikube)
 - **kubectl** configured to access your cluster
 - **Helm v3** (v3.8.0 or later recommended)
 - **Git** for cloning the Temporal repository
 
-### Database Requirements
-- **PostgreSQL 12+** instance accessible from your Kubernetes cluster. For smaller deployments you can use the same PostgreSQL database set up for SuprSend. For higher volume, you can set up a different PostgreSQL instance or move to a Cassandra-backed deployment.
+**Database Requirements**
+- **PostgreSQL 12+** instance accessible from your Kubernetes cluster. For smaller deployments you can use same postgres database which is setup for suprsend. If you have higher volume, you can setup a different postgres instance as well OR move to cassandra backed deployment.
 - Database credentials with sufficient privileges to create databases and schemas
 
-### Resource Requirements
+**Resource Requirements**
 - **Minimum**: 4 CPU cores, 8GB RAM
 - **Recommended**: 8 CPU cores, 16GB RAM
 - **Storage**: At least 100GB for logs and data
 
-### Verify Prerequisites
+**Verify Prerequisites**
 
 ```bash
 # Check kubectl access
@@ -107,26 +105,28 @@ psql -h $SQL_HOST -U $SQL_USER -d postgres -c "\l" | grep temporal
 
 You should see both `temporal` and `temporal_visibility` databases listed.
 
-### Step 4: Install Temporal
 
-Check out the Temporal Helm repository from [https://github.com/temporalio/helm-charts](https://github.com/temporalio/helm-charts):
+### Step 3: Install Temporal
 
-```bash
+Checout temporal helm repository from https://github.com/temporalio/helm-charts
+
+```
 git clone https://github.com/temporalio/helm-charts
-cd helm-charts/charts/temporal
+
+cd charts/temporal
 ```
 
-Now modify `values/values.postgres.yaml` (or `values/values.postgresql.yaml` depending on the chart version).
+Now modify `values/values.postgres.yaml` 
 
 <details>
 <summary>Sample values/values.postgres.yaml</summary>
-
-```yaml
+```yaml title="values/values.postgres.yaml"
 server:
   config:
     persistence:
       default:
         driver: "sql"
+
         sql:
           driver: "postgres12"
           host: YOUR_PG_INSTANCE_URL
@@ -134,7 +134,8 @@ server:
           database: temporal
           user: PG_USER
           password: PG_PASSWORD
-          # for a production deployment use existingSecret and provision the secret beforehand
+          # for a production deployment use this instead of `password` and provision the secret beforehand e.g. with a sealed secret
+          # it has a single key called `password`
           # existingSecret: temporal-default-store
           maxConns: 20
           maxIdleConns: 20
@@ -142,9 +143,14 @@ server:
           tls:
             enabled: true
             enableHostVerification: false
+          #  serverName: _HOST_ # this is strictly required when using serverless CRDB offerings
+          #  caFile: /path/to/certs/<CA-file> # Here we assumed that caFile, certFile, keyFile are stored in one secret mounted as 'secret-with-certs' (see: server.additionalVolumes and server.additionalVolumeMounts sections).
+          #  certFile: /path/to/certs/<client-cert-file>
+          #  keyFile: /path/to/certs/<client-key-file>
 
       visibility:
         driver: "sql"
+
         sql:
           driver: "postgres12"
           host: YOUR_PG_INSTANCE_URL
@@ -152,6 +158,8 @@ server:
           database: temporal_visibility
           user: PG_USER
           password: PG_PASSWORD
+          # for a production deployment use this instead of `password` and provision the secret beforehand e.g. with a sealed secret
+          # it has a single key called `password`
           # existingSecret: temporal-visibility-store
           maxConns: 20
           maxIdleConns: 20
@@ -159,6 +167,18 @@ server:
           tls:
             enabled: true
             enableHostVerification: false
+          #  serverName: _HOST_ # this is strictly required when using serverless CRDB offerings
+          #  caFile: /path/to/certs/<CA-file> # Here we assumed that caFile, certFile, keyFile are stored in one secret mounted as 'secret-with-certs' (see: server.additionalVolumes and server.additionalVolumeMounts sections).
+          #  certFile: /path/to/certs/<client-cert-file>
+          #  keyFile: /path/to/certs/<client-key-file>
+
+  # additionalVolumes:
+  #   - name: secret-with-certs
+  #     secret:
+  #       secretName: secret-with-certs
+  # additionalVolumeMounts:
+  #   - name: secret-with-certs
+  #     mountPath: /path/to/certs/
 
 cassandra:
   enabled: false
@@ -186,17 +206,17 @@ schema:
   update:
     enabled: false
 ```
-
 </details>
 
-Then install Temporal using Helm:
+
+and install Temporal using Helm:
 
 ```bash
 # Add the Temporal Helm repository
 helm repo add temporal https://go.temporal.io/helm-charts
 helm repo update
 
-# Install Temporal (use the values file you edited, e.g. values.postgresql.yaml)
+# Install Temporal
 helm install temporal temporal/temporal \
   -f values/values.postgresql.yaml \
   --timeout 900s \
@@ -222,7 +242,7 @@ helm install temporal temporal/temporal \
   --create-namespace
 ```
 
-### Step 5: Verify Installation
+### Step 4: Verify Installation
 
 Check that all Temporal components are running:
 
@@ -239,35 +259,37 @@ kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
 
 Open http://localhost:8080 in your browser to access the Temporal Web UI.
 
-### Step 6: Set Up Default Namespace for Temporal
+### Step 5: Setup default namespace for temporal
 
-SuprSend needs a namespace in Temporal to store workflow state. Create one using the following commands:
+SuprSend will need a namespace in temporal to store workflow state, create one using following commands:
 
 ```bash
 # Get shell access inside temporal admintools
 kubectl exec -it deployment/temporal-admintools -n temporal -- /bin/bash
 
-# Create default namespace. Important: *DO NOT* change the namespace name.
-# Change retention period based on your need.
+# create default namespace, Important: *DO NOT* change namespace name
+# change retention period based on your need
 temporal operator namespace create \
   --retention 7d \
   --namespace default
 ```
 
-### Step 7: Configure SuprSend Search Attributes (Required)
 
-Verify that the namespaces are created properly:
+### Step 6: Configure SuprSend Search Attributes (Required)
+
+Verify if the namepsaces are created properly
 
 ```bash
-# Check the namespaces; you should get two namespaces: temporal-system, default
-temporal operator namespace list --output jsonl | jq ".namespaceInfo.name"
-# "temporal-system"
-# "default"
+# check the namespaces, you should get two namespaces temporal-system, default
+$ temporal operator namespace list --output jsonl | jq ".namespaceInfo.name"
+"temporal-system"
+"default"
+
 ```
 
-Add the search attributes needed for SuprSend:
+Add Search attributes needed for SuprSend
 
-```bash
+```
 temporal operator search-attribute create --name SS_WorkspaceId --type Int
 temporal operator search-attribute create --name SS_TenantId --type Keyword
 temporal operator search-attribute create --name SS_SubscriberId --type Keyword
@@ -278,42 +300,37 @@ temporal operator search-attribute create --name SS_HasBatchDigestNode --type Bo
 temporal operator search-attribute create --name SS_IsBatchDigestInProgress --type Bool
 ```
 
-Verify that the attributes were set up correctly:
+You can check if above attributes have been setup properly by executing:
 
-```bash
+```
 temporal operator search-attribute list
 ```
 
-### Step 8: SuprSend Helm Configuration
+### Step 7: SuprSend Helm Configuration
 
 Once your Temporal cluster is set up and running with the required search attributes, configure SuprSend to connect to it.
 
-<Note>
-This section shows only the **Temporal-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
-</Note>
+> **Important**: This section shows only the **Temporal-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 
 #### Helm Values Configuration
 
-Add the following to your SuprSend values file (along with other required configuration — see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+Add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
 
 ```yaml
 # Temporal server host and port (e.g: temporal-frontend.temporal.svc.cluster.local:7233)
 temporalServerHostPort: "temporal-frontend.temporal.svc.cluster.local:7233"
 ```
 
-<Note>
-The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
-</Note>
+> **Note**: The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
 
-### Step 9: Upsize Temporal Based on Your Need
+### Step 8: Upsize temporal based on your need
 
-Scale Temporal components (frontend, history, matching, workers) according to your workflow volume and latency requirements using Helm upgrades or scaling deployments/StatefulSets.
 
----
 
-## High-Volume Deployment with Cassandra (Optional)
 
-For workloads exceeding 1 million workflows per day, use Cassandra as the primary datastore with OpenSearch or PostgreSQL for visibility.
+## High-Volume Deployment with Cassandra - Optional
+
+For workloads exceeding 1 million workflows per day, use Cassandra as the primary datastore with OpenSearch or PostgreSQL for visibility. 
 
 ### Prerequisites for High-Volume Setup
 
@@ -355,7 +372,7 @@ curl -o values.cassandra.yaml https://raw.githubusercontent.com/temporalio/helm-
 
 Edit `values.cassandra.yaml` to configure:
 
-```yaml
+```yaml title="values.cassandra.yaml"
 # Cassandra configuration
 server:
   config:
@@ -391,9 +408,9 @@ helm install temporal temporal/temporal \
 
 ### Use PostgreSQL for Visibility
 
-If you prefer PostgreSQL for the visibility store instead of OpenSearch:
+If you prefer PostgreSQL for visibility store instead of OpenSearch:
 
-```yaml
+```yaml title="values.cassandra.yaml"
 # In values.cassandra.yaml, replace the visibility section with:
 server:
   config:
@@ -406,8 +423,6 @@ server:
           password: your_postgresql_password
           databaseName: temporal_visibility
 ```
-
----
 
 ## Configure SSO Authentication (Optional)
 
@@ -427,7 +442,7 @@ kubectl create secret generic temporal-auth-secret \
 
 Add SSO configuration to your Helm values file:
 
-```yaml
+```yaml title="values.yaml"
 # Add to your values.yaml file
 web:
   additionalEnv:
@@ -452,80 +467,7 @@ helm upgrade temporal temporal/temporal \
   --namespace temporal
 ```
 
-For more SSO configuration options, see [Temporal Web UI Server Environment Variables](https://docs.temporal.io/references/web-ui-server-env-vars).
-
----
-
-## Troubleshooting
-
-<AccordionGroup>
-  <Accordion title="Search attributes already exist">
-    **Problem**: Error when adding search attributes that already exist.
-
-    **Solution**:
-    ```bash
-    # Check existing search attributes
-    tctl admin cluster get-search-attributes
-
-    # If attributes exist, you can skip adding them or remove and re-add
-    tctl admin cluster remove-search-attributes --name SS_WorkspaceId
-    ```
-  </Accordion>
-  <Accordion title="Pod startup issues (Pending / CrashLoopBackOff)">
-    **Problem**: Temporal pods stuck in Pending or CrashLoopBackOff state.
-
-    **Solution**:
-    ```bash
-    # Check pod status and events
-    kubectl describe pod -n temporal -l app.kubernetes.io/name=temporal
-
-    # Check resource constraints
-    kubectl top nodes
-    kubectl top pods -n temporal
-
-    # Check logs
-    kubectl logs -n temporal -l app.kubernetes.io/name=temporal
-    ```
-  </Accordion>
-  <Accordion title="Web UI not accessible">
-    **Problem**: Cannot access Temporal Web UI.
-
-    **Solution**:
-    ```bash
-    # Check service status
-    kubectl get svc -n temporal
-
-    # Port forward to access UI
-    kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
-
-    # Check if UI pod is running
-    kubectl get pods -n temporal -l app.kubernetes.io/component=frontend
-    ```
-  </Accordion>
-  <Accordion title="High memory usage">
-    **Problem**: Temporal components consuming excessive memory.
-
-    **Solution**:
-    ```yaml
-    # Add resource limits to your values.yaml
-    server:
-      resources:
-        limits:
-          memory: "2Gi"
-          cpu: "1000m"
-        requests:
-          memory: "1Gi"
-          cpu: "500m"
-    ```
-  </Accordion>
-  <Accordion title="Getting help">
-    **Temporal Documentation**: [https://docs.temporal.io](https://docs.temporal.io)  
-    **Temporal Community**: [https://community.temporal.io](https://community.temporal.io)  
-    **SuprSend Support**: Contact your SuprSend support team
-  </Accordion>
-</AccordionGroup>
-
----
+For more SSO configuration options, refer to the [Temporal Web UI Server Environment Variables](https://docs.temporal.io/references/web-ui-server-env-vars).
 
 ## Monitoring Your Deployment
 
@@ -564,13 +506,45 @@ You should see all the SuprSend-specific search attributes listed in the output.
 
 ---
 
-## What's next
+## FAQ
 
-<CardGroup cols="2">
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Deploy SuprSend with Helm and configure the stack.
-  </Card>
-  <Card title="Generating Required Keys" icon="key" iconType="solid" href="/docs/byoc/generating-required-keys">
-    Generate deployment secret, NATS NKey pair, and AES cipher keys.
-  </Card>
-</CardGroup>
+<AccordionGroup>
+  <Accordion title="Search attributes already exist">
+    Check existing search attributes with `tctl admin cluster get-search-attributes`. If they already exist, you can skip adding them or remove and re-add with `tctl admin cluster remove-search-attributes --name SS_WorkspaceId`.
+  </Accordion>
+  <Accordion title="Pods stuck in Pending or CrashLoopBackOff">
+    Check pod status and events:
+    ```bash
+    kubectl describe pod -n temporal -l app.kubernetes.io/name=temporal
+    kubectl top nodes
+    kubectl top pods -n temporal
+    kubectl logs -n temporal -l app.kubernetes.io/name=temporal
+    ```
+  </Accordion>
+  <Accordion title="Web UI not accessible">
+    Check service status and port-forward to access the UI:
+    ```bash
+    kubectl get svc -n temporal
+    kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
+    kubectl get pods -n temporal -l app.kubernetes.io/component=frontend
+    ```
+  </Accordion>
+  <Accordion title="High memory usage">
+    Add resource limits to your `values.yaml`:
+    ```yaml
+    server:
+      resources:
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+    ```
+  </Accordion>
+  <Accordion title="Getting help">
+    - **Temporal Documentation**: [https://docs.temporal.io](https://docs.temporal.io)
+    - **Temporal Community**: [https://community.temporal.io](https://community.temporal.io)
+    - **SuprSend Support**: Contact your SuprSend support team
+  </Accordion>
+</AccordionGroup>

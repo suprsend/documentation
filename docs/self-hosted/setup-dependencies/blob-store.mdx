@@ -1,15 +1,15 @@
 ---
 title: "Blob Store Configuration Guide"
-description: "Set up object storage (S3, Azure Blob, or GCS) for SuprSend self-hosted deployment with private and public buckets."
+description: "Set up object storage with private and public buckets for SuprSend self-hosted deployment."
 ---
 
 This guide helps you set up object storage for SuprSend self-hosted deployment. You'll need to configure two buckets (private and public) with one of the supported providers.
 
 ## Supported Providers
 
-- **AWS S3:** Amazon Simple Storage Service
-- **Azure Blob Storage:** Microsoft Azure Blob Storage
-- **Google Cloud Storage:** Google Cloud object storage
+*   **AWS S3:** Amazon Simple Storage Service
+*   **Azure Blob Storage:** Microsoft Azure Blob Storage
+*   **Google Cloud Storage:** Google Cloud object storage
 
 ## Prerequisites
 
@@ -136,7 +136,7 @@ For the private bucket, ensure "Block all public access" is enabled. No addition
 ### Step 3: Configure Access Keys
 
 1. **Navigate to Access Keys** in your Storage Account
-2. **Copy the Account Key** (key1 or key2) — this will be used in your SuprSend configuration
+2. **Copy the Account Key** (key1 or key2) - this will be used in your SuprSend configuration
 
 ### Step 4: Configure CORS
 
@@ -234,13 +234,11 @@ For the private bucket, ensure "Block all public access" is enabled. No addition
 
 ## SuprSend Helm Configuration
 
-<Note>
-This section shows only the **Blob Storage-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
-</Note>
+> **Important**: This section shows only the **Blob Storage-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 
 ### Kubernetes Secret Configuration
 
-First, add the Blob Storage-specific secrets to your SuprSend secrets file (see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide) for the full secrets template):
+First, add the Blob Storage-specific secrets to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
 
 ```yaml
 # ============================================
@@ -271,7 +269,7 @@ blobGcsCredentialKey: |
 
 ### Helm Values Configuration
 
-Then add the following to your SuprSend values file (along with other required configuration — see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
 
 ```yaml
 # Object store for files (options: 's3', 'azblob', 'gcs')
@@ -296,20 +294,27 @@ blobGcsBucketPublicMedia: "suprsend-public-prod"
 blobGcsBucketPrivateFileUpload: "suprsend-private-prod"
 ```
 
-<Note>
-The above configuration goes under `suprsendapi.config` section in your `suprsend-values.yaml`. Configure only the section that matches your chosen blob store provider (S3, Azure, or GCS).
-</Note>
+> **Note**: The above configuration goes under `suprsendapi.config` section in your `suprsend-values.yaml`. Configure only the section that matches your chosen blob store provider (S3, Azure, or GCS).
+
 
 ## Security Best Practices
 
 <AccordionGroup>
-  <Accordion title="Access control">
-    **Private Bucket**: Restrict access to SuprSend services only. **Public Bucket**: Allow public read access for media files. **IAM Policies**: Use least privilege principle. **Rotation**: Regularly rotate access keys. **Bucket Policies**: Implement strict bucket policies. **CORS**: Configure CORS only for required origins.
+  <Accordion title="Access Control">
+    - **Private Bucket**: Restrict access to SuprSend services only
+    - **Public Bucket**: Allow public read access for media files
+    - **IAM Policies**: Use least privilege principle
+    - **Rotation**: Regularly rotate access keys
+    - **Bucket Policies**: Implement strict bucket policies
+    - **CORS**: Configure CORS only for required origins
   </Accordion>
   <Accordion title="Encryption">
-    **Server-Side Encryption**: Enable for both buckets. **Key Management**: Use KMS for additional security (AWS). **TLS**: Ensure all connections use HTTPS.
+    - **Server-Side Encryption**: Enable for both buckets
+    - **Key Management**: Use KMS for additional security (AWS)
+    - **TLS**: Ensure all connections use HTTPS
   </Accordion>
 </AccordionGroup>
+
 
 ## Testing Configuration
 
@@ -341,33 +346,38 @@ Use Azure CLI to verify access:
 az storage blob list --account-name yourstorageaccount --account-key "your-key" --container-name suprsend-private
 ```
 
-## Troubleshooting
+## Next Steps
+
+Once your blob store is configured:
+1. **Verify Configuration**: Test both private and public access
+2. **Update SuprSend**: Configure SuprSend to use your blob store
+
+---
+
+## FAQ
 
 <AccordionGroup>
-  <Accordion title="AWS S3 — Access denied, CORS, rate limiting">
-    1. **Access Denied**: Verify IAM user has correct permissions; check bucket policies for public bucket; ensure "Block all public access" is enabled for private bucket.  
-    2. **CORS Issues**: Verify CORS configuration matches your domain.  
-    3. **Rate Limiting**: Monitor API rate limits and consider using CloudFront.
+  <Accordion title="AWS S3: Access Denied">
+    - Verify IAM user has correct permissions
+    - Check bucket policies for public bucket
+    - Ensure "Block all public access" is enabled for private bucket
   </Accordion>
-  <Accordion title="Azure Blob Storage — Access, CORS, connection">
-    1. **Access Denied**: Verify the account key is correct; check container access levels (private vs blob); ensure the storage account name is correct in the endpoint URL.  
-    2. **CORS Issues**: Configure CORS in the storage account's Resource sharing settings.  
-    3. **Connection Issues**: Verify the endpoint URL format: `https://<accountname>.blob.core.windows.net`.
+  <Accordion title="AWS S3: CORS or Rate Limiting Issues">
+    - Verify CORS configuration matches your domain
+    - Monitor API rate limits and consider using CloudFront
   </Accordion>
-  <Accordion title="General — Configuration, secrets, network">
-    1. **Configuration Issues**: Double-check Helm values match your actual bucket/container names.  
-    2. **Secret Issues**: Ensure Kubernetes secrets are created in the correct namespace.  
-    3. **Network Issues**: Verify egress rules allow connections to cloud storage endpoints.
+  <Accordion title="Azure Blob Storage: Access Denied">
+    - Verify the account key is correct
+    - Check container access levels (private vs blob)
+    - Ensure the storage account name is correct in the endpoint URL
+  </Accordion>
+  <Accordion title="Azure Blob Storage: CORS or Connection Issues">
+    - Configure CORS in the storage account's Resource sharing settings
+    - Verify the endpoint URL format: `https://<accountname>.blob.core.windows.net`
+  </Accordion>
+  <Accordion title="General: Configuration, Secret, or Network Issues">
+    - Double-check Helm values match your actual bucket/container names
+    - Ensure Kubernetes secrets are created in the correct namespace
+    - Verify egress rules allow connections to cloud storage endpoints
   </Accordion>
 </AccordionGroup>
-
-## What's next
-
-<CardGroup cols="2">
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Configure SuprSend to use your blob store and complete deployment.
-  </Card>
-  <Card title="Setting up Ingress" icon="network-wired" iconType="solid" href="/docs/byoc/setting-up-ingress">
-    Expose SuprSend services with Nginx Ingress and TLS.
-  </Card>
-</CardGroup>

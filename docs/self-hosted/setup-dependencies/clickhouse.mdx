@@ -1,9 +1,10 @@
 ---
 title: "ClickHouse Setup Guide"
-description: "Set up a production-ready ClickHouse cluster on Kubernetes with the Altinity Operator for SuprSend self-hosted deployments."
+description: "Set up a production-ready ClickHouse cluster on Kubernetes using the Altinity ClickHouse Operator."
 ---
 
-This guide walks you through setting up a production-ready ClickHouse cluster on Kubernetes using the **Altinity ClickHouse Operator**. It also includes steps to test **data persistence** and **connectivity** to ensure your deployment is reliable.
+This guide walks you through setting up a production-ready ClickHouse cluster on Kubernetes using the **Altinity ClickHouse Operator**.  
+It also includes steps to test **data persistence** and **connectivity** to ensure your deployment is reliable.
 
 ---
 
@@ -12,7 +13,7 @@ This guide walks you through setting up a production-ready ClickHouse cluster on
 Before starting, ensure the following tools and components are installed:
 
 | Requirement | Description |
-|-------------|-------------|
+|--------------|-------------|
 | **Kubernetes cluster** | Any K8s distribution (GKE, EKS, DigitalOcean, Minikube, etc.) |
 | **kubectl** | CLI tool to interact with your cluster |
 | **Helm 3+** | To install the ClickHouse Operator |
@@ -50,15 +51,18 @@ clickhouse-operator-7f999c9c4b-xyz12    1/1     Running   0          1m
 
 ## Step 2: Create ClickHouse Cluster
 
-Generate a password hash for your default user:
+Generate password for your default user,
 
 ```bash
 docker run --rm alpine sh -c "echo -n 'YOUR_PASSWORD' | sha256sum | awk '{print \$1}'"
 ```
 
+
+
+
 Create a file named **`clickhouse-cluster.yaml`** with the following content:
 
-```yaml
+```yaml title="clickhouse-cluster.yaml"
 apiVersion: "clickhouse.altinity.com/v1"
 kind: "ClickHouseInstallation"
 metadata:
@@ -121,9 +125,7 @@ NAME                                      READY   STATUS    RESTARTS   AGE
 chi-suprsend-ch-suprsend-ch-0-0-0         1/1     Running   0          1m
 ```
 
-<Note>
-The `chi` prefix stands for **ClickHouseInstallation** (CRD name defined by the Altinity Operator).
-</Note>
+> `chi` prefix stands for **ClickHouseInstallation** (CRD name defined by the Altinity Operator).
 
 ---
 
@@ -135,7 +137,8 @@ Run the following command:
 kubectl logs chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse | grep "Ready for connections"
 ```
 
-If you see "Ready for connections", your ClickHouse node is healthy.
+If you see “Ready for connections”, your ClickHouse node is healthy.
+
 
 ---
 
@@ -200,7 +203,7 @@ To verify that your data persists across pod restarts:
    kubectl exec -it chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SELECT * FROM test.data;"
    ```
 
-If you still see all inserted rows, persistence is working properly.
+✅ If you still see all inserted rows — persistence is working properly.
 
 ---
 
@@ -214,39 +217,18 @@ kubectl delete pvc -n clickhouse --all
 kubectl delete pod -n clickhouse --all
 ```
 
-<Warning>
-Use caution: deleting PVCs will erase all stored data if reclaim policy is not set to `Retain`.
-</Warning>
+> ⚠️ Use caution: deleting PVCs will erase all stored data if reclaim policy is not set to `Retain`.
 
 ---
 
 ## Step 7: Common Testing Commands
 
 | Purpose | Command |
-|---------|---------|
-| List databases | `kubectl exec -it chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SHOW DATABASES"` |
-| Check system tables | `kubectl exec -it chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SELECT name, engine FROM system.tables WHERE database='test'"` |
-| View pod logs | `kubectl logs chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse` |
+|----------|----------|
+| List databases | `kubectl exec -it chi-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SHOW DATABASES"` |
+| Check system tables | `kubectl exec -it chi-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SELECT name, engine FROM system.tables WHERE database='test'"` |
+| View pod logs | `kubectl logs chi-suprsend-ch-0-0-0 -n clickhouse` |
 | Describe volumes | `kubectl describe pvc -n clickhouse` |
-
----
-
-## Troubleshooting
-
-<AccordionGroup>
-  <Accordion title="Pods stuck in Pending">
-    **Possible cause**: StorageClass not found. **Fix**: Check `storageClassName` matches your cluster.
-  </Accordion>
-  <Accordion title="Pod restarting">
-    **Possible cause**: Wrong image or insufficient resources. **Fix**: Check logs and resource limits.
-  </Accordion>
-  <Accordion title="Can't connect via port-forward">
-    **Possible cause**: ClickHouse not yet ready. **Fix**: Wait until log shows "Ready for connections".
-  </Accordion>
-  <Accordion title="Data lost after restart">
-    **Possible cause**: PVC deleted or `Retain` not set. **Fix**: Ensure `reclaimPolicy: Retain`.
-  </Accordion>
-</AccordionGroup>
 
 ---
 
@@ -254,13 +236,11 @@ Use caution: deleting PVCs will erase all stored data if reclaim policy is not s
 
 Once your ClickHouse cluster is set up and running, configure SuprSend to connect to it.
 
-<Note>
-This section shows only the **ClickHouse-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)
-</Note>
+> **Important**: This section shows only the **ClickHouse-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 
 ### Kubernetes Secret Configuration
 
-First, add the ClickHouse-specific secrets to your SuprSend secrets file (see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide) for the full secrets template):
+First, add the ClickHouse-specific secrets to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
 
 ```yaml
 # ============================================
@@ -274,7 +254,7 @@ clickhouseConnUrlPassKey: "YOUR_PASSWORD"
 
 ### Helm Values Configuration
 
-Then add the following to your SuprSend values file (along with other required configuration — see [SuprSend Installation Guide](/docs/byoc/suprsend-installation-guide)):
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
 
 ```yaml
 # hostname of the ClickHouse DB instance
@@ -291,9 +271,7 @@ clickhouseConnUrlSecure: "true"
 clickhouseDeploymentType: "cloud"
 ```
 
-<Note>
-The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
-</Note>
+> **Note**: The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
 
 ---
 
@@ -301,24 +279,38 @@ The above configuration goes under `global.config` section in your `suprsend-val
 
 You now have a fully functional ClickHouse cluster running inside Kubernetes with:
 
-- Persistent 200Gi storage per pod
-- 1 shard × 1 replica layout (easy to scale later)
-- Verified persistence across restarts
+- Persistent 200Gi storage per pod  
+- 1 shard × 1 replica layout (easy to scale later)  
+- Verified persistence across restarts  
 - Easy connectivity via `clickhouse-client` or HTTP API
 - SuprSend Helm configuration ready
 
-For more advanced setups (multi-shard clusters, backups, monitoring, etc.), refer to:
-[Altinity ClickHouse Operator Documentation](https://docs.altinity.com/altinitykubernetesoperator/quickstartinstallation/)
+For more advanced setups (multi-shard clusters, backups, monitoring, etc.), refer to:  
+👉 [Altinity ClickHouse Operator Documentation](https://docs.altinity.com/altinitykubernetesoperator/quickstartinstallation/)
 
 ---
 
-## What's next
+## FAQ
 
-<CardGroup cols="2">
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/byoc/suprsend-installation-guide">
-    Deploy the rest of the stack with Helm.
-  </Card>
-  <Card title="List of Dependencies" icon="server" iconType="solid" href="/docs/byoc/list-of-dependencies">
-    Review other infrastructure components.
-  </Card>
-</CardGroup>
+<AccordionGroup>
+  <Accordion title="Pods stuck in Pending">
+    **Possible cause:** StorageClass not found.
+
+    **Fix:** Check that `storageClassName` matches your cluster's available storage classes.
+  </Accordion>
+  <Accordion title="Pod restarting repeatedly">
+    **Possible cause:** Wrong image or insufficient resources.
+
+    **Fix:** Check logs with `kubectl logs` and verify resource limits are adequate.
+  </Accordion>
+  <Accordion title="Can't connect via port-forward">
+    **Possible cause:** ClickHouse not yet ready.
+
+    **Fix:** Wait until the log shows "Ready for connections" before attempting to connect.
+  </Accordion>
+  <Accordion title="Data lost after restart">
+    **Possible cause:** PVC deleted or reclaim policy not set.
+
+    **Fix:** Ensure `reclaimPolicy: Retain` is set on your StorageClass.
+  </Accordion>
+</AccordionGroup>

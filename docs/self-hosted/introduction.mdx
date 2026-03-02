@@ -11,25 +11,21 @@ SuprSend’s **Self-Hosted** mode allows enterprises to deploy the full notifica
 
 It mirrors SuprSend’s cloud capabilities — including multi-channel delivery, preferences management, and workflow automation — but gives customers ownership of both the control plane and the data plane.
 
-## When to choose Self-Hosted
+## When to Choose Self-Hosted
 
-Self-hosting is a good fit if you need:
+Self-hosting SuprSend is ideal for teams that need:
 
-| Need | Example |
-|------|--------|
-| **Data residency or compliance** | GDPR, HIPAA, or enterprise IT policies |
-| **Private system integration** | Internal CRM, ERP, or on-prem alerting tools |
-| **Custom delivery infra** | Private SMTP, SMS gateways, or Kafka |
-| **Restricted networks** | Air-gapped or locked-down environments |
-| **Scale control** | High-volume workloads (millions of events/day) |
+- Data residency or privacy compliance (GDPR, HIPAA, or enterprise IT policies)
+- Integration with private systems (internal CRM, ERP, or on-prem alerting tools)
+- Custom delivery infra (e.g., using private SMTP, SMS gateways, or Kafka)
+- Air-gapped or restricted network environments
+- Scalability control for high-volume workloads (millions of events/day)
 
-If you prefer a fully managed experience with automatic scaling, uptime SLAs, and managed upgrades, use [SuprSend Cloud](https://app.suprsend.com/en/login) instead.
+If you prefer a managed experience — automatic scaling, uptime SLAs, and managed upgrades — consider [SuprSend Cloud](https://app.suprsend.com/en/login).
 
----
+## Deployment Modes
 
-## Deployment modes
-
-<Frame caption="SuprSend deployment options: SaaS, BYOC, and Self-Hosted">
+<Frame caption="SuprSend deployment options">
   <div style={{textAlign: 'center'}}>
     <img src="/images/suprsend-deployment-modes.png" alt="SuprSend Deployment Modes" style={{maxWidth: '100%', height: 'auto', borderRadius: '8px'}} />
   </div>
@@ -37,24 +33,22 @@ If you prefer a fully managed experience with automatic scaling, uptime SLAs, an
 
 SuprSend offers three deployment models:
 
+
 | Mode | Data Plane | Control Plane | Ease of Use | Scalability | Maintenance | SLA |
 |------|------------|---------------|-------------|-------------|-------------|-----|
 | SaaS | SuprSend | SuprSend | Easiest — no setup required | Managed by SuprSend | Fully managed | ✅ Available |
 | BYOC (Bring Your Own Cloud) | Customer | SuprSend | Moderate setup | Scales via SuprSend app | Shared responsibility | ❌ Not available |
 | Self-Hosted | Customer | Customer | Complex setup & maintenance | Customer managed | Fully customer responsibility | ❌ Not available |
 
-In the **Self-Hosted** model, you operate both the control plane and data plane — full isolation of data and operations.
+In the Self-Hosted model, both the control plane and data plane are operated by the customer — ensuring complete isolation of data and operations
 
----
-
-## Architecture overview
+## Architecture
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart TD
-    %% Internet boundary
     I[("Internet")] -->|HTTPS| G["Ingress / API Gateway"]
 
-    %% Customer VPC
     subgraph VPC["Customer VPC"]
       direction TB
 
@@ -64,7 +58,6 @@ flowchart TD
         A --> Q["Workers & Queues"]
       end
 
-      %% External stateful services (recommended outside K8s)
       subgraph EXT["External Stateful Services"]
         direction TB
         P[("PostgreSQL v16+")]
@@ -75,10 +68,8 @@ flowchart TD
         OS[("OpenSearch v1.3+")]
       end
 
-      %% Your App
       APP["Your Application<br/>(Backend / Frontend)"]
 
-      %% Data flows
       Q -->|"events / logs"| CH
       Q -->|"state / jobs"| R
       Q -->|"stream"| K
@@ -89,20 +80,18 @@ flowchart TD
 
     end
 
-    %% Notes
     G -.->|"API gateway must be internet-exposed<br/>for Inbox & Preferences"| NOTE["Your Frontend Application"]
 ```
-
-### High-level components
+### High-Level Components
 
 | Component | Description |
 |-----------|-------------|
 | SuprSend API | Core API gateway for receiving workflow triggers, managing templates, and handling user preferences. |
 | Workers & Queues | Distributed background processors for executing notification workflows, handling retries, and managing delivery logic. |
-| Dashboard | Web-based management interface for configuration, analytics, and debugging. You'll access two dashboards — a Host Account (for internal product alerts) and a Root Account (for configuring customer-facing notifications). |
-| PostgreSQL | Primary data store for users, templates, workflows, and notifications. |
+| Dashboard | Web-based management interface for configuration, analytics, and debugging. You’ll access two dashboards — a Host Account (for internal product alerts) and a Root Account (for configuring customer-facing notifications). |
+| PostgreSQL | Primary data store for users, templates, workflows, and notifications.  |
 | ClickHouse | Secondary data store to power analytics and logs. |
-| Redis | Cache and transient state management layer. You'll operate two Redis stores (both external) — one shared across all services and one dedicated to workflow state management. This separation ensures delays in any shared service do not affect workflow executions. |
+| Redis | Cache and transient state management layer. You’ll operate two Redis stores (both external) — one shared across all services and one dedicated to workflow state management. This separation ensures delays in any shared service do not affect workflow executions. |
 | NATS | Message queue for scalable event ingestion. |
 | OpenSearch | For powering In-app notifications |
 
@@ -110,9 +99,7 @@ flowchart TD
 SuprSend supports both single-cluster and multi-cluster topologies, depending on your scale and SLA requirements. You can run the entire system within your Kubernetes cluster, or keep stateful services (Postgres, Redis, ClickHouse) managed externally for better performance and resilience.
 </Note>
 
----
-
-## System requirements
+## System Requirements
 
 All dependencies are open-source under permissible licenses:
 
@@ -130,45 +117,21 @@ All dependencies are open-source under permissible licenses:
 For best performance, deploy databases and queues outside the Kubernetes cluster.
 </Note>
 
----
+## Networking & Observability
 
-## Networking and observability
+- **Secure Private Networking**: Self-hosted deployment supports secure private interconnects between SuprSend API, workers, and customer VPC.
 
-| Area | What you get |
-|------|----------------|
-| **Secure private networking** | Private interconnects between SuprSend API, workers, and your VPC |
-| **Centralized observability** | Push logs and metrics to your stack (e.g. Prometheus, Grafana) |
-| **Cluster management** | Use the [SuprSend CLI](/reference/cli-intro) or Terraform to create, update, and monitor clusters |
+- **Centralized Observability**: Logs and metrics can be pushed to your existing monitoring stack (e.g., Prometheus, Grafana).
 
----
+- **Cluster Management**: You can create, update, and monitor clusters using the SuprSend CLI or Terraform provider
 
-## Promotion and automation
+## Promotion & Automation 
+You can install [SuprSend CLI](https://docs.suprsend.com/reference/cli-intro) to promote assets and automate your deployment process in CI/CD pipeline. 
 
-Use the [SuprSend CLI](/reference/cli-intro) to promote assets and automate deployments in your CI/CD pipeline.
+## Release Lifecycle & Versioning
+- Stable Releases: Published every quarter.
+- Patch Releases: Security or bug-fix updates.
+- Version Format: vX.Y.Z (Semantic Versioning).
+- Upgrade Policy: Minor versions are upgrade-safe; major versions may introduce migrations.
 
-## Release lifecycle and versioning
-
-| Type | Cadence |
-|------|---------|
-| **Stable releases** | Every quarter |
-| **Patch releases** | Security and bug-fix updates as needed |
-| **Version format** | vX.Y.Z (Semantic Versioning) |
-| **Upgrade policy** | Minor versions are backward-compatible; major versions may introduce migrations |
-
-Track all self-hosted releases in the [Changelog](/docs/self-hosted/changelog).
-
----
-
-## What's next
-
-<CardGroup cols="3">
-  <Card title="Getting Started" icon="list-check" iconType="solid" href="/docs/self-hosted/getting-started">
-    Step-by-step deployment checklist and dependency order.
-  </Card>
-  <Card title="List of Dependencies" icon="server" iconType="solid" href="/docs/self-hosted/list-of-dependencies">
-    All infrastructure components and version requirements.
-  </Card>
-  <Card title="SuprSend Installation Guide" icon="rocket" iconType="solid" href="/docs/self-hosted/suprsend-installation-guide">
-    Helm install, secrets, and values configuration.
-  </Card>
-</CardGroup>
+You can track all releases in [Self Hosted Changelog](/docs/self-hosted/changelog).
