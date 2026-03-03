@@ -5,8 +5,6 @@ description: "Set up OpenSearch in Kubernetes for search, analytics, and in-app 
 
 This guide walks you through setting up **OpenSearch** in Kubernetes for SuprSend’s self‑hosted deployments. OpenSearch provides the backbone for search, analytics, and observability features in SuprSend.
 
----
-
 SuprSend recommends using a **managed OpenSearch service** (AWS OpenSearch, GCP Elastic, or Azure Elastic) for production environments to reduce operational overhead and ensure high availability.
 
 However, for self‑managed or air‑gapped environments, you can deploy OpenSearch directly in Kubernetes using the **OpenSearch Operator**.
@@ -55,13 +53,15 @@ kubectl -n opensearch create secret generic admin-credentials \
 ---
 
 ## Step 3: Generate Hashed Password for Internal Users
-
+<Steps>
+<Step title="Generate bcrypt hash of your admin password">
 To set up OpenSearch security, generate a bcrypt hash of your admin password:
 
 ```bash
 docker run --rm httpd:2.4-alpine htpasswd -nbBC 10 admin 'SuperStrong#Passw0rd' | cut -d: -f2
 ```
-
+</Step>
+<Step title="Create Kubernetes secret">
 Create a Kubernetes secret `os-internal-users.secret.yaml` with the generated hash:
 
 ```yaml title="os-internal-users.secret.yaml"
@@ -83,18 +83,19 @@ stringData:
         - "admin"
       description: "Admin user"
 ```
-
-Apply the secret:
+</Step>
+<Step title="Apply the secret">
 
 ```bash
 kubectl apply -f os-internal-users.secret.yaml
 ```
-
+</Step>
+</Steps>
 ---
 
 ## Step 4: Deploy the OpenSearch Cluster
-
-Create a cluster definition file `suprsend-opensearch.yaml`:
+<Steps>
+<Step title="Create cluster definition file">
 
 ```yaml title="suprsend-opensearch.yaml"
 apiVersion: opensearch.opster.io/v1
@@ -147,18 +148,19 @@ spec:
           cpu: "500m"
           memory: "2Gi"
 ```
-
-Apply the manifest:
+</Step>
+<Step title="Apply the manifest">
 
 ```bash
 kubectl apply -f suprsend-opensearch.yaml
 ```
-
+</Step>
+</Steps>
 ---
 
 ## Step 5: Verify the Deployment
 
-### Check Persistent Volumes
+**Check Persistent Volumes**
 
 Ensure volumes are created correctly:
 
@@ -166,13 +168,14 @@ Ensure volumes are created correctly:
 kubectl get pvc -n opensearch
 ```
 
-### Check Cluster Health
+**Check Cluster Health**
 
 ```bash
 kubectl get OpenSearchCluster -n opensearch
 ```
-
+<Tip>
 The status should show **green** once all nodes are ready.
+</Tip>
 
 You can also try making a curl request from with cluster
 
@@ -198,8 +201,9 @@ curl https://suprsend-opensearch-cluster.opensearch.svc.cluster.local:9200/_clus
   "active_shards_percent_as_number" : 100.0
 }
 ```
-
+<Tip>
 Make sure status is `green`
+</Tip>
 ---
 
 ## Step 6: Access OpenSearch Dashboards
@@ -212,10 +216,11 @@ kubectl port-forward svc/suprsend-opensearch-dashboards 5601:5601 -n opensearch
 
 Access in your browser at: [https://localhost:5601](https://localhost:5601)
 
+<Info>
 Login credentials:
 - **Username:** admin
 - **Password:** SuperStrong#Passw0rd
-
+</Info>
 ---
 
 ## Step 7: Backup and Persistence
@@ -253,8 +258,9 @@ kubectl delete ns opensearch-operator
 ## Step 9: SuprSend Helm Configuration
 
 Once your OpenSearch cluster is operational, configure SuprSend to use it.
-
-> **Important**: This section shows only the **OpenSearch-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+<Note>
+This section shows only the **OpenSearch-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+</Note>
 
 ### Kubernetes Secret Configuration
 
@@ -276,20 +282,18 @@ Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprse
 # connection url for opensearch
 opensearchConnUrlKey: "opensearchConnUrlKey"
 ```
-
-> **Note**: The OpenSearch connection is configured via the full connection URL in the secret, which includes the host, port, credentials, and scheme. The above configuration goes under `suprsendInboxApi.secret` section.
+<Note>
+The OpenSearch connection is configured via the full connection URL in the secret, which includes the host, port, credentials, and scheme. The above configuration goes under `suprsendInboxApi.secret` section.
+</Note>
 
 ---
 
 ## Best Practices
-
-<Accordion title="Best Practices">
-  - Use **dedicated storage classes** (e.g., SSD-backed volumes)
-  - Enable **auto-scaling** and **snapshot policies**
-  - Run OpenSearch in **HA mode** with 3+ nodes for redundancy
-  - Use **Ingress or LoadBalancer** for external access with TLS termination
-  - Configure proper **TLS certificates** for production deployments
-</Accordion>
+- Use **dedicated storage classes** (e.g., SSD-backed volumes)
+- Enable **auto-scaling** and **snapshot policies**
+- Run OpenSearch in **HA mode** with 3+ nodes for redundancy
+- Use **Ingress or LoadBalancer** for external access with TLS termination
+- Configure proper **TLS certificates** for production deployments
 
 ---
 

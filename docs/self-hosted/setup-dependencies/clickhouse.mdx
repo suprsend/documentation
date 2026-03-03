@@ -51,12 +51,15 @@ clickhouse-operator-7f999c9c4b-xyz12    1/1     Running   0          1m
 
 ## Step 2: Create ClickHouse Cluster
 
-Generate password for your default user,
+<Steps>
+  <Step title="Generate password for your default user">
 
 ```bash
 docker run --rm alpine sh -c "echo -n 'YOUR_PASSWORD' | sha256sum | awk '{print \$1}'"
 ```
 
+</Step>
+<Step title="Create ClickHouse Cluster">
 
 
 
@@ -105,13 +108,14 @@ spec:
         templates:
           podTemplate: clickhouse-pod-template
 ```
-
-Apply the manifest:
+</Step>
+<Step title="Apply the manifest">
 
 ```bash
 kubectl apply -f clickhouse-cluster.yaml -n clickhouse
 ```
-
+</Step>
+<Step title="Verify the cluster is running">
 Wait until the pods are running:
 
 ```bash
@@ -126,7 +130,8 @@ chi-suprsend-ch-suprsend-ch-0-0-0         1/1     Running   0          1m
 ```
 
 > `chi` prefix stands for **ClickHouseInstallation** (CRD name defined by the Altinity Operator).
-
+</Step>
+</Steps>
 ---
 
 ## Step 3: Verify ClickHouse Cluster Health
@@ -143,8 +148,8 @@ If you see “Ready for connections”, your ClickHouse node is healthy.
 ---
 
 ## Step 4: Connect to ClickHouse
-
-### Option 1: Using kubectl port-forward
+<Tabs>
+<Tab title="Option 1: Using kubectl port-forward">
 
 ```bash
 kubectl port-forward pod/chi-suprsend-ch-suprsend-ch-0-0-0 8123:8123 -n clickhouse
@@ -161,14 +166,13 @@ Expected response:
 ```
 1
 ```
-
-### Option 2: Using clickhouse-client (recommended for testing)
+</Tab>
+<Tab title="Option 2: Using clickhouse-client">
 
 ```bash
 kubectl exec -it chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client
 ```
 
-Inside the shell:
 
 ```sql
 CREATE DATABASE test;
@@ -176,33 +180,35 @@ CREATE TABLE test.data (id UInt32, message String) ENGINE = MergeTree() ORDER BY
 INSERT INTO test.data VALUES (1, 'Hello'), (2, 'ClickHouse');
 SELECT * FROM test.data;
 ```
-
+</Tab>
+</Tabs>
 ---
 
 ## Step 5: Test Persistence
 
 To verify that your data persists across pod restarts:
-
-1. Insert some data:
+<Steps>
+<Step title="Insert some data">
    ```sql
    INSERT INTO test.data VALUES (3, 'Persistence Test');
    ```
-
-2. Delete the pod:
-   ```bash
-   kubectl delete pod chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse
-   ```
-
-3. Wait for it to restart:
-   ```bash
-   kubectl get pods -n clickhouse -w
-   ```
-
-4. Reconnect and check the data:
-   ```bash
-   kubectl exec -it chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SELECT * FROM test.data;"
-   ```
-
+</Step>
+<Step title="Delete the pod">
+```bash
+kubectl delete pod chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse
+```
+</Step>
+<Step title="Wait for it to restart">
+```bash
+kubectl get pods -n clickhouse -w
+```
+</Step>
+<Step title="Reconnect and check the data">
+```bash 
+kubectl exec -it chi-suprsend-ch-suprsend-ch-0-0-0 -n clickhouse -- clickhouse-client -q "SELECT * FROM test.data;"
+```
+</Step>
+</Steps>
 ✅ If you still see all inserted rows — persistence is working properly.
 
 ---
@@ -216,9 +222,9 @@ kubectl delete chi suprsend-ch -n clickhouse
 kubectl delete pvc -n clickhouse --all
 kubectl delete pod -n clickhouse --all
 ```
-
-> ⚠️ Use caution: deleting PVCs will erase all stored data if reclaim policy is not set to `Retain`.
-
+<Warning>
+Deleting PVCs will erase all stored data if reclaim policy is not set to `Retain`.
+</Warning>
 ---
 
 ## Step 7: Common Testing Commands
@@ -235,8 +241,9 @@ kubectl delete pod -n clickhouse --all
 ## Step 8: SuprSend Helm Configuration
 
 Once your ClickHouse cluster is set up and running, configure SuprSend to connect to it.
-
-> **Important**: This section shows only the **ClickHouse-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+<Note>
+This section shows only the **ClickHouse-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+</Note>
 
 ### Kubernetes Secret Configuration
 
@@ -270,9 +277,9 @@ clickhouseConnUrlSecure: "true"
 # ClickHouse deployment type: 'cloud' (managed) or 'oss_single' (self-hosted single node)
 clickhouseDeploymentType: "cloud"
 ```
-
-> **Note**: The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
-
+<Note>
+The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
+</Note>
 ---
 
 ## Summary
