@@ -1,0 +1,307 @@
+---
+title: "PostgreSQL Setup Guide"
+description: "Provision, configure, and validate PostgreSQL for a SuprSend self-hosted deployment."
+---
+
+This guide helps your team provision, configure, and validate PostgreSQL for a **SuprSend self-hosted deployment**.  
+You can use a **managed PostgreSQL** (recommended for ease of maintenance) or deploy it on your own **VMs/Kubernetes**.
+
+> **Version Requirement**: PostgreSQL **v17 or newer**  
+> **Required Extensions**: `pg_cron`, `pgcrypto`, `pg_stat_statements`, `btree_gin`, `btree_gist`  
+> **Required Parameters (in `postgresql.conf` or DB parameter group):**
+> ```
+> shared_preload_libraries = 'pg_stat_statements,pg_cron'
+> cron.database_name = 'defaultdb'
+> cron.max_running_jobs = 1
+> hot_standby_feedback = on
+> max_standby_archive_delay = -1
+> max_standby_streaming_delay = -1
+> wal_level = logical
+> ```
+
+---
+
+## Topology & Sizing
+
+| Component | Recommended Configuration |
+|------------|---------------------------|
+| **Topology** | 1 primary + 1–2 hot standbys (streaming replication) |
+| **Compute** | 4 vCPU / 16–32 GB RAM |
+| **Storage** | SSD, 100–200 GB to start |
+| **Connections** | Use PgBouncer for pooling |
+| **Backups** | Automated daily + PITR (WAL archival) |
+
+---
+
+## Managed PostgreSQL (Recommended)
+
+Managed services simplify upgrades, backups, and high availability.
+
+### AWS RDS / Aurora PostgreSQL
+1. Create a **PostgreSQL 17+** instance or cluster.
+2. In the **parameter group**, apply the configuration parameters above.
+3. Enable extensions (run per DB as admin):
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS pg_cron;
+   CREATE EXTENSION IF NOT EXISTS pgcrypto;
+   CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+   CREATE EXTENSION IF NOT EXISTS btree_gin;
+   CREATE EXTENSION IF NOT EXISTS btree_gist;
+   ```
+4. Ensure `wal_level=logical` and configure replication if needed.
+
+### Google Cloud SQL for PostgreSQL
+1. Create a **PostgreSQL 17+** instance.
+2. Add the required parameters in **Flags**.
+3. Enable all required extensions.
+
+### Azure Database for PostgreSQL – Flexible Server
+1. Create a **PostgreSQL 17+** flexible server.
+2. Apply the parameters above.
+3. Enable required extensions.
+
+<Note>
+Verify `pg_cron` availability. If unavailable, consider self-hosted deployment.
+</Note>
+---
+
+## Self-Hosted on VMs
+
+1. Install PostgreSQL 17+ (from PGDG or distro repos).  
+2. Edit `postgresql.conf`:
+   ```conf
+   shared_preload_libraries = 'pg_stat_statements,pg_cron'
+   cron.database_name = 'defaultdb'
+   cron.max_running_jobs = 1
+   hot_standby_feedback = on
+   max_standby_archive_delay = -1
+   max_standby_streaming_delay = -1
+   wal_level = logical
+   ```
+3. Restart PostgreSQL.
+4. Configure replication and backup scripts as needed.
+
+---
+
+## Self-Hosted on Kubernetes
+
+You can deploy PostgreSQL using a **Postgres Operator** or **Helm chart**.
+
+Example ConfigMap fragment:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-conf
+data:
+  postgresql.conf: |
+    shared_preload_libraries = 'pg_stat_statements,pg_cron'
+    cron.database_name = 'defaultdb'
+    cron.max_running_jobs = 1
+    hot_standby_feedback = on
+    max_standby_archive_delay = -1
+    max_standby_streaming_delay = -1
+    wal_level = logical
+```
+
+Mount this ConfigMap into your container or operator-managed config.
+
+---
+
+## Create Required Databases
+
+Run the following SQL on your instance:
+
+```sql
+CREATE DATABASE suprsend;
+CREATE DATABASE defaultdb;
+CREATE DATABASE pronto;
+CREATE DATABASE svix;
+CREATE DATABASE temporal;
+CREATE DATABASE temporal_visibility;
+```
+
+---
+
+## Enable Required Extensions
+
+Enable `pg_cron` on `defaultdb` database
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+Run the following commands **in each of the six databases**:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE EXTENSION IF NOT EXISTS btree_gin;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+```
+<Tip>
+`cron.database_name = 'defaultdb'` means scheduled jobs run by default in the `defaultdb` database.
+</Tip>
+
+---
+
+## Create Roles & Grant Access
+
+Create an application role for SuprSend:
+
+```sql
+CREATE ROLE suprsend_app WITH LOGIN PASSWORD '<<strong-password>>';
+
+GRANT CONNECT ON DATABASE suprsend TO suprsend_app;
+\c suprsend
+GRANT USAGE ON SCHEMA public TO suprsend_app;
+GRANT CREATE, SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO suprsend_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO suprsend_app;
+```
+
+Repeat equivalent grants for other databases as needed.
+
+<Tip>
+For high concurrency, use **PgBouncer** in transaction pooling mode.
+</Tip>
+
+---
+
+## Replication, HA & Backups
+
+- Enable **streaming replication** with 1–2 replicas.
+- Ensure `hot_standby_feedback=on` and `wal_level=logical`.
+- Recommended replication parameters:
+  ```conf
+  max_wal_senders = 10
+  max_replication_slots = 10
+  ```
+- Use **WAL archiving** for point-in-time recovery.
+- On managed platforms, enable automated backups.
+
+---
+
+## Observability & Maintenance
+
+- `pg_stat_statements`: helps analyze query performance.
+- Monitor:
+  - CPU, memory, IOPS
+  - Connection usage
+  - Replication lag
+  - Autovacuum activity
+- Example pg_cron job:
+  ```sql
+  SELECT cron.schedule('analyze-all', '0 2 * * *', $$VACUUM (ANALYZE);$$);
+  ```
+
+---
+
+## Security & Networking
+
+- Enforce **TLS** for connections.
+- Restrict access to VPC/VNet or private subnets.
+- Rotate credentials regularly.
+- Store secrets in a managed secret manager (e.g., AWS Secrets Manager).
+
+---
+
+## Validation Checklist
+
+```sql
+-- Check version
+SELECT version();
+
+-- Verify parameters
+SHOW shared_preload_libraries;
+SHOW cron.database_name;
+SHOW wal_level;
+
+-- Confirm databases
+SELECT datname FROM pg_database
+WHERE datname IN ('suprsend','defaultdb','pronto','svix','temporal','temporal_visibility');
+
+-- Confirm extensions
+SELECT extname FROM pg_extension
+WHERE extname IN ('pg_cron','pgcrypto','pg_stat_statements','btree_gin','btree_gist');
+```
+
+All checks should return expected values.
+
+---
+
+## SuprSend Helm Configuration
+
+Once your PostgreSQL instance is configured with all required databases and extensions, configure SuprSend to use it.
+
+<Note>
+This section shows only the **PostgreSQL-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+</Note>
+
+### Kubernetes Secret Configuration
+
+First, add the PostgreSQL-specific secrets to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
+
+```yaml
+# ============================================
+# PostgreSQL Configuration (this guide)
+# ============================================
+# username of the PostgreSQL database
+pgDbUserKey: "suprsend_app"
+# password of the PostgreSQL database
+pgDbPasswordKey: "YOUR_PASSWORD"
+```
+
+### Helm Values Configuration
+
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
+
+```yaml
+# hostname of PostgreSQL database instance
+pgDbHost: "your-postgres-host.region.rds.amazonaws.com"
+# port for the PostgreSQL database instance (e.g: 5432)
+pgDbPort: "5432"
+# SSL mode for the connection: 'disable', 'require', 'verify-ca', or 'verify-full'
+pgDbSslmode: "require"
+# postgres connection pool size within application (e.g: 10)
+pgMaxPoolSize: "10"
+# hostname of read-only PostgreSQL replica instance (optional)
+pgDbReplicaHost: ""
+```
+<Note>
+SuprSend will automatically connect to the required databases (`suprsend`, `pronto`, `svix`, `defaultdb`) using the same host and credentials. Ensure all databases are created on the same PostgreSQL instance. The above configuration goes under `global.config` section.
+</Note>
+
+---
+
+## Final Steps
+
+✅ Provision PostgreSQL **17+**  
+✅ Apply **configuration parameters**  
+✅ Create **six databases**  
+✅ Enable **required extensions**  
+✅ Set up **roles and access**  
+✅ Configure **replication & backups**  
+✅ Run **validation checklist**
+
+---
+
+**Next Steps:**  
+Once PostgreSQL is ready, proceed with deploying the rest of the SuprSend stack using the Helm charts provided in the deployment documentation.
+
+---
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Do we need all extensions in every database?">
+    Yes. To ensure consistent functionality across services, enable them in all databases.
+  </Accordion>
+  <Accordion title="Why wal_level=logical?">
+    Required for CDC, logical replication, and certain SuprSend data sync features.
+  </Accordion>
+  <Accordion title="What if a managed DB doesn't support pg_cron?">
+    You can use external schedulers (like CloudWatch, GCP Cloud Scheduler, or Kubernetes CronJobs) as a fallback.
+  </Accordion>
+</AccordionGroup>
