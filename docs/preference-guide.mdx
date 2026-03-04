@@ -49,7 +49,7 @@ data?.sections?.flatMap((s) => s.subcategories || []).map((sub) =>
 );
 ```
 
-**When to use:** Your app sends on multiple channels (Email, SMS, Push, Slack) and users want to control volume per channel. Examples: "Email me everything but push only critical alerts", "Turn off SMS entirely." Common in consumer apps, marketplaces, and collaboration tools.
+**When to use:** Your app sends on multiple channels (Email, SMS, Push, Slack) and users want to control what they receive on each channel. Examples: "Email me everything, but send push only for critical alerts", "Turn off SMS entirely." Common in consumer apps, marketplaces, and collaboration tools.
 
 **Related docs:** [User Preferences](/docs/user-preferences) | [Manage Categories](/docs/managing-notification-categories) | [JS SDK preferences](/docs/js-preferences)
 
@@ -118,8 +118,9 @@ This works through a user profile field `digest_frequency`. The workflow reads i
 **Configure in SuprSend**
 
 1. In **Developers → [Notification categories](/docs/managing-notification-categories)**, create sub-categories for each frequency option: **Instant**, **Daily**, **Weekly**, **Off**
-2. In your workflow, add a **condition node** that reads `digest_frequency` from the user's profile
-3. Branch the workflow: if `daily` → Digest node with daily schedule; if `weekly` → Digest node with weekly schedule; if `instant` → send immediately (no digest); if `off` → exit. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
+2. Store the user's chosen frequency as a user property called `digest_frequency` (e.g. via your app's settings page using the [Users API](/docs/users))
+3. In your workflow, add a **condition node** that reads `digest_frequency` from the user's profile
+4. Branch the workflow: if `daily` → Digest node with daily schedule; if `weekly` → Digest node with weekly schedule; if `instant` → send immediately (no digest); if `off` → exit. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
 
 {/* TODO: Add workflow screenshot showing condition on digest_frequency with daily/weekly digest branches */}
 
@@ -159,9 +160,9 @@ Each brand or tenant sees only the categories you allow for them. Per tenant, yo
 
 **Configure in SuprSend**
 
-1. Go to **Tenants → [your tenant] → [Tenant Preference](/docs/tenant-preference)**
-2. Disable any categories or channels this tenant's users should not see
-3. Repeat per tenant. Only categories you leave enabled will appear for that tenant's users
+1. Go to **Tenants**, select the tenant you want to configure, and open **Tenant Preference**
+2. Disable any categories or channels that should be hidden from this tenant's users and excluded from notifications
+3. Repeat for each tenant. Only the categories you leave enabled will be visible to that tenant's users and eligible for notifications
 
 Most teams prefer the **API** for this — especially when managing many tenants programmatically:
 
@@ -190,7 +191,7 @@ data?.sections?.flatMap((s) => s.subcategories || []).map((cat) => (
 ));
 ```
 
-**When to use:** Multi-tenant or white-label SaaS where each customer org sees a different set of notifications. Examples: free-plan tenant sees only billing alerts, enterprise tenant sees billing + product + security. A reseller's customers see only the features that reseller has enabled.
+**When to use:** Multi-tenant SaaS applications where each customer org sees a different set of notifications. Examples: free-plan tenants see only limited features, paid tenants see all the features they are subscribed to.
 
 **Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences) | [Preference Evaluation](/docs/preference-evaluation)
 
@@ -198,57 +199,62 @@ data?.sections?.flatMap((s) => s.subcategories || []).map((cat) => (
 
 ## 5. Department
 
-Tag is set in code (user profile, environment variable). No department selector is shown to the user. For example, a sales person only sees sales categories.
+Different teams within your organization need different notifications. Instead of showing every category to every user and relying on them to configure, you can automatically filter categories based on the user's department.
 
-<Frame caption="Filter by department">
-  <img src="/images/dept.png" alt="Filter by department" width="280" />
+This is done using **tags** in SuprSend. A tag is a label you assign to notification categories (e.g. `sales`, `finance`, `engineering`). When fetching preferences, you pass the relevant tag and SuprSend returns only the categories that match. The user never sees a department picker — your app determines their department from their profile or session and passes the corresponding tag automatically.
+
+<Frame caption="A sales user sees only sales-related notification categories">
+  <img src="/images/dept-sales.png" alt="Sales department preferences" width="280" />
+</Frame>
+
+<Frame caption="A finance user sees only finance-related notification categories">
+  <img src="/images/dept-finance.png" alt="Finance department preferences" width="280" />
 </Frame>
 
 **Configure in SuprSend**
 
-1. In **Developers → [Notification categories](/docs/managing-notification-categories)**, create categories and add tags to sections or sub-categories (e.g. `engineering`, `sales`)
+1. In **Developers → [Notification categories](/docs/managing-notification-categories)**, create categories and add tags to sections or sub-categories (e.g. `engineering`, `sales`, `finance`)
 2. Click **Publish**
 
 **Build in your app**
 
-Set the tag from code (environment variable, user profile, etc.) and call `getPreferences({ tags })`. No filter UI is needed — the tag is determined programmatically.
+Determine the user's department from their profile or session context, then call `getPreferences({ tags })` with the corresponding tag. No filter UI is needed — the tag is set programmatically and the user only sees categories relevant to them.
 
 ```javascript
-const TAG = import.meta.env.VITE_DEPARTMENT_TAG || user?.department || 'engineering';
+const TAG = user?.department || 'engineering';
 const { data, updateCategoryPreference } = usePreferences({ tags: TAG });
 ```
 
-**When to use:** Users in different teams automatically see only relevant notifications — no picker needed. Examples: sales reps see deal and pipeline alerts; engineers see deploy and incident alerts; HR sees onboarding and leave requests. The department is known from the user's profile or environment.
+**When to use:** Users in different teams should automatically see only relevant notifications — no picker needed. Examples: sales reps see deal and pipeline alerts; engineers see deploy and incident alerts; finance sees billing and expense alerts. The department is determined from the user's profile or session.
+
 **Related docs:** [User Preferences](/docs/user-preferences) | [Manage Categories](/docs/managing-notification-categories)
 
 ---
 
-## 6. Department + Tenant Admin
+## 6. Preferences Customization by Tenant Admins
 
-Same as [Department](#5-department), but scoped to a specific tenant. **Admin side:** Tenant admin can restrict which categories their users see (disable or hide via Tenant Preference) and set default On/Off per category (Dashboard or API). **User side:** Pick department (tag), then see only categories allowed for that tenant and tag.
+Allow tenant admins to determine which notifications are relevant for their organization. Instead of the SuprSend dashboard admin configuring every tenant, the tenant's own admin can enable or disable categories, set default preferences, and control channel availability for their users — via the Dashboard or the API.
 
-<Frame caption="Filter by department, scoped to tenant">
-  <img src="/images/dept_ten.png" alt="Filter by department, scoped to tenant" width="280" />
+<Frame caption="Tenant admin customizing notification preferences for their organization">
+  <img src="/images/dept_ten.png" alt="Tenant admin preferences" width="280" />
 </Frame>
 
 **Configure in SuprSend**
 
-1. Add tags to categories as in [Department](#5-department)
-2. Go to **Tenants → [tenant] → [Tenant Preference](/docs/tenant-preference)**: disable or hide categories this tenant's users should not see; set default preference per category
-3. Tenant admin can later change these via Dashboard or API: `PATCH /v1/tenant/{tenant_id}/preference/category/{category_slug}/`
-4. **Publish**
+1. Provide tenant admins access to manage their tenant's preferences via the [Tenant Preference API](/docs/tenant-preference).
+2. Tenant admins can enable or disable categories, set default On/Off per category, and control which channels are available — all scoped to their tenant
+3. **Publish**
 
 **Build in your app**
 
-Pass both `tenantId` and `tags`. Show a department selector and the filtered category list. Use `updateCategoryPreference` as usual. Users only see categories allowed for the tenant and matching the selected tag.
+Build an admin settings page that calls the Tenant Preference API. The admin selects categories to enable or disable and sets defaults. For end users, call `getPreferences({ tenantId })` — they only see what their tenant admin has left enabled.
 
 ```javascript
-const TENANT_ID = 'default';
-const [tag, setTag] = useState('sales');
-const { data, updateCategoryPreference } = usePreferences({ tenantId: TENANT_ID, tags: tag });
+const TENANT_ID = 'acme-corp';
+const { data, updateCategoryPreference } = usePreferences({ tenantId: TENANT_ID });
 ```
 
-**When to use:** Multi-tenant app where each org has internal teams, and the org admin controls what each team sees. Examples: a workforce platform where Company A's Sales team sees different alerts than Company B's Sales team. Admin restricts per tenant, code filters per department.
+**When to use:** Multi-tenant apps where each organization's admin needs the ability to customize which notifications their users receive. Examples: a B2B platform where one customer org enables billing + product + security alerts while another only enables billing alerts, or a white-label product where each customer admin tailors the notification experience for their end users.
 
 **Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences)
 
@@ -301,7 +307,7 @@ data?.sections?.map((section) => (
 
 Users pick **at what level they want to be alerted** (e.g. 80% or 90% of a usage limit). The threshold value is stored as a user profile property. Your workflow reads it and fires when the metric crosses that value.
 
-Preferences are still involved — the notification category controls whether the alert is on or off, and which channels it is delivered on. The threshold just determines *when* the workflow triggers. Without the category preference, there is no way for the user to opt in/out or choose channels for this alert type.
+Preferences are still involved — the notification category controls whether the alert is on or off, and which channels it is delivered on. The threshold just determines *when* the workflow triggers. You need both: the threshold (stored as a user property) decides when to fire the alert, and the category preference lets the user toggle the alert on or off and choose which channels receive it.
 
 <Frame caption="Threshold alerts">
   <img src="/images/thresholdimg.png" alt="Threshold alerts" width="280" />
@@ -364,7 +370,7 @@ const { data, updateCategoryPreference, updateChannelPreferenceInCategory, updat
 // Full UI: Channels + Categories, same as Channel/Category pages but scoped to selectedTenantId
 ```
 
-**When to use:** Each project needs its own complete set of notification preferences — not just filtered categories, but separate channel settings, category toggles, everything. Examples: a CI/CD platform where "Project Alpha" gets email + Slack for deploys but "Project Beta" only gets Slack, or a client portal where each client project has independent notification settings.
+**When to use:** Each project or sub-account needs its own complete set of notification preferences — not just filtered categories, but separate channel settings, category toggles, everything. Examples: an ad platform where a business has multiple ad accounts and wants separate notification settings per account (one account gets email + SMS for budget alerts, another only gets email), or a cloud hosting provider where each sub-account (production, staging, dev) has independent alert preferences.
 
 **Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences)
 
