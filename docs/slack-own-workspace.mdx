@@ -7,11 +7,25 @@ This guide covers sending notifications into a Slack workspace that you own and 
 
 ## How it works
 
-You create a [Slack app](https://api.slack.com/apps), install it into your workspace, and copy the bot token it generates. You then pass that token — along with a target user ID or channel ID — to SuprSend using `user.add_slack()`. When a workflow runs, SuprSend uses that token to post the message via [Slack's API](https://api.slack.com/methods).
+```mermaid
+sequenceDiagram
+    participant Dev as Your Server
+    participant SS as SuprSend
+    participant Slack as Slack API
+
+    Note over Dev: Install Slack app into your workspace<br/>Copy bot token (xoxb-...)
+    Dev->>SS: user.add_slack(user_id/email/channel_id + token)
+    SS-->>Dev: Profile saved
+
+    Dev->>SS: workflows.trigger(workflow, recipients)
+    SS->>Slack: POST message using stored token
+    Slack-->>SS: 200 OK
+    SS-->>Dev: Delivery confirmed
+```
+
+You control everything — there's no user consent step because you own the workspace and the Slack app.
 
 ## Step 1 — Enable the Slack channel in SuprSend
-
-Before any messages can be sent, you need to activate the Slack channel in your SuprSend workspace.
 
 1. Log in to your [SuprSend dashboard](https://app.suprsend.com)
 2. Go to **[Vendors → Slack](https://app.suprsend.com/en/staging/vendors/slack)**
@@ -27,7 +41,7 @@ Before any messages can be sent, you need to activate the Slack channel in your 
 
 ## Step 2 — Set up your Slack app
 
-If you already have a Slack app installed in your workspace, you can skip to [Step 3](#step-3--verify-your-oauth-scopes). You only need an app that is installed in the target workspace and has the right scopes.
+If you already have a Slack app installed in your workspace, skip to [Step 3](#step-3--verify-your-oauth-scopes).
 
 If you need to create one:
 
@@ -53,15 +67,15 @@ If you need to create one:
 
 ## Step 3 — Verify your OAuth scopes
 
-Your app needs the right [bot token scopes](https://api.slack.com/scopes) to post messages. Navigate to **Features → OAuth & Permissions → Bot Token Scopes** in your app settings and confirm the following scopes are present. Add any that are missing.
+Navigate to **Features → OAuth & Permissions → Bot Token Scopes** and confirm the following scopes are present. Add any that are missing.
 
 | Scope | Required | Purpose |
 |-------|----------|---------|
 | [`chat:write`](https://api.slack.com/scopes/chat:write) | Yes | Post messages to channels the bot has been invited to |
 | [`chat:write.public`](https://api.slack.com/scopes/chat:write.public) | Yes | Post to public channels without the bot needing to join first |
 | [`im:write`](https://api.slack.com/scopes/im:write) | Yes | Send direct messages to users |
-| [`users:read`](https://api.slack.com/scopes/users:read) | No | Look up a user by their Slack user ID. Required only for DM by `user_id`. |
-| [`users:read.email`](https://api.slack.com/scopes/users:read.email) | No | Look up a user by email address. Required only for DM by email. |
+| [`users:read`](https://api.slack.com/scopes/users:read) | No | Required to look up users by Slack user ID |
+| [`users:read.email`](https://api.slack.com/scopes/users:read.email) | No | Required to look up users by email address |
 
 <Frame>
   ![Adding Bot Token Scopes](/images/docs/75119e0-slack_scope.png)
@@ -73,8 +87,6 @@ Your app needs the right [bot token scopes](https://api.slack.com/scopes) to pos
 
 ## Step 4 — Get your bot token
 
-Once your app is installed with the correct scopes:
-
 1. In the left sidebar, go to **Settings → Install App**
 2. If the app is not yet installed, click **Install to Workspace**, review the permissions, and click **Allow**
 3. Copy the **Bot User OAuth Token** — it starts with `xoxb-`
@@ -83,9 +95,7 @@ Store this token in an environment variable. Do not commit it to source control.
 
 ## Step 5 — Store the target in SuprSend
 
-SuprSend needs to know where to deliver the notification. You store this as Slack channel data on a user profile using the SDK.
-
-Initialize the [SuprSend SDK](https://docs.suprsend.com/docs/nodejs-sdk) first if you haven't already:
+Initialize the SDK first if you haven't already:
 
 <CodeGroup>
 ```javascript Node.js
@@ -101,19 +111,16 @@ supr_client = Suprsend("workspace_key", "workspace_secret")
 ```
 </CodeGroup>
 
-**Resolving Slack user IDs automatically**
+**Resolving Slack user IDs without manual lookups**
 
-You don't need to look up user IDs manually. The two common approaches to keep this fully automated:
+If you want to send DMs to individuals, you need their Slack `user_id`. You don't need to look these up manually — two common automated approaches:
 
-- **Bulk sync at setup** — call [Slack's `users.list` API](https://api.slack.com/methods/users.list) once to get all workspace members, map each member's email to their Slack `user_id`, and store the results in SuprSend. Run this on a schedule if your team changes frequently.
+- **Bulk sync at setup** — call [Slack's `users.list` API](https://api.slack.com/methods/users.list) once to fetch all workspace members, map each member's email to their Slack `user_id`, and store in SuprSend. Run this periodically if your team changes.
+- **Resolve on login** — when an employee logs in to your internal tool, call [Slack's `users.lookupByEmail` API](https://api.slack.com/methods/users.lookupByEmail) with their email to get their `user_id`, then store it in SuprSend. One call per user, done once.
 
-- **Resolve at the point of connection** — when a user connects their Slack account or logs in, call [Slack's `users.lookupByEmail` API](https://api.slack.com/methods/users.lookupByEmail) with their email to get their `user_id` instantly, then store it in SuprSend. One API call per user, triggered once.
+Both require the `users:read` scope (for `users.list`) or `users:read.email` scope (for `users.lookupByEmail`). Once stored, no further lookups are needed.
 
-Both approaches require the [`users:read`](https://api.slack.com/scopes/users:read) scope (for `users.list`) or [`users:read.email`](https://api.slack.com/scopes/users:read.email) scope (for `users.lookupByEmail`). Once stored, no further lookups are needed.
-
-**Sending a DM to a user by Slack user ID**
-
-You can find a user's Slack ID by querying [Slack's users.list API](https://api.slack.com/methods/users.list), or by opening the user's profile in Slack and selecting **Copy member ID**.
+**Sending a DM by Slack user ID**
 
 <CodeGroup>
 ```javascript Node.js
@@ -142,9 +149,9 @@ print(user.save())
 ```
 </CodeGroup>
 
-**Sending a DM to a user by email**
+**Sending a DM by email**
 
-Requires the [`users:read.email`](https://api.slack.com/scopes/users:read.email) scope.
+Requires the [`users:read.email`](https://api.slack.com/scopes/users:read.email) scope. SuprSend resolves the email to a Slack user ID automatically at send time.
 
 <CodeGroup>
 ```javascript Node.js
@@ -175,13 +182,13 @@ print(user.save())
 
 **Sending to a channel**
 
-To get a channel's ID, open the channel in Slack in a browser. The ID appears at the end of the URL — for example, in `https://app.slack.com/client/TXXXXX/C012AB3CD`, the channel ID is `C012AB3CD`.
+To get a channel's ID, open it in Slack in a browser. The ID is at the end of the URL — in `https://app.slack.com/client/TXXXXX/C012AB3CD`, the channel ID is `C012AB3CD`.
 
 <Frame>
   ![Channel ID from Slack URL](/images/docs/6b2149c-Screenshot_2023-02-27_at_8.41.57_PM.png)
 </Frame>
 
-We recommend using a descriptive `distinct_id` for channel profiles so they're easy to reference across workflow triggers.
+Use a descriptive `distinct_id` for channel profiles so they're easy to reference in workflow triggers.
 
 <CodeGroup>
 ```javascript Node.js
@@ -212,10 +219,10 @@ print(user.save())
 
 ## Step 6 — Trigger a workflow
 
-With the profile saved, trigger a SuprSend workflow using the same `distinct_id`. SuprSend will use the stored channel data to route the message.
+With the profile saved, trigger a SuprSend workflow using the same `distinct_id`.
 
 <Callout type="info">
-  Don't want to pre-store Slack identities? You can pass the identity inline in the `$slack` field of the `recipients` array instead. See [Storing Slack identity: pre-stored vs. inline](/integrations/chat/slack/overview#storing-slack-identity-pre-stored-vs-inline) in the overview.
+  Prefer not to store Slack identities in SuprSend? Pass the token inline in the `$slack` field of `recipients` instead. See [Storing Slack identity: pre-stored vs. inline](/integrations/chat/slack/overview#storing-slack-identity-pre-stored-vs-inline).
 </Callout>
 
 <CodeGroup>
@@ -258,5 +265,5 @@ print(response)
 </CodeGroup>
 
 <Callout type="tip">
-  Use SuprSend's staging workspace to test your integration before switching to production. Staging and production have separate vendor settings and user profiles.
+  Use SuprSend's staging workspace to test before switching to production. Staging and production have separate vendor settings and user profiles.
 </Callout>

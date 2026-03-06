@@ -1,21 +1,50 @@
 ---
 title: Sending a message to another workspace
-description: How to send Slack notifications into your customers' Slack workspaces using OAuth V2 and SuprSend.
+description: How to let your users connect their Slack workspace to your app, so SuprSend can send notifications there.
 ---
 
-This guide covers sending notifications into Slack workspaces you don't own — your customers' workspaces. This is the right approach for SaaS products where users connect their own Slack workspace to receive product notifications. It requires building an [OAuth V2 flow](https://api.slack.com/authentication/oauth-v2) so each customer can authorize your app.
+This guide is for SaaS products that want to send Slack notifications **into their customers' workspaces**. Unlike email — where you just need an address — Slack requires each user to explicitly grant your app permission to post on their behalf. This guide walks through how to collect that permission and wire it up with SuprSend.
 
 ## How it works
 
-You build an **Add to Slack** button in your product. When a customer clicks it, they're taken to Slack's authorization screen, where they approve your app. Slack then redirects back to your app with a temporary code, which you exchange for a permanent bot token scoped to that customer's workspace. You store that token in the SuprSend user profile for that customer — and from then on, SuprSend can send notifications into their workspace on your behalf.
+The flow has three parts: your user grants access, you get a token, and SuprSend uses that token to send notifications.
 
-<Frame>
-  ![OAuth V2 authorization flow](/images/docs/70585e3-image.png)
-</Frame>
+```mermaid
+sequenceDiagram
+    participant User as Customer
+    participant App as Your App
+    participant Slack as Slack
+    participant SS as SuprSend
+
+    User->>App: Clicks "Add to Slack"
+    App->>Slack: Redirect to oauth/v2/authorize
+    Slack-->>User: Shows authorization screen + channel picker
+    User->>Slack: Approves your app, selects a channel
+    Slack->>App: Redirects to callback with ?code=...
+
+    App->>Slack: POST oauth.v2.access (exchange code)
+    Note over Slack,App: Response contains either:<br/>access_token (bot token) for full routing<br/>OR incoming_webhook.url for one fixed channel
+
+    alt Bot token path – DMs or multiple channels
+        App->>SS: user.add_slack(user_id/channel_id + access_token)
+    else Webhook path – one fixed channel per customer
+        App->>SS: user.add_slack(incoming_webhook.url)
+    end
+    SS-->>App: Profile saved
+
+    Note over User,SS: From here, every workflow trigger routes automatically
+    App->>SS: workflows.trigger(workflow, recipients)
+    SS->>Slack: POST message using stored token or webhook
+    Slack-->>User: Notification delivered to their workspace
+```
+
+Each customer goes through this once. After that, SuprSend has their token and can send notifications whenever a workflow runs.
+
+<Callout type="info">
+  The `access_token` you receive is scoped to that customer's workspace specifically. It is not the same as your own bot token — every customer gets a unique one.
+</Callout>
 
 ## Step 1 — Enable the Slack channel in SuprSend
-
-Before any messages can be sent, you need to activate the Slack channel in your SuprSend workspace.
 
 1. Log in to your [SuprSend dashboard](https://app.suprsend.com)
 2. Go to **[Vendors → Slack](https://app.suprsend.com/en/staging/vendors/slack)**
@@ -31,7 +60,7 @@ Before any messages can be sent, you need to activate the Slack channel in your 
 
 ## Step 2 — Set up your Slack app
 
-If you already have a Slack app, you can use it here — you don't need to create a new one. The app's name and icon will appear on Slack's authorization screen, so make sure they're recognizable to your customers.
+If you already have a Slack app, you can use it here. The app's name and icon are what your customers will see on the Slack authorization screen — make sure they're recognizable.
 
 If you need to create one:
 
@@ -67,12 +96,16 @@ Navigate to **Features → OAuth & Permissions → [Bot Token Scopes](https://ap
 </Frame>
 
 <Callout type="warning">
-  If you added new scopes to an existing app, customers who have already authorized your app will need to re-authorize it before the new scopes take effect in their workspace. Plan scope additions carefully in production.
+  If you add new scopes to an existing app, customers who have already authorized it will need to re-authorize before the new scopes take effect. Plan scope additions carefully in production.
+</Callout>
+
+<Callout type="info">
+  **Simpler alternative:** If each customer only needs notifications in one fixed channel, you can use the `incoming-webhook` scope instead of a bot token. During the OAuth flow, the customer picks a channel and Slack returns a webhook URL for it — no `access_token` to manage. See [Sending via incoming webhook](/integrations/chat/slack/sending-a-direct-message#a-customers-workspace) for how to handle the callback and store the URL in SuprSend.
 </Callout>
 
 ## Step 4 — Configure your OAuth redirect URL
 
-When a customer completes the authorization flow, Slack redirects them back to a URL you control. You must register this URL before the OAuth flow will work.
+Slack redirects the user back to your app after they approve. You must register this URL first or Slack will reject the request.
 
 1. Go to **Features → OAuth & Permissions**
 2. Under **Redirect URLs**, click **Add New Redirect URL**
@@ -80,16 +113,16 @@ When a customer completes the authorization flow, Slack redirects them back to a
 4. Click **Save URLs**
 
 <Callout type="warning">
-  The redirect URL in your authorization link must exactly match what you registered here. A mismatch will cause Slack to reject the request.
+  The redirect URL in your authorization link must exactly match what you registered here — including trailing slashes.
 </Callout>
 
-## Step 5 — Build the authorization flow
+## Step 5 — Build the "Add to Slack" flow
 
-This is what your customers will go through when they click **Add to Slack** in your product.
+This is the UI and backend your customers interact with when connecting their Slack workspace.
 
-**Construct the authorization URL**
+**1. Add the button to your product**
 
-When a customer clicks your button, redirect them to this URL:
+Place an **Add to Slack** button on your settings or onboarding page. When clicked, redirect the user to Slack's authorization URL:
 
 ```
 https://slack.com/oauth/v2/authorize
@@ -99,15 +132,19 @@ https://slack.com/oauth/v2/authorize
   &state=YOUR_CSRF_STATE_TOKEN
 ```
 
-You can find your `client_id` under **[Basic Information](https://api.slack.com/apps)** in your app's settings.
+Your `client_id` is under **Basic Information** in your Slack app settings.
 
 <Callout type="warning">
-  Always generate a unique `state` value per authorization request and tie it to the user's session. Verify this value when Slack redirects back to prevent CSRF attacks.
+  Always generate a unique `state` value per request, tied to the user's session. Verify it when Slack redirects back to prevent CSRF attacks.
 </Callout>
 
-**Handle the callback and exchange the code for a token**
+**2. What your user sees**
 
-When the customer approves your app, Slack redirects them to your callback URL with a `code` parameter. Exchange it for a permanent bot token using Slack's [`oauth.v2.access`](https://api.slack.com/methods/oauth.v2.access) endpoint.
+Slack shows the user an authorization screen listing exactly what permissions your app is requesting. The user approves, and Slack redirects them back to your `redirect_uri` with a temporary `code` parameter.
+
+**3. Exchange the code for a token**
+
+On your server, exchange the `code` for a permanent bot token. This token is unique to that customer's workspace and is what you'll store in SuprSend.
 
 <CodeGroup>
 ```javascript Node.js
@@ -123,8 +160,8 @@ const response = await fetch("https://slack.com/api/oauth.v2.access", {
 });
 
 const data = await response.json();
-const botToken = data.access_token; // Starts with xoxb- — store this per customer
-const teamId = data.team.id;        // Slack workspace ID
+const botToken = data.access_token; // xoxb-... — unique per customer workspace
+const teamId = data.team.id;        // The customer's Slack workspace ID
 ```
 
 ```python Python
@@ -138,16 +175,18 @@ response = requests.post("https://slack.com/api/oauth.v2.access", data={
 })
 
 data      = response.json()
-bot_token = data["access_token"]  # Store per customer
-team_id   = data["team"]["id"]
+bot_token = data["access_token"]  # xoxb-... — unique per customer workspace
+team_id   = data["team"]["id"]    # The customer's Slack workspace ID
 ```
 </CodeGroup>
 
-Store the `access_token` and `team.id` securely in your database, associated with the customer. You'll pass this token to SuprSend in the next step.
+Store the `access_token` and `team.id` securely in your database, associated with the customer.
 
 ## Step 6 — Store the target in SuprSend
 
-Initialize the [SuprSend SDK](https://docs.suprsend.com/docs/nodejs-sdk) first if you haven't already:
+Once you have the customer's token, save their Slack delivery target to SuprSend using `user.add_slack()`. You only need to do this once per user — SuprSend stores it and uses it automatically on every subsequent workflow trigger.
+
+Initialize the SDK first if you haven't already:
 
 <CodeGroup>
 ```javascript Node.js
@@ -163,19 +202,19 @@ supr_client = Suprsend("workspace_key", "workspace_secret")
 ```
 </CodeGroup>
 
-After obtaining the customer's bot token, save their Slack target to their SuprSend user profile using `user.add_slack()`.
+**DM the user directly**
 
-**Sending a DM to the user**
+Use `user_id` (their Slack member ID) or `email` to send a direct message. You can get the user's Slack `user_id` from the OAuth response — the `authed_user.id` field contains the ID of the user who just authorized your app.
 
 <CodeGroup>
 ```javascript Node.js
 const distinct_id = "user_001";
 const user = supr_client.user.get_instance(distinct_id);
 
-// By Slack user ID
+// By Slack user ID (from authed_user.id in the OAuth response)
 user.add_slack({
   user_id: "UXXXXXXXXX",
-  access_token: botToken  // The token from oauth.v2.access
+  access_token: botToken
 });
 
 // Or by email (requires users:read.email scope)
@@ -192,7 +231,7 @@ response.then((res) => console.log("response", res));
 distinct_id = "user_001"
 user = supr_client.user.get_instance(distinct_id)
 
-# By Slack user ID
+# By Slack user ID (from authed_user.id in the OAuth response)
 user.add_slack({
   "user_id": "UXXXXXXXXX",
   "access_token": bot_token
@@ -208,13 +247,12 @@ print(user.save())
 ```
 </CodeGroup>
 
-**Sending to a channel in the customer's workspace**
+**Post to a channel in the customer's workspace**
 
-During the OAuth flow you can ask the customer to select a channel. After the callback, you'll have that channel's ID.
+During the OAuth flow, you can include a channel picker so the customer selects where they want notifications. After the callback, use that channel's ID here.
 
 <CodeGroup>
 ```javascript Node.js
-// Use a distinct_id that ties the channel to the customer
 const distinct_id = `channel_${customerId}_general`;
 const user = supr_client.user.get_instance(distinct_id);
 
@@ -242,10 +280,10 @@ print(user.save())
 
 ## Step 7 — Trigger a workflow
 
-With channel data saved, trigger a SuprSend workflow targeting the same `distinct_id`.
+With channel data saved, trigger a SuprSend workflow targeting the same `distinct_id`. SuprSend will look up the stored token and route the message automatically.
 
 <Callout type="info">
-  Don't want to pre-store Slack identities? You can pass the identity inline in the `$slack` field of the `recipients` array instead. See [Storing Slack identity: pre-stored vs. inline](/integrations/chat/slack/overview#storing-slack-identity-pre-stored-vs-inline) in the overview.
+  Prefer not to store Slack identities in SuprSend? Pass the token inline in the `$slack` field of `recipients` instead. See [Storing Slack identity: pre-stored vs. inline](/integrations/chat/slack/overview#storing-slack-identity-pre-stored-vs-inline).
 </Callout>
 
 <CodeGroup>

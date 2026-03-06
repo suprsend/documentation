@@ -7,9 +7,25 @@ SuprSend lets you send Slack notifications to channels and direct messages to us
 
 ## Choosing your implementation
 
+```mermaid
+flowchart TD
+    A{Who owns the\ntarget workspace?} --> B[You own it]
+    A --> C[Your customer owns it]
+
+    B --> D{Do you need DMs\nor flexible channels?}
+    D -->|Yes| E[Sending to your\nown workspace]
+    D -->|No – fixed channel only| F[Incoming webhook]
+
+    C --> G[Sending to another\nworkspace – OAuth V2]
+
+    style E fill:#e8f5e9,stroke:#2e7d32
+    style F fill:#e3f2fd,stroke:#1565c0
+    style G fill:#fce4ec,stroke:#880e4f
+```
+
 ### [Sending a message to your own workspace](/integrations/chat/slack/sending-an-internal-message)
 
-Use this when you want to send notifications to channels or users in **your own** company's Slack workspace. You install a Slack app once, copy its bot token, and use it to send messages. No OAuth flow required.
+Use this for internal tooling — alerts, monitoring, on-call notifications — where you own the Slack workspace. You install a Slack app once, copy its bot token, and use it to send to any channel or user.
 
 Common use cases:
 - Deployment alerts and release notifications to `#deployments`
@@ -19,27 +35,25 @@ Common use cases:
 
 ### [Sending a message to another workspace](/integrations/chat/slack/sending-a-message-to-channels)
 
-Use this when you're building a SaaS product and want to send notifications into **your customers'** Slack workspaces. Each customer authorizes your app via an [OAuth V2 flow](https://api.slack.com/authentication/oauth-v2), giving you a bot token scoped to their workspace.
+Use this when your **customers** need to connect their Slack workspace to your product. You add an "Add to Slack" button — customers click it, approve your app on Slack's screen, and you get a token for their workspace. SuprSend uses that token to send notifications there.
 
 Common use cases:
 - Task assignments and project updates delivered into a customer's workspace
-- Weekly digests or activity summaries
-- Real-time product event notifications (new comment, status change, approval request)
+- Real-time product event notifications (new comment, status change, approval)
 - Customer-facing alerting where each customer picks their own channel
+- Weekly digests or activity summaries
 
 ### [Sending via incoming webhook](/integrations/chat/slack/sending-a-direct-message)
 
-Use this when you need a quick, fixed-channel setup with no OAuth flow. An [incoming webhook](https://api.slack.com/messaging/webhooks) ties one URL to one channel — SuprSend posts to that URL and Slack delivers the message. Simplest option, but limited to one channel per webhook and cannot send DMs.
+Use this when you need a quick, fixed-channel setup with no OAuth flow. A webhook ties one URL to one channel — SuprSend posts to that URL and Slack delivers the message. Cannot send DMs.
 
 Common use cases:
 - CI/CD status and deployment summaries to `#deployments`
-- Error and anomaly alerts to a dedicated `#alerts` channel
-- Product announcements or changelogs to `#announcements`
-- Internal operational notifications where the destination channel never changes
+- Error and anomaly alerts to `#alerts`
+- Product announcements to `#announcements`
+- Internal operational notifications where the destination never changes
 
 ## Prerequisites
-
-Regardless of which guide you follow, you'll need:
 
 - A [SuprSend account](https://app.suprsend.com)
 - A Slack account with permission to create or manage [Slack apps](https://api.slack.com/apps)
@@ -51,9 +65,9 @@ You do not need to create a new Slack app if you already have one. All three gui
 
 SuprSend gives you two ways to associate a Slack identity with a recipient.
 
-**Pre-stored (recommended for most cases):** Call [`user.add_slack()`](https://docs.suprsend.com/docs/nodejs-sdk) to save the user's Slack identity to their profile in SuprSend. Any workflow triggered for that `distinct_id` will automatically route to the right place — no need to pass identity on every trigger.
+**Pre-stored (recommended for most cases):** Call `user.add_slack()` to save the user's Slack identity to their profile in SuprSend once. Any workflow triggered for that `distinct_id` will automatically route to the right place — no need to pass identity on every trigger.
 
-**Inline (useful for one-off or dynamic sends):** Pass the Slack identity directly in the `$slack` field of the `recipients` array when [triggering a workflow](https://docs.suprsend.com/docs/workflow-trigger). Nothing is stored in SuprSend — the identity is resolved at trigger time.
+**Inline (for one-off or dynamic sends):** Pass the Slack identity directly in the `$slack` field of the `recipients` array when triggering a workflow. Nothing is stored in SuprSend — identity is resolved at trigger time.
 
 ```json
 {
@@ -69,21 +83,21 @@ SuprSend gives you two ways to associate a Slack identity with a recipient.
       ]
     }
   ],
-  "data": { ... }
+  "data": {}
 }
 ```
 
-Use inline when you don't want to manage user profiles in SuprSend, or when the Slack identity isn't known until the moment of the trigger. Use pre-stored when the same user will receive multiple notifications over time — it avoids passing identity on every call.
+Use inline when the Slack identity isn't known until trigger time, or when you don't want to manage profiles in SuprSend. Use pre-stored when the same user receives multiple notifications over time.
 
 ## Order of precedence
 
-When SuprSend resolves a Slack delivery target — whether from a stored profile or an inline payload — it uses the following priority order if more than one field is present:
+When SuprSend resolves a Slack delivery target, it uses this priority order if more than one field is present:
 
 | Priority | Field | Delivers to |
 |----------|-------|-------------|
 | 1 (highest) | `incoming_webhook.url` | The channel the webhook was configured for |
 | 2 | `channel_id` + `access_token` | The specified Slack channel |
-| 3 | `user_id` + `access_token` | A DM to the Slack user with that ID |
+| 3 | `user_id` + `access_token` | A DM to that Slack user |
 | 4 (lowest) | `email` + `access_token` | A DM after resolving the user by email |
 
 Only include the fields relevant to your use case.
