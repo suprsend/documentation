@@ -1,0 +1,165 @@
+---
+title: Sending via incoming webhook
+description: How to send Slack notifications to a fixed channel using an incoming webhook and SuprSend.
+---
+
+This guide covers sending notifications to a specific Slack channel using an [incoming webhook](https://api.slack.com/messaging/webhooks). It's the fastest way to get a Slack integration running — there's no OAuth flow, no bot token management, and no per-user setup. You generate a URL and SuprSend posts to it.
+
+## How it works
+
+You activate [incoming webhooks](https://api.slack.com/messaging/webhooks) on your Slack app, generate a webhook URL for a specific channel, and store that URL in SuprSend using `user.add_slack()`. When a workflow runs, SuprSend posts the notification to that URL and Slack delivers it to the channel.
+
+## Step 1 — Enable the Slack channel in SuprSend
+
+Before any messages can be sent, you need to activate the Slack channel in your SuprSend workspace.
+
+1. Log in to your [SuprSend dashboard](https://app.suprsend.com)
+2. Go to **[Vendors → Slack](https://app.suprsend.com/en/staging/vendors/slack)**
+3. Toggle the Slack channel to **Enabled** and click **Save**
+
+<Frame>
+  ![Enable Slack in SuprSend Vendor Settings](/images/docs/a10a8f8-image.png)
+</Frame>
+
+<Callout type="warning">
+  Each SuprSend workspace (e.g. staging, production) has its own vendor settings. Enable Slack separately in each environment — notifications will fail silently if the channel is not enabled.
+</Callout>
+
+## Step 2 — Enable incoming webhooks on your Slack app
+
+If you don't have a Slack app yet, create one at [api.slack.com/apps](https://api.slack.com/apps) by clicking **Create New App → From scratch**, selecting your workspace, and clicking **Create App**.
+
+If you already have a Slack app:
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and select your app
+
+    <Frame>
+      ![Slack Apps page](/images/docs/2895991-Screenshot_2022-07-12_at_11.48.16_AM.png)
+    </Frame>
+
+2. In the left sidebar, go to **Features → Incoming Webhooks**
+3. If **Activate Incoming Webhooks** is already **On**, proceed to Step 3
+4. If it's **Off**, toggle it **On**
+
+    <Frame>
+      ![Incoming Webhooks settings](/images/docs/77b9c2d-Screenshot_2023-02-27_at_8.03.12_PM.png)
+    </Frame>
+
+<Callout type="info">
+  Enabling incoming webhooks on an existing app does not affect its other functionality or existing scopes.
+</Callout>
+
+## Step 3 — Generate a webhook URL
+
+1. On the **Incoming Webhooks** page, scroll to the bottom and click **Add New Webhook to Workspace**
+2. Select the channel you want to post to
+
+    <Frame>
+      ![Select a channel for the webhook](/images/docs/0419abf-Screenshot_2023-02-27_at_8.05.13_PM.png)
+    </Frame>
+
+3. Click **Allow**
+4. Slack will generate a webhook URL in this format:
+
+```
+https://hooks.slack.com/services/<WORKSPACE_ID>/<BOT_ID>/<WEBHOOK_SECRET>
+```
+
+Copy this URL — you'll use it in the next step. If you need to post to multiple channels, repeat this process and generate a separate URL for each one.
+
+## Step 4 — Store the webhook URL in SuprSend
+
+Initialize the [SuprSend SDK](https://docs.suprsend.com/docs/nodejs-sdk) first if you haven't already:
+
+<CodeGroup>
+```javascript Node.js
+const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
+const supr_client = new Suprsend("workspace_key", "workspace_secret");
+```
+
+```python Python
+from suprsend import Suprsend, WorkflowTriggerRequest
+
+supr_client = Suprsend("workspace_key", "workspace_secret")
+```
+</CodeGroup>
+
+Pass the webhook URL to SuprSend by calling `user.add_slack()` with the `incoming_webhook` field. Use a descriptive `distinct_id` that makes the target channel easy to identify.
+
+<CodeGroup>
+```javascript Node.js
+const distinct_id = "channel_incidents";
+const user = supr_client.user.get_instance(distinct_id);
+
+user.add_slack({
+  incoming_webhook: {
+    url: "<your-webhook-url>"
+  }
+});
+
+const response = user.save();
+response.then((res) => console.log("response", res));
+```
+
+```python Python
+distinct_id = "channel_incidents"
+user = supr_client.user.get_instance(distinct_id)
+
+user.add_slack({
+  "incoming_webhook": {
+    "url": "<your-webhook-url>"
+  }
+})
+
+print(user.save())
+```
+</CodeGroup>
+
+If you have multiple target channels, create a separate profile for each one and repeat this step with a different `distinct_id` and webhook URL for each.
+
+## Step 5 — Trigger a workflow
+
+With the profile saved, trigger a SuprSend workflow using the same `distinct_id`. SuprSend will deliver the notification to the channel the webhook is configured for.
+
+<Callout type="info">
+  Don't want to pre-store the webhook URL? You can pass `incoming_webhook.url` inline in the `$slack` field of the `recipients` array instead. See [Storing Slack identity: pre-stored vs. inline](/integrations/chat/slack/overview#storing-slack-identity-pre-stored-vs-inline) in the overview.
+</Callout>
+
+<CodeGroup>
+```javascript Node.js
+const body = {
+  workflow: "deployment-complete",   // workflow slug from the SuprSend dashboard
+  recipients: [
+    { distinct_id: "channel_incidents" }
+  ],
+  data: {
+    service: "payments-api",
+    environment: "production",
+    status: "success"
+  }
+};
+
+const wf = new WorkflowTriggerRequest(body);
+const response = supr_client.workflows.trigger(wf);
+response.then((res) => console.log("response", res));
+```
+
+```python Python
+wf = WorkflowTriggerRequest(
+  body={
+    "workflow": "deployment-complete",  # workflow slug from the SuprSend dashboard
+    "recipients": [
+      { "distinct_id": "channel_incidents" }
+    ],
+    "data": {
+      "service": "payments-api",
+      "environment": "production",
+      "status": "success"
+    }
+  }
+)
+
+response = supr_client.workflows.trigger(wf)
+print(response)
+```
+</CodeGroup>
