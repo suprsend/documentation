@@ -1,0 +1,236 @@
+---
+title: "Feed"
+description: "Understand the notification data structure — every field that makes up an In-App notification."
+---
+
+Every notification delivered to a user's In-App feed follows a standard JSON structure. Understanding this structure helps you design templates on the dashboard and render custom UIs on the client side.
+
+## Notification JSON structure
+
+```json
+{
+  "n_id": "01K1G8SBGS4A1QG2CGYSVXQ517",
+  "n_category": "transactional",
+  "tenant_id": "default",
+  "created_on": 1753966489304,
+  "seen_on": 1754346745613,
+  "read_on": 1754346745613,
+  "interacted_on": 1754346745613,
+  "is_pinned": false,
+  "archived": false,
+  "is_expiry_visible": false,
+  "message": {
+    "schema": "1.0",
+    "header": "Your invoice for March is ready",
+    "text": "An invoice of **$49.00** has been generated for your workspace Acme Corp.",
+    "subtext": {
+      "text": "View full billing history",
+      "action_url": "https://app.example.com/billing/history"
+    },
+    "avatar": {
+      "avatar_url": "https://cdn-icons-png.flaticon.com/512/3144/3144456.png",
+      "action_url": "https://app.example.com/settings"
+    },
+    "url": "https://app.example.com/billing/inv_12345",
+    "extra_data": "{\"workspace\": \"Acme Corp\"}",
+    "tags": ["billing", "finance"],
+    "actions": [
+      {
+        "url": "https://app.example.com/billing/inv_12345",
+        "name": "View Invoice"
+      },
+      {
+        "url": "https://app.example.com/billing/pay/inv_12345",
+        "name": "Pay Now"
+      }
+    ],
+    "is_pinned": true,
+    "is_expiry_enabled": true,
+    "expiry": {
+      "format": "absolute",
+      "expiry_type": "fixed",
+      "is_expiry_visible": true,
+      "value": "2025-09-30T23:59:59Z"
+    }
+  }
+}
+```
+
+## Top-level fields
+
+These fields are managed by the SDK and describe the notification's lifecycle state.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `n_id` | `string` | Unique notification ID. |
+| `n_category` | `string` | [Notification category](/docs/notification-category) (e.g., `transactional`, `marketing`). Used for preference management and tab filtering. |
+| `tenant_id` | `string` | [Tenant identifier](/docs/tenants) in a multi-tenant setup. |
+| `created_on` | `number` | Epoch timestamp (ms) — when the notification was delivered. |
+| `seen_on` | `number` | Epoch timestamp (ms) — when the notification first appeared in view. |
+| `read_on` | `number` | Epoch timestamp (ms) — when `markAsRead` was called. |
+| `interacted_on` | `number` | Epoch timestamp (ms) — when the user clicked or tapped the notification. |
+| `is_pinned` | `boolean` | Whether the notification stays pinned at the top of the feed. |
+| `archived` | `boolean` | Whether the user has archived this notification. Hidden from the feed by default. |
+| `is_expiry_visible` | `boolean` | Whether the expiry countdown is visible to the user. |
+
+## Message object
+
+The `message` object holds all the content you configure in your [In-App Inbox template](/docs/in-app-inbox-template) on the SuprSend dashboard.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `header` | `string` | Title shown in bold at the top of the notification card. |
+| `text` | `string` | Body content. Supports **Markdown** (headings, bold, italic, links, blockquotes, code). |
+| `subtext` | `object` | Footer text with an optional click-through URL. |
+| `avatar` | `object` | Image displayed alongside the notification (e.g., sender's profile picture). Can include a click-through URL. |
+| `url` | `string` | Redirect URL when the entire notification card is clicked. |
+| `extra_data` | `string` | Stringified JSON for passing arbitrary data to custom notification card UIs. |
+| `tags` | `string[]` | Labels for filtering and organizing notifications into [tabs](/docs/multi-tabs). |
+| `actions` | `array` | Up to 2 call-to-action buttons, each with a `name` and `url`. |
+| `is_pinned` | `boolean` | Pin this notification at the top of the feed. |
+| `is_expiry_enabled` | `boolean` | Whether auto-archival on expiry is active. |
+| `expiry` | `object` | Expiry configuration (see below). |
+| `schema` | `string` | Message schema version. |
+
+### Subtext
+
+```json
+{
+  "text": "View full billing history",
+  "action_url": "https://app.example.com/billing/history"
+}
+```
+
+Rendered below the body text. Clicking it navigates to `action_url`.
+
+### Avatar
+
+```json
+{
+  "avatar_url": "https://cdn-icons-png.flaticon.com/512/3144/3144456.png",
+  "action_url": "https://app.example.com/settings"
+}
+```
+
+Shown on the left side of the notification card. Use it for sender profile images, app icons, or category-specific illustrations.
+
+### Actions
+
+```json
+[
+  { "url": "https://app.example.com/approve/123", "name": "Approve" },
+  { "url": "https://app.example.com/reject/123", "name": "Reject" }
+]
+```
+
+Renders up to **2 buttons** on the notification card. You can use [custom click handlers](/docs/react-customising-feed) to intercept button clicks and perform inline actions (like approvals) instead of redirecting.
+
+### Expiry
+
+```json
+{
+  "format": "absolute",
+  "expiry_type": "fixed",
+  "is_expiry_visible": true,
+  "value": "2025-09-30T23:59:59Z"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `format` | `string` | `absolute` (ISO timestamp) or `relative` (duration string). |
+| `expiry_type` | `string` | `fixed` (static value) or `dynamic` (computed from event/user data). |
+| `is_expiry_visible` | `boolean` | Show a countdown timer on the card. Goes red when less than 1 hour remains. |
+| `value` | `string` | The expiry timestamp or duration. |
+
+## How fields map to the template editor
+
+The fields above correspond directly to what you configure in the SuprSend dashboard template editor:
+
+<Frame>
+  <img src="/images/docs/5fee052-image.png" />
+</Frame>
+
+| Template field | JSON field |
+|----------------|------------|
+| Header | `message.header` |
+| Text | `message.text` |
+| Avatar | `message.avatar.avatar_url` |
+| Subtext | `message.subtext.text` |
+| Action URL | `message.url` |
+| Action buttons | `message.actions[]` |
+| Tags | `message.tags[]` |
+| Pin notification | `message.is_pinned` |
+| Expiry | `message.expiry` |
+
+## Using dynamic data
+
+All text fields in the template support [Handlebars](https://handlebarsjs.com/guide/) variables. Pass dynamic values when [triggering a workflow](/docs/trigger-workflow):
+
+```json
+{
+  "header": "{{event.user_name}} commented on your post",
+  "text": "**{{event.user_name}}** said: \"{{event.comment_text}}\"",
+  "url": "https://app.example.com/posts/{{event.post_id}}"
+}
+```
+
+Variables are resolved at send time using the data you pass in the workflow trigger payload.
+
+<Tip>
+  Declare your variables in the **Mock data** section of the template editor to get autocomplete suggestions and preview rendering.
+</Tip>
+
+## Accessing feed data in code
+
+### React
+
+Use the `useFeedData` hook to access the notifications array:
+
+```jsx
+import { useFeedData } from "@suprsend/react";
+
+function Feed() {
+  const feedData = useFeedData();
+
+  return feedData.notifications.map((notification) => (
+    <div key={notification.n_id}>
+      <strong>{notification.message.header}</strong>
+      <p>{notification.message.text}</p>
+      {notification.message.actions?.map((action) => (
+        <a key={action.name} href={action.url}>{action.name}</a>
+      ))}
+    </div>
+  ));
+}
+```
+
+### JavaScript
+
+Access notifications through the SDK instance:
+
+```javascript
+const notifications = window.suprsend.feed.notifications;
+
+notifications.forEach((notification) => {
+  console.log(notification.message.header);
+  console.log(notification.message.text);
+});
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="In-App Inbox Template" icon="palette" href="/docs/in-app-inbox-template">
+    Design templates with the visual editor on the dashboard.
+  </Card>
+  <Card title="Multiple Tabs" icon="table-columns" href="/docs/multi-tabs">
+    Organize notifications into tabs using tags and categories.
+  </Card>
+  <Card title="Trigger Workflow" icon="bolt" href="/docs/trigger-workflow">
+    Pass dynamic data when sending notifications.
+  </Card>
+  <Card title="Notification Categories" icon="tag" href="/docs/notification-category">
+    Group notifications for preference management.
+  </Card>
+</CardGroup>

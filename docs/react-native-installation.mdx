@@ -1,0 +1,117 @@
+---
+title: "Installation"
+description: "Install and set up the SuprSend React Native SDK in your mobile application."
+---
+
+## Prerequisites
+
+- A SuprSend account — [sign up here](https://auth.suprsend.com/sign-up) if you don't have one
+- Your **Workspace Key** from [Settings → API Keys](https://app.suprsend.com/en/sandbox/developers/api-keys)
+- A **subscriber ID** (HMAC) generated on your backend for authentication — see the [HMAC authentication guide](/docs/hmac-authentication)
+
+## Install the SDK
+
+<CodeGroup>
+  ```shell npm
+  npm install @suprsend/react-headless
+  ```
+
+  ```shell yarn
+  yarn add @suprsend/react-headless
+  ```
+</CodeGroup>
+
+## Set up the provider
+
+Wrap your application with `SuprSendProvider`. This initializes the SDK, authenticates the user, and establishes a real-time WebSocket connection.
+
+```jsx
+import { SuprSendProvider } from "@suprsend/react-headless";
+
+function App() {
+  return (
+    <SuprSendProvider
+      workspaceKey="YOUR_WORKSPACE_KEY"
+      subscriberId="HMAC_SUBSCRIBER_ID"
+      distinctId="USER_DISTINCT_ID"
+    >
+      <YourApp />
+    </SuprSendProvider>
+  );
+}
+```
+
+### Provider props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `workspaceKey` | `string` | Yes | Your SuprSend workspace key |
+| `distinctId` | `string` | Yes | Unique identifier for the user |
+| `subscriberId` | `string` | Yes | HMAC-generated subscriber ID for authentication |
+| `host` | `string` | No | Custom API host URL |
+
+<Note>All SuprSend hooks (`useBell`, `useNotifications`, etc.) must be used inside `SuprSendProvider`.</Note>
+
+## Build your first notification feed
+
+Use the headless hooks to fetch notifications and render them with your own React Native components.
+
+```jsx
+import { SuprSendProvider, useBell, useNotifications } from "@suprsend/react-headless";
+import { View, Text, TouchableOpacity, FlatList } from "react-native";
+
+function App() {
+  return (
+    <SuprSendProvider
+      workspaceKey="YOUR_WORKSPACE_KEY"
+      subscriberId="HMAC_SUBSCRIBER_ID"
+      distinctId="USER_DISTINCT_ID"
+    >
+      <BellIcon />
+      <NotificationFeed />
+    </SuprSendProvider>
+  );
+}
+
+function BellIcon() {
+  const { unSeenCount, markAllSeen } = useBell();
+  return (
+    <TouchableOpacity onPress={() => markAllSeen()}>
+      <Text>🔔 {unSeenCount > 0 ? `(${unSeenCount})` : ""}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function NotificationFeed() {
+  const { notifications, markClicked } = useNotifications();
+  return (
+    <FlatList
+      data={notifications}
+      keyExtractor={(item) => item.n_id}
+      renderItem={({ item }) => (
+        <TouchableOpacity onPress={() => markClicked(item.n_id)}>
+          <Text style={{ fontWeight: "bold" }}>{item.message.header}</Text>
+          <Text>{item.message.text}</Text>
+        </TouchableOpacity>
+      )}
+    />
+  );
+}
+```
+
+## Verify the integration
+
+1. Trigger a test workflow from the [SuprSend dashboard](https://app.suprsend.com) targeting the same `distinctId` you used above.
+2. You should see the notification appear in real time in your custom feed.
+3. Check the console logs — the SDK logs connection status and any errors.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/docs/react-native-authentication">
+    Learn about HMAC subscriber ID generation.
+  </Card>
+  <Card title="Headless hooks" icon="code" href="/docs/inbox-react-native">
+    Full API reference for all available hooks.
+  </Card>
+</CardGroup>

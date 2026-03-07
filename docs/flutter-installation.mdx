@@ -1,0 +1,137 @@
+---
+title: "Installation"
+description: "Install and set up the SuprSend Flutter SDK in your mobile application."
+---
+
+## Prerequisites
+
+- A SuprSend account — [sign up here](https://auth.suprsend.com/sign-up) if you don't have one
+- Your **Workspace Key** and **Workspace Secret** from [Settings → API Keys](https://app.suprsend.com/en/sandbox/developers/api-keys)
+- A **subscriber ID** (HMAC) generated on your backend for authentication — see the [HMAC authentication guide](/docs/hmac-authentication)
+
+## Install the SDK
+
+<Steps>
+  <Step title="Add the dependency">
+    Add `suprsend_flutter_inbox` to your `pubspec.yaml`:
+
+    ```yaml
+    dependencies:
+      flutter:
+        sdk: flutter
+      suprsend_flutter_inbox: ^0.0.1
+    ```
+  </Step>
+  <Step title="Install packages">
+    ```bash
+    flutter pub get
+    ```
+  </Step>
+</Steps>
+
+## Set up the provider
+
+Wrap your `MaterialApp` (or the part of the widget tree that needs notifications) with `SuprSendProvider`. This initializes the SDK, authenticates the user, and establishes a real-time WebSocket connection.
+
+```dart
+import 'package:suprsend_flutter_inbox/main.dart';
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SuprSendProvider(
+      workspaceKey: "YOUR_WORKSPACE_KEY",
+      workspaceSecret: "YOUR_WORKSPACE_SECRET",
+      distinctId: "USER_DISTINCT_ID",
+      subscriberId: "HMAC_SUBSCRIBER_ID",
+      child: MaterialApp(
+        home: HomeScreen(),
+      ),
+    );
+  }
+}
+```
+
+### Provider parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspaceKey` | `String` | Yes | Your SuprSend workspace key |
+| `workspaceSecret` | `String` | Yes | Your SuprSend workspace secret |
+| `distinctId` | `String` | Yes | Unique identifier for the user |
+| `subscriberId` | `String` | Yes | HMAC-generated subscriber ID for authentication |
+| `child` | `Widget` | Yes | Your app's widget tree |
+
+<Note>All SuprSend hooks (`useBell`, `useNotifications`, etc.) must be used inside `SuprSendProvider`.</Note>
+
+## Build your first notification feed
+
+Use the provided hooks to fetch notifications and render them with your own Flutter widgets.
+
+```dart
+import 'package:suprsend_flutter_inbox/main.dart';
+import 'package:flutter/material.dart';
+
+class NotificationScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Notifications"),
+        actions: [BellWidget()],
+      ),
+      body: NotificationList(),
+    );
+  }
+}
+
+class BellWidget extends HookWidget {
+  @override
+  Widget build(BuildContext context) {
+    var bellData = useBell();
+    return IconButton(
+      icon: Badge(
+        label: Text("${bellData.unSeenCount}"),
+        isLabelVisible: bellData.unSeenCount > 0,
+        child: Icon(Icons.notifications),
+      ),
+      onPressed: () => bellData.markAllSeen(),
+    );
+  }
+}
+
+class NotificationList extends HookWidget {
+  @override
+  Widget build(BuildContext context) {
+    var notificationData = useNotifications();
+    return ListView.builder(
+      itemCount: notificationData.notifications.length,
+      itemBuilder: (context, index) {
+        var notification = notificationData.notifications[index];
+        return ListTile(
+          title: Text(notification.message.header ?? ""),
+          subtitle: Text(notification.message.text ?? ""),
+          onTap: () => notificationData.markClicked(notification.nId),
+        );
+      },
+    );
+  }
+}
+```
+
+## Verify the integration
+
+1. Trigger a test workflow from the [SuprSend dashboard](https://app.suprsend.com) targeting the same `distinctId` you used above.
+2. You should see the notification appear in real time in your custom feed.
+3. Check the debug console — the SDK logs connection status and any errors.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/docs/flutter-authentication">
+    Learn about HMAC subscriber ID generation.
+  </Card>
+  <Card title="Headless hooks" icon="code" href="/docs/inbox-flutter">
+    Full API reference for all available hooks.
+  </Card>
+</CardGroup>
