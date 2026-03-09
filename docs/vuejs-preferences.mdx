@@ -1,0 +1,465 @@
+---
+title: "Preferences"
+description: "Build a notification preference centre in your Vue.js application using the SuprSend web SDK."
+---
+
+Build a notification preference centre in Vue.js using the `@suprsend/web-sdk`. The same [preference methods](/docs/js-preferences#integration) and [data structure](/docs/js-preferences#understanding-preference-structure) used in the JavaScript SDK apply directly — this guide provides Vue.js-specific component examples using the Composition API.
+
+<Frame caption="Example notification preference centre">
+  ![Notification preferences](/images/docs/9204517-full_preferences.png)
+</Frame>
+
+<Warning>
+  **Preferences changes in `@suprsend/web-sdk` version >=2.0.0**
+
+  In `@suprsend/web-sdk@2.0.0` we have revamped SDK. The whole structure of preferences have been changed from SDK side. Please upgrade to newer versions. Old version of documentation for preference is available [here](https://docs.suprsend.com/v1.2.1/docs/preferences-javascript).
+</Warning>
+
+## Pre-Requisites
+
+- [Integrate JavaScript SDK](/docs/javascript-installation)
+- [Identify user on login](/docs/javascript-installation#2-authenticate-user) and [reset on logout](/docs/javascript-installation#3-reset-user) to ensure that preference changes are tagged to the correct user
+- [Configure notification categories](/docs/user-preferences#create-notification-category) on SuprSend dashboard
+- [Understanding of the preference data structure and methods](/docs/js-preferences)
+
+## Example implementation
+
+This example shows how to build a notification preference centre in Vue.js using the `@suprsend/web-sdk`. The same [preference methods](/docs/js-preferences#integration) and [data structure](/docs/js-preferences#understanding-preference-structure) used in the JavaScript SDK apply directly.
+
+## Integration
+
+There will be 3 components in the example implementation:
+
+- **PreferencePage** — Main component that fetches preferences and listens to events
+- **CategoryLevelPreferences** — Renders category-level preference toggles
+- **ChannelLevelPreferences** — Renders overall channel-level preference radio buttons
+
+### PreferencePage component setup
+
+Create a composable to access the SuprSend client instance across components. Call [getPreferences](/docs/js-preferences#get-preferences-data) to fetch the full user preferences data. Then configure [event listeners](/docs/js-preferences#event-listeners) `preferences_updated` and `preferences_error` to keep the UI in sync.
+
+```vue PreferencePage.vue
+<template>
+  <p v-if="!preferencesData">Loading...</p>
+  <div v-else class="main-div">
+    <h3 class="main-header">Notification Preferences</h3>
+    <CategoryLevelPreferences
+      :preferencesData="preferencesData"
+      @update="handleUpdate"
+    />
+    <ChannelLevelPreferences
+      :preferencesData="preferencesData"
+      @update="handleUpdate"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from "vue";
+import { SuprSend } from "@suprsend/web-sdk";
+import CategoryLevelPreferences from "./CategoryLevelPreferences.vue";
+import ChannelLevelPreferences from "./ChannelLevelPreferences.vue";
+
+const publicApiKey = "YOUR_PUBLIC_API_KEY";
+const distinctId = "YOUR_DISTINCT_ID";
+
+const suprSendClient = new SuprSend(publicApiKey);
+const preferencesData = ref(null);
+
+const handleUpdate = (data) => {
+  preferencesData.value = { ...data };
+};
+
+const onPreferencesUpdated = (data) => {
+  preferencesData.value = { ...data.body };
+};
+
+const onPreferencesError = (response) => {
+  console.log("ERROR:", response?.error?.message);
+};
+
+onMounted(async () => {
+  await suprSendClient.identify(distinctId);
+
+  const resp = await suprSendClient.user.preferences.getPreferences();
+  if (resp.status === "error") {
+    console.log(resp.error.message);
+  } else {
+    preferencesData.value = { ...resp.body };
+  }
+
+  suprSendClient.emitter.on("preferences_updated", onPreferencesUpdated);
+  suprSendClient.emitter.on("preferences_error", onPreferencesError);
+});
+
+onUnmounted(() => {
+  suprSendClient.emitter.off("preferences_updated", onPreferencesUpdated);
+  suprSendClient.emitter.off("preferences_error", onPreferencesError);
+});
+
+// Provide the client to child components
+import { provide } from "vue";
+provide("suprSendClient", suprSendClient);
+</script>
+
+<style scoped>
+.main-div {
+  margin: 24px;
+}
+.main-header {
+  margin-bottom: 24px;
+}
+</style>
+```
+
+### Category level Preference section
+
+In category-level preferences, you'll fetch data from 3 parts:
+
+- **[Section](/docs/js-preferences#11-sections)** — to show sections like "Product Updates"
+- **[Category](/docs/js-preferences#12-categories-sections---sub-categories)** — to show categories and their overall status
+- **[CategoryChannel](/docs/js-preferences#13-category-channels-sections---sub-categories---channels)** — to show communication channels inside the category and their status
+
+<Frame caption="Category-level preference sections, categories, and channels">
+  ![Category preferences](/images/docs/3b8ee51-image.png)
+</Frame>
+
+Steps to render category preference UI:
+
+1. Loop through `preferencesData.sections` for showing sections, show sub-categories inside each section, and show subcategory's channels inside each sub-category.
+2. Add a **toggle** next to each sub-category for opting in and out. Add **checkboxes** in sub-category channels for opting in and out of category-channel.
+3. To update category preference, call [updateCategoryPreference](/docs/js-preferences#update-category-preference). For preference state `opt_in` set the toggle as **on** and **off** for `opt_out`.
+4. To update category-channel preference, call [updateChannelPreferenceInCategory](/docs/js-preferences#update-channel-preference-in-category). For preference state `opt_in` set the checkbox as **checked** and **unchecked** for `opt_out`.
+
+```vue CategoryLevelPreferences.vue
+<template>
+  <div
+    v-for="(section, sIdx) in preferencesData.sections"
+    :key="sIdx"
+    class="cat-container"
+  >
+    <div v-if="section.name" class="section-name-container">
+      <p class="section-name-text">{{ section.name }}</p>
+      <p class="section-description-text">{{ section.description }}</p>
+    </div>
+    <div
+      v-for="(subcategory, cIdx) in section.subcategories"
+      :key="cIdx"
+      class="subcategory-container"
+    >
+      <div class="subcategory-top-div">
+        <div>
+          <p class="subcategory-name">{{ subcategory.name }}</p>
+          <p class="subcategory-description">{{ subcategory.description }}</p>
+        </div>
+        <input
+          type="checkbox"
+          :disabled="!subcategory.is_editable"
+          :checked="subcategory.preference === 'opt_in'"
+          @change="handleCategoryChange($event, subcategory.category)"
+        />
+      </div>
+
+      <div class="subcategory-channel-container">
+        <div
+          v-for="(channel, chIdx) in subcategory.channels"
+          :key="chIdx"
+          class="category-channel-checkbox"
+        >
+          <input
+            type="checkbox"
+            :id="subcategory.category + '-' + channel.channel"
+            :disabled="!channel.is_editable"
+            :checked="channel.preference === 'opt_in'"
+            @change="handleChannelChange(channel, subcategory.category)"
+          />
+          <label
+            class="category-channel-label"
+            :for="subcategory.category + '-' + channel.channel"
+          >
+            {{ channel.channel }}
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { inject } from "vue";
+import { PreferenceOptions } from "@suprsend/web-sdk";
+
+const props = defineProps(["preferencesData"]);
+const emit = defineEmits(["update"]);
+const suprSendClient = inject("suprSendClient");
+
+const handleCategoryChange = async (event, category) => {
+  const resp =
+    await suprSendClient.user.preferences.updateCategoryPreference(
+      category,
+      event.target.checked ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
+    );
+  if (resp.status === "error") {
+    console.log(resp.error.message);
+  } else {
+    emit("update", resp.body);
+  }
+};
+
+const handleChannelChange = async (channel, category) => {
+  if (!channel.is_editable) return;
+
+  const resp =
+    await suprSendClient.user.preferences.updateChannelPreferenceInCategory(
+      channel.channel,
+      channel.preference === PreferenceOptions.OPT_IN
+        ? PreferenceOptions.OPT_OUT
+        : PreferenceOptions.OPT_IN,
+      category
+    );
+  if (resp.status === "error") {
+    console.log(resp.error.message);
+  } else {
+    emit("update", resp.body);
+  }
+};
+</script>
+
+<style scoped>
+.cat-container {
+  margin-bottom: 24px;
+}
+.section-name-container {
+  background-color: #fafbfb;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+.section-name-text {
+  font-size: 18px;
+  font-weight: 500;
+  color: #3d3d3d;
+}
+.section-description-text {
+  color: #6c727f;
+}
+.subcategory-channel-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.subcategory-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3d3d3d;
+}
+.subcategory-top-div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.subcategory-container {
+  border-bottom: 1px solid #d9d9d9;
+  padding-bottom: 12px;
+  margin-top: 18px;
+}
+.subcategory-description {
+  color: #6c727f;
+  font-size: 14px;
+  margin-top: 6px;
+}
+.category-channel-checkbox {
+  margin-right: 20px;
+}
+.category-channel-label {
+  margin-left: 4px;
+  cursor: pointer;
+}
+</style>
+```
+
+### Channel level Preference section
+
+Steps to render channel preference UI:
+
+1. Loop through `preferencesData.channel_preferences` for showing channels and for every channel item show an option to select preference using radio buttons.
+2. Add radio buttons for switching from `all` to `required` preference.
+3. To update channel preference, call [updateOverallChannelPreference](/docs/js-preferences#update-overall-channel-preference), and if no error is received in response, update the state.
+
+<Frame caption="Switch channel between All and Required">
+  ![Channel preference update](/images/docs/5574d6f-channel-update_1.png)
+</Frame>
+
+```vue ChannelLevelPreferences.vue
+<template>
+  <div>
+    <div class="channel-header-div">
+      <p class="channel-header-p">What notifications to allow for channel?</p>
+    </div>
+    <div>
+      <div
+        v-for="(channel, idx) in preferencesData.channel_preferences"
+        :key="idx"
+        class="channel-container"
+      >
+        <p class="channel-channel-text">{{ channel.channel }}</p>
+        <p class="channel-help-text">
+          {{
+            channel.is_restricted
+              ? "Allow required notifications only"
+              : "Allow all notifications"
+          }}
+        </p>
+
+        <div class="channel-radio-container">
+          <p class="channel-radio-pref-text">
+            {{ channel.channel }} Preferences
+          </p>
+          <div class="radio-grp">
+            <div class="radio-grp-2">
+              <div class="radio-grp-container">
+                <input
+                  type="radio"
+                  :checked="!channel.is_restricted"
+                  :name="'all-' + channel.channel"
+                  :id="'all-' + channel.channel"
+                  @change="handleChange(channel.channel, 'ALL')"
+                />
+                <label class="all-label" :for="'all-' + channel.channel">
+                  All
+                </label>
+              </div>
+              <p class="channel-radiohelp-text">
+                Allow All Notifications, except the ones that I have turned off
+              </p>
+            </div>
+            <div>
+              <div class="radio-grp-container">
+                <input
+                  type="radio"
+                  :name="'required-' + channel.channel"
+                  :id="'required-' + channel.channel"
+                  :checked="channel.is_restricted"
+                  @change="handleChange(channel.channel, 'REQUIRED')"
+                />
+                <label
+                  class="required-label"
+                  :for="'required-' + channel.channel"
+                >
+                  Required
+                </label>
+              </div>
+              <p class="channel-radiohelp-text">
+                Allow only important notifications related to account and
+                security settings
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { inject } from "vue";
+import { ChannelLevelPreferenceOptions } from "@suprsend/web-sdk";
+
+const props = defineProps(["preferencesData"]);
+const emit = defineEmits(["update"]);
+const suprSendClient = inject("suprSendClient");
+
+const handleChange = async (channel, preference) => {
+  const preferenceStatus =
+    preference === "ALL"
+      ? ChannelLevelPreferenceOptions.ALL
+      : ChannelLevelPreferenceOptions.REQUIRED;
+  const resp =
+    await suprSendClient.user.preferences.updateOverallChannelPreference(
+      channel,
+      preferenceStatus
+    );
+  if (resp.status === "error") {
+    console.log(resp.error.message);
+  } else {
+    emit("update", resp.body);
+  }
+};
+</script>
+
+<style scoped>
+.channel-header-div {
+  background-color: #fafbfb;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+.channel-header-p {
+  font-size: 18px;
+  font-weight: 500;
+  color: #3d3d3d;
+}
+.channel-container {
+  border: 1px solid #d9d9d9;
+  border-radius: 5px;
+  padding: 12px 24px;
+  margin-bottom: 24px;
+}
+.channel-channel-text {
+  font-size: 18px;
+  font-weight: 500;
+  color: #3d3d3d;
+}
+.channel-help-text {
+  color: #6c727f;
+  font-size: 14px;
+  margin-top: 6px;
+}
+.channel-radio-container {
+  margin-top: 12px;
+  margin-left: 24px;
+}
+.channel-radio-pref-text {
+  color: #3d3d3d;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 18px;
+  border-bottom: 1px solid #e8e8e8;
+}
+.channel-radiohelp-text {
+  color: #6c727f;
+  font-size: 14px;
+  margin-left: 32px;
+  margin-top: 4px;
+}
+.radio-grp {
+  margin-top: 12px;
+}
+.radio-grp-2 {
+  margin-bottom: 8px;
+}
+.radio-grp-container {
+  display: flex;
+  align-items: center;
+}
+.all-label {
+  margin-left: 12px;
+  cursor: pointer;
+}
+.required-label {
+  margin-left: 12px;
+  cursor: pointer;
+}
+</style>
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Preferences Data Structure" icon="sitemap" href="/docs/js-preferences#understanding-preference-structure">
+    Deep dive into sections, categories, and channel preference data.
+  </Card>
+  <Card title="Vue.js Overview" icon="vuejs" href="/docs/vuejs-overview">
+    Full documentation index for Vue.js integration.
+  </Card>
+</CardGroup>

@@ -1,57 +1,129 @@
 ---
-title: "Full screen or Sidesheet notifications feed"
-description: "Guide to integrate the `NotificationFeed` component for displaying notifications in full screen/ sidesheet in your React app."
+title: "Full-screen / Sidesheet Feed"
+description: "Render notifications as a full-page view or side-panel instead of a popover in your React app."
 ---
 
-If you want to render notifications in separate screen or in side-sheet or in any other way instead of popover, you can use `NotificationFeed` component wrapped inside [SuprSendFeedProvider](https://docs.suprsend.com/docs/headless-feed#suprsendfeedprovider). Both of these components should be children of [SuprSendProvider](https://docs.suprsend.com/docs/react-1#suprsendprovider).
+If you need notifications in a dedicated page, side sheet, or any layout other than the bell-icon popover, use the `NotificationFeed` component wrapped inside `SuprSendFeedProvider`.
 
-<CodeGroup>
-  ```javascript Example.jsx
-  import { SuprSendProvider, SuprSendFeedProvider, NotificationFeed } from '@suprsend/react';
+<Frame caption="Full-screen notification feed">
+  ![Full-screen notification feed](https://files.readme.io/bb3ea43-image.png)
+</Frame>
 
-  function Example() {
-    return (
-      <SuprSendProvider>
-        <SuprSendFeedProvider>
-          <NotificationFeed />
-        </SuprSendFeedProvider>
-      </SuprSendProvider>
-    );
-  }
+Try it live in the [Interactive Playground](https://inbox-playground.suprsend.com/).
+
+## Prerequisites
+
+Make sure you have [installed the SDK and set up `SuprSendProvider`](/docs/react-installation) before adding the feed components.
+
+## Integration
+
+Both `SuprSendFeedProvider` and `NotificationFeed` must be rendered inside `SuprSendProvider`.
+
+```jsx
+import {
+  SuprSendProvider,
+  SuprSendFeedProvider,
+  NotificationFeed,
+} from "@suprsend/react";
+
+function NotificationsPage() {
+  return (
+    <SuprSendProvider
+      publicApiKey="YOUR_PUBLIC_API_KEY"
+      distinctId="YOUR_DISTINCT_ID"
+      userToken="SIGNED_USER_TOKEN"
+    >
+      <SuprSendFeedProvider>
+        <NotificationFeed />
+      </SuprSendFeedProvider>
+    </SuprSendProvider>
+  );
+}
+```
+
+<Warning>
+  `NotificationFeed` uses infinite scroll. You must set a height on its container for scrolling to work properly.
+
+  ```jsx
+  <NotificationFeed
+    theme={{ notificationsContainer: { container: { height: "100vh" } } }}
+  />
   ```
+</Warning>
 
-  ```javascript TypeDef
-  interface SuprSendFeedProviderProps {
-    tenantId?: string;
-    pageSize?: number;
-    stores?: IStore[] | null;
-    host?: { socketHost?: string, apiHost?: string };
-  }
+## Configuration
 
-  interface NotificationFeedProps {
-    pagination?: boolean;
-    showUnreadCountOnTabs?: boolean;
-    hideAvatar?: boolean;
-    themeType?: ThemeType;
-    theme?: INotificationFeedTheme;
-    notificationClickHandler?: (notification: IRemoteNotification) => void;
-    primaryActionClickHandler?: (notification: IRemoteNotification) => void;
-    secondaryActionClickHandler?: (notification: IRemoteNotification) => void;
-    loaderComponent?: React.FC;
-    noNotificationsComponent?: React.FC;
-    tabBadgeComponent?: React.FC<{ count: number }>;
-    notificationComponent?: React.FC<CustomNotificationCard>;
-    headerRightComponent?: React.FC<{markAllRead: () => void, closeInboxPopover: () => void}>;
-  }
-  ```
-</CodeGroup>
+### SuprSendFeedProvider props
 
-> Please refer [Customising CSS styles](https://docs.suprsend.com/docs/customising-feed#customising-css-styles) section to view typedefs for `INotificationFeedTheme`.
+`SuprSendFeedProvider` manages the feed connection and data fetching.
 
-Infinite scroll is also included to fetch more pages in `NotificationFeed` component. Specifying height for the container is needed for infinite scroll to work properly.
+```typescript
+interface SuprSendFeedProviderProps {
+  tenantId?: string;
+  pageSize?: number;
+  stores?: IStore[] | null;
+  host?: { socketHost?: string; apiHost?: string };
+}
+```
 
-<CodeGroup>
-  ```javascript Example.jsx
-  <NotificationFeed theme={{ notificationsContainer: { container: { height: '100vh' } } }} />
-  ```
-</CodeGroup>
+| Prop | Type | Description |
+|------|------|-------------|
+| `tenantId` | `string` | Filter notifications by tenant. Defaults to `"default"`. |
+| `pageSize` | `number` | Notifications per page. Default `20`, max `100`. |
+| `stores` | `IStore[]` | Define multiple tabs. See [Adding tabs](/docs/react-customising-feed#adding-tabs). |
+| `host` | `object` | Override API and WebSocket endpoints. |
+
+### NotificationFeed props
+
+`NotificationFeed` renders the notification list and handles user interactions.
+
+```typescript
+interface NotificationFeedProps {
+  pagination?: boolean;
+  showUnreadCountOnTabs?: boolean;
+  hideAvatar?: boolean;
+  themeType?: ThemeType;
+  theme?: INotificationFeedTheme;
+  notificationClickHandler?: (notification: IRemoteNotification) => void;
+  primaryActionClickHandler?: (notification: IRemoteNotification) => void;
+  secondaryActionClickHandler?: (notification: IRemoteNotification) => void;
+  loaderComponent?: React.FC;
+  noNotificationsComponent?: React.FC;
+  tabBadgeComponent?: React.FC<{ count: number }>;
+  notificationComponent?: React.FC<CustomNotificationCard>;
+  headerRightComponent?: React.FC<{
+    markAllRead: () => void;
+    closeInboxPopover: () => void;
+  }>;
+}
+```
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `pagination` | `boolean` | Enable infinite scroll. Default `true`. |
+| `showUnreadCountOnTabs` | `boolean` | Show unread count on tabs. |
+| `hideAvatar` | `boolean` | Hide notification avatars. |
+| `themeType` | `"dark" \| "light"` | Toggle dark or light mode. |
+| `theme` | `INotificationFeedTheme` | CSS style overrides. See [Customising CSS styles](/docs/react-customising-feed#customising-css-styles) for full type definitions. |
+| `notificationClickHandler` | `function` | Callback when a notification is clicked. |
+| `primaryActionClickHandler` | `function` | Callback for primary action button. |
+| `secondaryActionClickHandler` | `function` | Callback for secondary action button. |
+| `notificationComponent` | `React.FC` | Replace the default notification card. |
+| `headerRightComponent` | `React.FC` | Replace the header right area. |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Popover Inbox" icon="bell" href="/docs/react-in-app-feed">
+    Use the bell-icon popover inbox instead.
+  </Card>
+  <Card title="Customising Feed" icon="paintbrush" href="/docs/react-customising-feed">
+    Tabs, dark mode, custom components, and CSS style overrides.
+  </Card>
+  <Card title="Toast Notifications" icon="message" href="/docs/react-toast-notifications">
+    Show a toast when a new notification arrives.
+  </Card>
+  <Card title="Headless Inbox" icon="code" href="/docs/react-sdk-headless-feed">
+    Build a completely custom UI using React hooks.
+  </Card>
+</CardGroup>

@@ -1,493 +1,255 @@
 ---
 title: "Preferences"
-description: "Step-by-Step Guide to add SuprSend notification preference centre in react-based websites."
-
-
+description: "Build a notification preference centre in your React app using headless SDK methods."
 ---
 
+The `@suprsend/react` SDK provides headless methods to fetch and update user notification preferences. You build the UI — the SDK handles the API calls, optimistic updates, and real-time sync.
+
+<Frame caption="Example notification preference centre">
+  ![Notification preferences](/images/docs/9204517-full_preferences.png)
+</Frame>
+
+## Prerequisites
+
+- [Install `@suprsend/react` and set up `SuprSendProvider`](/docs/react-installation)
+- [Configure notification categories](/docs/user-preferences#create-notification-category) on the SuprSend dashboard
+
 ## Integration steps
+
 <Steps>
-<Step title="Integrate SuprSendProvider">
+  <Step title="Set up SuprSendProvider">
+    Wrap your app in [`SuprSendProvider`](/docs/react-installation#set-up-the-provider) to create the SuprSend client and authenticate the user.
+  </Step>
 
-Integrate [SuprSendProvider](https://docs.suprsend.com/docs/react-1#suprsendprovider) as it is needed for creating SuprSend Client and authenticating user.
+  <Step title="Access preference methods">
+    Call `useSuprSendClient()` inside your component to get the client instance, which exposes all preference methods under `client.user.preferences`.
+  </Step>
 
-</Step>
-
-<Step title="Accessing preferences methods using useSuprSendClient hook">
-
-Call [useSuprSendClient](https://docs.suprsend.com/docs/react-1#usesuprsendclient) hook in your react component code to get SuprSend client instance which has all preferences methods.
-
-</Step>
-
-<Step title="Integrating Preferences">
-
-Please refer these sections to [understand](https://docs.suprsend.com/docs/js-preferences#understanding-preferences-structure) and [implement](https://docs.suprsend.com/docs/js-preferences#integration) preferences methods in your react application, as integration steps are same for both the web-sdk and react-sdk.
-
-</Step>
+  <Step title="Fetch and render preferences">
+    Call `getPreferences()` to fetch the user's preference data, then render it. Listen to `preferences_updated` and `preferences_error` events to keep the UI in sync.
+  </Step>
 </Steps>
 
-## Example
+## Understanding the data structure
 
-<CodeGroup>
-  ```javascript Example.jsx
-  import { useState, useEffect } from "react";
-  import Switch from "react-switch";
-  import {
-    SuprSendProvider,
-    ChannelLevelPreferenceOptions,
-    PreferenceOptions,
-    useSuprSendClient,
-    useAuthenticateUser,
-  } from "@suprsend/react";
+Preferences contain two sections — refer to the [JavaScript Preferences guide](/docs/js-preferences#understanding-preference-structure) for the complete data structure documentation:
 
-  // -------------- Category Level Preferences -------------- //
+1. **Category-level preferences** — Sections with categories and per-channel toggles
+2. **Overall channel preferences** — Global channel-level settings (All vs Required)
 
-  const handleCategoryPreferenceChange = async ({
-    data,
-    subcategory,
-    setPreferenceData,
-    suprSendClient,
-  }) => {
+```typescript
+interface PreferenceData {
+  sections: Section[] | null;
+  channel_preferences: ChannelPreference[] | null;
+}
+```
+
+## Available methods
+
+| Method | Description |
+|--------|-------------|
+| `getPreferences(args?)` | Fetch the full preference tree. Accepts optional `tenantId` and `tags`. |
+| `updateCategoryPreference(category, preference)` | Opt-in or opt-out of a category. |
+| `updateChannelPreferenceInCategory(channel, preference, category)` | Toggle a specific channel within a category. |
+| `updateOverallChannelPreference(channel, preference)` | Set a channel to "All" or "Required". |
+
+All update methods are **optimistic** — the UI updates immediately and the API call happens in the background with a 1-second debounce. Listen to event listeners to handle success and error states.
+
+### Event listeners
+
+```typescript
+suprSendClient.emitter.on("preferences_updated", (data: ApiResponse) => {
+  // Update your UI with data.body
+});
+
+suprSendClient.emitter.on("preferences_error", (response: ApiResponse) => {
+  // Show error toast
+});
+```
+
+## Complete example
+
+```jsx
+import { useState, useEffect } from "react";
+import {
+  SuprSendProvider,
+  ChannelLevelPreferenceOptions,
+  PreferenceOptions,
+  useSuprSendClient,
+  useAuthenticateUser,
+} from "@suprsend/react";
+
+export default function App() {
+  return (
+    <SuprSendProvider
+      publicApiKey="YOUR_PUBLIC_API_KEY"
+      distinctId="YOUR_DISTINCT_ID"
+    >
+      <Preferences />
+    </SuprSendProvider>
+  );
+}
+
+function Preferences() {
+  const suprSendClient = useSuprSendClient();
+  const { authenticatedUser } = useAuthenticateUser();
+  const [preferenceData, setPreferenceData] = useState();
+
+  useEffect(() => {
+    if (!authenticatedUser) return;
+
+    suprSendClient.user.preferences.getPreferences().then((resp) => {
+      if (resp.status !== "error") {
+        setPreferenceData({ ...resp.body });
+      }
+    });
+
+    suprSendClient.emitter.on("preferences_updated", (data) => {
+      setPreferenceData({ ...data.body });
+    });
+
+    suprSendClient.emitter.on("preferences_error", (response) => {
+      console.log("ERROR:", response?.error?.message);
+    });
+  }, [authenticatedUser]);
+
+  if (!preferenceData) return <p>Loading...</p>;
+
+  return (
+    <div style={{ margin: 24 }}>
+      <h3 style={{ marginBottom: 24 }}>Notification Preferences</h3>
+      <CategoryPreferences
+        data={preferenceData}
+        onUpdate={setPreferenceData}
+      />
+      <ChannelPreferences
+        data={preferenceData}
+        onUpdate={setPreferenceData}
+      />
+    </div>
+  );
+}
+
+function CategoryPreferences({ data, onUpdate }) {
+  const suprSendClient = useSuprSendClient();
+
+  const handleCategoryToggle = async (category, checked) => {
     const resp = await suprSendClient.user.preferences.updateCategoryPreference(
-      subcategory.category,
-      data ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
+      category,
+      checked ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
     );
-    if (resp.status === "error") {
-      console.log(resp.error.message);
-    } else {
-      setPreferenceData({ ...resp.body });
-    }
+    if (resp.status !== "error") onUpdate({ ...resp.body });
   };
 
-  const handleChannelPreferenceInCategoryChange = async ({
-    channel,
-    subcategory,
-    setPreferenceData,
-    suprSendClient,
-  }) => {
+  const handleChannelToggle = async (channel, category) => {
     if (!channel.is_editable) return;
-
     const resp =
       await suprSendClient.user.preferences.updateChannelPreferenceInCategory(
         channel.channel,
         channel.preference === PreferenceOptions.OPT_IN
           ? PreferenceOptions.OPT_OUT
           : PreferenceOptions.OPT_IN,
-        subcategory.category
+        category
       );
-    if (resp.status === "error") {
-      console.log(resp.error.message);
-    } else {
-      setPreferenceData({ ...resp.body });
-    }
+    if (resp.status !== "error") onUpdate({ ...resp.body });
   };
 
-  function NotificationCategoryPreferences({
-    preferenceData,
-    setPreferenceData,
-  }) {
-    const suprSendClient = useSuprSendClient();
-
-    if (!preferenceData.sections) {
-      return null;
-    }
-    return preferenceData.sections?.map((section, index) => {
-      return (
-        <div style={{ marginBottom: 24 }} key={index}>
-          {section?.name && (
-            <div
-              style={{
-                backgroundColor: "#FAFBFB",
-                paddingTop: 12,
-                paddingBottom: 12,
-                marginBottom: 18,
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 18,
-                  fontWeight: 500,
-                  color: "#3D3D3D",
-                }}
-              >
-                {section.name}
-              </p>
-              <p style={{ color: "#6C727F" }}>{section.description}</p>
-            </div>
-          )}
-
-          {section?.subcategories?.map((subcategory, index) => {
-            return (
-              <div
-                key={index}
-                style={{
-                  borderBottom: "1px solid #D9D9D9",
-                  paddingBottom: 12,
-                  marginTop: 18,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <p
-                      style={{
-                        fontSize: 16,
-                        fontWeight: 600,
-                        color: "#3D3D3D",
-                      }}
-                    >
-                      {subcategory.name}
-                    </p>
-                    <p style={{ color: "#6C727F", fontSize: 14 }}>
-                      {subcategory.description}
-                    </p>
-                  </div>
-                  <Switch
-                    disabled={!subcategory.is_editable}
-                    onChange={(data) => {
-                      handleCategoryPreferenceChange({
-                        data,
-                        subcategory,
-                        setPreferenceData,
-                        suprSendClient,
-                      });
-                    }}
-                    uncheckedIcon={false}
-                    checkedIcon={false}
-                    height={20}
-                    width={40}
-                    onColor="#2563EB"
-                    checked={subcategory.preference === PreferenceOptions.OPT_IN}
-                  />
-                </div>
-
-                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-                  {subcategory?.channels.map((channel, index) => {
-                    return (
-                      <Checkbox
-                        key={index}
-                        value={channel.preference}
-                        title={channel.channel}
-                        disabled={!channel.is_editable}
-                        onClick={() => {
-                          handleChannelPreferenceInCategoryChange({
-                            channel,
-                            subcategory,
-                            setPreferenceData,
-                            suprSendClient,
-                          });
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+  return data.sections?.map((section, i) => (
+    <div key={i} style={{ marginBottom: 24 }}>
+      {section.name && (
+        <div style={{ backgroundColor: "#FAFBFB", padding: "12px 0", marginBottom: 18 }}>
+          <p style={{ fontSize: 18, fontWeight: 500 }}>{section.name}</p>
+          <p style={{ color: "#6C727F" }}>{section.description}</p>
         </div>
-      );
-    });
-  }
+      )}
+      {section.subcategories?.map((sub, j) => (
+        <div key={j} style={{ borderBottom: "1px solid #D9D9D9", paddingBottom: 12, marginTop: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p style={{ fontSize: 16, fontWeight: 600 }}>{sub.name}</p>
+              <p style={{ color: "#6C727F", fontSize: 14 }}>{sub.description}</p>
+            </div>
+            <input
+              type="checkbox"
+              disabled={!sub.is_editable}
+              checked={sub.preference === PreferenceOptions.OPT_IN}
+              onChange={(e) => handleCategoryToggle(sub.category, e.target.checked)}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            {sub.channels?.map((ch, k) => (
+              <label key={k} style={{ cursor: ch.is_editable ? "pointer" : "not-allowed" }}>
+                <input
+                  type="checkbox"
+                  disabled={!ch.is_editable}
+                  checked={ch.preference === PreferenceOptions.OPT_IN}
+                  onChange={() => handleChannelToggle(ch, sub.category)}
+                />
+                {" "}{ch.channel}
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  ));
+}
 
-  // -------------- Channel Level Preferences -------------- //
+function ChannelPreferences({ data, onUpdate }) {
+  const suprSendClient = useSuprSendClient();
 
-  const handleOverallChannelPreferenceChange = async ({
-    channel,
-    status,
-    setPreferenceData,
-    suprSendClient,
-  }) => {
+  const handleChange = async (channel, status) => {
     const resp =
       await suprSendClient.user.preferences.updateOverallChannelPreference(
-        channel.channel,
+        channel,
         status
       );
-    if (resp.status === "error") {
-      console.log(resp.error.message);
-    } else {
-      setPreferenceData({ ...resp.body });
-    }
+    if (resp.status !== "error") onUpdate({ ...resp.body });
   };
 
-  function ChannelLevelPreferernceItem({ channel, setPreferenceData }) {
-    const suprSendClient = useSuprSendClient();
-    const [isActive, setIsActive] = useState(false);
-
-    return (
-      <div
-        style={{
-          border: "1px solid #D9D9D9",
-          borderRadius: 5,
-          padding: "12px 24px",
-          marginBottom: 24,
-        }}
-      >
-        <div
-          style={{
-            cursor: "pointer",
-          }}
-          onClick={() => setIsActive(!isActive)}
-        >
-          <p
-            style={{
-              fontSize: 18,
-              fontWeight: 500,
-              color: "#3D3D3D",
-            }}
-          >
-            {channel.channel}
-          </p>
-          <p style={{ color: "#6C727F", fontSize: 14 }}>
-            {channel.is_restricted
-              ? "Allow required notifications only"
-              : "Allow all notifications"}
-          </p>
-        </div>
-        {isActive && (
+  return (
+    <div>
+      <div style={{ backgroundColor: "#FAFBFB", padding: "12px 0", marginBottom: 18 }}>
+        <p style={{ fontSize: 18, fontWeight: 500 }}>Channel preferences</p>
+      </div>
+      {data.channel_preferences?.map((ch, i) => (
+        <div key={i} style={{ border: "1px solid #D9D9D9", borderRadius: 5, padding: "12px 24px", marginBottom: 24 }}>
+          <p style={{ fontSize: 18, fontWeight: 500 }}>{ch.channel}</p>
           <div style={{ marginTop: 12, marginLeft: 24 }}>
-            <p
-              style={{
-                color: "#3D3D3D",
-                fontSize: 16,
-                fontWeight: 500,
-                marginTop: 12,
-                borderBottom: "1px solid #E8E8E8",
-              }}
-            >
-              {channel.channel} Preferences
-            </p>
-            <div style={{ marginTop: 12 }}>
-              <div style={{ marginBottom: 8 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <input
-                      type="radio"
-                      name={`all- ${channel.channel}`}
-                      value={true}
-                      id={`all- ${channel.channel}`}
-                      checked={!channel.is_restricted}
-                      onChange={() => {
-                        handleOverallChannelPreferenceChange({
-                          channel,
-                          status: ChannelLevelPreferenceOptions.ALL,
-                          setPreferenceData,
-                          suprSendClient,
-                        });
-                      }}
-                    />
-                  </div>
-                  <label
-                    htmlFor={`all- ${channel.channel}`}
-                    style={{ marginLeft: 12 }}
-                  >
-                    All
-                  </label>
-                </div>
-                <p style={{ color: "#6C727F", fontSize: 14, marginLeft: 22 }}>
-                  Allow All Notifications, except the ones that I have turned off
-                </p>
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <div>
-                    <input
-                      type="radio"
-                      name={`required- ${channel.channel}`}
-                      value={true}
-                      id={`required- ${channel.channel}`}
-                      checked={channel.is_restricted}
-                      onChange={() => {
-                        handleOverallChannelPreferenceChange({
-                          channel,
-                          status: ChannelLevelPreferenceOptions.REQUIRED,
-                          setPreferenceData,
-                          suprSendClient,
-                        });
-                      }}
-                    />
-                  </div>
-                  <label
-                    htmlFor={`required- ${channel.channel}`}
-                    style={{ marginLeft: 12 }}
-                  >
-                    Required
-                  </label>
-                </div>
-                <p style={{ color: "#6C727F", fontSize: 14, marginLeft: 22 }}>
-                  Allow only important notifications related to account and
-                  security settings
-                </p>
-              </div>
-            </div>
+            <label style={{ display: "block", marginBottom: 8 }}>
+              <input
+                type="radio"
+                checked={!ch.is_restricted}
+                onChange={() => handleChange(ch.channel, ChannelLevelPreferenceOptions.ALL)}
+              />
+              {" "}All — Allow all notifications except those turned off
+            </label>
+            <label style={{ display: "block" }}>
+              <input
+                type="radio"
+                checked={ch.is_restricted}
+                onChange={() => handleChange(ch.channel, ChannelLevelPreferenceOptions.REQUIRED)}
+              />
+              {" "}Required — Only important account and security notifications
+            </label>
           </div>
-        )}
-      </div>
-    );
-  }
-
-  function ChannelLevelPreferences({ preferenceData, setPreferenceData }) {
-    return (
-      <div>
-        <div
-          style={{
-            backgroundColor: "#FAFBFB",
-            paddingTop: 12,
-            paddingBottom: 12,
-            marginBottom: 18,
-          }}
-        >
-          <p
-            style={{
-              fontSize: 18,
-              fontWeight: 500,
-              color: "#3D3D3D",
-            }}
-          >
-            What notifications to allow for channel?
-          </p>
         </div>
-        <div>
-          {preferenceData.channel_preferences ? (
-            <div>
-              {preferenceData.channel_preferences?.map((channel, index) => {
-                return (
-                  <ChannelLevelPreferernceItem
-                    key={index}
-                    channel={channel}
-                    setPreferenceData={setPreferenceData}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            <p>No Data</p>
-          )}
-        </div>
-      </div>
-    );
-  }
+      ))}
+    </div>
+  );
+}
+```
 
-  // -------------- Main component -------------- //
+## Next steps
 
-  export default function App() {
-    return (
-      <SuprSendProvider
-        publicApiKey="YOUR_PUBLIC_API_KEY"
-        distinctId={"YOUR_DISTINCT_ID"}
-      >
-        <Preferences />
-      </SuprSendProvider>
-    );
-  }
-
-  function Preferences() {
-    const suprSendClient = useSuprSendClient();
-    const { authenticatedUser } = useAuthenticateUser();
-    const [preferenceData, setPreferenceData] = useState();
-
-    useEffect(() => {
-      if (!authenticatedUser) return;
-
-      suprSendClient.user.preferences.getPreferences().then((resp) => {
-        if (resp.status === "error") {
-          console.log(resp.error.message);
-        } else {
-          setPreferenceData({ ...resp.body });
-        }
-      });
-
-      // listen for update in preferences data
-      suprSendClient.emitter.on("preferences_updated", (preferenceData) => {
-        setPreferenceData({ ...preferenceData.body });
-      });
-
-      // listen for errors
-      suprSendClient.emitter.on("preferences_error", (response) => {
-        console.log("ERROR:", response?.error?.message);
-      });
-    }, [authenticatedUser]);
-
-    if (!preferenceData) return <p>Loading...</p>;
-    return (
-      <div style={{ margin: 24 }}>
-        <h3 style={{ marginBottom: 24 }}>Notification Preferences</h3>
-        <NotificationCategoryPreferences
-          preferenceData={preferenceData}
-          setPreferenceData={setPreferenceData}
-        />
-        <ChannelLevelPreferences
-          preferenceData={preferenceData}
-          setPreferenceData={setPreferenceData}
-        />
-      </div>
-    );
-  }
-
-  // -------------- Custom Checkbox Component -------------- //
-
-  function Checkbox({ title, value, onClick, disabled }) {
-    const selected = value === PreferenceOptions.OPT_IN;
-
-    return (
-      <div
-        style={{
-          border: "0.5px solid #B5B5B5",
-          display: "inline-flex",
-          padding: "0px 20px 0px 4px",
-          borderRadius: 30,
-          cursor: disabled ? "not-allowed" : "pointer",
-        }}
-        onClick={onClick}
-      >
-        <Circle selected={selected} disabled={disabled} />
-        <p
-          style={{
-            marginLeft: 8,
-            color: "#6C727F",
-            marginTop: 1,
-            fontWeight: 500,
-            paddingBottom: 4,
-          }}
-        >
-          {title}
-        </p>
-      </div>
-    );
-  }
-
-  function Circle({ selected, disabled }) {
-    const bgColor = selected
-      ? disabled
-        ? "#BDCFF8"
-        : "#2463EB"
-      : disabled
-      ? "#D0CFCF"
-      : "#FFF";
-
-    return (
-      <div
-        style={{
-          height: 20,
-          width: 20,
-          borderRadius: 100,
-          border: "0.5px solid #A09F9F",
-          backgroundColor: bgColor,
-          marginTop: 3.6,
-        }}
-      />
-    );
-  }
-  ```
-</CodeGroup>
-
-##
+<CardGroup cols={2}>
+  <Card title="Preferences Data Structure" icon="sitemap" href="/docs/js-preferences#understanding-preference-structure">
+    Deep dive into sections, categories, and channel preference data.
+  </Card>
+  <Card title="Headless Inbox" icon="code" href="/docs/react-sdk-headless-feed">
+    Build a custom notification feed UI with React hooks.
+  </Card>
+  <Card title="Popover Inbox" icon="bell" href="/docs/react-in-app-feed">
+    Use the drop-in popover inbox component.
+  </Card>
+</CardGroup>

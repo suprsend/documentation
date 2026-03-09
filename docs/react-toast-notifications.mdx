@@ -1,84 +1,120 @@
 ---
 title: "Toast Notifications"
-description: "Integration steps to show a toast when new notification arrives, in react application."
+description: "Show a real-time toast popup when a new notification arrives in your React app."
 ---
 
-<Note>
-  **Toast Notifications in @suprsend/react**
+Toast notifications let you surface new messages the moment they arrive — even when the user hasn't opened the inbox. The [`@suprsend/react`](https://www.npmjs.com/package/@suprsend/react) SDK exposes a `feed.new_notification` event you can hook into with any toast library.
 
-  In the `@suprsend/react` SDK, toast notification functionality is no longer included in Inbox by default. Developers who wish to use toast notifications will need to implement them separately to achieve similar functionality. This change allows for more flexibility and modularity in customizing the user experience.
+<Note>
+  In `@suprsend/react`, toast functionality is **not** built into the `Inbox` component by default. You implement it separately, giving you full control over the toast library and design.
 </Note>
 
-SDK exposes event listener `feed.new_notification` which is available on feedClient. You can use this listener to show toast notification by using your own toast library. We also export `ToastNotification` component, which is a light version of `NotificationCard` that can be used by your toast library. The following example snippet uses [react-hot-toast](https://react-hot-toast.com/).
+## How it works
 
-<CodeGroup>
-  ```javascript Example.jsx
-  import toast, { Toaster } from 'react-hot-toast';
-  import { SuprSendFeedProvider, Inbox, useFeedClient } from '@suprsend/react';
+1. Wrap your component in [`SuprSendFeedProvider`](/docs/react-sdk-headless-feed#suprsendfeedprovider) (or use [`Inbox`](/docs/react-in-app-feed), which wraps it internally).
+2. Access the `feedClient` via the [`useFeedClient`](/docs/react-sdk-headless-feed#usefeedclient) hook.
+3. Listen to the `feed.new_notification` event.
+4. Show a toast using your preferred library (the example below uses [react-hot-toast](https://react-hot-toast.com/)).
 
-  // drop-in Inbox component example
-  function Example() {
-    return (
-      <SuprSendProvider>
-        <Inbox>
-          <ToastNotification />
-        </Inbox>
-      </SuprSendProvider>
-    );
-  }
+## Integration
 
-  // example when using SuprSendFeedProvider provider in headless or fullscreen feed
-  function HeadlessExample() {
-    return (
-      <SuprSendProvider>
-        <SuprSendFeedProvider>
-          <ToastNotification />
-        </SuprSendFeedProvider>
-      </SuprSendProvider>
-    );
-  }
+### With the Inbox component
 
-  function ToastNotification() {
-    const feedClient = useFeedClient();
+```jsx
+import { SuprSendProvider, Inbox } from "@suprsend/react";
 
-    useEffect(() => {
-      if (!feedClient) return;
+function App() {
+  return (
+    <SuprSendProvider
+      publicApiKey="YOUR_PUBLIC_API_KEY"
+      distinctId="YOUR_DISTINCT_ID"
+      userToken="SIGNED_USER_TOKEN"
+    >
+      <Inbox>
+        <ToastHandler />
+      </Inbox>
+    </SuprSendProvider>
+  );
+}
+```
 
-      // event listener which return new notification data
-      feedClient.emitter.on('feed.new_notification', (data) => {
-        toast.custom(<ToastNotificationCard notificationData={data} />); // show toast with new notification data
-        feedClient.markAsSeen(data.n_id); // marking seen
-      });
+### With SuprSendFeedProvider (headless or full-screen)
 
-      return () => {
-        feedClient.emitter.off('feed.new_notification');
-      };
-    }, [feedClient]);
+```jsx
+import { SuprSendProvider, SuprSendFeedProvider } from "@suprsend/react";
 
-    return <Toaster />;
-  }
-  ```
+function App() {
+  return (
+    <SuprSendProvider
+      publicApiKey="YOUR_PUBLIC_API_KEY"
+      distinctId="YOUR_DISTINCT_ID"
+      userToken="SIGNED_USER_TOKEN"
+    >
+      <SuprSendFeedProvider>
+        <ToastHandler />
+        {/* your feed UI */}
+      </SuprSendFeedProvider>
+    </SuprSendProvider>
+  );
+}
+```
 
-  ```javascript TypeDef
-  interface ToastNotificationProps {
-    notificationData: IRemoteNotification;
-    hideAvatar?: boolean;
-    themeType?: ThemeType;
-    theme?: ToastNotificationCardTheme;
-  }
-    
-  interface ToastNotificationCardTheme {
-    avatar?: React.CSSProperties;
-    headerText?: React.CSSProperties;
-    bodyText?: NotificationCardBodyTextThemeProps;
-    container?: React.CSSProperties;
-  }
-    
-  interface NotificationCardBodyTextThemeProps extends React.CSSProperties {
-    color?: string;
-    blockquoteColor?: string;
-    tableBorderColor?: string;
-    linkColor?: string;
-  }
-  ```
-</CodeGroup>
+### ToastHandler component
+
+```jsx
+import { useEffect } from "react";
+import toast, { Toaster } from "react-hot-toast";
+import { useFeedClient, ToastNotificationCard } from "@suprsend/react";
+
+function ToastHandler() {
+  const feedClient = useFeedClient();
+
+  useEffect(() => {
+    if (!feedClient) return;
+
+    const handler = (data) => {
+      toast.custom(<ToastNotificationCard notificationData={data} />);
+      feedClient.markAsSeen(data.n_id);
+    };
+
+    feedClient.emitter.on("feed.new_notification", handler);
+    return () => feedClient.emitter.off("feed.new_notification", handler);
+  }, [feedClient]);
+
+  return <Toaster />;
+}
+```
+
+## ToastNotificationCard props
+
+The SDK exports a lightweight `ToastNotificationCard` component designed for use inside toast popups.
+
+```typescript
+interface ToastNotificationProps {
+  notificationData: IRemoteNotification;
+  hideAvatar?: boolean;
+  themeType?: ThemeType;
+  theme?: ToastNotificationCardTheme;
+}
+
+interface ToastNotificationCardTheme {
+  avatar?: React.CSSProperties;
+  headerText?: React.CSSProperties;
+  bodyText?: NotificationCardBodyTextThemeProps;
+  container?: React.CSSProperties;
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Popover Inbox" icon="bell" href="/docs/react-in-app-feed">
+    Add the bell-icon popover inbox component.
+  </Card>
+  <Card title="Customising Feed" icon="paintbrush" href="/docs/react-customising-feed">
+    Style the notification card, header, and more.
+  </Card>
+  <Card title="Feed" icon="database" href="/docs/feed-data">
+    Understand the fields available in each notification.
+  </Card>
+</CardGroup>

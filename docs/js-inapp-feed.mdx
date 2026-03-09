@@ -1,16 +1,22 @@
 ---
-title: "Headless"
-description: "Integrate SuprSend's InApp feed in non-React apps using headless SDK methods."
+title: "Headless Inbox"
+description: "Build a fully custom notification UI in any web framework using the headless JavaScript SDK."
 ---
 
-**NOTE:** Refer type definitions for this guide [here](https://github.com/suprsend/suprsend-web-sdk/blob/main/src/interface.ts) .
+If the drop-in [`suprsend-inbox`](/docs/web-components-popover-feed) and [`suprsend-feed`](/docs/web-components-fullscreen-feed) components don't fit your design, you can build your own UI from scratch using the headless API. The SDK gives you direct access to the feed data and actions — you control the rendering.
 
-## Initialise feed client
+<Info>
+  The headless API works with any framework — Angular, Vue.js, Vanilla JS, or React. For React-specific hooks, see the [React Headless Inbox](/docs/react-sdk-headless-feed) guide instead.
+</Info>
 
-Using SuprSend client instance create Feed client instance.
+For full type definitions, see the [source types](https://github.com/suprsend/suprsend-web-sdk/blob/main/src/interface.ts).
+
+## Initialize the feed client
+
+Create a feed client instance from your SuprSend client:
 
 ```typescript
-const feedClient: Feed = suprSendClient.feed.initialize(options?: IFeedOptions);
+const feedClient = suprSendClient.feed.initialize(options?: IFeedOptions);
 
 interface IFeedOptions {
   tenantId?: string;
@@ -20,181 +26,138 @@ interface IFeedOptions {
 }
 ```
 
-If you are passing `tenant_id` in feed, make sure to pass scope key while creating [userToken](/docs/client-authentication#2-creating-signed-user-jwt-token) else 403 error will be thrown due to scope mismatching.
+If you pass `tenantId`, make sure to include the scope key when creating the [userToken](/docs/client-authentication#2-creating-signed-user-jwt-token), otherwise you'll get a 403 error.
 
-## Feed client
+## Feed data
 
-### Get feed data
-
-This returns notification store which contains list of notifications and other meta data like page information etc. You can call this anytime to get updated store data.
+Access the current notification store at any time:
 
 ```typescript
-const feedData: IFeedData = feedClient.data;
+const feedData = feedClient.data;
 ```
 
-### Initialise socket for realtime update
+## Fetching notifications
+
+```typescript
+feedClient.fetch();         // fetch the first page
+feedClient.fetchNextPage(); // fetch the next page (infinite scroll)
+```
+
+## Real-time updates
+
+Open a WebSocket connection for live notification delivery:
 
 ```typescript
 feedClient.initializeSocketConnection();
 ```
 
-### Fetching notification data
+## Emitter events
 
-This method will get first page of notifications from SuprSend server and set data in notification store.
+### Store updates
 
-```typescript
-feedClient.fetch();
-```
-
-### Fetch more notifications
-
-This method will get next page of notifications from SuprSend server and set data in notification store.
+Fires whenever the notification store changes (new notification, read state change, etc.). Use this to re-render your UI.
 
 ```typescript
-feedClient.fetchNextPage();
-```
-
-### Listening for updates to store
-
-Whenever there is update in notification store (ex: on new notification or existing notification state updated) this event is fired by library. You can listen to this event and update your local state so that UI of you application is refreshed.
-
-```typescript
-feedClient.emitter.on("feed.store_update", (updatedStoreData: IFeedData) => {
+feedClient.emitter.on("feed.store_update", (updatedStoreData) => {
   // update your local state to refresh UI
 });
 ```
 
-### Listening for new notification
+### New notification
 
-In case you want to show toast notification on receiving new notification you can use this listener.
+Fires when a new notification arrives. Useful for showing toast notifications.
 
 ```typescript
-feedClient.emitter.on(
-  "feed.new_notification",
-  (notificationData: IRemoteNotification) => {
-    // your logic to trigger toast with new notification data
-  }
-);
+feedClient.emitter.on("feed.new_notification", (notification) => {
+  // show a toast with the new notification
+});
 ```
 
-### Removing feed
+## Available methods
 
-This will remove feed client data and abort socket connection. Additionally calling `suprSendClient.reset` method during logout will also remove all feedClient instances attached SuprSend client instance.
+| Method | Description |
+|--------|-------------|
+| `feedClient.fetch()` | Fetch the first page of notifications. |
+| `feedClient.fetchNextPage()` | Fetch the next page. |
+| `feedClient.markAsSeen(id)` | Mark a notification as seen. |
+| `feedClient.markAsRead(id)` | Mark a notification as read. |
+| `feedClient.markAsUnread(id)` | Mark a notification as unread. |
+| `feedClient.markAsArchived(id)` | Archive a notification. |
+| `feedClient.markAsInteracted(id)` | Mark as interacted. |
+| `feedClient.markAllAsRead()` | Mark all notifications as read. |
+| `feedClient.markBulkAsSeen(ids)` | Bulk mark as seen. |
+| `feedClient.changeActiveStore(storeId)` | Switch the active store/tab. |
+| `feedClient.resetBadgeCount()` | Reset the bell badge count (call on inbox open). |
+| `feedClient.remove()` | Remove the feed client and close the socket. |
+
+## Complete example
+
+This example uses vanilla JavaScript patterns. Adapt it to your framework of choice.
+
+```javascript
+import { SuprSend } from "@suprsend/web-sdk";
+
+const suprSendClient = new SuprSend("YOUR_PUBLIC_API_KEY");
+
+async function initializeFeed() {
+  await suprSendClient.identify("YOUR_DISTINCT_ID");
+
+  const feedClient = suprSendClient.feed.initialize();
+
+  feedClient.emitter.on("feed.store_update", (storeData) => {
+    renderNotifications(storeData);
+  });
+
+  feedClient.emitter.on("feed.new_notification", (notification) => {
+    showToast(notification.message.header);
+  });
+
+  feedClient.initializeSocketConnection();
+  feedClient.fetch();
+}
+
+function renderNotifications(storeData) {
+  const container = document.getElementById("notifications");
+  if (!storeData?.notifications?.length) {
+    container.innerHTML = "<p>No notifications</p>";
+    return;
+  }
+
+  container.innerHTML = storeData.notifications
+    .map((n) => `<div class="notification">${n.message.header}</div>`)
+    .join("");
+}
+
+function showToast(message) {
+  // Use your preferred toast library
+  console.log("New notification:", message);
+}
+
+initializeFeed();
+```
+
+## Cleanup
+
+Remove the feed client when the user logs out or the component unmounts:
 
 ```typescript
 feedClient.remove();
+suprSendClient.reset();
 ```
 
-### Other methods
+## Next steps
 
-```typescript
-// If stores are used, this method will change active store
-feedClient.changeActiveStore(storeId: string)
-
-// Used to reset badge count which is shown on bell icon. This count is latest notifications that user received from the last he opened inbox popup.
-// call this on click of bell icon
-feedClient.resetBadgeCount()
-
-// mark notification as seen
-await feedClient.markAsSeen(notificationId: string)
-
-// mark notification as read
-await feedClient.markAsRead(notificationId: string)
-
-// mark notification as unread
-await feedClient.markAsUnread(notificationId: string)
-
-// mark notification as archived
-await feedClient.markAsArchived(notificationId: string)
-
-// mark notification as interacted
-await feedClient.markAsInteracted(notificationId: string)
-
-// bulk mark all notifications as read
-await feedClient.markAllAsRead()
-
-// bulk mark given notification id's as seen
-await feedClient.markBulkAsSeen(notificationIds: string[])
-```
-
-## Example
-
-For understanding purpose we have added current simple example in react. You could refer this headless example and design the feed in your Angular or Vue.js etc. If you want to implement in react please refer `@suprsend/react-core` or `@suprsend/react`
-
-```jsx
-import { SuprSend } from "@suprsend/web-sdk";
-import { useEffect, useState } from "react";
-
-export default function Example() {
-  const [feedData, setFeedData] = useState();
-  const [feedInstance, setFeedInstance] = useState();
-
-  const initializeFeed = async (suprSendClient) => {
-    await suprSendClient.identify("YOUR_DISTINCT_ID"); // authenticating user
-
-    const feedClient = suprSendClient.feeds.initialize(); // creating feed instance using suprsend client instance
-    setFeedInstance(feedClient); // storing it in state so that feed client methods like markRead can be accessed outside
-    const initialFeedData = feedClient?.data; // get initial store data from feed instance
-    setFeedData(initialFeedData); // storing that data in react state so that UI is rendered accordingly
-
-    feedClient?.emitter.on("feed.store_update", (updatedStoreData) => {
-      setFeedData(updatedStoreData); // register listener to get updated store data and store it in local react state so that UI is updated w.r.t new state
-    });
-
-    feedClient.initializeSocketConnection(); // register for socketio connection for realtime updated in feed data
-    feedClient.fetch(); // fetch existing notifications. Once API call is success you get first page notifications in feed.store_update listener and react state update happens which cause UI to renrender.
-  };
-
-  useEffect(() => {
-    const suprSendClient = new SuprSend("YOUR_PUBLIC_API_KEY"); // creating suprsend client instance
-
-    initializeFeed(suprSendClient);
-
-    return () => suprSendClient.reset(); // up on unmounting remove user so that inbox data will also be cleared
-  }, []);
-
-  if (!feedData) return null;
-  if (feedData.apiStatus === "LOADING") return <p>Loading Data</p>;
-  if (feedData.apiStatus === "SUCCESS" && !feedData?.notifications?.length) {
-    return <p>No Notifications</p>;
-  }
-  if (feedData.notifications) {
-    return (
-      <div>
-        <div>
-          {feedData.notifications.map((notification) => {
-            return (
-              <div
-                key={notification.n_id}
-                onClick={() => {
-                  feedInstance.markAsRead(notification.n_id);
-                }}
-              >
-                {notification.n_id}
-              </div>
-            );
-          })}
-        </div>
-        {feedData.apiStatus === "FETCHING_MORE" ? (
-          <p>Loading More</p>
-        ) : (
-          <div>
-            {feedData.pageInfo.hasMore && (
-              <button
-                onClick={() => {
-                  feedInstance.fetchNextPage();
-                }}
-              >
-                Next
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-  return null;
-}
-```
-
-###
+<CardGroup cols={2}>
+  <Card title="Feed" icon="database" href="/docs/feed-data">
+    Understand every field in the notification JSON structure.
+  </Card>
+  <Card title="Preferences (Headless)" icon="sliders" href="/docs/js-preferences">
+    Build a custom notification preference centre.
+  </Card>
+  <Card title="Popover Inbox" icon="bell" href="/docs/web-components-popover-feed">
+    Use the drop-in popover component instead.
+  </Card>
+  <Card title="Customising Feed" icon="paintbrush" href="/docs/web-components-customisations">
+    CSS theming for the drop-in components.
+  </Card>
+</CardGroup>

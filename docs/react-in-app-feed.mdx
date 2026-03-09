@@ -1,74 +1,108 @@
 ---
-title: "Popover feed"
-description: "Guide to add In-App Popover feed in react-based websites using drop-in components."
+title: "Popover Inbox"
+description: "Add a bell-icon popover inbox to your React app with the drop-in Inbox component."
 ---
 
-For react applications you can implement InApp feed using our Drop-In components (popover, full screen and side sheet notifications) or use headless react hooks.
+The `Inbox` component renders a bell icon with an unread badge. Clicking it opens a popover containing the user's notification feed — complete with real-time updates, infinite scroll, and action buttons.
 
-### Pre-Requisite
+<Frame>
+  ![](https://files.readme.io/8134005a504eceaeeba615a8d9189cdc363e99a62f51be601e23177f8651c166-Screenshot_2025-01-14_at_5.50.46_PM.png)
+</Frame>
 
-Integrate [SuprSendProvider](https://docs.suprsend.com/docs/react-1#suprsendprovider) as it is needed for creating SuprSend Client and authenticating user.
+Try it live in the [Interactive Playground](https://inbox-playground.suprsend.com/).
 
-## Inbox (Popover Feed)
+## Prerequisites
 
-The Inbox component comes with Bell, Badge and Popover that contains notifications and it should be child of [SuprSendProvider](https://docs.suprsend.com/docs/react-1#suprsendprovider). This component is already wrapped in [SuprSendFeedProvider](https://docs.suprsend.com/docs/headless-feed#suprsendfeedprovider) internally, so you don't have to wrap it again.
+Make sure you have [installed the SDK and set up `SuprSendProvider`](/docs/react-installation) before adding the Inbox component.
 
-### Install Inbox
+## Integration
 
-```bash
-npm install @suprsend/react
+The `Inbox` component must be rendered inside `SuprSendProvider`. It internally wraps `SuprSendFeedProvider`, so you don't need to add that separately.
+
+```jsx
+import { SuprSendProvider, Inbox } from "@suprsend/react";
+
+function App() {
+  return (
+    <SuprSendProvider
+      publicApiKey="YOUR_PUBLIC_API_KEY"
+      distinctId="YOUR_DISTINCT_ID"
+      userToken="SIGNED_USER_TOKEN"
+    >
+      <Inbox />
+    </SuprSendProvider>
+  );
+}
 ```
 
-### Integrate Inbox
+## Configuration
 
-<CodeGroup>
-  ```javascript Example.jsx
-  import {SuprSendProvider, Inbox} from "@suprsend/react"
+Pass props to `Inbox` to control its behavior and appearance.
 
-  function Example() {
-    return (
-      <SuprSendProvider publicApiKey={YOUR_KEY} distinctId={YOUR_DISTINCT_ID}>
-        <Inbox/>
-      </SuprSendProvider>
-    );
-  }
-  ```
+```typescript
+interface InboxProps {
+  tenantId?: string;
+  stores?: IStore[] | null;
+  host?: { socketHost?: string; apiHost?: string };
+  pageSize?: number;
+  pagination?: boolean;
+  theme?: ITheme;
+  themeType?: ThemeType;
+  popperPosition?: Placement;
+  hideAvatar?: boolean;
+  showUnreadCountOnTabs?: boolean;
+  notificationClickHandler?: (notification: IRemoteNotification) => void;
+  primaryActionClickHandler?: (notification: IRemoteNotification) => void;
+  secondaryActionClickHandler?: (notification: IRemoteNotification) => void;
+  bellComponent?: React.FC;
+  badgeComponent?: React.FC<{ count: number }>;
+  loaderComponent?: React.FC;
+  noNotificationsComponent?: React.FC;
+  tabBadgeComponent?: React.FC<{ count: number }>;
+  notificationComponent?: React.FC<CustomNotificationCard>;
+  headerRightComponent?: React.FC<{
+    markAllRead: () => void;
+    closeInboxPopover: () => void;
+  }>;
+}
+```
 
-  ```javascript TypeDef
-  interface InboxProps {
-    tenantId?: string;
-    stores?: IStore[] | null; // pass it if you want to use multiple tabs
-    host?: {
-      socketHost?: string,
-      apiHost?: string,
-    };
-    pageSize?: number; // defined page size defaults to 20, max value that can be passed is 100
-    pagination?: boolean; // pass false to disable pagination
-    theme?: ITheme; // used to customise css styles of existing component
-    themeType?: ThemeType; // dark or light
-    popperPosition?: Placement; // placement of inbox popover on click of bell
-    hideAvatar?: boolean;
-    showUnreadCountOnTabs?: boolean;
-    notificationClickHandler?: (notification: IRemoteNotification) => void; // callback executed on click of notification card
-    primaryActionClickHandler?: (notification: IRemoteNotification) => void; // callback executed on click of primary action button
-    secondaryActionClickHandler?: (notification: IRemoteNotification) => void; // callback executed on click of secondary action button
-    bellComponent?: React.FC; // custom component for bell
-    badgeComponent?: React.FC<{ count: number }>; // custom component for badge
-    loaderComponent?: React.FC; // custom component for loader
-    noNotificationsComponent?: React.FC; // custom component when no notifications are present
-    tabBadgeComponent?: React.FC<{ count: number }>;
-    notificationComponent?: React.FC<CustomNotificationCard>;  // custom notification card component
-    headerRightComponent?: React.FC<{markAllRead: () => void,closeInboxPopover: () => void}>; // custom right side header component to override mark all as read etc
-  }
-  ```
-</CodeGroup>
-
-Note: Refer [Customising Feed](https://docs.suprsend.com/docs/customising-feed) for detailed explanation on customisation options available in feed components.
-
-![](https://files.readme.io/8134005a504eceaeeba615a8d9189cdc363e99a62f51be601e23177f8651c166-Screenshot_2025-01-14_at_5.50.46_PM.png)
+| Prop | Type | Description |
+|------|------|-------------|
+| `tenantId` | `string` | Filter notifications by tenant. Defaults to `"default"`. |
+| `stores` | `IStore[]` | Define multiple tabs to group notifications. See [Adding tabs](/docs/react-customising-feed#adding-tabs). |
+| `pageSize` | `number` | Notifications per page. Default `20`, max `100`. |
+| `pagination` | `boolean` | Enable infinite scroll pagination. Default `true`. |
+| `theme` | `ITheme` | CSS style overrides. See [Customising CSS styles](/docs/react-customising-feed#customising-css-styles). |
+| `themeType` | `"dark" \| "light"` | Toggle dark or light mode. |
+| `popperPosition` | `Placement` | Popover position relative to the bell (`"top"`, `"bottom"`, `"left"`, `"right"`). |
+| `hideAvatar` | `boolean` | Hide notification avatars. |
+| `showUnreadCountOnTabs` | `boolean` | Show unread count badge on tabs. |
+| `notificationClickHandler` | `function` | Callback when a notification card is clicked. Overrides default URL navigation. |
+| `primaryActionClickHandler` | `function` | Callback for the primary action button. |
+| `secondaryActionClickHandler` | `function` | Callback for the secondary action button. |
+| `bellComponent` | `React.FC` | Replace the default bell icon with a custom component. |
+| `badgeComponent` | `React.FC` | Replace the default unread badge. |
+| `notificationComponent` | `React.FC` | Replace the default notification card. See [Custom notification card](/docs/react-customising-feed#custom-notification-card-component). |
+| `headerRightComponent` | `React.FC` | Replace the "Mark all as read" area in the header. See [Custom header](/docs/react-customising-feed#custom-header-component). |
 
 <Note>
-  **Toast Notifications in @suprsend/react**
-
-  In the `@suprsend/react` SDK, toast notification functionality is no longer included in Inbox by default. Developers who wish to use toast notifications will need to implement them separately to achieve similar functionality. This change allows for more flexibility and modularity in customizing the user experience.
+  **Toast notifications** are not included in `Inbox` by default. See the [Toast Notifications](/docs/react-toast-notifications) guide to add them.
 </Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Full-screen / Sidesheet Feed" icon="sidebar" href="/docs/react-full-screen-or-sidesheet-notifications-feed">
+    Render notifications as a full-page or side-panel feed instead of a popover.
+  </Card>
+  <Card title="Customising Feed" icon="paintbrush" href="/docs/react-customising-feed">
+    Tabs, dark mode, custom components, and CSS style overrides.
+  </Card>
+  <Card title="Feed" icon="database" href="/docs/feed-data">
+    Understand the JSON structure of each notification.
+  </Card>
+  <Card title="Headless Inbox" icon="code" href="/docs/react-sdk-headless-feed">
+    Build a completely custom UI using React hooks.
+  </Card>
+</CardGroup>
