@@ -5,7 +5,7 @@ description: "A practical guide to implementing common preference scenarios in S
 
 Notification preferences give users control over what they hear from your app, on which channel, and how often. Get them right and users stay engaged. Skip them and users will unsubscribe from everything.
 
-This guide covers common preference patterns from real-world usecases, from simple channel opt-in/ out-outs to complex multi-tenant setups. Each section covers what it is, how to set it up in SuprSend, and the code for your application you can refer to.
+This guide covers common preference patterns from real-world usecases, from simple channel opt-in/opt-outs to complex multi-tenant setups. Each section covers what it is, how to set it up in SuprSend, and the code for your application you can refer to.
 
 > **New to preferences in SuprSend?** Read the [User Preferences overview](/docs/user-preferences) first — it covers how categories, channels, and the preference API response are structured. For multi-tenant setups, see [Tenant Preferences](/docs/tenant-preference).
 
@@ -16,7 +16,7 @@ This guide covers common preference patterns from real-world usecases, from simp
 Users choose All or Only important alerts per channel (Email, Push, SMS, Slack etc) and separately pick which channel gets each type of notification.
 
 <Frame caption="Channel-level preferences">
-  <img src="/images/channel.png" alt="Channel-level preferences" width="280" />
+  <img src="/images/channel.png" alt="Channel-level preferences" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -35,8 +35,10 @@ const { data, updateOverallChannelPreference, updateChannelPreferenceInCategory 
 
 // Block 1 — Global: All vs Only important per channel
 data?.channel_preferences?.map((ch) => (
-  <button onClick={() => updateOverallChannelPreference(ch.channel, 'all')}>All</button>
-  <button onClick={() => updateOverallChannelPreference(ch.channel, 'required')}>Only important</button>
+  <>
+    <button onClick={() => updateOverallChannelPreference(ch.channel, 'all')}>All</button>
+    <button onClick={() => updateOverallChannelPreference(ch.channel, 'required')}>Only important</button>
+  </>
 ));
 
 // Block 2 — Per-category: which channel for each notification type
@@ -60,7 +62,7 @@ data?.sections?.flatMap((s) => s.subcategories || []).map((sub) =>
 Allow users to turn each notification type on or off (e.g. Product updates, Billing) and optionally choose which channel receives each type.
 
 <Frame caption="Category-level preferences">
-  <img src="/images/category.png" alt="Category-level preferences" width="280" />
+  <img src="/images/category.png" alt="Category-level preferences" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -112,7 +114,7 @@ Instead of individual notifications, users choose a **summary frequency** — In
 This works through a user profile field `digest_frequency`. The workflow reads it at runtime via a **condition node** on the user property, then branches into the matching digest schedule (daily or weekly) or sends instantly.
 
 <Frame caption="Digest preferences">
-  <img src="/images/digest_guide.png" alt="Digest preferences" width="280" />
+  <img src="/images/t1.png" alt="Digest preferences" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -121,8 +123,6 @@ This works through a user profile field `digest_frequency`. The workflow reads i
 2. Store the user's chosen frequency as a user property called `digest_frequency` (e.g. via your app's settings page using the [Users API](/docs/users))
 3. In your workflow, add a **condition node** that reads `digest_frequency` from the user's profile
 4. Branch the workflow: if `daily` → Digest node with daily schedule; if `weekly` → Digest node with weekly schedule; if `instant` → send immediately (no digest); if `off` → exit. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
-
-{/* TODO: Add workflow screenshot showing condition on digest_frequency with daily/weekly digest branches */}
 
 **Build in your app**
 
@@ -149,20 +149,19 @@ const save = async () => {
 
 ## 4. Tenant restriction
 
-Each brand or tenant sees only the categories you allow for them. Per tenant, you decide which categories (and channels) are visible to that tenant's users — hidden ones do not appear in `getPreferences()` and are not sent.
+Control which notification categories each tenant's users can see based on their plan or configuration. Categories you hide for a tenant do not appear in `getPreferences()` and notifications for those categories are not sent.
 
-- **Admin:** Restrict what this tenant's users see.
-- **User:** Same preference UI, list filtered by tenant.
+In the example below, a free-plan tenant only sees **Task Assigned** and **Task Comments** — categories like Advanced Analytics Alerts and SLA Breach Alerts are hidden entirely. A paid-plan tenant sees all four categories and can toggle each one on or off.
 
-<Frame caption="Tenant-restricted categories">
-  <img src="/images/tenant-rest.png" alt="Tenant-restricted categories" width="280" />
+<Frame caption="Free-plan users see only core categories; paid-plan users see the full set">
+  <img src="/images/tenant_res.png" alt="Tenant-restricted categories — free vs paid plan" width="560" />
 </Frame>
 
 **Configure in SuprSend**
 
 1. Go to **Tenants**, select the tenant you want to configure, and open **Tenant Preference**
-2. Disable any categories or channels that should be hidden from this tenant's users and excluded from notifications
-3. Repeat for each tenant. Only the categories you leave enabled will be visible to that tenant's users and eligible for notifications
+2. For each category you want to hide, set `visible_to_subscriber: false`. For example, hide "Advanced Analytics Alerts" and "SLA Breach Alerts" for free-plan tenants while keeping them visible for paid-plan tenants
+3. Repeat for each tenant. Only the categories you leave visible will appear in the user's preference UI and be eligible for notifications
 
 Most teams prefer the **API** for this — especially when managing many tenants programmatically:
 
@@ -177,10 +176,10 @@ Set `visible_to_subscriber: false` to hide the category entirely from the tenant
 
 **Build in your app**
 
-Call `getPreferences({ tenantId })`. SuprSend filters the response to only return what is enabled for that tenant. Render the list and use `updateCategoryPreference` as usual — users only see categories you did not restrict.
+Call `getPreferences({ tenantId })`. SuprSend filters the response based on what is enabled for that tenant — free-plan users only get back the visible categories, paid-plan users get the full list. Render the list and use `updateCategoryPreference` as usual.
 
 ```javascript
-const TENANT_ID = 'default';
+const TENANT_ID = 'acme-corp';
 const { data, updateCategoryPreference } = usePreferences({ tenantId: TENANT_ID });
 
 data?.sections?.flatMap((s) => s.subcategories || []).map((cat) => (
@@ -191,7 +190,7 @@ data?.sections?.flatMap((s) => s.subcategories || []).map((cat) => (
 ));
 ```
 
-**When to use:** Multi-tenant SaaS applications where each customer org sees a different set of notifications. Examples: free-plan tenants see only limited features, paid tenants see all the features they are subscribed to.
+**When to use:** Multi-tenant SaaS applications where each tenant's plan or configuration determines which notifications are available. Examples: free-plan tenants see only limited features, paid tenants see all the features they are subscribed to.
 
 **Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences) | [Preference Evaluation](/docs/preference-evaluation)
 
@@ -204,11 +203,11 @@ Different teams within your organization need different notifications. Instead o
 This is done using **tags** in SuprSend. A tag is a label you assign to notification categories (e.g. `sales`, `finance`, `engineering`). When fetching preferences, you pass the relevant tag and SuprSend returns only the categories that match. The user never sees a department picker — your app determines their department from their profile or session and passes the corresponding tag automatically.
 
 <Frame caption="A sales user sees only sales-related notification categories">
-  <img src="/images/dept-sales.png" alt="Sales department preferences" width="280" />
+  <img src="/images/t2_sales.png" alt="Sales department preferences" width="450" />
 </Frame>
 
 <Frame caption="A finance user sees only finance-related notification categories">
-  <img src="/images/dept-finance.png" alt="Finance department preferences" width="280" />
+  <img src="/images/t2_finance.png" alt="Finance department preferences" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -236,7 +235,7 @@ const { data, updateCategoryPreference } = usePreferences({ tags: TAG });
 Allow tenant admins to determine which notifications are relevant for their organization. Instead of the SuprSend dashboard admin configuring every tenant, the tenant's own admin can enable or disable categories, set default preferences, and control channel availability for their users — via the Dashboard or the API.
 
 <Frame caption="Tenant admin customizing notification preferences for their organization">
-  <img src="/images/tenant_pref.png" alt="Tenant admin preferences" width="280" />
+  <img src="/images/t3.png" alt="Tenant admin preferences" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -265,7 +264,7 @@ const { data, updateCategoryPreference } = usePreferences({ tenantId: TENANT_ID 
 User sees modules on the UI (e.g. Source alerts, Destination alerts) and can switch between them. Uses tags — `getPreferences({ tags: selectedTag })`.
 
 <Frame caption="Filter by module">
-  <img src="/images/Categories%20by%20Module.png" alt="Filter by module" width="280" />
+  <img src="/images/t4.png" alt="Filter by module" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -310,7 +309,7 @@ Users pick **at what level they want to be alerted** (e.g. 80% or 90% of a usage
 Preferences are still involved — the notification category controls whether the alert is on or off, and which channels it is delivered on. The threshold just determines *when* the workflow triggers. You need both: the threshold (stored as a user property) decides when to fire the alert, and the category preference lets the user toggle the alert on or off and choose which channels receive it.
 
 <Frame caption="Threshold alerts">
-  <img src="/images/thresholdimg.png" alt="Threshold alerts" width="280" />
+  <img src="/images/thresholdimg.png" alt="Threshold alerts" width="450" />
 </Frame>
 
 **Configure in SuprSend**
@@ -350,7 +349,7 @@ const saveThreshold = async () => {
 Each project gets its own full set of preference settings — tags do not work for this pattern. Instead, each project is represented as a **tenant**. Preferences are saved at the tenant level. User selects a project → `getPreferences({ tenantId: projectId })`.
 
 <Frame caption="Project-level preferences — each project = tenant">
-  <img src="/images/Project%20Level.png" alt="Project-level preferences" width="280" />
+  <img src="/images/t5.png" alt="Project-level preferences" width="450" />
 </Frame>
 
 **Configure in SuprSend**
