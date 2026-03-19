@@ -1,6 +1,6 @@
 ---
 title: "API Request Errors"
-description: "Reference for errors that occur before a workflow runs, with causes and fixes."
+description: "Reference for errors that occur at your API or SDK endpoints, with What does this means and fixes."
 slug: api-request-errors
 keywords:
   - API request errors
@@ -10,20 +10,10 @@ keywords:
   - authentication failed
 ---
 
-Errors that are detected at your API or SDK request level such as bad request, missing assets, workflow trigger condition mismatch are recorded in **Request Logs**. Workflow execution doesn't happen for these errors. Use the [idempotency key](/docs/logging) from the failed request to trace the call. A **`200`** response means the request was **accepted** only — not that a workflow ran. For failures after acceptance, see [Workflow Execution Errors](/docs/error-guides) or Message Logs.
+This page covers all types of errors that can occur while validating and processing API/SDK requests, including common What does this means and how to fix them. If you encounter an error not listed here, please contact support with the error message and request details.
 
-<CardGroup cols={2}>
-  <Card title="Request Logs" icon="code" iconType="solid" href="/docs/logging#requests">
-    Where API request errors are recorded.
-  </Card>
-  <Card title="Workflow Execution Errors" icon="sitemap" iconType="solid" href="/docs/error-guides">
-    Errors during execution (template, delivery, vendor).
-  </Card>
-</CardGroup>
-
-<Note>
-  API request errors are **not** retried automatically. For validation or auth errors, correct the request and retry with a new or corrected idempotency key. For transient errors, retry with the **same** idempotency key.
-</Note>
+### What Request Logs are
+Request Logs capture every API/SDK request SuprSend receives, including the full request payload and API response. They help you debug request validation issues, missing required fields, authentication failures, invalid resource identifiers, and any error that prevents workflow execution from starting.
 
 ---
 
@@ -32,130 +22,106 @@ Errors that are detected at your API or SDK request level such as bad request, m
 <span id="error-1"></span>
 <span id="error-8"></span>
 
-### `workflow not found` / `workflow with slug '<slug>' not found`
+### workflow not found / workflow with slug `<slug>` not found
+<br/>
+**What does this mean:** The workflow does not exist in the workspace, or exists but is not in an active state.
 
-**Cause:** The workflow does not exist in the workspace, or exists but is not in an active state.
-
-**Fix:** Check that the `workflow` field in your payload matches the slug of a live workflow exactly — slugs are case-sensitive and cannot be changed after creation. Open the workflow on the [Workflows page](https://app.suprsend.com/en/production/workflows) and copy the slug from the URL or the workflow header. If it doesn't exist yet, create and commit it. See [Create Workflow](/docs/workflows#create-workflow).
+**How to fix it:** 
+- Check if the `workflow_slug` is correct. You can check the slug from workflow settings on the workflow details page in the dashboard. Slugs are case-sensitive.
+- Check if the workflow is in `draft` state, you need to click on `Commit` to start using it. See [Design Workflow](/docs/design-workflow).
 
 ---
 
 <span id="error-34"></span>
 
-### `workflow with slug '<slug>' is disabled`
+### workflow with slug `<slug>` is disabled
+<br/>
+**What does this mean:** 
+The workflow exists but is in **disabled** state.
 
-**Cause:** The workflow exists but is in draft or disabled state.
-
-**Fix:** Open the workflow in the dashboard, finalize your edits, and click **Commit** to make it live. Workflows must be committed before they can receive API triggers. See [Design Workflow](/docs/design-workflow).
-
----
-
-<span id="error-82"></span>
-
-### `workflow missing`
-
-**Cause:** The `workflow` key is absent from the request body.
-
-**Fix:** Include the `workflow` field with a valid slug string in every trigger request. See [Trigger Workflow](/docs/trigger-workflow).
-
----
-
-<span id="error-118"></span>
-
-### `workflow version not found`
-
-**Cause:** The specified workflow version does not exist.
-
-**Fix:** Ensure the workflow has at least one committed version — open it in the dashboard and click **Commit** if needed. Retry without specifying a version, or use a valid version identifier.
+**How to fix it:** 
+Got the workflow details page and enable it by clicking on the 3 dots menu at the top right corner. See [Design Workflow](/docs/design-workflow).
 
 ---
 
 <span id="error-45"></span>
 
-### `[workflow: <slug>] tenant_override: jq-expression '<expression>' evaluated to empty value. Value is either missing OR it is not of expected type: [string]`
+### [workflow: `<slug>`] tenant_override: jq-expression `<expression>` evaluated to empty value. Value is either missing OR it is not of expected type: [string]
+<br/>
+**What does this mean:** 
+You have event based trigger and in your trigger -> override settings, you have passed a jq expression for tenant override that is returning empty, null or non-string value.
 
-**Cause:** The `tenant_override` jq expression returned empty, `null`, or a non-string. The most common cause is a key name mismatch — e.g. the expression uses `.tenantId` but the payload key is `"tenant_id"`.
-
-**Fix:** Verify the key your expression references exists in `data` and the path matches exactly. The expression must return a non-empty string.
-
----
-
-<span id="error-60"></span>
-<span id="error-28"></span>
-<span id="error-115"></span>
-<span id="error-116"></span>
-<span id="error-134"></span>
-
-### `[workflow: <slug>] recipients_override: jq-expression '<expression>' evaluated to empty value. Value is either missing OR it is not of expected type: [string / list(string)]`
-
-**Cause:** The `recipients_override` expression returned empty, `null`, or a type that is neither a string nor a list of strings. Common causes: a typo in the path, a key missing from `data`, or an incorrect function name.
-
-**Fix:** The expression must resolve to a `distinct_id` string or a list of `distinct_id` strings. Verify all key names and function names are correct. Test your expression at [jqplay.org](https://jqplay.org). See [Trigger Workflow](/docs/trigger-workflow).
+**How to fix it:** 
+- Verify the key your expression references exists in `data` and the variable referred in your expression matches exactly with payload. The expression must return a non-empty string.
+- If you are new to jq, we recommend testing your expression at [jqplay.org](https://jqplay.org) with sample payload before using it in your trigger.
+- If you have mistakenly overriden tenant in your trigger, you can remove it by clicking on trigger node in graph and opening the override settings. See [Trigger Workflow](/docs/trigger-workflow).
 
 ---
 
-<span id="error-70"></span>
-<span id="error-106"></span>
 
-### `[workflow: <slug>] actor_override: jq-expression '.<field>' evaluated to empty value. Value is either missing OR it is not of expected type: [string]`
+###  [workflow:  `<slug>`] recipients_override: jq-expression `<expression>` evaluated to empty value. Value is either missing OR it is not of expected type: [string / list(string)]
+<br/>
 
-**Cause:** The `actor_override` expression returned empty or a non-string. The path referenced (e.g. `.distinct_id`, `.targetUserId`) does not exist in the `data` object.
+**What does this mean:** You have event based trigger and in your trigger -> override settings, you have passed a jq expression for recipients override that is returning empty, null, non-string or non-array value.
 
-**Fix:** Verify the field your expression references is present in `data` and the key name matches exactly.
-
----
-
-<span id="error-2"></span>
-<span id="error-3"></span>
-<span id="error-16"></span>
-
-### `no valid recipients found`
-
-**Cause:** SuprSend could not resolve any recipient — no `recipients` were passed, all referenced `distinct_id` values don't exist in the workspace, or users have no channel information.
-
-**Fix:** There are two approaches. **Option 1 — inline channel info:** Pass channel data directly in the recipient object so SuprSend creates the user automatically: `{"distinct_id": "user-123", "$email": ["user@example.com"]}`. **Option 2 — pre-created user:** Pass just the `distinct_id` if the user already exists with channels on their profile. See [Create User](/docs/users#creating-user-profile-on-suprsend) and [Trigger Workflow](/docs/trigger-workflow).
+**How to fix it:** 
+- The expression must resolve to a `distinct_id` string or an array`distinct_id`s.
+- Verify all key names and function names are correct. Test your expression at [jqplay.org](https://jqplay.org) with the same payload you are sending to SuprSend.
+- If you have mistakenly overriden recipients in your trigger, you can remove it by clicking on trigger node in graph and opening the override settings. See [Trigger Workflow](/docs/trigger-workflow).
 
 ---
 
-<span id="error-4"></span>
-<span id="error-95"></span>
+### [workflow: `<slug>`] actor_override: jq-expression `<expression>` evaluated to empty value. Value is either missing OR it is not of expected type: [string]`
 
-### `user [distinct_id: '<distinct_id>'] not found` / `User not found with distinct_id: <distinct_id>`
+**What does this mean:** You have event based trigger and in your trigger -> override settings, you have passed a jq expression for actor override that is returning empty, null or non-string value.
 
-**Cause:** The `distinct_id` does not match any user profile in the workspace.
+**How to fix it:** 
+- The expression must resolve to a `distinct_id` string.
+- Verify all key names and function names are correct. Test your expression at [jqplay.org](https://jqplay.org) with the same payload you are sending to SuprSend.
+- If you have mistakenly overriden actor in your trigger, you can remove it by clicking on trigger node in graph and opening the override settings. See [Trigger Workflow](/docs/trigger-workflow).
+---
 
-**Fix:** Either [create the user first](/docs/users#creating-user-profile-on-suprsend), or pass channel info inline in the recipient object: `{"distinct_id": "user-123", "$email": ["user@example.com"]}`.
+
+### no valid recipients found / user [distinct_id: `<distinct_id>`] not found / User not found with distinct_id: `<distinct_id>`
+
+**What does this mean:**
+`distinct_id` passed in event trigger or `recipient` passed in API trigger does not exist in the workspace.
+
+**How to fix it:**
+- Search with the `distinct_id` on the user page in the dashboard to confirm if the user exists. If not, create the user via API/SDK or dashboard. See [Create User](/docs/users#creating-user-profile-on-suprsend).
+- You can also create the user inline in case of API based trigger by passing channel info inline in the recipient object like this - `{"distinct_id": "user-123", "$email": ["["user@example.com"]}`. 
+- For event based triggers, users need to be pre-created; but if that user is part of your payload instead of the direct `distinct_id` field, you can use override settings in trigger node to override the recipient with the value from your payload. See [Trigger Workflow](/docs/trigger-workflow).
 
 ---
 
-<span id="error-5"></span>
+### channel details missing for transient user
 
-### `channel details missing for transient user`
+**What does this mean:** 
+A transient (anonymous) user was specified with `"is_transient": true` in workflow trigger but no channel identities were provided.
 
-**Cause:** A transient (anonymous) user was specified with `"is_transient": true` but no channel identities were provided.
-
-**Fix:** Include at least one channel identity in the recipient object, e.g. `"$email": ["user@example.com"]`. Transient users are not stored in SuprSend, so all channel info must be supplied at trigger time. See [Anonymous Users](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user).
+**How to fix it:** 
+When you pass `is_transient: true` in the workflow trigger, SuprSend doesn't create or look for that user in db. Since, it's used for anonymous sending, you need to pass channel details inline in the recipient object like this - `{"is_transient": true, "$email": ["joe@example.com"]}`. See [Sending to Anonymous Users](/docs/node-trigger-workflow-from-api#sending-notification-to-anonymous-user) for more details.
 
 ---
 
-<span id="error-6"></span>
-<span id="error-98"></span>
+### one of [distinct_id, object_type/id] must be present
 
-### `one of [distinct_id, object_type/id] must be present` / `in case recipient is a map, one of [distinct_id, object_type/id] must be present`
+**What does this mean:** 
+In your API based trigger, recipient object is missing its identifier — neither `distinct_id` nor the `object_type`/`id` pair was included.
 
-**Cause:** A recipient object is missing its identifier — neither `distinct_id` nor the `object_type`/`id` pair was included.
-
-**Fix:** Every recipient object must have either a `distinct_id` (for users) or both `object_type` and `id` (for objects). See [Trigger Workflow](/docs/trigger-workflow).
+**How to fix it:** 
+Every recipient object must have either a `distinct_id` (for users) or `is_transient: true` with channel details (for anonymous users),
+or both `object_type` and `id` (for objects). See if you're missing it or the key name is wrong. See [Trigger Workflow](/docs/trigger-workflow).
 
 ---
 
 <span id="error-24"></span>
 
-### `error: must pass value for either event or distinct_id/anonymous_id`
+### error: must pass value for either event or distinct_id/anonymous_id
 
-**Cause:** The request is missing both an `event` name and a user identifier (`distinct_id` or `anonymous_id`).
+**What does this mean:** The request is missing both an `event` name and a user identifier (`distinct_id` or `anonymous_id`).
 
-**Fix:** Include either `event` (for event-based triggers) or `distinct_id`/`anonymous_id` in your payload.
+**How to fix it:** Include either `event` (for event-based triggers) or `distinct_id`/`anonymous_id` in your payload.
 
 ---
 
@@ -163,9 +129,9 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"distinct_ids":"must contain at least 1 item"}`
 
-**Cause:** The `distinct_ids` array was included but is empty.
+**What does this mean:** The `distinct_ids` array was included but is empty.
 
-**Fix:** Include at least one valid `distinct_id` — an empty array `[]` is not accepted.
+**How to fix it:** Include at least one valid `distinct_id` — an empty array `[]` is not accepted.
 
 ---
 
@@ -173,7 +139,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"recipients":"must contain at least 1 item"}`
 
-**Cause:** The `recipients` array was included but is empty.
+**What does this mean:** The `recipients` array was included but is empty.
 
 **Fix:** Include at least one valid recipient.
 
@@ -183,7 +149,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"distinct_ids":"must contain at maximum 100 items"}`
 
-**Cause:** More than 100 `distinct_ids` were passed in a single request.
+**What does this mean:** More than 100 `distinct_ids` were passed in a single request.
 
 **Fix:** Split into batches of at most 100. For large user lists, use [Lists](/docs/lists) and [Broadcast](/docs/broadcast) instead.
 
@@ -193,7 +159,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `error: must pass value for distinct_id`
 
-**Cause:** `distinct_id` is required but was not provided.
+**What does this mean:** `distinct_id` is required but was not provided.
 
 **Fix:** Add `distinct_id` to the recipient object.
 
@@ -203,7 +169,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `user's distinct_id must be present if it's not transient`
 
-**Cause:** A non-transient user recipient is missing `distinct_id`.
+**What does this mean:** A non-transient user recipient is missing `distinct_id`.
 
 **Fix:** Add `distinct_id`, or use `"is_transient": true` with channel details if sending to an anonymous user.
 
@@ -213,7 +179,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `actor: value must be either of type string or map`
 
-**Cause:** The `actor` field was passed as an incorrect type — e.g. a number or boolean.
+**What does this mean:** The `actor` field was passed as an incorrect type — e.g. a number or boolean.
 
 **Fix:** Pass `actor` as a plain `distinct_id` string, or as a map object with user details. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -223,7 +189,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `recipients: no valid value passed`
 
-**Cause:** The `recipients` field contains no valid values.
+**What does this mean:** The `recipients` field contains no valid values.
 
 **Fix:** Include at least one valid recipient — a `distinct_id` string or a recipient map object. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -233,7 +199,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for recipients. each element must be of type string or map`
 
-**Cause:** The `recipients` array contains elements that are neither strings nor map objects.
+**What does this mean:** The `recipients` array contains elements that are neither strings nor map objects.
 
 **Fix:** Each element must be a plain `distinct_id` string or a recipient map. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -243,7 +209,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `from_user_id: [distinct_id: 'string'] not found`
 
-**Cause:** The user referenced in `from_user_id` does not exist in the workspace.
+**What does this mean:** The user referenced in `from_user_id` does not exist in the workspace.
 
 **Fix:** Create the user via API/SDK before referencing them in `from_user_id`, or pass their channel info inline. See [Create User](/docs/users#creating-user-profile-on-suprsend).
 
@@ -253,7 +219,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"recipients":"is a required field"}`
 
-**Cause:** The `recipients` field is completely absent from the request body.
+**What does this mean:** The `recipients` field is completely absent from the request body.
 
 **Fix:** Add the `recipients` field to your payload. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -263,7 +229,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"distinct_ids":"is a required field"}`
 
-**Cause:** The `distinct_ids` field is completely absent from the request body.
+**What does this mean:** The `distinct_ids` field is completely absent from the request body.
 
 **Fix:** Add the `distinct_ids` field to your payload.
 
@@ -276,7 +242,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `tenant/brand doesn't exist with id: <tenant_id>` / `No tenant found for tenant_id <tenant_id>`
 
-**Cause:** The `tenant_id` does not exist in this workspace.
+**What does this mean:** The `tenant_id` does not exist in this workspace.
 
 **Fix:** Check that the value exactly matches (including case) a tenant on the [Tenants page](https://app.suprsend.com/en/production/tenants/). Tenants are workspace-scoped — a tenant in staging does not exist in production unless created there separately. See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
 
@@ -288,7 +254,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `[workflow: <slug>] tenant doesn't exist with id: <tenant_id>`
 
-**Cause:** The `tenant_id` passed in the workflow trigger does not exist in this workspace.
+**What does this mean:** The `tenant_id` passed in the workflow trigger does not exist in this workspace.
 
 **Fix:** Verify the tenant exists on the [Tenants page](https://app.suprsend.com/en/production/tenants/) and create it if needed. See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
 
@@ -298,7 +264,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `tenant '{{tenant_id}}' not found`
 
-**Cause:** The `tenant_id` does not exist in this workspace.
+**What does this mean:** The `tenant_id` does not exist in this workspace.
 
 **Fix:** Verify and create it on the [Tenants page](https://app.suprsend.com/en/production/tenants/). See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
 
@@ -308,7 +274,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `tenant 'string' not found`
 
-**Cause:** The `tenant_id` does not exist in this workspace.
+**What does this mean:** The `tenant_id` does not exist in this workspace.
 
 **Fix:** Verify and create it on the [Tenants page](https://app.suprsend.com/en/production/tenants/). See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
 
@@ -318,7 +284,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `default tenant/brand doesn't exist`
 
-**Cause:** The default tenant has not been set up in the workspace.
+**What does this mean:** The default tenant has not been set up in the workspace.
 
 **Fix:** Create the default tenant from the [Tenants page](https://app.suprsend.com/en/production/tenants/), or specify a `tenant_id` explicitly in your request rather than relying on the default.
 
@@ -328,7 +294,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `tenant '695f3eb773cd94216a18e8a2' not found`
 
-**Cause:** The `tenant_id` does not exist in this workspace.
+**What does this mean:** The `tenant_id` does not exist in this workspace.
 
 **Fix:** Verify and create it on the [Tenants page](https://app.suprsend.com/en/production/tenants/). See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
 
@@ -338,7 +304,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Category '<category>' not applicable to tenant '<tenant_id>'`
 
-**Cause:** The notification category is not enabled for this tenant.
+**What does this mean:** The notification category is not enabled for this tenant.
 
 **Fix:** Enable the category in the tenant's notification preferences in the dashboard, or use a category that is already applicable to that tenant.
 
@@ -348,7 +314,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `['default tenant cannot be deleted']`
 
-**Cause:** The default tenant is protected and cannot be deleted.
+**What does this mean:** The default tenant is protected and cannot be deleted.
 
 **Fix:** Use a different tenant for this operation.
 
@@ -358,7 +324,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `tenant 'default' not found`
 
-**Cause:** The default tenant is missing — this can happen in newly created workspaces.
+**What does this mean:** The default tenant is missing — this can happen in newly created workspaces.
 
 **Fix:** Create it from the [Tenants page](https://app.suprsend.com/en/production/tenants/), or specify a `tenant_id` explicitly in your request.
 
@@ -368,7 +334,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"tenant_id": ["Ensure this field contains legal characters. Only letters, numbers, underscore(_), hyphen(-) characters allowed"]}`
 
-**Cause:** The `tenant_id` contains invalid characters such as spaces, dots, or slashes.
+**What does this mean:** The `tenant_id` contains invalid characters such as spaces, dots, or slashes.
 
 **Fix:** Use only letters (`a-z`, `A-Z`), numbers (`0-9`), underscores (`_`), or hyphens (`-`). Valid examples: `acme-corp`, `tenant_001`.
 
@@ -378,7 +344,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"tenant_name": "missing value"}`
 
-**Cause:** `tenant_name` was not provided in the request.
+**What does this mean:** `tenant_name` was not provided in the request.
 
 **Fix:** Include a non-empty string value for `tenant_name` in the request body.
 
@@ -388,7 +354,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `error while parsing number to E164 format`
 
-**Cause:** The phone number is not in valid E.164 format — missing the `+` prefix, a leading `0` after the country code, spaces, dashes, or no country code at all.
+**What does this mean:** The phone number is not in valid E.164 format — missing the `+` prefix, a leading `0` after the country code, spaces, dashes, or no country code at all.
 
 **Fix:** Use `+` followed by the country code and number with no spaces or dashes. Examples: `+15555555555` (US), `+447911123456` (UK), `+919876543210` (India).
 
@@ -398,7 +364,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel 'sms': <value>. error: error while parsing number to E164 format`
 
-**Cause:** The SMS number is not in valid E.164 format.
+**What does this mean:** The SMS number is not in valid E.164 format.
 
 **Fix:** Use `+[country code][number]` with no spaces or dashes, e.g. `+15555555555`.
 
@@ -408,7 +374,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel 'whatsapp': <value>. error: error while parsing number to E164 format`
 
-**Cause:** The WhatsApp number is not in valid E.164 format.
+**What does this mean:** The WhatsApp number is not in valid E.164 format.
 
 **Fix:** Use `+[country code][number]` with no spaces or dashes, e.g. `+15555555555`.
 
@@ -418,7 +384,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel 'sms'/'whatsapp': error while parsing number to E164 format` (multiple)
 
-**Cause:** One or more SMS or WhatsApp numbers are not in valid E.164 format.
+**What does this mean:** One or more SMS or WhatsApp numbers are not in valid E.164 format.
 
 **Fix:** Use `+[country code][number]` with no spaces or dashes for every number in the request.
 
@@ -428,7 +394,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel sms: <value>. error: error while parsing number to E164 format`
 
-**Cause:** The SMS number is not in valid E.164 format.
+**What does this mean:** The SMS number is not in valid E.164 format.
 
 **Fix:** Use `+[country code][number]` with no spaces or dashes, e.g. `+15555555555`.
 
@@ -438,7 +404,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel whatsapp: <value>. error: error while parsing number to E164 format`
 
-**Cause:** The WhatsApp number is not in valid E.164 format.
+**What does this mean:** The WhatsApp number is not in valid E.164 format.
 
 **Fix:** Use `+[country code][number]` with no spaces or dashes, e.g. `+15555555555`.
 
@@ -448,7 +414,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid timezone: <timezone>`
 
-**Cause:** The timezone value is not a valid IANA identifier. Abbreviations like `EST` or formats like `UTC+5:30` are not accepted.
+**What does this mean:** The timezone value is not a valid IANA identifier. Abbreviations like `EST` or formats like `UTC+5:30` are not accepted.
 
 **Fix:** Use a valid IANA timezone string. Examples: `America/New_York`, `Asia/Kolkata`, `Europe/London`, `Australia/Sydney`. See the full list at [IANA Time Zone Database](https://www.iana.org/time-zones).
 
@@ -458,7 +424,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid locale/language: '<locale>'`
 
-**Cause:** The locale value is not a valid BCP 47 language tag.
+**What does this mean:** The locale value is not a valid BCP 47 language tag.
 
 **Fix:** Use a two-letter language code optionally followed by a region subtag: `en`, `fr`, `en-US`, `pt-BR`.
 
@@ -468,7 +434,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid language: <language>`
 
-**Cause:** The language value is not valid.
+**What does this mean:** The language value is not valid.
 
 **Fix:** Use a valid BCP 47 language tag, e.g. `en`, `en-US`, `pt-BR`.
 
@@ -478,7 +444,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid email address`
 
-**Cause:** The email address is not valid — missing `@`, incomplete domain, leading/trailing spaces, or outside the 6–320 character limit.
+**What does this mean:** The email address is not valid — missing `@`, incomplete domain, leading/trailing spaces, or outside the 6–320 character limit.
 
 **Fix:** Provide a properly formatted email address between 6 and 320 characters with no surrounding spaces, e.g. `user@domain.com`.
 
@@ -488,7 +454,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel 'email': <value>. error: invalid email address`
 
-**Cause:** The email address passed for the `email` channel is not valid.
+**What does this mean:** The email address passed for the `email` channel is not valid.
 
 **Fix:** Provide a properly formatted address between 6 and 320 characters, e.g. `user@domain.com`.
 
@@ -498,7 +464,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid email address. must be 6 <= len(email) <= 320`
 
-**Cause:** The email address is outside the allowed length range of 6 to 320 characters.
+**What does this mean:** The email address is outside the allowed length range of 6 to 320 characters.
 
 **Fix:** Provide a valid email address within that length range.
 
@@ -508,7 +474,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel email: <value>. error: invalid email address`
 
-**Cause:** The email address is not valid.
+**What does this mean:** The email address is not valid.
 
 **Fix:** Provide a properly formatted address between 6 and 320 characters, e.g. `user@domain.com`.
 
@@ -518,7 +484,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid email address. value in email format required. e.g. user@example.com`
 
-**Cause:** The email address is not valid.
+**What does this mean:** The email address is not valid.
 
 **Fix:** Provide a properly formatted email address, e.g. `user@domain.com`.
 
@@ -528,7 +494,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"social_links": {"<key>": ["Enter a valid URL."]}}`
 
-**Cause:** A value in the `social_links` object is not a valid URL — missing the protocol or malformed.
+**What does this mean:** A value in the `social_links` object is not a valid URL — missing the protocol or malformed.
 
 **Fix:** Ensure all `social_links` values are fully qualified URLs including `https://`, e.g. `https://twitter.com/yourhandle`.
 
@@ -538,7 +504,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"preference":"must be one of ['opt_in' 'opt_out']"}`
 
-**Cause:** The `preference` field has an invalid value.
+**What does this mean:** The `preference` field has an invalid value.
 
 **Fix:** Set it to exactly `opt_in` or `opt_out` (lowercase).
 
@@ -548,7 +514,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"primary_color": ["Enter a valid hex color, eg. #000000"]}`
 
-**Cause:** The `primary_color` value is not a valid CSS hex color.
+**What does this mean:** The `primary_color` value is not a valid CSS hex color.
 
 **Fix:** Provide a 6-digit hex code prefixed with `#`, e.g. `#1A73E8`.
 
@@ -558,7 +524,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"logo": ["Ensure this field has no more than 2048 characters."]}`
 
-**Cause:** The logo URL exceeds 2048 characters.
+**What does this mean:** The logo URL exceeds 2048 characters.
 
 **Fix:** Use a shorter URL — if generated dynamically with long query parameters, host the image on a CDN and use its direct path.
 
@@ -568,7 +534,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Request body contains an invalid value for the "Subscriber_EditOperationSet.operations" field`
 
-**Cause:** The `operations` array contains an invalid value or incorrectly structured entry.
+**What does this mean:** The `operations` array contains an invalid value or incorrectly structured entry.
 
 **Fix:** Each entry must be a map using a supported operation key: `$set`, `$append`, `$remove`, or `$unset`. No element may be a plain string or primitive.
 
@@ -578,7 +544,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `error: must pass value for $identified_id`
 
-**Cause:** The `$identified_id` field is missing from the identify/alias payload.
+**What does this mean:** The `$identified_id` field is missing from the identify/alias payload.
 
 **Fix:** Include `$identified_id` — this is the known identifier you want to associate with the anonymous user.
 
@@ -592,7 +558,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `decoding failed: '$append[0]' expected type 'map[string]interface {}', got unconvertible type 'string'`
 
-**Cause:** A field has the wrong type — `$append` expects map objects, not plain strings.
+**What does this mean:** A field has the wrong type — `$append` expects map objects, not plain strings.
 
 **Fix:** Use `{"$email": ["user@example.com"]}` instead of `["user@example.com"]`. Check the field named in the error and correct its type. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -602,7 +568,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `BAD REQUEST`
 
-**Cause:** The request body is malformed JSON — typically a missing quote, trailing comma, or unmatched bracket.
+**What does this mean:** The request body is malformed JSON — typically a missing quote, trailing comma, or unmatched bracket.
 
 **Fix:** Validate your payload as valid JSON before sending. Use SDK serialization rather than constructing JSON strings manually.
 
@@ -612,7 +578,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"preference":"is a required field"}`
 
-**Cause:** The `preference` field is missing from the request body.
+**What does this mean:** The `preference` field is missing from the request body.
 
 **Fix:** Add `"preference": "opt_in"` or `"preference": "opt_out"` to the payload.
 
@@ -629,7 +595,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `(root): missing required property '<property>'`
 
-**Cause:** A required field is absent from the request body.
+**What does this mean:** A required field is absent from the request body.
 
 **Fix:** Add the field named in the error. Check the [API Reference](/docs/trigger-workflow) for the full required schema for the endpoint you are calling.
 
@@ -639,7 +605,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `driver: missing required property 'email'`
 
-**Cause:** The `email` field is missing from the `driver` nested object.
+**What does this mean:** The `email` field is missing from the `driver` nested object.
 
 **Fix:** Add `email` to the `driver` object in your payload.
 
@@ -649,7 +615,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `charger: missing required property 'name'`
 
-**Cause:** The `name` field is missing from the `charger` nested object.
+**What does this mean:** The `name` field is missing from the `charger` nested object.
 
 **Fix:** Add `name` to the `charger` object in your payload.
 
@@ -659,7 +625,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `depot: missing required property 'name'`
 
-**Cause:** The `name` field is missing from the `depot` nested object.
+**What does this mean:** The `name` field is missing from the `depot` nested object.
 
 **Fix:** Add `name` to the `depot` object in your payload.
 
@@ -670,7 +636,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `(root): property '<property>' is not allowed by the schema.`
 
-**Cause:** The request includes a field the API does not accept for this endpoint.
+**What does this mean:** The request includes a field the API does not accept for this endpoint.
 
 **Fix:** Remove the field named in the error. This often happens when reusing payloads between endpoints where field names differ. Check the [API Reference](/docs/trigger-workflow) for accepted fields.
 
@@ -680,7 +646,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Request body must not be empty`
 
-**Cause:** The request was sent with no body.
+**What does this mean:** The request was sent with no body.
 
 **Fix:** Include a valid JSON object in the request body. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -690,7 +656,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Notification entry archived`
 
-**Cause:** The referenced notification entry is archived and cannot be modified.
+**What does this mean:** The referenced notification entry is archived and cannot be modified.
 
 **Fix:** Unarchive the entry from the dashboard, or reference an active notification entry.
 
@@ -700,7 +666,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `int: Instance type "string" is invalid. Expected "number".`
 
-**Cause:** A numeric field was passed as a quoted string.
+**What does this mean:** A numeric field was passed as a quoted string.
 
 **Fix:** Numeric fields must be unquoted, e.g. `"amount": 100` not `"amount": "100"`.
 
@@ -710,7 +676,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `longitude: Instance type "string" is invalid. Expected "number".`
 
-**Cause:** The `longitude` field was passed as a string instead of a number.
+**What does this mean:** The `longitude` field was passed as a string instead of a number.
 
 **Fix:** Pass it as an unquoted number, e.g. `"longitude": -73.9857`.
 
@@ -720,7 +686,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `driver/driverId: Instance type "number" is invalid. Expected "string".`
 
-**Cause:** The `driverId` field was passed as a number instead of a string.
+**What does this mean:** The `driverId` field was passed as a number instead of a string.
 
 **Fix:** Pass it as a quoted string, e.g. `"driverId": "42"`.
 
@@ -730,7 +696,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Request body contains an invalid value for the "properties" field`
 
-**Cause:** The `properties` field has an invalid value or structure.
+**What does this mean:** The `properties` field has an invalid value or structure.
 
 **Fix:** Fix the value per the API spec. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -740,7 +706,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Request body contains an invalid value for the "distinct_ids" field`
 
-**Cause:** The `distinct_ids` field has an invalid value or structure.
+**What does this mean:** The `distinct_ids` field has an invalid value or structure.
 
 **Fix:** Fix the value per the API spec. See [Trigger Workflow](/docs/trigger-workflow).
 
@@ -750,7 +716,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Request body must only contain a single JSON object`
 
-**Cause:** The request body contains more than one root-level JSON object.
+**What does this mean:** The request body contains more than one root-level JSON object.
 
 **Fix:** Send exactly one JSON object per request.
 
@@ -760,7 +726,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"channel_preferences[0].channel":"must be one of ['sms' 'email' 'androidpush' 'iospush' 'webpush' 'inbox' 'whatsapp' 'slack' 'ms_teams']"}`
 
-**Cause:** The `channel` value in a `channel_preferences` entry is not in the accepted list.
+**What does this mean:** The `channel` value in a `channel_preferences` entry is not in the accepted list.
 
 **Fix:** Use one of the accepted channel values: `sms`, `email`, `androidpush`, `iospush`, `webpush`, `inbox`, `whatsapp`, `slack`, `ms_teams`.
 
@@ -770,7 +736,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"channel_preferences[0].channel":"is a required field"}`
 
-**Cause:** An entry in `channel_preferences` is missing the `channel` field.
+**What does this mean:** An entry in `channel_preferences` is missing the `channel` field.
 
 **Fix:** Every object in `channel_preferences` must include both `channel` and `is_restricted`.
 
@@ -780,7 +746,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `order_id: String is too short (0 < 4).`
 
-**Cause:** The `order_id` value is shorter than the minimum required length of 4 characters.
+**What does this mean:** The `order_id` value is shorter than the minimum required length of 4 characters.
 
 **Fix:** Provide an `order_id` that is at least 4 characters long.
 
@@ -790,7 +756,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `dateOfBirth: String does not match format "date".`
 
-**Cause:** The `dateOfBirth` value is not in ISO 8601 date format.
+**What does this mean:** The `dateOfBirth` value is not in ISO 8601 date format.
 
 **Fix:** Use `YYYY-MM-DD` format, e.g. `1990-06-15`.
 
@@ -800,7 +766,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `template '<slug>' not found`
 
-**Cause:** The template slug does not exist in the workspace, or has no published version.
+**What does this mean:** The template slug does not exist in the workspace, or has no published version.
 
 **Fix:** Click the copy icon on the template details page to get the exact slug. Publish the template if it is in draft. See [Templates](/docs/templates).
 
@@ -810,7 +776,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `TemplateGroup '<slug>' not found`
 
-**Cause:** The template group slug does not exist, or has no published version.
+**What does this mean:** The template group slug does not exist, or has no published version.
 
 **Fix:** Verify the slug and publish the template if it is in draft. See [Templates](/docs/templates).
 
@@ -820,7 +786,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `category '<slug>' not found`
 
-**Cause:** The notification category slug does not exist in the workspace.
+**What does this mean:** The notification category slug does not exist in the workspace.
 
 **Fix:** Category slugs are case-sensitive. Find the correct slug on the [Notification Categories page](https://app.suprsend.com/en/staging/settings/notification-categories).
 
@@ -830,7 +796,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Category '<slug>' not found`
 
-**Cause:** The notification category slug does not exist in the workspace.
+**What does this mean:** The notification category slug does not exist in the workspace.
 
 **Fix:** Category slugs are case-sensitive. Find the correct slug on the [Notification Categories page](https://app.suprsend.com/en/staging/settings/notification-categories).
 
@@ -840,7 +806,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `object '<id>' not found`
 
-**Cause:** The object referenced by `object_type` and `id` does not exist.
+**What does this mean:** The object referenced by `object_type` and `id` does not exist.
 
 **Fix:** Create it via the Objects API first, or verify the `id` and `object_type` are correct. See [Objects](/docs/objects).
 
@@ -850,7 +816,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `subscribers list is empty for list_id: <list_id>`
 
-**Cause:** The list exists but has no subscribers.
+**What does this mean:** The list exists but has no subscribers.
 
 **Fix:** Add subscribers to the list before triggering the workflow. See [Lists](/docs/lists).
 
@@ -860,7 +826,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `list_id: '<list_id>' not found`
 
-**Cause:** The `list_id` does not exist in the workspace.
+**What does this mean:** The `list_id` does not exist in the workspace.
 
 **Fix:** Verify the `list_id` or create the list. See [Lists](/docs/lists).
 
@@ -870,7 +836,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `nid '<nid>' not found`
 
-**Cause:** The `nid` does not exist.
+**What does this mean:** The `nid` does not exist.
 
 **Fix:** `nid` values are generated by SuprSend and available in the Logs — they cannot be specified manually.
 
@@ -880,7 +846,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"object_ids":"must contain at least 1 item"}`
 
-**Cause:** The `object_ids` array is empty.
+**What does this mean:** The `object_ids` array is empty.
 
 **Fix:** Include at least one valid, non-empty object ID string.
 
@@ -890,7 +856,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"object_ids":"is a required field"}`
 
-**Cause:** The `object_ids` field is missing from the request.
+**What does this mean:** The `object_ids` field is missing from the request.
 
 **Fix:** Add the `object_ids` field to your payload.
 
@@ -900,7 +866,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `Request body contains an invalid value for the "object_ids" field`
 
-**Cause:** The `object_ids` field has an invalid value.
+**What does this mean:** The `object_ids` field has an invalid value.
 
 **Fix:** Ensure each element is a non-empty string.
 
@@ -910,7 +876,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `{"object_ids[0]":"is a required field","object_ids[1]":"is a required field"}`
 
-**Cause:** One or more elements in `object_ids` are empty or null.
+**What does this mean:** One or more elements in `object_ids` are empty or null.
 
 **Fix:** Provide non-empty string values for all elements.
 
@@ -920,7 +886,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid webpush subscription: {"keys":{"auth":"","p256dh":""}}`
 
-**Cause:** The web push subscription has empty `auth` or `p256dh` keys.
+**What does this mean:** The web push subscription has empty `auth` or `p256dh` keys.
 
 **Fix:** These values come from the browser's `PushSubscription` when a user grants push permission — do not construct them manually. Always use the value returned by the browser. See [Web Push](/docs/web-push-quick-start).
 
@@ -930,7 +896,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid webpush subscription: {"endpoint":"","expirationTime":null,"keys":{...}}`
 
-**Cause:** The web push subscription has an empty `endpoint`.
+**What does this mean:** The web push subscription has an empty `endpoint`.
 
 **Fix:** A valid subscription requires a non-empty `endpoint` URL alongside `auth` and `p256dh` keys — all returned by the browser's `PushSubscription`. See [Web Push](/docs/web-push-quick-start).
 
@@ -945,7 +911,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value for channel 'slack': map[access_token:xoxb-... channel:C...]. error: invalid value`
 
-**Cause:** The `$slack` object is structured incorrectly. A common mistake is passing a channel name (e.g. `#general`) instead of a channel ID.
+**What does this mean:** The `$slack` object is structured incorrectly. A common mistake is passing a channel name (e.g. `#general`) instead of a channel ID.
 
 **Fix:** SuprSend supports four Slack formats: by user `email`, by Slack `user_id`, by channel `id` (must start with `C`), or by `incoming_webhook` URL. The `access_token` must be a Bot Token starting with `xoxb-`. See [Slack](/docs/slack-quick-start).
 
@@ -955,7 +921,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `$slack: value must be of dict/map type`
 
-**Cause:** The `$slack` value is not a map/object.
+**What does this mean:** The `$slack` value is not a map/object.
 
 **Fix:** Pass `$slack` as a map, e.g. `{"email": "user@example.com", "access_token": "xoxb-..."}`. See [Slack](/docs/slack-quick-start).
 
@@ -969,7 +935,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `$iospush: value must be of string type`
 
-**Cause:** The `$iospush` value is not a string — an object or null was passed instead of a device token.
+**What does this mean:** The `$iospush` value is not a string — an object or null was passed instead of a device token.
 
 **Fix:** Pass the APNS device token as a string in an array: `"$iospush": ["apns_token_here"]`.
 
@@ -979,7 +945,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `$email: value must be of string type`
 
-**Cause:** The `$email` value is not a string.
+**What does this mean:** The `$email` value is not a string.
 
 **Fix:** Pass email addresses as strings in an array: `"$email": ["user@example.com"]`.
 
@@ -989,7 +955,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `invalid value: {"conversation_id":"...","serviceUrl":"...","tenant_id":"..."}`
 
-**Cause:** The MS Teams payload is invalid — a required field is missing, the `service_url` is wrong for the tenant's region, or there is accidental whitespace in a value.
+**What does this mean:** The MS Teams payload is invalid — a required field is missing, the `service_url` is wrong for the tenant's region, or there is accidental whitespace in a value.
 
 **Fix:** Provide all three required fields — `tenant_id`, `service_url`, and `conversation_id` — matching your MS Teams bot integration exactly. The `service_url` varies by region: use `amer`, `apac`, or `emea` variants. Check for whitespace in any of the values.
 
@@ -999,7 +965,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `workspace key inactive`
 
-**Cause:** The API key or workspace is inactive.
+**What does this mean:** The API key or workspace is inactive.
 
 **Fix:** Verify you are using the correct key for the target workspace — staging and production keys are separate. Check and manage active keys under **Settings → API Keys** in the dashboard.
 
@@ -1009,7 +975,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `db_integrity_violation ERROR: duplicate key value violates unique constraint "<constraint>" (SQLSTATE=<code>)`
 
-**Cause:** A record with the same unique key already exists.
+**What does this mean:** A record with the same unique key already exists.
 
 **Fix:** Use a unique identifier, or update the existing record instead of creating a new one. If retrying a previous request, use the same idempotency key.
 
@@ -1019,7 +985,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `duplicate key value violates unique constraint "<constraint>"`
 
-**Cause:** A duplicate key conflict occurred.
+**What does this mean:** A duplicate key conflict occurred.
 
 **Fix:** Use a unique identifier, or update the existing record.
 
@@ -1029,7 +995,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `parent_object_properties: db_integrity_violation ERROR: duplicate key value violates unique constraint "<constraint>"`
 
-**Cause:** A duplicate key conflict occurred while resolving parent object properties.
+**What does this mean:** A duplicate key conflict occurred while resolving parent object properties.
 
 **Fix:** Use a unique identifier, or update the existing record.
 
@@ -1039,7 +1005,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `parent_object_properties: db_error dial tcp: lookup <host>: i/o timeout`
 
-**Cause:** A temporary database connectivity issue while resolving parent object properties.
+**What does this mean:** A temporary database connectivity issue while resolving parent object properties.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1049,7 +1015,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `db_error tcp <host>: i/o timeout`
 
-**Cause:** A temporary database connectivity issue.
+**What does this mean:** A temporary database connectivity issue.
 
 **Fix:** Retry using the **same idempotency key**. If the error persists, check the [SuprSend status page](https://status.suprsend.com).
 
@@ -1059,7 +1025,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `parent_object_properties: db_error tcp <host>: i/o timeout`
 
-**Cause:** A temporary database issue while resolving parent object properties.
+**What does this mean:** A temporary database issue while resolving parent object properties.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1069,7 +1035,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `db_error dial tcp: lookup <host>: i/o timeout`
 
-**Cause:** A temporary database connectivity issue.
+**What does this mean:** A temporary database connectivity issue.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1079,7 +1045,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `db_error context canceled`
 
-**Cause:** A temporary database issue.
+**What does this mean:** A temporary database issue.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1089,7 +1055,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `db_error sql: database is closed`
 
-**Cause:** A temporary database issue.
+**What does this mean:** A temporary database issue.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1099,7 +1065,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `parent_object_properties: db_error sql: database is closed`
 
-**Cause:** A temporary database issue while resolving parent object properties.
+**What does this mean:** A temporary database issue while resolving parent object properties.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1109,7 +1075,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `parent_object_properties: db_error dial tcp: lookup <host>: i/o timeout`
 
-**Cause:** A temporary database connectivity issue while resolving parent object properties.
+**What does this mean:** A temporary database connectivity issue while resolving parent object properties.
 
 **Fix:** Retry using the **same idempotency key**.
 
@@ -1119,7 +1085,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `not_found sql: no rows in result set`
 
-**Cause:** A database lookup found no matching record — the referenced ID does not exist.
+**What does this mean:** A database lookup found no matching record — the referenced ID does not exist.
 
 **Fix:** Verify the ID in your request refers to an existing record, and create it first if needed.
 
@@ -1129,7 +1095,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `datacache failure during GET`
 
-**Cause:** A temporary cache failure.
+**What does this mean:** A temporary cache failure.
 
 **Fix:** Retry the request — no changes to your payload are needed.
 
@@ -1139,7 +1105,7 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `parent_object_properties: datacache failure during GET`
 
-**Cause:** A temporary cache failure while resolving parent object properties.
+**What does this mean:** A temporary cache failure while resolving parent object properties.
 
 **Fix:** Retry the request.
 
@@ -1149,6 +1115,6 @@ Errors that are detected at your API or SDK request level such as bad request, m
 
 ### `[distinct_id: __object:...] EOF` / `redis eval error: EOF`
 
-**Cause:** A temporary Redis infrastructure issue — not caused by your request payload.
+**What does this mean:** A temporary Redis infrastructure issue — not What does this meand by your request payload.
 
 **Fix:** Retry using the **same idempotency key**. If persistent, check the [SuprSend status page](https://status.suprsend.com).
