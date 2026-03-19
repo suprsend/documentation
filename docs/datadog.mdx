@@ -1,0 +1,149 @@
+---
+title: "Datadog"
+description: "Stream real-time notification metrics from SuprSend to your Datadog account via OpenTelemetry (OTLP)."
+---
+
+The SuprSend Datadog connector streams notification metrics to your Datadog account via [OpenTelemetry (OTLP)](https://opentelemetry.io/) in near real-time — with latency under **10 seconds**. It covers three key areas of your notification pipeline:
+
+<CardGroup cols={3}>
+  <Card title="API Requests" icon="server" href="#reported-metrics">
+    Track every API call hitting SuprSend — success/failure counts, error breakdowns, and request volume over time.
+  </Card>
+  <Card title="Workflow Executions" icon="diagram-project" href="#reported-metrics">
+    Monitor workflow performance, catch execution errors early, and identify top failing workflows.
+  </Card>
+  <Card title="Messages" icon="envelope" href="#reported-metrics">
+    Follow the full message lifecycle — triggered, delivered, seen, clicked — with delivery errors by vendor and channel.
+  </Card>
+</CardGroup>
+
+<Info>
+  **Enterprise plan feature.** The SuprSend Datadog connector is only available on our [Enterprise plan](https://suprsend.com/pricing).
+</Info>
+
+## How it works
+
+SuprSend exports `suprsend.*` metrics to Datadog via OTLP over HTTP. You provide your **Datadog OTLP endpoint** and **API key**, choose which events to sync, and SuprSend streams them in near real-time — with latency **under 10 seconds**.
+
+Once connected you can **build custom dashboards**, **set up monitors and alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, channel, vendor, template), and **correlate notification health with your infrastructure and APM data** in Datadog.
+
+All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, template, node, and error details. See [Reported metrics](#reported-metrics) for the full list.
+
+<Warning>
+  Please refer to your Datadog pricing agreement for information on how custom metrics sent to Datadog are priced for your account.
+</Warning>
+
+---
+
+## Installing the connector
+
+<Steps>
+  <Step title="Create a new connector">
+    In your SuprSend dashboard, navigate to [**Connectors**](https://app.suprsend.com/connectors) and click **New Connector**.
+
+    <Frame>
+      <img src="/images/docs/connectors-list.png" />
+    </Frame>
+  </Step>
+
+  <Step title="Configure connector settings">
+    Fill in the following fields:
+
+    | Field | Description |
+    |-------|-------------|
+    | **Connector Name** | A label to identify this connector (e.g. `Datadog Production`) |
+    | **OTLP Endpoint** | Select the site that matches your Datadog account's region from the dropdown |
+    | **API Key** | A Datadog API key from the [API Keys](https://app.datadoghq.com/organization-settings/api-keys) page. We recommend creating a dedicated key for SuprSend |
+    | **Events to sync** | One or more metric events to export (see [Reported metrics](#reported-metrics)) |
+    | **Protocol** | HTTP |
+
+    <Frame caption="Datadog connector configuration">
+      <img src="/images/docs/datadog-connector-settings.png" />
+    </Frame>
+  </Step>
+
+  <Step title="Save the connector">
+    Click **Save**. Your metrics will start streaming to Datadog within a few minutes.
+  </Step>
+</Steps>
+
+---
+
+## Dashboard starter kit
+
+Get started quickly with our pre-built Datadog dashboard to visualize your SuprSend metrics in a few clicks.
+
+<Frame caption="SuprSend Notification Overview dashboard in Datadog">
+  <img src="/images/docs/datadog-dashboard-preview.png" />
+</Frame>
+
+**Import the dashboard**
+
+<Steps>
+  <Step title="Create a new dashboard">
+    Visit [Datadog's dashboard list](https://app.datadoghq.com/dashboard/lists) and click **New Dashboard**. Give it a name (e.g. `SuprSend Notification Overview`) and click **New Dashboard**.
+  </Step>
+
+  <Step title="Import the dashboard JSON">
+    Click the **gear icon** in the top-right corner and choose **Import dashboard JSON...**.
+
+    <Tip>You may need to close the **Add Widgets** tray to see the gear icon.</Tip>
+  </Step>
+
+  <Step title="Paste the JSON">
+    Copy the dashboard JSON using the copy button on the code block below, then paste it into the import dialog.
+  </Step>
+</Steps>
+
+The dashboard ships with four template variables — `workspace_key`, `tenant_id`, `channel`, and `workflow_slug` — so you can filter any widget right from the top of the dashboard.
+
+```json Dashboard Starter Kit JSON
+{"title":"SuprSend Notification Overview","description":"Monitor your SuprSend notification pipeline — API requests, workflow executions, and messages — all in one place.","layout_type":"ordered","reflow_type":"fixed","notify_list":[],"template_variables":[{"name":"workspace_key","prefix":"workspace_key","available_values":[],"default":"*"},{"name":"tenant_id","prefix":"tenant_id","available_values":[],"default":"*"},{"name":"channel","prefix":"channel","available_values":[],"default":"*"},{"name":"workflow_slug","prefix":"workflow_slug","available_values":[],"default":"*"}],"widgets":[{"id":1,"definition":{"type":"note","content":"## 🌐  API Requests","background_color":"vivid_blue","font_size":"18","text_align":"left","show_tick":false,"tick_pos":"50%","tick_edge":"left"},"layout":{"x":0,"y":0,"width":12,"height":1}},{"id":2,"definition":{"title":"Total Requests","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":0,"y":1,"width":2,"height":2}},{"id":3,"definition":{"title":"Successful","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:success}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":2,"y":1,"width":2,"height":2}},{"id":4,"definition":{"title":"Failed","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:failed}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":4,"y":1,"width":2,"height":2}},{"id":5,"definition":{"title":"Partial Failures","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:partial_failure}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":6,"y":1,"width":2,"height":2}},{"id":6,"definition":{"title":"API Errors","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.errors{$workspace_key,$tenant_id}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":8,"y":1,"width":2,"height":2}},{"id":7,"definition":{"title":"Success Rate","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"(query1 / query2) * 100","number_format":{"unit":{"type":"canonical_unit","unit_name":"percent"}}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:success}.as_count()","aggregator":"sum"},{"name":"query2","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":false,"precision":1},"layout":{"x":10,"y":1,"width":2,"height":2}},{"id":8,"definition":{"title":"Request Volume Over Time","title_size":"16","title_align":"left","type":"timeseries","requests":[{"formulas":[{"formula":"query1","alias":"Success"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:success}.as_count()"}],"response_format":"timeseries","display_type":"bars","style":{"palette":"green"}},{"formulas":[{"formula":"query2","alias":"Failed"}],"queries":[{"name":"query2","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:failed}.as_count()"}],"response_format":"timeseries","display_type":"bars","style":{"palette":"warm"}},{"formulas":[{"formula":"query3","alias":"Partial Failure"}],"queries":[{"name":"query3","data_source":"metrics","query":"sum:suprsend.api_request.total{$workspace_key,$tenant_id,status:partial_failure}.as_count()"}],"response_format":"timeseries","display_type":"bars","style":{"palette":"orange"}}],"yaxis":{"include_zero":true},"legend_layout":"auto","legend_columns":["avg","sum"]},"layout":{"x":0,"y":3,"width":8,"height":3}},{"id":9,"definition":{"title":"Top Errors by API Type","title_size":"16","title_align":"left","type":"toplist","requests":[{"formulas":[{"formula":"query1","limit":{"count":10,"order":"desc"}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.api_request.errors{$workspace_key,$tenant_id} by {api_type}.as_count()","aggregator":"sum"}],"response_format":"scalar"}]},"layout":{"x":8,"y":3,"width":4,"height":3}},{"id":10,"definition":{"type":"note","content":"## ⚙️  Workflow Executions","background_color":"vivid_purple","font_size":"18","text_align":"left","show_tick":false,"tick_pos":"50%","tick_edge":"left"},"layout":{"x":0,"y":6,"width":12,"height":1}},{"id":11,"definition":{"title":"Total Executions","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.workflow_execution.total{$workspace_key,$tenant_id,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":0,"y":7,"width":3,"height":2}},{"id":12,"definition":{"title":"Workflow Errors","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.workflow_execution.errors{$workspace_key,$tenant_id,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":3,"y":7,"width":3,"height":2}},{"id":13,"definition":{"title":"Broadcast Errors","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.Broadcast_execution.errors{$workspace_key,$tenant_id}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":6,"y":7,"width":3,"height":2}},{"id":14,"definition":{"title":"Error Rate","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"(query1 / query2) * 100","number_format":{"unit":{"type":"canonical_unit","unit_name":"percent"}}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.workflow_execution.errors{$workspace_key,$tenant_id,$workflow_slug}.as_count()","aggregator":"sum"},{"name":"query2","data_source":"metrics","query":"sum:suprsend.workflow_execution.total{$workspace_key,$tenant_id,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":false,"precision":1},"layout":{"x":9,"y":7,"width":3,"height":2}},{"id":15,"definition":{"title":"Executions Over Time","title_size":"16","title_align":"left","type":"timeseries","requests":[{"formulas":[{"formula":"query1","alias":"Executions"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.workflow_execution.total{$workspace_key,$tenant_id,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"bars","style":{"palette":"purple"}},{"formulas":[{"formula":"query2","alias":"Errors"}],"queries":[{"name":"query2","data_source":"metrics","query":"sum:suprsend.workflow_execution.errors{$workspace_key,$tenant_id,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"bars","style":{"palette":"warm"}}],"yaxis":{"include_zero":true},"legend_layout":"auto","legend_columns":["avg","sum"]},"layout":{"x":0,"y":9,"width":8,"height":3}},{"id":16,"definition":{"title":"Top Failing Workflows","title_size":"16","title_align":"left","type":"toplist","requests":[{"formulas":[{"formula":"query1","limit":{"count":10,"order":"desc"}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.workflow_execution.errors{$workspace_key,$tenant_id} by {workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}]},"layout":{"x":8,"y":9,"width":4,"height":3}},{"id":17,"definition":{"type":"note","content":"## ✉️  Messages","background_color":"vivid_green","font_size":"18","text_align":"left","show_tick":false,"tick_pos":"50%","tick_edge":"left"},"layout":{"x":0,"y":12,"width":12,"height":1}},{"id":18,"definition":{"title":"Triggered","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.triggered{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":0,"y":13,"width":2,"height":2}},{"id":19,"definition":{"title":"Delivered","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.delivered{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":2,"y":13,"width":2,"height":2}},{"id":20,"definition":{"title":"Delivery Errors","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.delivery_errors{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":4,"y":13,"width":2,"height":2}},{"id":21,"definition":{"title":"Seen","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.seen{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":6,"y":13,"width":2,"height":2}},{"id":22,"definition":{"title":"Clicked","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"query1"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.clicked{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":true,"precision":0},"layout":{"x":8,"y":13,"width":2,"height":2}},{"id":23,"definition":{"title":"Delivery Rate","title_size":"16","title_align":"left","type":"query_value","requests":[{"formulas":[{"formula":"(query1 / query2) * 100","number_format":{"unit":{"type":"canonical_unit","unit_name":"percent"}}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.delivered{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"},{"name":"query2","data_source":"metrics","query":"sum:suprsend.messages.triggered{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()","aggregator":"sum"}],"response_format":"scalar"}],"autoscale":false,"precision":1},"layout":{"x":10,"y":13,"width":2,"height":2}},{"id":24,"definition":{"title":"Message Lifecycle Over Time","title_size":"16","title_align":"left","type":"timeseries","requests":[{"formulas":[{"formula":"query1","alias":"Triggered"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.triggered{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"line","style":{"palette":"blue"}},{"formulas":[{"formula":"query2","alias":"Delivered"}],"queries":[{"name":"query2","data_source":"metrics","query":"sum:suprsend.messages.delivered{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"line","style":{"palette":"green"}},{"formulas":[{"formula":"query3","alias":"Seen"}],"queries":[{"name":"query3","data_source":"metrics","query":"sum:suprsend.messages.seen{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"line","style":{"palette":"yellow"}},{"formulas":[{"formula":"query4","alias":"Clicked"}],"queries":[{"name":"query4","data_source":"metrics","query":"sum:suprsend.messages.clicked{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"line","style":{"palette":"orange"}},{"formulas":[{"formula":"query5","alias":"Delivery Errors"}],"queries":[{"name":"query5","data_source":"metrics","query":"sum:suprsend.messages.delivery_errors{$workspace_key,$tenant_id,$channel,$workflow_slug}.as_count()"}],"response_format":"timeseries","display_type":"line","style":{"palette":"warm"}}],"yaxis":{"include_zero":true},"legend_layout":"auto","legend_columns":["avg","sum"]},"layout":{"x":0,"y":15,"width":8,"height":3}},{"id":25,"definition":{"title":"Delivery Errors by Channel","title_size":"16","title_align":"left","type":"toplist","requests":[{"formulas":[{"formula":"query1","limit":{"count":10,"order":"desc"}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.delivery_errors{$workspace_key,$tenant_id,$workflow_slug} by {channel}.as_count()","aggregator":"sum"}],"response_format":"scalar"}]},"layout":{"x":8,"y":15,"width":4,"height":3}},{"id":26,"definition":{"title":"Delivered by Channel","title_size":"16","title_align":"left","type":"timeseries","requests":[{"formulas":[{"formula":"query1","alias":"Delivered"}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.delivered{$workspace_key,$tenant_id,$workflow_slug} by {channel}.as_count()"}],"response_format":"timeseries","display_type":"bars","style":{"palette":"green"}}],"yaxis":{"include_zero":true},"legend_layout":"auto","legend_columns":["avg","sum"]},"layout":{"x":0,"y":18,"width":6,"height":3}},{"id":27,"definition":{"title":"Delivery Errors by Vendor","title_size":"16","title_align":"left","type":"toplist","requests":[{"formulas":[{"formula":"query1","limit":{"count":10,"order":"desc"}}],"queries":[{"name":"query1","data_source":"metrics","query":"sum:suprsend.messages.delivery_errors{$workspace_key,$tenant_id,$channel,$workflow_slug} by {vendor}.as_count()","aggregator":"sum"}],"response_format":"scalar"}]},"layout":{"x":6,"y":18,"width":6,"height":3}}]}
+```
+
+---
+
+## Reported metrics
+
+<AccordionGroup>
+  <Accordion title="API Requests">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.api_request.total` | Count of API requests, grouped by status (`sent`, `in_progress`, `success`, `failed`, `partial_failure`) | `api_type`, `method`, `status`, `workspace_key`, `tenant_id` |
+    | `suprsend.api_request.errors` | Count of API request errors, grouped by error message | `workspace_key`, `tenant_id`, `error_severity`, `api_type` |
+  </Accordion>
+
+  <Accordion title="Workflow Executions">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.workflow_execution.total` | Count of workflow executions started | `workflow_slug`, `trigger_type`, `category`, `root_category`, `workspace_slug`, `workspace_key`, `tenant_id` |
+    | `suprsend.workflow_execution.errors` | Count of workflow execution errors, grouped by error message | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `node_type`, `node_name`, `node_slug`, `error_message`, `error_code`, `error_type`, `error_severity` |
+    | `suprsend.broadcast_execution.errors` | Count of broadcast execution errors, grouped by error message | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `error_message`, `error_code`, `error_type`, `error_severity` |
+  </Accordion>
+
+  <Accordion title="Messages">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.messages.triggered` | Count of message trigger attempts | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.delivered` | Count of messages confirmed as delivered by the vendor | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.delivery_errors` | Count of message delivery failures reported by the vendor | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `error_message`, `error_code`, `error_type`, `error_severity`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.seen` | Count of messages viewed or opened by the recipient | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.clicked` | Count of messages clicked by the recipient | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+  - All metrics are scoped to the SuprSend environment (e.g. `production`, `staging`) via the `workspace_key` tag.
+  - For delivery, seen, and click metrics to be populated for Email, SMS, and WhatsApp, configure `https://hub.suprsend.com/webhook/*` as a callback URL in your vendor dashboard. See the [vendor integration docs](/docs/vendors) for per-vendor instructions.
+  - For error details, the [SuprSend dashboard](https://app.suprsend.com) provides more granular information via [Logs](/docs/logging) and [Analytics](/docs/analytics).
+</Info>
+
+---
+
+## Disabling the connector
+
+To pause metrics streaming, open the connector from the [**Connectors**](https://app.suprsend.com/connectors) page and toggle **Enable sync** off. Re-enable it at any time to resume.
+
+<Frame caption="Toggle Enable sync off to pause metrics streaming">
+  <img src="/images/docs/datadog-disable-sync.png" />
+</Frame>

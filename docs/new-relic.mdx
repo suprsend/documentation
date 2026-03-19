@@ -1,0 +1,141 @@
+---
+title: "New Relic"
+description: "Stream real-time notification metrics from SuprSend to your New Relic account via OpenTelemetry (OTLP)."
+---
+
+The SuprSend New Relic connector streams notification metrics to your New Relic account via [OpenTelemetry (OTLP)](https://opentelemetry.io/) in near real-time — with latency under **10 seconds**. It covers three key areas of your notification pipeline:
+
+<CardGroup cols={3}>
+  <Card title="API Requests" icon="server" href="#reported-metrics">
+    Track every API call hitting SuprSend — success/failure counts, error breakdowns, and request volume over time.
+  </Card>
+  <Card title="Workflow Executions" icon="diagram-project" href="#reported-metrics">
+    Monitor workflow performance, catch execution errors early, and identify top failing workflows.
+  </Card>
+  <Card title="Messages" icon="envelope" href="#reported-metrics">
+    Follow the full message lifecycle — triggered, delivered, seen, clicked — with delivery errors by vendor and channel.
+  </Card>
+</CardGroup>
+
+<Info>
+  **Enterprise plan feature.** The SuprSend New Relic connector is only available on our [Enterprise plan](https://suprsend.com/pricing).
+</Info>
+
+## How it works
+
+SuprSend exports `suprsend.*` metrics to New Relic via OTLP over HTTP. You provide your **New Relic OTLP endpoint** and **API key**, choose which events to sync, and SuprSend streams them in near real-time — with latency **under 10 seconds**.
+
+Once connected you can **build custom dashboards**, **set up alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, channel, vendor, template), and **correlate notification health with your infrastructure and APM data** in New Relic.
+
+All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, template, node, and error details. See [Reported metrics](#reported-metrics) for the full list.
+
+<Warning>
+  Please refer to your New Relic pricing agreement for information on how custom metrics sent to New Relic are priced for your account.
+</Warning>
+
+---
+
+## Installing the connector
+
+<Steps>
+  <Step title="Create a new connector">
+    In your SuprSend dashboard, navigate to [**Connectors**](https://app.suprsend.com/connectors) and click **New Connector**.
+
+    <Frame>
+      <img src="/images/docs/connectors-list.png" />
+    </Frame>
+  </Step>
+
+  <Step title="Configure connector settings">
+    Fill in the following fields:
+
+    | Field | Description |
+    |-------|-------------|
+    | **Connector Name** | A label to identify this connector (e.g. `New Relic Production`) |
+    | **OTLP Endpoint** | Select the region that matches your New Relic account (see [endpoints table](#new-relic-otlp-endpoints-by-region) below) |
+    | **API Key** | A New Relic API key from the [API Keys](https://one.newrelic.com/launcher/api-keys-ui.api-keys-launcher) page. We recommend creating a dedicated key for SuprSend |
+    | **Events to sync** | One or more metric events to export (see [Reported metrics](#reported-metrics)) |
+    | **Protocol** | HTTP |
+
+    {/* TODO: Add New Relic connector settings screenshot */}
+  </Step>
+
+  <Step title="Save the connector">
+    Click **Save**. Your metrics will start streaming to New Relic within a few minutes.
+  </Step>
+</Steps>
+
+---
+
+## Dashboard starter kit
+
+Get started quickly with our pre-built New Relic dashboard to visualize your SuprSend metrics in a few clicks.
+
+<Frame caption="SuprSend Notification Overview dashboard in New Relic">
+  <img src="/images/docs/newrelic-dashboard-preview.png" />
+</Frame>
+
+**Import the dashboard**
+
+<Steps>
+  <Step title="Open the dashboards page">
+    In New Relic, navigate to **Dashboards** and click **Import dashboard**.
+  </Step>
+
+  <Step title="Paste the JSON">
+    Copy the dashboard JSON using the copy button on the code block below, then paste it into the import dialog.
+  </Step>
+</Steps>
+
+The dashboard ships with four template variables — `workspace_key`, `tenant_id`, `channel`, and `workflow_slug` — so you can filter any widget right from the top of the dashboard.
+
+```json Dashboard Starter Kit JSON
+{"name":"SuprSend Notification Overview","description":null,"permissions":"PUBLIC_READ_WRITE","pages":[{"name":"SuprSend Notification Overview","description":null,"widgets":[{"title":"API Requests","layout":{"column":1,"row":1,"width":12,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.billboard"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.api_request.total) AS 'Total Requests', filter(sum(suprsend.api_request.total), WHERE status = 'success') AS 'Successful', filter(sum(suprsend.api_request.total), WHERE status = 'failed') AS 'Failed', filter(sum(suprsend.api_request.total), WHERE status = 'partial_failure') AS 'Partial Failures', sum(suprsend.api_request.errors) AS 'Errors' FROM Metric SINCE 1 day ago"}]}},{"title":"API Request Volume Over Time","layout":{"column":1,"row":4,"width":8,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.line"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.api_request.total) AS 'Total', filter(sum(suprsend.api_request.total), WHERE status = 'success') AS 'Successful', filter(sum(suprsend.api_request.total), WHERE status = 'failed') AS 'Failed', sum(suprsend.api_request.errors) AS 'Errors' FROM Metric SINCE 1 day ago TIMESERIES AUTO"}]}},{"title":"Top Errors by API Type","layout":{"column":9,"row":4,"width":4,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.bar"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.api_request.errors) FROM Metric FACET api_type SINCE 1 day ago LIMIT 10"}]}},{"title":"Workflow Executions","layout":{"column":1,"row":7,"width":12,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.billboard"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.workflow_execution.total) AS 'Total Executions', sum(suprsend.workflow_execution.errors) AS 'Workflow Errors', sum(suprsend.Broadcast_execution.errors) AS 'Broadcast Errors' FROM Metric SINCE 1 day ago"}]}},{"title":"Workflow Executions Over Time","layout":{"column":1,"row":10,"width":8,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.line"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.workflow_execution.total) AS 'Executions', sum(suprsend.workflow_execution.errors) AS 'Workflow Errors', sum(suprsend.Broadcast_execution.errors) AS 'Broadcast Errors' FROM Metric SINCE 1 day ago TIMESERIES AUTO"}]}},{"title":"Top Failing Workflows","layout":{"column":9,"row":10,"width":4,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.bar"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.workflow_execution.errors) FROM Metric FACET workflow_slug SINCE 1 day ago LIMIT 10"}]}},{"title":"Messages","layout":{"column":1,"row":13,"width":12,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.billboard"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.messages.triggered) AS 'Triggered', sum(suprsend.messages.delivered) AS 'Delivered', sum(suprsend.messages.delivery_errors) AS 'Delivery Errors', sum(suprsend.messages.seen) AS 'Seen', sum(suprsend.messages.clicked) AS 'Clicked' FROM Metric SINCE 1 day ago"}]}},{"title":"Message Lifecycle Over Time","layout":{"column":1,"row":16,"width":8,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.line"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.messages.triggered) AS 'Triggered', sum(suprsend.messages.delivered) AS 'Delivered', sum(suprsend.messages.seen) AS 'Seen', sum(suprsend.messages.clicked) AS 'Clicked', sum(suprsend.messages.delivery_errors) AS 'Delivery Errors' FROM Metric SINCE 1 day ago TIMESERIES AUTO"}]}},{"title":"Delivery Errors by Channel","layout":{"column":9,"row":16,"width":4,"height":3},"linkedEntityGuids":null,"visualization":{"id":"viz.bar"},"rawConfiguration":{"nrqlQueries":[{"accountIds":[4375541],"query":"SELECT sum(suprsend.messages.delivery_errors) FROM Metric FACET channel SINCE 1 day ago LIMIT 10"}]}}]}],"variables":[]}
+```
+
+---
+
+## Reported metrics
+
+<AccordionGroup>
+  <Accordion title="API Requests">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.api_request.total` | Count of API requests, grouped by status (`sent`, `in_progress`, `success`, `failed`, `partial_failure`) | `api_type`, `method`, `status`, `workspace_key`, `tenant_id` |
+    | `suprsend.api_request.errors` | Count of API request errors, grouped by error message | `workspace_key`, `tenant_id`, `error_severity`, `api_type` |
+  </Accordion>
+
+  <Accordion title="Workflow Executions">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.workflow_execution.total` | Count of workflow executions started | `workflow_slug`, `trigger_type`, `category`, `root_category`, `workspace_slug`, `workspace_key`, `tenant_id` |
+    | `suprsend.workflow_execution.errors` | Count of workflow execution errors, grouped by error message | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `node_type`, `node_name`, `node_slug`, `error_message`, `error_code`, `error_type`, `error_severity` |
+    | `suprsend.broadcast_execution.errors` | Count of broadcast execution errors, grouped by error message | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `error_message`, `error_code`, `error_type`, `error_severity` |
+  </Accordion>
+
+  <Accordion title="Messages">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.messages.triggered` | Count of message trigger attempts | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.delivered` | Count of messages confirmed as delivered by the vendor | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.delivery_errors` | Count of message delivery failures reported by the vendor | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `error_message`, `error_code`, `error_type`, `error_severity`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.seen` | Count of messages viewed or opened by the recipient | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.clicked` | Count of messages clicked by the recipient | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+  - All metrics are scoped to the SuprSend environment (e.g. `production`, `staging`) via the `workspace_key` tag.
+  - For delivery, seen, and click metrics to be populated for Email, SMS, and WhatsApp, configure `https://hub.suprsend.com/webhook/*` as a callback URL in your vendor dashboard. See the [vendor integration docs](/docs/vendors) for per-vendor instructions.
+  - For error details, the [SuprSend dashboard](https://app.suprsend.com) provides more granular information via [Logs](/docs/logging) and [Analytics](/docs/analytics).
+</Info>
+
+---
+
+## Disabling the connector
+
+To pause metrics streaming, open the connector from the [**Connectors**](https://app.suprsend.com/connectors) page and toggle **Enable sync** off. Re-enable it at any time to resume.
+
+<Frame caption="Toggle Enable sync off to pause metrics streaming">
+  <img src="/images/docs/newrelic-disable-sync.png" />
+</Frame>

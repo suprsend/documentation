@@ -1,0 +1,136 @@
+---
+title: "OpenTelemetry"
+description: "Stream real-time notification metrics from SuprSend to any OpenTelemetry-compatible observability platform via OTLP."
+---
+
+The SuprSend OTel connector streams notification metrics via the [OpenTelemetry Protocol (OTLP)](https://opentelemetry.io/) over HTTP in near real-time — with latency under **10 seconds**. It covers three key areas of your notification pipeline:
+
+<CardGroup cols={3}>
+  <Card title="API Requests" icon="server" href="#reported-metrics">
+    Track every API call hitting SuprSend — success/failure counts, error breakdowns, and request volume over time.
+  </Card>
+  <Card title="Workflow Executions" icon="diagram-project" href="#reported-metrics">
+    Monitor workflow performance, catch execution errors early, and identify top failing workflows.
+  </Card>
+  <Card title="Messages" icon="envelope" href="#reported-metrics">
+    Follow the full message lifecycle — triggered, delivered, seen, clicked — with delivery errors by vendor and channel.
+  </Card>
+</CardGroup>
+
+Use it to connect SuprSend to any platform that accepts OTLP, including Grafana Cloud, Prometheus, Honeycomb, Dynatrace, or your own self-hosted OTel Collector.
+
+<Tip>
+  Connecting to **Datadog** or **New Relic**? Use our dedicated connectors with pre-built dashboard starter kits — [Datadog connector](/docs/datadog) · [New Relic connector](/docs/new-relic)
+</Tip>
+
+<Info>
+  **Enterprise plan feature.** The SuprSend OTel connector is only available on our [Enterprise plan](https://suprsend.com/pricing).
+</Info>
+
+## How it works
+
+SuprSend exports `suprsend.*` metrics via OTLP over HTTP. You provide your **OTLP endpoint** and **authentication headers**, choose which events to sync, and SuprSend streams them in near real-time — with latency **under 10 seconds**.
+
+Once connected you can **build custom dashboards**, **set up alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, channel, vendor, template), and **correlate notification health with your infrastructure and APM data**.
+
+All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, template, node, and error details. See [Reported metrics](#reported-metrics) for the full list.
+
+<Warning>
+  Please refer to your observability platform's pricing agreement for information on how custom metrics ingested via OTLP are priced.
+</Warning>
+
+---
+
+## Installing the connector
+
+<Steps>
+  <Step title="Create a new connector">
+    In your SuprSend dashboard, navigate to [**Connectors**](https://app.suprsend.com/connectors) and click **New Connector**.
+
+    <Frame>
+      <img src="/images/docs/connectors-list.png" />
+    </Frame>
+  </Step>
+
+  <Step title="Configure connector settings">
+    Fill in the following fields:
+
+    | Field | Description |
+    |-------|-------------|
+    | **Connector Name** | A label to identify this connector (e.g. `Grafana Cloud Production`) |
+    | **Tool Used** | The name of the observability tool you are connecting to (e.g. `Grafana Cloud`) |
+    | **OTLP Endpoint** | Your platform's OTLP HTTP endpoint URL (e.g. `https://otlp-gateway-prod-us-east-0.grafana.net/otlp/v1/metrics`) |
+    | **Headers** | One or more HTTP headers for authentication. Click **+ Add Header** to add key/value pairs (see [Authentication](#authentication) below) |
+    | **Events to sync** | One or more metric events to export (see [Reported metrics](#reported-metrics)) |
+    | **Protocol** | HTTP |
+
+    {/* TODO: Add OTel connector settings screenshot */}
+  </Step>
+
+  <Step title="Save the connector">
+    Click **Save**. Your metrics will start streaming to your platform within a few minutes.
+  </Step>
+</Steps>
+
+---
+
+## Authentication
+
+SuprSend passes authentication credentials as HTTP headers. The header format depends on your platform:
+
+| Auth type | Header key | Header value | Used by |
+|-----------|------------|--------------|---------|
+| Bearer token | `Authorization` | `Bearer <your-api-key>` | Datadog, Honeycomb, Dynatrace |
+| Basic auth | `Authorization` | `Basic <base64(username:password)>` | Grafana Cloud |
+| Custom header | varies | varies | Self-hosted collectors |
+
+<Tip>
+  We recommend creating a dedicated API key or token specifically for SuprSend so you can rotate or revoke it independently without affecting other integrations.
+</Tip>
+
+---
+
+## Reported metrics
+
+<AccordionGroup>
+  <Accordion title="API Requests">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.api_request.total` | Count of API requests, grouped by status (`sent`, `in_progress`, `success`, `failed`, `partial_failure`) | `api_type`, `method`, `status`, `workspace_key`, `tenant_id` |
+    | `suprsend.api_request.errors` | Count of API request errors, grouped by error message | `workspace_key`, `tenant_id`, `error_severity`, `api_type` |
+  </Accordion>
+
+  <Accordion title="Workflow Executions">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.workflow_execution.total` | Count of workflow executions started | `workflow_slug`, `trigger_type`, `category`, `root_category`, `workspace_slug`, `workspace_key`, `tenant_id` |
+    | `suprsend.workflow_execution.errors` | Count of workflow execution errors, grouped by error message | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `node_type`, `node_name`, `node_slug`, `error_message`, `error_code`, `error_type`, `error_severity` |
+    | `suprsend.broadcast_execution.errors` | Count of broadcast execution errors, grouped by error message | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `error_message`, `error_code`, `error_type`, `error_severity` |
+  </Accordion>
+
+  <Accordion title="Messages">
+    | Metric | Description | Tags |
+    |--------|-------------|------|
+    | `suprsend.messages.triggered` | Count of message trigger attempts | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.delivered` | Count of messages confirmed as delivered by the vendor | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.delivery_errors` | Count of message delivery failures reported by the vendor | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `error_message`, `error_code`, `error_type`, `error_severity`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.seen` | Count of messages viewed or opened by the recipient | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+    | `suprsend.messages.clicked` | Count of messages clicked by the recipient | `workspace_slug`, `workspace_key`, `tenant_id`, `category`, `channel`, `vendor`, `workflow_slug`, `template_slug` |
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+  - All metrics are scoped to the SuprSend environment (e.g. `production`, `staging`) via the `workspace_key` tag.
+  - For delivery, seen, and click metrics to be populated for Email, SMS, and WhatsApp, configure `https://hub.suprsend.com/webhook/*` as a callback URL in your vendor dashboard. See the [vendor integration docs](/docs/vendors) for per-vendor instructions.
+  - For error details, the [SuprSend dashboard](https://app.suprsend.com) provides more granular information via [Logs](/docs/logging) and [Analytics](/docs/analytics).
+</Info>
+
+---
+
+## Disabling the connector
+
+To pause metrics streaming, open the connector from the [**Connectors**](https://app.suprsend.com/connectors) page and toggle **Enable sync** off. Re-enable it at any time to resume.
+
+<Frame caption="Toggle Enable sync off to pause metrics streaming">
+  <img src="/images/docs/otel-disable-sync.png" />
+</Frame>
