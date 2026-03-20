@@ -1,0 +1,157 @@
+---
+title: "Setting up Ingress"
+description: "Configure ingress to expose SuprSend APIs and dashboard to the internet with TLS."
+---
+
+Follow these steps in order to expose SuprSend services.
+
+## Set up Nginx Ingress Controller
+
+### New Namespace 
+
+First create a new namespace to install the Nginx Ingress Controller.
+
+```bash
+kubectl create namespace ingress-nginx
+```
+
+### Install the official Helm chart
+
+Add the repo.
+
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+```
+
+Then install the chart.
+
+```bash
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --version 4.12.1 \
+  --set controller.publishService.enabled=true
+```
+
+Verify it’s deployed and running:
+
+```bash
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx
+```
+
+You should see a LoadBalancer type service named ingress-nginx-controller.
+
+### Get the Ingress Controller’s hostname
+
+This will be your ingress endpoint.
+
+```bash
+kubectl get svc ingress-nginx-controller -n ingress-nginx \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+Keep this hostname handy — you’ll need it for DNS or certificate validation.
+
+
+## Set up DNS (Important)
+
+For each of those hostnames required by SuprSend, setup a A or CNAME record (based on the load balancer type) in your DNS zone. Each of those records should point at the load balancer host name mentioned above.
+
+<Note>
+This is a pre-requisite step before configuring Cert Manager. Cert Manager will not setup/renew SSL certificates unless the DNS records point at the load balancer address.
+</Note>
+
+## Set up Cert Manager
+
+### New Namespace 
+
+```bash
+kubectl create namespace cert-manager
+```
+
+### Install the chart
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+```
+
+```bash
+helm install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --version v1.17.1 \
+  --set installCRDs=true
+```
+
+Check if all pods are up:
+
+```bash
+kubectl get pods -n cert-manager
+```
+
+## Create the Let's Encrypt ClusterIssuer
+
+Create a file named cluster-issuer.yaml:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: <your-email@example.com> # replace it with your work email address
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+```
+
+Apply it:
+
+```bash
+kubectl apply -f cluster-issuer.yaml
+```
+
+Verify if it is created:
+
+```bash
+kubectl get clusterissuer letsencrypt-prod -o yaml
+```
+## Configuring Ingress for each service
+
+Then for service that needs ingress in SuprSend chart, pass the following values under ingress in Values.yaml of SuprSend chart:
+
+```yaml
+<service-name>:
+  ingress:
+    annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: "/"
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    ingressClassName: "nginx" 
+    host: <hostname of the service>
+    tlsSecretKey: <unique key for each service>
+```
+
+- `annotations` are required for Cert Manager to automatically generate a new SSL cert for the host name provided.
+- `ingressClassName` is "nginx" since we used Nginx as our Ingress controller.
+- `host` must be the domain used to expose the service. 
+- `tlsSecretKey` is the name of Kubernetes secret where SSL cert's SSL cert and Private key will be stored by Cert Manager. This should be unique for each ingress service. 
+
+Upgrade/Install the SuprSend chart now with updated `values.yaml`. Chart will configure Ingress for each service with above  values. And for each of the services & ingress and host names, Cert Manager will begin to create certificates, fulfil HTTP challenges and make the certificates ready for use in Service ingresses automatically. Cert Manager will also renew the certificates automatically when expiry date arrives, provided the DNS records created earlier in your DNS zone are still present.
+
+After installing/upgrading the chart, use the following command to verify if SSL certificates are provisioned & ready.
+
+```bash
+kubectl get certificate -A
+```
+
+Check Ingresses using this command:
+
+```bash
+kubectl get ingress -n <namespace of chart installation>
+```

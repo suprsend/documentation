@@ -3,87 +3,183 @@ title: "Branch"
 description: "Use branch to route notifications across different paths by applying condition on input data."
 ---
 
-Branch is an `if/elseif/else` step used to route notification through different paths in a workflow based on conditions. Some common use cases could be to send multi-step reminder to users until payment is made and route notification on different paths based on user properties.
+Branch is an `if / else if / else` step that routes notifications through different workflow paths based on conditions. You can add up to 10 branches (9 condition branches + 1 default branch). The first branch that satisfies its condition will be executed.
 
-You can add up to 10 branches in a workflow. The First branch satisfying the condition in the order will be executed.
+Conditions are evaluated **at runtime**, using the latest available data at the moment the Branch node executes.
 
-## How branch works?
+**Common use cases:** A/B testing, personalized journeys, conditional follow-ups, multi-step reminders, routing by trigger payload, batch/digest data, or tenant settings.
 
-There are 2 types of branches: Condition branch, Default branch
+## Execution Model
 
-1. **Condition branch**: User proceeds through this branch when a condition is met. The condition can be applied on recipient, actor, tenant properties and node input data. You can add up to 9 condition branches. If 2 branches satisfies the condition, the first branch in the order will be executed.
+The Branch node supports two branch types:
 
-2. **Default branch**: This is the fallback branch which is executed if no condition branch results in truthy value. 
+1. **Condition Branch**: Executes when its condition evaluates to true (up to 9 condition branches).
+2. **Default Branch**: Executes when no condition branch evaluates to true.
 
-   <Note>
-     **Exit node connection**: If no node is added in the default branch, it will automatically connect to the exit node. If you have additional nodes under your branch that you want to execute, you can move them inside a condition branch instead.
-   </Note>
+<Frame caption="Branch workflow example showing conditional routing">
+  <img src="/images/branch-wf.png" />
+</Frame>
 
-## Constructing a condition
+**Execution rules:**
+- Conditions are evaluated in order from first to last.
+- The first branch whose condition evaluates to true is executed.
+- If no condition evaluates to true, the default branch executes.
+- If the branch has no nodes below it, it automatically connects to the exit node.
 
-You can add conditions on data payload passed in the trigger, user properties and tenant properties. A condition is a combination of 3 parts: Data type, Key, operator and Value.
+## Condition Syntax
 
-### Data type
+Conditions evaluate data from trigger payloads, user properties, tenant properties, or message status. A condition consists of four components: **Data type**, **Key**, **Operator**, and **Value**.
 
-You can apply conditions to all data available at the node's input. For instance, if a condition branch follows a batch, fetch, or webhook node, it can utilize data that has been modified or added by those nodes.
+### Data Types
 
-| Data Type      | Description                                                                                                                                                                                                                          | Referring this property in condition                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Input Payload  | This includes the data from your trigger payload and any data modified or added by nodes such as data transform, batch/digest, or webhook/fetch nodes before the branch node.                                                        | Specify key if you are adding this variable in key or value field.                                                     |
-| Actor          | Actor properties. In case of event trigger, `distinct_id` works both as actor and recipient and for inline workflow trigger, it is the `distinct_id` in actor object.                                                                | Directly specify key if you are adding this in key or add as `$actor.<property_key>` if you add it in value field.     |
-| Recipient      | Recipient properties. It is the `distinct_id` in your event trigger or the key value defined in [override recipient](/docs/override-recipient-list) field. For inline workflow trigger, it is the `distinct_id` in recipient object. | Directly specify key if you are adding this in key or add as `$recipient.<property_key>` if you add it in value field. |
-| Tenant | Tenant properties. It is all the properties of the tenant\_id in your workflow trigger.                                                                                                                                      | Directly specify key if you are adding this in key or add as`$brand.<property_key>` if you add it in value field.      |
+| Data Type | Description | What to pass in key | What to pass in dynamic value |
+|--------|-------------------|------------------|------------------|
+| **Input Payload** | Data from trigger payload or nodes before the branch | Directly specify as `key` with no prefix | Use key directly (e.g., `payment_due_date`) |
+| **Actor** | Properties of the user who performed the action | Add as `<property_key>` | Add as `$actor.<property_key>` |
+| **Recipient** | Properties of the user receiving the notification | Add as `<property_key>` | Add as `$recipient.<property_key>`|
+| **Tenant** | Properties of the tenant/brand | Add as `<property_key>` for reserved properties,  `properties.<property_key>` for custom properties | Add as `$brand.<property_key>` or `$brand.properties.<property_key>` |
+| **Message Status** | Delivery status of previously sent notifications | Pass the node slug whose message status you want to check, e.g., `message_status from node "welcome-email" == "seen"` | Pass the status you want to check, e.g., `"seen"` | Value can be one of `delivered`, `seen`, `clicked`, `delivery_failed` |
 
-### Key-Value pair
+### Operators
 
-1. **Key**: It is the variable key in your data input to apply condition on.
+| Operator | Usage | Supported Data Types |
+|----------|----------|---------------------|
+| `==` / `!=` | Equal to / not equal to (case sensitive) | All |
+| `>`, `>=` | Greater than / greater than or equal | Numbers, timestamps |
+| `<`, `<=` | Less than / less than or equal to | Numbers, timestamps |
+| `contains` / `not contains` | Substring or array item match / no substring or array item match | Strings, arrays |
+| `is empty` / `is not empty` | key is missing, empty or null / key is present, not empty or null | All |
+| `datetime is` / `datetime is before` / `datetime is after` | Datetime equal to / less than / greater than | Timestamps |
+| `intersects` / `not intersects` | Any array value matches / No array values match | Arrays |
 
-2. **Operator**: you can use any of the below operators to compare key and value:
+<Note>
+  **Type constraints**: If a key's data type doesn't match the operator (e.g., using `>` on a string), the condition will always evaluate to false.
+</Note>
 
-    | Operator           | Description                                                                                                                                                                                                                                                                               |
-    | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | `==`                 | key **is equal to** value. This is a case sensitive check.                                                                                                                                                                                                                                |
-    | `!=`                 | key **is not equal** to value. This is a case sensitive check.                                                                                                                                                                                                                            |
-    |`> `                 | key **is greater than** value. can be applied to integers, float values or epoch timestamps                                                                                                                                                                                               |
-    | `> =`                | key **is greater than or equals to** value. can be applied to integers, float values or epoch timestamps                                                                                                                                                                                  |
-    | `<`                 | key **is less than** value. can be applied to integers and float values                                                                                                                                                                                                                   |
-    | `< =`                | key **is less than or equals to** value. can be applied to integers and float values                                                                                                                                                                                                      |
-    | `contains`           | key should be a substring or list item of an array.                                                                                                                                                                                                                                       |
-    | `not contains`       | key should not be a substring or match any list item of an array.                                                                                                                                                                                                                         |
-    | `is empty`           | evaluates to true if the key is missing, is an empty string or has `null` value.                                                                                                                                                                                                          |
-    | `is not empty`       | key should be present and should not be an empty string or `null` value                                                                                                                                                                                                                   |
-    | `datetime is`        | datetime comparator. key **is equal to** value. Both values are converted into timestamp for comparison. Use `"now"` in value for current timestamp (evaluated at time of node evaluation) and add interval as `"now+1d"`(y-year, M-month, w-week, d-day, h-hour, m-minute, s-second)     |
-    | `datetime is before` | datetime comparator. key **is less than** value. Both values are converted into timestamp for comparison. Use `"now"` in value for current timestamp (evaluated at time of node evaluation) and add interval as `"now+1d"`(y-year, M-month, w-week, d-day, h-hour, m-minute, s-second)    |
-    | `datetime is after ` | datetime comparator. key **is greater than** value. Both values are converted into timestamp for comparison. Use `"now"` in value for current timestamp (evaluated at time of node evaluation) and add interval as `"now+1d"`(y-year, M-month, w-week, d-day, h-hour, m-minute, s-second) |
-    | `intersects`          | Evaluates to true if **any value** in the left array matches **any value** in the right array. Useful for checking overlaps between arrays.                                                                                                                                               |
-    | `not intersects`      | Evaluates to true if **no values** in the left array match any values in the right array. It could be used in case of checking or filtering out any overlaps between arrays.                                                                                                                                              |
-
-3. **Value**: Value can be [**fixed**](/docs/branch#fixed-values) or [**dynamic**](/docs/branch#dynamic-values) (evaluated based on workflow input payload). Dynamic values are helpful when the comparison value is dynamic for each user. e.g., in case of payment reminder, the payment due date could vary for each user and is part of your trigger data. You can add condition in this case as`current_date >= payment_due_date`(where both timestamps are in epoch).
+### Values
+You can either add a fixed value or a dynamic value to the condition.
 
 #### Fixed values
-
-Fixed values can be added as:
-
-* **string**: enclose within double inverted commas as`"string"`
-
-* **number**:`1`,`1.2`
-
-* **boolean**:`true`,`false`
-
-* **datetime**: "2024-01-01T00:00:00Z", "now" (current timestamp), "now+1d", "now-1d" (current timestamp +/- interval). You can add only 1 of these interval units in the expression (y-year, M-month, w-week, d-day, h-hour, m-minute, s-second).
+| Type | Syntax |
+|------|---------|
+| String | Enclose within double inverted commas as `"string"` |
+| Number | Add without double inverted commas as `100`, `99.99` |
+| Boolean | Add without double inverted commas as `true`, `false` |
+| Datetime | Enclose within double inverted commas as `"2024-01-01T00:00:00Z"` or `"now+1d"` |
+| Message Status | Select from dropdown on frontend or pass as `$message.seen` in workflow API. Value can be one of `delivered`, `seen`, `clicked`, `delivery_failed` |
 
 #### Dynamic values
+Dynamic values are evaluated based on the data available at the node input along with actor, recipient or tenant properties. Refer below table for types of dynamic values and their respective syntax.
 
-You can add input payload key directly as `key` with no prefix. All other properties should start with their respective `$` prefix. You can refer to all the data types available in workflow [in the above section](/docs/branch#data-type).
+| Type | Syntax |
+|------|---------|
+| Input payload | Add key directly (e.g., `payment_due_date`) |
+| Actor | Add as `$actor.<property_key>` (e.g., `$actor.role`) |
+| Recipient | Add as `$recipient.<property_key>` (e.g., `$recipient.plan`) |
+| Tenant | Add as `$brand.<property_key>` for reserved properties, add as `properties.<property_key>` for custom properties (e.g., `$brand.timezone`, `properties.timezone`) |
 
-## Adding Multiple Conditions in a single branch
 
-You can combine multiple conditions in a branch with `AND`, `OR` operator.
+## Combining Conditions
 
-* `AND`- all conditions separated by`AND`should be true for the evaluation to pass.
+Combine conditions using `AND` and `OR` logical operators:
 
-* `OR`- Evaluation will pass if any of the conditions separated by`OR`is true.
+- **AND**: All conditions must evaluate to true
+- **OR**: At least one condition must evaluate to true
 
-If you have a condition (a or b) and c, you can construct it as (a and b) or (b and c).
+**Example:** `(user_role == "admin" OR user_role == "manager") AND priority == "high"`
+
+<Note>
+  Nested grouping is not supported. Rewrite complex logic using equivalent expanded conditions. For example, `(a OR b) AND c` becomes `(a AND c) OR (b AND c)`.
+</Note>
+
+## Condition on Message Status
+Message Status is a special data type that lets you evaluate the delivery or engagement state of a previously sent notification. Common use cases include reminder and escalation workflows—for example, sending a follow-up notification if the user has not seen the earlier message.
+
+When using message status checks, always add a delay before evaluating the status to allow sufficient time for vendors to report delivery or engagement events.
+
+<br/>
+**Condition Syntax:**<br/>
+Condition on message status looks like this<br/> `<node slug> IS/ IS_NOT <message status>`. Eg. `message_status from node "welcome-email" is "seen"`.
+
+You can find node slug below node name in the workflow editor.
+```json
+  {
+      "op": "IS",
+      "ref": "multichannel_1", // node slug
+      "value": "$message.seen", // message status
+      "variable": "message_status", // fixed value
+      "variable_ns": "$ref" // fixed value
+  }
+```
+
+On UI, it looks like this:
+
+<Frame caption="Message Status condition on UI">
+  <img src="/images/branch-message-status.png" />
+</Frame>
+<br/>
+**Message Status and their meaning:**<br/>
+Here's a list of all message statuses, supported operators and their meaning.
+
+| Status | `IS` | `IS_NOT` | Description |
+|--------|------|------|-------------|
+| `delivered` | ✅ | ✅ | Notification reached user (includes delivered, seen, clicked) |
+| `seen` | ✅ | ✅ | User viewed/opened or clicked notification. For Android Push channel, user clearing the notification from tray is also considered as seen. |
+| `clicked` | ✅ | ✅ | User clicked notification |
+| `delivery_failed` | ✅ | ❌ | Vendor reported some error which prevented delivery |
+
+<Note>
+For multi-channel and smart channel routing, `delivered`, `seen` and `clicked` status requires at least one successful channel, while `delivery_failed` requires all channels to fail.
+</Note>
+<br/>
+**Per-Channel Message Status:**<br/>
+Following message statuses are currently tracked for each channel:
+
+| Channels | Delivered | Seen | Clicked |
+|----------|-----------|------|---------|
+| Email, Android Push, iOS Push, Web Push, Inbox | ✅ | ✅ | ✅ |
+| WhatsApp | ✅ | ✅ | ❌ |
+| SMS, Slack, MS Teams | ✅ | ❌ | ❌ |
+
+<Note>
+ To track message status for external channels like WhatsApp, SMS, and Email, you'll need to add suprsend tracking URL as webhook in your vendor dashboard.
+</Note>
+
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="How many branches can I add?" defaultOpen={false}>
+    Up to 10 branches total: 9 condition branches + 1 default branch.
+  </Accordion>
+
+  <Accordion title="What happens if multiple branches are satisfied?" defaultOpen={false}>
+    The first branch in order is executed (as mentioned in the intro). Place branch with more specificity before the branch with lesser condition if they have common condition set.
+  </Accordion>
+
+  <Accordion title="When are Message Status conditions evaluated?" defaultOpen={false}>
+    Only after the referenced node has executed and vendor feedback has been received. The condition checks actual delivery state, not input data.
+  </Accordion>
+
+  <Accordion title="Why don't my Message Status conditions work?" defaultOpen={false}>
+    Message Status requires vendor tracking to be setup. Ensure you have:
+    * SuprSend tracking URL added as webhook in your vendor dashboard.
+    * Proper SDK installation for Android Push and iOS Push channels.
+    * For Inbox, Slack, MS Teams, engagement status are automatically tracked.
+
+    In case all the above conditions met and still the condition is not evaluated, it could be due to delay in vendor reporting the status.
+  </Accordion>
+
+  <Accordion title="What's the difference between 'delivery_failed' and 'is_not delivered'?" defaultOpen={false}>
+    * **`IS delivery_failed`**: Evaluates to true only when the vendor explicitly reports a delivery failure. For multi-channel delivery nodes, this condition is met only if all channels fail.
+    * **`IS_NOT "delivered"`**: Indicates that a successful delivery status has not been received for the channel. This can also occur if the vendor has not yet reported the delivery status by the time the branch condition is evaluated.
+  </Accordion>
+
+  <Accordion title="Where do I find the node reference for Message Status?" defaultOpen={false}>
+    Each node has a unique slug. You can see node slug below node name in the workflow editor. You can also edit node slug by clicking on navigation icon next to node name and selecting "Edit metadata".
+    <img src="/images/node-slug.png" />
+    <img src="/images/node-slug-edit.png" />
+  </Accordion>
+</AccordionGroup>
 
 ***

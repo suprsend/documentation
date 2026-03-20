@@ -1,0 +1,328 @@
+---
+title: "Task Management App with React"
+sidebarTitle: "Task Management"
+tag: "REACT"
+description: "Learn how to build a Kanban board with real-time notifications, OTP verification, and multi-channel messaging using SuprSend's React SDK"
+---
+
+This guide shows you how to create a task management app with OTP verification, real-time in-app notifications, email notifications, and user preferences using SuprSend's React SDK.
+
+<Card title="Task Board" img="/images/taskboard-example-app.png">
+  Kanban board build in react with **drop-in Inbox** and **Preference Centre**.<br/>
+  [Try it out](https://task-board-example-app.vercel.app)           |     [GitHub code repository](https://github.com/suprsend/taskBoard)
+  
+</Card>
+
+
+You can either follow this guide for exact code implementation or vibe-code this in minutes using our [ready-to-use mcp prompts](/reference/mcp-example-task-management-app).
+
+
+## Part 1: Setting Up the Foundation
+
+### Project Initialization
+
+Create a new React app:
+
+```bash
+npx create-react-app task-management-app
+cd task-management-app
+```
+
+Install dependencies:
+
+```bash
+npm install @suprsend/react react-hot-toast react-switch lucide-react
+```
+
+For styling, we recommend Tailwind CSS. The SuprSend components work seamlessly with Tailwind.
+
+### Environment Configuration
+
+Get your API keys from the [SuprSend Dashboard](https://app.suprsend.com/en/sandbox/developers/api-keys) and add them to `.env`:
+
+```env
+REACT_APP_SUPRSEND_WORKSPACE=your-workspace-name
+REACT_APP_SUPRSEND_API_KEY=your-api-key
+REACT_APP_SUPRSEND_PUBLIC_KEY=your-public-key
+```
+
+<Note>
+  The API key should be kept secure. In production, use a backend API to trigger workflows. See [API key management](/docs/developer/api-keys) for best practices.
+</Note>
+
+### Initialize SuprSend Provider
+
+Wrap your app with `SuprSendProvider`. See the [React SDK setup guide](/docs/react-sdk) for complete initialization:
+
+```javascript
+import { SuprSendProvider } from '@suprsend/react';
+
+function App() {
+  return (
+    <SuprSendProvider
+      workspaceKey={process.env.REACT_APP_SUPRSEND_WORKSPACE}
+      publicKey={process.env.REACT_APP_SUPRSEND_PUBLIC_KEY}
+      distinctId={userEmail}
+    >
+      {/* Your app */}
+    </SuprSendProvider>
+  );
+}
+```
+
+## Part 2: Add Login flow with OTP email verification
+
+With SuprSend, you can implement secure OTP verification entirely from the frontend—no backend required.
+
+### The Flow
+
+1. Generate a 6-digit OTP in your React app
+2. Trigger a SuprSend workflow to send the OTP via email
+3. User enters the OTP to complete verification
+4. SuprSend automatically creates or updates the user profile
+
+### Setting Up the OTP Workflow
+
+In the SuprSend dashboard, create:
+
+1. **Email Template** with slug `otp_verification`
+   - Subject: `Your OTP Verification Code`
+   - Body: HTML template with `{{otp}}` variable
+   - See [email template guide](/docs/email-template) for details
+
+2. **Workflow** with slug `otp_verification`
+   - Category: `Transactional` (important for deliverability)
+   - Trigger: API Trigger
+   - Delivery Node: Email channel
+   - Learn about [notification categories](/docs/notification-category)
+
+### Implementing the OTP Flow
+
+Send OTP when user submits their email:
+
+```javascript
+const sendOTPEmail = async (email, otp, userName) => {
+  await fetch('https://hub.suprsend.com/trigger/', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.REACT_APP_SUPRSEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      workflow: 'otp_verification',
+      recipients: [{
+        distinct_id: email,
+        $email: [email],
+        name: userName,
+        $channels: ['email'],
+        $skip_create: false
+      }],
+      data: { otp, user_name: userName }
+    })
+  });
+};
+```
+
+After OTP verification, create the user session. See [user management APIs](/docs/js-events-and-user-methods) for details.
+
+## Part 3: Add Popover Inbox and Toast Notifications
+
+SuprSend's React SDK gives you a production-ready inbox component in a single line of code.
+
+### The Inbox Component
+
+Add the `Inbox` component to your header:
+
+```javascript
+import { Inbox } from '@suprsend/react';
+
+<Inbox popperPosition="bottom-end" />
+```
+
+That's it. The component handles WebSocket connections, notification state, pagination, and real-time updates automatically. See the [React inbox integration guide](/docs/react-inbox-integration) for customization options.
+
+### Toast Notifications
+
+Show toast notifications when new notifications arrive:
+
+```javascript
+import { useFeedClient, ToastNotificationCard } from '@suprsend/react';
+import toast, { Toaster } from 'react-hot-toast';
+
+const feedClient = useFeedClient();
+
+feedClient.emitter.on('feed.new_notification', (data) => {
+  toast.custom((t) => (
+    <ToastNotificationCard notificationData={data} />
+  ));
+});
+```
+
+<Warning>
+  Don't mark notifications as "seen" in the toast handler. Let the Inbox component handle that when the user opens the popover.
+</Warning>
+
+See the [React toast notifications guide](/docs/react-toast-notifications) for complete implementation details.
+
+## Part 4: Setting up Notifications in SuprSend on task actions
+
+Instead of making separate API calls for email and in-app notifications, define a workflow once and SuprSend handles delivery across all channels automatically.
+
+### Creating Workflows on SuprSend dashboard
+
+Create two workflows in the SuprSend dashboard:
+
+**1. Task Created Workflow**
+- Slug: `task_created`
+- Category: `Transactional` (or create custom category `task-updates` to handle preferences)
+- Delivery Nodes: Both Email and Inbox channels
+- Template Variables: `{{task_title}}`, `{{task_id}}`, `{{task_priority}}`, `{{task_description}}`
+
+**2. Task Status Changed Workflow**
+- Slug: `task_status_changed`
+- Category: `Transactional` (or create custom category `task-updates` to handle preferences)
+- Delivery Nodes: Email and Inbox
+- Template Variables: `{{task_title}}`, `{{old_status}}`, `{{new_status}}`, `{{task_id}}`, `{{task_description}}`
+
+See the [workflow builder guide](/docs/design-workflow) for creating workflows.
+
+### Setting up workflow triggers in backend code
+
+When a task is created or status changes, trigger the workflow:
+
+```javascript
+const triggerWorkflow = async (workflowSlug, userEmail, distinctId, eventData) => {
+  await fetch('https://hub.suprsend.com/trigger/', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.REACT_APP_SUPRSEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      workflow: workflowSlug,
+      recipients: [{
+        distinct_id: distinctId,
+        $email: [userEmail],
+        $channels: ['email', 'inbox'],
+        $skip_create: false
+      }],
+      data: eventData
+    })
+  });
+};
+```
+
+When you trigger a workflow, SuprSend automatically checks user preferences and respects opt-outs. See the [workflow API reference](/docs/trigger-workflow) for complete details.
+
+## Part 5: Add NotificationPreference Centre
+
+SuprSend provides a complete preference system out of the box. Preferences are automatically evaluated when you trigger workflows—no manual checks required.
+
+```javascript
+import { useSuprSendClient, PreferenceOptions } from '@suprsend/react';
+
+const suprSendClient = useSuprSendClient();
+
+// Get preferences
+const resp = await suprSendClient.user.preferences.getPreferences();
+
+// Update category preference
+await suprSendClient.user.preferences.updateCategoryPreference(
+  'task-updates',
+  PreferenceOptions.OPT_IN
+);
+```
+
+See the [JavaScript preferences API](/docs/js-preferences) for complete details.
+
+## Part 6: Building the Kanban Board
+
+The Kanban board is a standard React component with drag-and-drop functionality. Integrate workflow triggers:
+
+```javascript
+const handleCreateTask = async (taskData) => {
+  const newTask = { id: Date.now().toString(), ...taskData };
+  setTasks([...tasks, newTask]);
+  
+  // Trigger notification
+  await triggerWorkflow('task_created', userEmail, distinctId, {
+    task_title: newTask.title,
+    task_id: newTask.id,
+    task_priority: newTask.priority
+  });
+};
+
+const handleStatusChange = async (task, newStatus) => {
+  const updatedTask = { ...task, status: newStatus };
+  setTasks(tasks.map(t => t.id === task.id ? updatedTask : t));
+  
+  // Trigger notification
+  await triggerWorkflow('task_status_changed', userEmail, distinctId, {
+    task_title: task.title,
+    old_status: task.status,
+    new_status: newStatus,
+    task_id: task.id
+  });
+};
+```
+
+Always wrap workflow triggers in try-catch blocks:
+
+```javascript
+try {
+  await triggerWorkflow('task_created', userEmail, distinctId, eventData);
+} catch (error) {
+  console.error('Notification failed:', error);
+  // Continue with task creation even if notification fails
+}
+```
+
+## Part 7: Production Deployment
+
+### Pre-Deployment Checklist
+
+- ✅ All API keys are in environment variables
+- ✅ Workflows are committed (not in draft mode)
+- ✅ Templates are published
+- ✅ Error handling is in place
+- ✅ User preferences are set correctly
+
+### Deploying to Vercel
+
+1. Build the app: `npm run build`
+2. Deploy via CLI: `vercel --prod`
+3. Set environment variables in Vercel dashboard
+4. Configure routing with `vercel.json`:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+### Post-Deployment Verification
+
+1. Test OTP email delivery
+2. Verify inbox notifications appear
+3. Check email notifications are received
+4. Test preference changes persist
+5. Monitor SuprSend dashboard for delivery logs
+
+## What's Next?
+
+- Explore the [React SDK documentation](/docs/react-sdk) for advanced customization
+- Learn about [workflow builder](/docs/design-workflow) for complex notification logic
+- Check out [preference management](/docs/user-preferences) for granular user control
+- Review the [API reference](/docs/trigger-workflow) for programmatic workflows
+- Use the [ready-to-use Prompts](/reference/mcp-example-task-management-app) for AI-assisted development
+
+Ready to add notifications to your app? Start with the [React SDK quickstart](/docs/react-sdk) and see how quickly you can go from zero to production-ready notifications.
+
+**Questions?** Join our [Slack community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) or **Ask AI**.
+
+*Build faster. Scale effortlessly. 🚀*

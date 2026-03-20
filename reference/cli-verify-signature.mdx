@@ -1,0 +1,406 @@
+---
+title: "Verify CLI Signature"
+description: "Cryptographically verify the integrity and authenticity of the SuprSend CLI before installation using Cosign."
+keywords:
+  - suprsend cli verify
+  - cli signature verification
+  - cosign verify-blob
+  - cli integrity check
+  - suprsend cli security
+---
+
+The SuprSend CLI is **signed and notarised** starting from release [`0.2.19`](https://github.com/suprsend/cli/releases/tag/0.2.19). Before [installing](/reference/cli-installation), you can cryptographically confirm that the binary you downloaded was built by SuprSend and has not been modified in transit.
+
+---
+
+## How it works
+
+SuprSend signs the CLI using [Cosign](https://docs.sigstore.dev/cosign/overview/). At every release, `checksums.txt` — a SHA-256 hash manifest of every release archive — is signed and the resulting bundle is published alongside `checksums.txt.sig` and `public_key.pem` as GitHub release assets.
+
+Running [`cosign verify-blob`](https://docs.sigstore.dev/cosign/verifying/blobs/) confirms the signature is valid and that `checksums.txt` has not been modified since signing.
+
+---
+
+## Prerequisites
+
+You need **[Cosign](https://docs.sigstore.dev/cosign/system_config/installation/)** installed. It is a single binary with no runtime dependencies.
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install cosign
+    ```
+  </Tab>
+  <Tab title="Linux (amd64)">
+    ```bash
+    curl -O -L https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+    sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+    sudo chmod +x /usr/local/bin/cosign
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    winget install -e --id Sigstore.Cosign
+    ```
+  </Tab>
+</Tabs>
+
+Confirm it is working:
+
+```
+cosign version
+```
+
+---
+
+## Step 1 — Download the verification files
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    VERSION="0.2.19"
+
+    curl -sL -O https://github.com/suprsend/cli/releases/download/${VERSION}/checksums.txt.sig
+    curl -sL -O https://github.com/suprsend/cli/releases/download/${VERSION}/checksums.txt
+    curl -sL -O https://github.com/suprsend/cli/releases/download/${VERSION}/public_key.pem
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $VERSION = "0.2.19"
+    $BASE    = "https://github.com/suprsend/cli/releases/download/$VERSION"
+
+    Invoke-WebRequest "$BASE/checksums.txt.sig" -OutFile checksums.txt.sig
+    Invoke-WebRequest "$BASE/checksums.txt"     -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/public_key.pem"    -OutFile public_key.pem
+    ```
+  </Tab>
+</Tabs>
+
+| File | Description |
+|---|---|
+| `checksums.txt` | SHA-256 hashes of all platform archives in the release. This is what gets signed. |
+| `checksums.txt.sig` | The Cosign bundle — contains the signature over `checksums.txt` and its verification metadata. |
+| `public_key.pem` | SuprSend's [PEM-encoded](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) public key, published with every release on GitHub. Used to verify the signature. |
+
+<Note>
+  Always download `public_key.pem` directly from the official [SuprSend CLI releases page](https://github.com/suprsend/cli/releases). Do not copy it from mirrors or third-party sources.
+</Note>
+
+---
+
+## Step 2 — Verify the signature
+
+With all three files in the same directory, run:
+
+```bash
+cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+```
+
+This command is identical on macOS, Linux, and Windows (PowerShell).
+
+**What each argument does:**
+
+| Argument | Description |
+|---|---|
+| `--key public_key.pem` | SuprSend's PEM-encoded public key. Cosign uses this to validate the signature. |
+| `--bundle checksums.txt.sig` | The Cosign bundle containing the signature and its metadata. |
+| `checksums.txt` | The artifact being verified — the SHA-256 manifest of all release archives. |
+
+**Expected output:**
+
+```
+Verified OK
+```
+
+`Verified OK` confirms:
+- The signature was produced using SuprSend's private key — the key that corresponds to `public_key.pem`. Only SuprSend's release pipeline has access to it.
+- `checksums.txt` is byte-for-byte identical to what was signed at release time.
+
+<Warning>
+  If you see `invalid signature when validating ASN1 encoded signature`, do not proceed with [installation](/reference/cli-installation). Re-download all three files from the same release and retry. If the failure persists, [contact SuprSend support](mailto:support@suprsend.com).
+</Warning>
+
+---
+
+## Step 3 — Verify the archive checksum
+
+This step confirms your downloaded CLI archive matches the hash in `checksums.txt` — ruling out any corruption or substitution of the binary.
+
+<Note>
+  Your platform archive must be downloaded and present in the same directory as `checksums.txt` before running this command. If you haven't downloaded it yet, see the [Installation page](/reference/cli-installation). If the archive is not in the directory, the command will return no output rather than an error — which can look like a pass but means nothing was actually verified.
+</Note>
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    shasum -a 256 --check checksums.txt --ignore-missing
+    ```
+
+    **Expected output** (filename matches the archive you downloaded):
+
+    ```
+    darwin.arm64.suprsend.tar.gz: OK
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    sha256sum --check checksums.txt --ignore-missing
+    ```
+
+    **Expected output** (filename matches the archive you downloaded):
+
+    ```
+    linux.x64.suprsend.tar.gz: OK
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    # Auto-detects whichever Windows archive is present in the current directory
+    $archives = @(
+      "suprsend_Windows_x86_64.zip",
+      "suprsend_Windows_arm64.zip",
+      "win32.x64.suprsend.zip",
+      "win32.arm64.suprsend.zip"
+    )
+
+    $archive = $archives | Where-Object { Test-Path ".\$_" } | Select-Object -First 1
+
+    if (-not $archive) {
+      Write-Error "No Windows archive found in the current directory. Download it first."
+      exit 1
+    }
+
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match [regex]::Escape($archive) }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$archive" -Algorithm SHA256).Hash.ToLower()
+
+    if ($expected -eq $actual) {
+      Write-Host "Checksum OK — $archive"
+    } else {
+      Write-Error "CHECKSUM MISMATCH — do not use this archive"
+    }
+    ```
+
+    **Expected output:**
+
+    ```
+    Checksum OK — suprsend_Windows_x86_64.zip
+    ```
+
+    The filename in the output will match whichever archive you downloaded.
+  </Tab>
+</Tabs>
+
+---
+
+## Full script
+
+Downloads the verification files and your platform archive, verifies both, then installs.
+
+<Tabs>
+  <Tab title="macOS (Apple Silicon)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.2.19"
+    ARCHIVE="darwin.arm64.suprsend.tar.gz"
+    BASE="https://github.com/suprsend/cli/releases/download/${VERSION}"
+
+    echo "-> Downloading release files..."
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/public_key.pem"
+    curl -sL -O "${BASE}/${ARCHIVE}"
+
+    echo "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    echo "-> Verifying archive checksum..."
+    shasum -a 256 --check checksums.txt --ignore-missing
+
+    echo "-> Extracting and installing..."
+    tar -xzf "${ARCHIVE}"
+    sudo mv suprsend /usr/local/bin/suprsend
+
+    echo "Done. SuprSend CLI ${VERSION} installed and verified."
+    ```
+  </Tab>
+  <Tab title="macOS (Intel)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.2.19"
+    ARCHIVE="darwin.x64.suprsend.tar.gz"
+    BASE="https://github.com/suprsend/cli/releases/download/${VERSION}"
+
+    echo "-> Downloading release files..."
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/public_key.pem"
+    curl -sL -O "${BASE}/${ARCHIVE}"
+
+    echo "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    echo "-> Verifying archive checksum..."
+    shasum -a 256 --check checksums.txt --ignore-missing
+
+    echo "-> Extracting and installing..."
+    tar -xzf "${ARCHIVE}"
+    sudo mv suprsend /usr/local/bin/suprsend
+
+    echo "Done. SuprSend CLI ${VERSION} installed and verified."
+    ```
+  </Tab>
+  <Tab title="Linux (x86_64)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.2.19"
+    ARCHIVE="linux.x64.suprsend.tar.gz"
+    BASE="https://github.com/suprsend/cli/releases/download/${VERSION}"
+
+    echo "-> Downloading release files..."
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/public_key.pem"
+    curl -sL -O "${BASE}/${ARCHIVE}"
+
+    echo "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    echo "-> Verifying archive checksum..."
+    sha256sum --check checksums.txt --ignore-missing
+
+    echo "-> Extracting and installing..."
+    tar -xzf "${ARCHIVE}"
+    sudo mv suprsend /usr/local/bin/suprsend
+
+    echo "Done. SuprSend CLI ${VERSION} installed and verified."
+    ```
+  </Tab>
+  <Tab title="Linux (ARM64)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.2.19"
+    ARCHIVE="linux.arm64.suprsend.tar.gz"
+    BASE="https://github.com/suprsend/cli/releases/download/${VERSION}"
+
+    echo "-> Downloading release files..."
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/public_key.pem"
+    curl -sL -O "${BASE}/${ARCHIVE}"
+
+    echo "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    echo "-> Verifying archive checksum..."
+    sha256sum --check checksums.txt --ignore-missing
+
+    echo "-> Extracting and installing..."
+    tar -xzf "${ARCHIVE}"
+    sudo mv suprsend /usr/local/bin/suprsend
+
+    echo "Done. SuprSend CLI ${VERSION} installed and verified."
+    ```
+  </Tab>
+  <Tab title="Windows (x86_64)">
+    ```powershell
+    $VERSION = "0.2.19"
+    $ARCHIVE = "suprsend_Windows_x86_64.zip"
+    $BASE    = "https://github.com/suprsend/cli/releases/download/$VERSION"
+
+    Write-Host "-> Downloading release files..."
+    Invoke-WebRequest "$BASE/checksums.txt.sig" -OutFile checksums.txt.sig
+    Invoke-WebRequest "$BASE/checksums.txt"     -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/public_key.pem"    -OutFile public_key.pem
+    Invoke-WebRequest "$BASE/$ARCHIVE"          -OutFile $ARCHIVE
+
+    Write-Host "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    Write-Host "-> Verifying archive checksum..."
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match "suprsend_Windows_x86_64" }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$ARCHIVE" -Algorithm SHA256).Hash.ToLower()
+    if ($expected -eq $actual) { Write-Host "Checksum OK" } else { Write-Error "CHECKSUM MISMATCH — do not use this archive" }
+
+    Write-Host "-> Extracting and installing..."
+    Expand-Archive -Path $ARCHIVE -DestinationPath .\suprsend_install -Force
+    Move-Item -Force .\suprsend_install\suprsend.exe "C:\Windows\System32\suprsend.exe"
+
+    Write-Host "Done. SuprSend CLI $VERSION installed and verified."
+    ```
+  </Tab>
+  <Tab title="Windows (ARM64)">
+    ```powershell
+    $VERSION = "0.2.19"
+    $ARCHIVE = "suprsend_Windows_arm64.zip"
+    $BASE    = "https://github.com/suprsend/cli/releases/download/$VERSION"
+
+    Write-Host "-> Downloading release files..."
+    Invoke-WebRequest "$BASE/checksums.txt.sig" -OutFile checksums.txt.sig
+    Invoke-WebRequest "$BASE/checksums.txt"     -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/public_key.pem"    -OutFile public_key.pem
+    Invoke-WebRequest "$BASE/$ARCHIVE"          -OutFile $ARCHIVE
+
+    Write-Host "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    Write-Host "-> Verifying archive checksum..."
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match "suprsend_Windows_arm64" }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$ARCHIVE" -Algorithm SHA256).Hash.ToLower()
+    if ($expected -eq $actual) { Write-Host "Checksum OK" } else { Write-Error "CHECKSUM MISMATCH — do not use this archive" }
+
+    Write-Host "-> Extracting and installing..."
+    Expand-Archive -Path $ARCHIVE -DestinationPath .\suprsend_install -Force
+    Move-Item -Force .\suprsend_install\suprsend.exe "C:\Windows\System32\suprsend.exe"
+
+    Write-Host "Done. SuprSend CLI $VERSION installed and verified."
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Reference
+
+<AccordionGroup>
+  <Accordion title="Available platform archives" id="available-platform-archives">
+
+    All archives are available on the [GitHub releases page](https://github.com/suprsend/cli/releases).
+
+    | Platform | Archive filename |
+    |---|---|
+    | macOS (Apple Silicon) | `darwin.arm64.suprsend.tar.gz` |
+    | macOS (Intel) | `darwin.x64.suprsend.tar.gz` |
+    | macOS (Universal — Apple Silicon + Intel) | `suprsend_Darwin_all.tar.gz` |
+    | Linux (x86_64) | `linux.x64.suprsend.tar.gz` |
+    | Linux (x86_64) | `suprsend_Linux_x86_64.tar.gz` |
+    | Linux (ARM64) | `linux.arm64.suprsend.tar.gz` |
+    | Linux (ARM64) | `suprsend_Linux_arm64.tar.gz` |
+    | Windows (x86_64) | `suprsend_Windows_x86_64.zip` |
+    | Windows (x86_64) | `win32.x64.suprsend.zip` |
+    | Windows (ARM64) | `suprsend_Windows_arm64.zip` |
+    | Windows (ARM64) | `win32.arm64.suprsend.zip` |
+
+  </Accordion>
+
+  <Accordion title="Security model">
+    SuprSend's signing private key is held exclusively by the automated release pipeline and never leaves the secure signing environment. `public_key.pem` is the public counterpart — it is published openly with every release and carries no risk of compromise.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+<Tip>
+  If you encounter an unexpected verification failure, reach out at [support@suprsend.com](mailto:support@suprsend.com) or open an issue on the [SuprSend CLI GitHub repository](https://github.com/suprsend/cli/issues).
+</Tip>

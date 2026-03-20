@@ -1,0 +1,312 @@
+---
+title: "OpenSearch Setup Guide"
+description: "Set up OpenSearch in Kubernetes for search, analytics, and in-app notifications in SuprSend."
+---
+
+This guide walks you through setting up **OpenSearch** in Kubernetes for SuprSend’s self‑hosted deployments. OpenSearch provides the backbone for search, analytics, and observability features in SuprSend.
+
+SuprSend recommends using a **managed OpenSearch service** (AWS OpenSearch, GCP Elastic, or Azure Elastic) for production environments to reduce operational overhead and ensure high availability.
+
+However, for self‑managed or air‑gapped environments, you can deploy OpenSearch directly in Kubernetes using the **OpenSearch Operator**.
+
+---
+
+## Prerequisites
+
+- Kubernetes cluster (v1.25 or later)
+- `kubectl` and `helm` CLI installed and configured
+- Persistent storage provisioner (e.g., EBS, GCE Persistent Disk, or DO Block Storage)
+- At least 4 CPU cores and 8 GB RAM available
+
+---
+
+## Step 1: Install the OpenSearch Operator
+
+```bash
+helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/
+kubectl create ns opensearch-operator
+
+helm install opensearch-operator opensearch-operator/opensearch-operator \
+  --namespace opensearch-operator
+```
+
+This installs the OpenSearch Operator which manages OpenSearch clusters declaratively.
+
+---
+
+## Step 2: Create Namespace and Admin Credentials
+
+Create a dedicated namespace for OpenSearch:
+
+```bash
+kubectl create ns opensearch
+```
+
+Create the admin credentials secret:
+
+```bash
+kubectl -n opensearch create secret generic admin-credentials \
+  --from-literal=username=admin \
+  --from-literal=password='SuperStrong#Passw0rd'
+```
+
+---
+
+## Step 3: Generate Hashed Password for Internal Users
+<Steps>
+<Step title="Generate bcrypt hash of your admin password">
+To set up OpenSearch security, generate a bcrypt hash of your admin password:
+
+```bash
+docker run --rm httpd:2.4-alpine htpasswd -nbBC 10 admin 'SuperStrong#Passw0rd' | cut -d: -f2
+```
+</Step>
+<Step title="Create Kubernetes secret">
+Create a Kubernetes secret `os-internal-users.secret.yaml` with the generated hash:
+
+```yaml title="os-internal-users.secret.yaml"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: os-internal-users
+  namespace: opensearch
+type: Opaque
+stringData:
+  internal_users.yml: |
+    _meta:
+      type: "internalusers"
+      config_version: 2
+    admin:
+      hash: "<PASTE_BCRYPT_HASH_HERE>"
+      reserved: true
+      backend_roles:
+        - "admin"
+      description: "Admin user"
+```
+</Step>
+<Step title="Apply the secret">
+
+```bash
+kubectl apply -f os-internal-users.secret.yaml
+```
+</Step>
+</Steps>
+---
+
+## Step 4: Deploy the OpenSearch Cluster
+<Steps>
+<Step title="Create cluster definition file">
+
+```yaml title="suprsend-opensearch.yaml"
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: suprsend-opensearch
+  namespace: opensearch
+spec:
+  general:
+    serviceName: suprsend-opensearch-cluster
+    version: "1.3.20"
+    setVMMaxMapCount: true
+  security:
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+    config:
+      adminCredentialsSecret:
+        name: admin-credentials
+      securityConfigSecret:
+        name: os-internal-users
+  dashboards:
+    enable: true
+    version: "1.3.20"
+    replicas: 1
+    opensearchCredentialsSecret:
+      name: admin-credentials
+    additionalConfig:
+      opensearch.ssl.verificationMode: "none"
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "512Mi"
+      limits:
+        cpu: "200m"
+        memory: "512Mi"
+  nodePools:
+    - component: nodes
+      replicas: 3
+      roles: ["master","data","ingest"]
+      diskSize: "50Gi"
+      jvm: "-Xms1g -Xmx1g"
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "2Gi"
+        limits:
+          cpu: "500m"
+          memory: "2Gi"
+```
+</Step>
+<Step title="Apply the manifest">
+
+```bash
+kubectl apply -f suprsend-opensearch.yaml
+```
+</Step>
+</Steps>
+---
+
+## Step 5: Verify the Deployment
+
+**Check Persistent Volumes**
+
+Ensure volumes are created correctly:
+
+```bash
+kubectl get pvc -n opensearch
+```
+
+**Check Cluster Health**
+
+```bash
+kubectl get OpenSearchCluster -n opensearch
+```
+<Tip>
+The status should show **green** once all nodes are ready.
+</Tip>
+
+You can also try making a curl request from with cluster
+
+```bash
+# make sure to replace password with the password that you generated
+curl https://suprsend-opensearch-cluster.opensearch.svc.cluster.local:9200/_cluster/health?pretty=true -u "admin:SuperStrong#Passw0rd"
+{
+  "cluster_name" : "suprsend-opensearch",
+  "status" : "green",
+  "timed_out" : false,
+  "number_of_nodes" : 3,
+  "number_of_data_nodes" : 3,
+  "discovered_master" : true,
+  "active_primary_shards" : 4,
+  "active_shards" : 9,
+  "relocating_shards" : 0,
+  "initializing_shards" : 0,
+  "unassigned_shards" : 0,
+  "delayed_unassigned_shards" : 0,
+  "number_of_pending_tasks" : 0,
+  "number_of_in_flight_fetch" : 0,
+  "task_max_waiting_in_queue_millis" : 0,
+  "active_shards_percent_as_number" : 100.0
+}
+```
+<Tip>
+Make sure status is `green`
+</Tip>
+---
+
+## Step 6: Access OpenSearch Dashboards
+
+You can port‑forward to the dashboard service:
+
+```bash
+kubectl port-forward svc/suprsend-opensearch-dashboards 5601:5601 -n opensearch
+```
+
+Access in your browser at: [https://localhost:5601](https://localhost:5601)
+
+<Info>
+Login credentials:
+- **Username:** admin
+- **Password:** SuperStrong#Passw0rd
+</Info>
+---
+
+## Step 7: Backup and Persistence
+
+- Persistent volumes ensure data durability.
+- To take regular snapshots, configure **S3 or GCS snapshot repositories** in OpenSearch.
+- Example (S3):
+
+```bash
+PUT _snapshot/suprsend_backup_repo
+{
+  "type": "s3",
+  "settings": {
+    "bucket": "suprsend-opensearch-backups",
+    "region": "ap-south-1"
+  }
+}
+```
+
+---
+
+## Step 8: Cleanup (if needed)
+
+To uninstall everything:
+
+```bash
+kubectl delete OpenSearchCluster suprsend-opensearch -n opensearch
+kubectl delete ns opensearch
+helm uninstall opensearch-operator -n opensearch-operator
+kubectl delete ns opensearch-operator
+```
+
+---
+
+## Step 9: SuprSend Helm Configuration
+
+Once your OpenSearch cluster is operational, configure SuprSend to use it.
+<Note>
+This section shows only the **OpenSearch-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+</Note>
+
+### Kubernetes Secret Configuration
+
+First, add the OpenSearch-specific secret to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
+
+```yaml
+# ============================================
+# OpenSearch Configuration (this guide)
+# ============================================
+# connection url for opensearch (full URL with credentials)
+opensearchConnUrlKey: "https://admin:SuperStrong#Passw0rd@suprsend-opensearch-cluster.opensearch.svc.cluster.local:9200"
+```
+
+### Helm Values Configuration
+
+Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
+
+```yaml
+# connection url for opensearch
+opensearchConnUrlKey: "opensearchConnUrlKey"
+```
+<Note>
+The OpenSearch connection is configured via the full connection URL in the secret, which includes the host, port, credentials, and scheme. The above configuration goes under `suprsendInboxApi.secret` section.
+</Note>
+
+---
+
+## Best Practices
+- Use **dedicated storage classes** (e.g., SSD-backed volumes)
+- Enable **auto-scaling** and **snapshot policies**
+- Run OpenSearch in **HA mode** with 3+ nodes for redundancy
+- Use **Ingress or LoadBalancer** for external access with TLS termination
+- Configure proper **TLS certificates** for production deployments
+
+---
+
+## References
+
+<CardGroup cols="3">
+  <Card title="OpenSearch Operator" icon="github" iconType="solid" href="https://github.com/opensearch-project/opensearch-k8s-operator">
+    Official Kubernetes operator for OpenSearch.
+  </Card>
+  <Card title="SuprSend Docs" icon="book" iconType="solid" href="https://docs.suprsend.com">
+    SuprSend product documentation.
+  </Card>
+  <Card title="OpenSearch Reference" icon="magnifying-glass" iconType="solid" href="https://opensearch.org/docs/latest/">
+    OpenSearch configuration and API reference.
+  </Card>
+</CardGroup>
