@@ -104,7 +104,7 @@ When you pass `is_transient: true` in the workflow trigger, SuprSend doesn't cre
 
 ---
 
-### one of [distinct_id, object_type/id] must be present
+### one of [distinct_id, object_type/id] must be present / user's distinct_id must be present if it's not transient
 
 **What does this mean:** 
 In your API based trigger, recipient object is missing its identifier — neither `distinct_id` nor the `object_type`/`id` pair was included.
@@ -115,23 +115,16 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 
 ---
 
-<span id="error-24"></span>
-
-### error: must pass value for either event or distinct_id/anonymous_id
-
-**What does this mean:** The request is missing both an `event` name and a user identifier (`distinct_id` or `anonymous_id`).
-
-**How to fix it:** Include either `event` (for event-based triggers) or `distinct_id`/`anonymous_id` in your payload.
-
----
 
 <span id="error-42"></span>
 
-### `{"distinct_ids":"must contain at least 1 item"}`
+### "distinct_ids":"must contain at least 1 item"
 
-**What does this mean:** The `distinct_ids` array was included but is empty.
+**What does this mean:** 
+In your user update request, you have passed empty string or an empty array in `distinct_id` field.
 
-**How to fix it:** Include at least one valid `distinct_id` — an empty array `[]` is not accepted.
+**How to fix it:** 
+Check the API request where you're getting this error and fix distinct_id field. You should be able to see the exact API request and response when you click on the failed log in request logs tab.
 
 ---
 
@@ -139,9 +132,11 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 
 ### `{"recipients":"must contain at least 1 item"}`
 
-**What does this mean:** The `recipients` array was included but is empty.
+**What does this mean:** 
+In object subscription update call, the `recipients` field was either empty string or empty array.
 
-**Fix:** Include at least one valid recipient.
+**How to fix it:** 
+Check the API request where you're getting this error and fix recipients field. You should be able to see the exact API request and response when you click on the failed log in request logs tab.
 
 ---
 
@@ -149,59 +144,52 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 
 ### `{"distinct_ids":"must contain at maximum 100 items"}`
 
-**What does this mean:** More than 100 `distinct_ids` were passed in a single request.
+**What does this mean:** 
+Bulk trigger requests accepts upto 100 `distinct_ids` in a single request. You have passed more than 100 `distinct_ids` in a single request.
 
-**Fix:** Split into batches of at most 100. For large user lists, use [Lists](/docs/lists) and [Broadcast](/docs/broadcast) instead.
-
----
-
-<span id="error-56"></span>
-
-### `error: must pass value for distinct_id`
-
-**What does this mean:** `distinct_id` is required but was not provided.
-
-**Fix:** Add `distinct_id` to the recipient object.
+**How to fix it:** 
+Split the request into multiple requests, each with at most 100 `distinct_ids`. For large user lists, use [Lists](/docs/lists) and [Broadcast](/docs/broadcast) instead.
 
 ---
 
-<span id="error-64"></span>
-
-### `user's distinct_id must be present if it's not transient`
-
-**What does this mean:** A non-transient user recipient is missing `distinct_id`.
-
-**Fix:** Add `distinct_id`, or use `"is_transient": true` with channel details if sending to an anonymous user.
-
----
 
 <span id="error-65"></span>
 
 ### `actor: value must be either of type string or map`
 
-**What does this mean:** The `actor` field was passed as an incorrect type — e.g. a number or boolean.
+**What does this mean:** 
+You can only pass one actor in a workflow call which can be either a `distinct_id` string or a map object with complete user object like this - `{"distinct_id": "user-123", "name": "John Doe", "$email": ["john@example.com"]}`.
 
-**Fix:** Pass `actor` as a plain `distinct_id` string, or as a map object with user details. See [Trigger Workflow](/docs/trigger-workflow).
+**How to fix it:** 
+Check the API request where you're getting this error and fix actor field. You should be able to see the exact API request and response when you click on the failed log in request logs tab.
 
 ---
 
 <span id="error-66"></span>
 
-### `recipients: no valid value passed`
+### `recipients: no valid value passed` / `invalid value for recipients. each element must be of type string or map`
 
-**What does this mean:** The `recipients` field contains no valid values.
+**What does this mean:** 
+Recipients field in workflow call is an array of `distinct_ids` or recipient objects. Your input doesn't contain any valid recipient input. Here are some examples of valid recipient input:
 
-**Fix:** Include at least one valid recipient — a `distinct_id` string or a recipient map object. See [Trigger Workflow](/docs/trigger-workflow).
+```json example
+{
+  "recipients": ["distinct-id-1", "distinct-id-2"]
+}
 
----
+{
+  "recipients": [
+    {
+      "distinct_id": "distinct-id-1",
+      "name": "John Doe",
+      "$email": ["john@example.com"]
+    }
+  ]
+}
+```
 
-<span id="error-74"></span>
-
-### `invalid value for recipients. each element must be of type string or map`
-
-**What does this mean:** The `recipients` array contains elements that are neither strings nor map objects.
-
-**Fix:** Each element must be a plain `distinct_id` string or a recipient map. See [Trigger Workflow](/docs/trigger-workflow).
+**How to fix it:** 
+Check the API request where you're getting this error and fix recipients field. You should be able to see the exact API request and response when you click on the failed log in request logs tab.
 
 ---
 
@@ -209,9 +197,11 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 
 ### `from_user_id: [distinct_id: 'string'] not found`
 
-**What does this mean:** The user referenced in `from_user_id` does not exist in the workspace.
+**What does this mean:** 
+In [merge user profile API](/reference/merge-users), distinct_id passed in the `from_user_id` field does not exist in the workspace.
 
-**Fix:** Create the user via API/SDK before referencing them in `from_user_id`, or pass their channel info inline. See [Create User](/docs/users#creating-user-profile-on-suprsend).
+**How to fix it:** 
+`from_user_id` is the distinct_id of the user's old profile that you are merging into the new profile. So, it should be pre-created. Check if the `distinct_id` is correct or if you have mistakenly passed the new profile's `distinct_id` in `from_user_id`.
 
 ---
 
@@ -221,8 +211,23 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 
 **What does this mean:** The `recipients` field is completely absent from the request body.
 
-**Fix:** Add the `recipients` field to your payload. See [Trigger Workflow](/docs/trigger-workflow).
+**Fix:** Add the `recipients` field to your payload. Recipients field is an array of `distinct_ids` or recipient objects.
 
+```json example 
+{
+  "recipients": ["distinct-id-1", "distinct-id-2"]
+}
+
+{
+  "recipients": [
+    {
+      "distinct_id": "distinct-id-1",
+      "name": "John Doe",
+      "$email": ["john@example.com"]
+    }
+  ]
+}
+```
 ---
 
 <span id="error-112"></span>
@@ -231,7 +236,7 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 
 **What does this mean:** The `distinct_ids` field is completely absent from the request body.
 
-**Fix:** Add the `distinct_ids` field to your payload.
+**Fix:** Add the `distinct_ids` field to your payload. Distinct ids is an array of user `distinct_ids`.
 
 ---
 
@@ -240,43 +245,11 @@ or both `object_type` and `id` (for objects). See if you're missing it or the ke
 <span id="error-43"></span>
 <span id="error-97"></span>
 
-### `tenant/brand doesn't exist with id: <tenant_id>` / `No tenant found for tenant_id <tenant_id>`
+### `tenant/brand doesn't exist with id: <tenant_id>` / `No tenant found for tenant_id <tenant_id>` / `[workflow: <slug>] tenant doesn't exist with id: <tenant_id>` / `tenant '{{tenant_id}}' not found`
 
 **What does this mean:** The `tenant_id` does not exist in this workspace.
 
 **Fix:** Check that the value exactly matches (including case) a tenant on the [Tenants page](https://app.suprsend.com/en/production/tenants/). Tenants are workspace-scoped — a tenant in staging does not exist in production unless created there separately. See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
-
----
-
-<span id="error-11"></span>
-<span id="error-36"></span>
-<span id="error-38"></span>
-
-### `[workflow: <slug>] tenant doesn't exist with id: <tenant_id>`
-
-**What does this mean:** The `tenant_id` passed in the workflow trigger does not exist in this workspace.
-
-**Fix:** Verify the tenant exists on the [Tenants page](https://app.suprsend.com/en/production/tenants/) and create it if needed. See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
-
----
-
-<span id="error-84"></span>
-
-### `tenant '{{tenant_id}}' not found`
-
-**What does this mean:** The `tenant_id` does not exist in this workspace.
-
-**Fix:** Verify and create it on the [Tenants page](https://app.suprsend.com/en/production/tenants/). See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
-
----
-
-<span id="error-86"></span>
-
-### `tenant 'string' not found`
-
-**What does this mean:** The `tenant_id` does not exist in this workspace.
-
-**Fix:** Verify and create it on the [Tenants page](https://app.suprsend.com/en/production/tenants/). See [Create Tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform).
 
 ---
 
