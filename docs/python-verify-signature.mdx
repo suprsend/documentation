@@ -1,0 +1,376 @@
+---
+title: "Verify Package Signature"
+description: "Cryptographically verify the integrity and authenticity of the SuprSend Python SDK before installation."
+keywords:
+  - suprsend python sdk verify
+  - pip package verification
+  - sha256 checksum python
+  - suprsend sdk integrity
+  - cosign verify python package
+  - pypi verified details
+---
+
+The SuprSend Python SDK is **signed and checksummed** starting from release [`v0.18.1`](https://github.com/suprsend/suprsend-py-sdk/releases/tag/v0.18.1). Before installing, you can cryptographically confirm that the package you downloaded was built by SuprSend and has not been modified in transit.
+
+---
+
+## Before you begin
+
+The SuprSend Python SDK ships with two independent trust signals:
+
+- **PyPI Verified details badge** — visible on the [PyPI project page](https://pypi.org/project/suprsend-py-sdk/) sidebar. PyPI has confirmed that the GitHub repository linked on the project page is owned by the same account that maintains the package — ruling out typosquatting and metadata spoofing.
+- **SHA-256 checksum + Cosign signature** — every GitHub release publishes a `checksums.txt` listing SHA-256 hashes of all release artifacts, signed with SuprSend's private key using [Cosign](https://docs.sigstore.dev/cosign/overview/).
+
+Verification below is a two-step process: first confirm `checksums.txt` came from SuprSend's pipeline untampered (Step 4), then confirm your downloaded file matches the hash inside it (Step 5). Both steps are required — Step 4 alone does not verify your package, and Step 5 alone does not verify the source of the hashes.
+
+---
+
+## Prerequisites
+
+You need **[Cosign](https://docs.sigstore.dev/cosign/system_config/installation/)** installed. It is a single binary with no runtime dependencies.
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install cosign
+    ```
+  </Tab>
+  <Tab title="Linux (amd64)">
+    ```bash
+    curl -O -L https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+    sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+    sudo chmod +x /usr/local/bin/cosign
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    winget install -e --id Sigstore.Cosign
+    ```
+  </Tab>
+</Tabs>
+
+Confirm it is working:
+
+```bash
+cosign version
+```
+
+---
+
+## Step 1 — Create a working directory
+
+All files — the package and the three verification assets — must be in the same directory for the checksum step to work. Create a dedicated directory and switch into it before proceeding.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    mkdir suprsend-verify && cd suprsend-verify
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    New-Item -ItemType Directory -Name suprsend-verify
+    Set-Location suprsend-verify
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Step 2 — Download the package
+
+You have two options. Either way, save the file into the `suprsend-verify` directory you just created.
+
+**Option A — pip3 download (recommended)**
+
+`pip3 download` fetches the package artifact locally without installing it. The `-d .` flag saves it into the current directory.
+
+```bash
+pip3 download suprsend-py-sdk --no-deps -d .
+```
+
+This places the wheel file (`suprsend_py_sdk-0.18.1-py3-none-any.whl`) directly in `suprsend-verify`.
+
+<Note>
+  `--no-deps` prevents pip3 from also downloading dependencies, keeping the directory clean for verification.
+</Note>
+
+**Option B — Download directly from PyPI**
+
+Go to [https://pypi.org/project/suprsend-py-sdk/#files](https://pypi.org/project/suprsend-py-sdk/#files), click the `.whl` filename to download it, then move it into the `suprsend-verify` directory before continuing.
+
+---
+
+## Step 3 — Download the verification files
+
+Run these commands from inside the `suprsend-verify` directory:
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    VERSION="0.18.1"
+    BASE="https://github.com/suprsend/suprsend-py-sdk/releases/download/v${VERSION}"
+
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/public_key.pem"
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $VERSION = "0.18.1"
+    $BASE    = "https://github.com/suprsend/suprsend-py-sdk/releases/download/v$VERSION"
+
+    Invoke-WebRequest "$BASE/checksums.txt"     -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/checksums.txt.sig" -OutFile checksums.txt.sig
+    Invoke-WebRequest "$BASE/public_key.pem"    -OutFile public_key.pem
+    ```
+  </Tab>
+</Tabs>
+
+At this point your `suprsend-verify` directory should contain exactly these files:
+
+```
+suprsend-verify/
+├── checksums.txt
+├── checksums.txt.sig
+├── public_key.pem
+└── suprsend_py_sdk-0.18.1-py3-none-any.whl
+```
+
+| File | Description |
+|---|---|
+| `checksums.txt` | SHA-256 hashes of all release artifacts. This is what gets signed. |
+| `checksums.txt.sig` | The Cosign bundle — contains the signature over `checksums.txt` and its verification metadata. |
+| `public_key.pem` | SuprSend's PEM-encoded public key. Used to verify the signature. |
+
+<Note>
+  Always download `public_key.pem` directly from the official [SuprSend Python SDK releases page](https://github.com/suprsend/suprsend-py-sdk/releases). Do not copy it from mirrors or third-party sources.
+</Note>
+
+---
+
+## Step 4 — Verify the signature
+
+```bash
+cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+```
+
+This command is identical on macOS, Linux, and Windows (PowerShell).
+
+**What each argument does:**
+
+| Argument | Description |
+|---|---|
+| `--key public_key.pem` | SuprSend's PEM-encoded public key. Cosign uses this to validate the signature. |
+| `--bundle checksums.txt.sig` | The Cosign bundle containing the signature and its metadata. |
+| `checksums.txt` | The artifact being verified — the SHA-256 manifest of all release artifacts. |
+
+**Expected output:**
+
+```
+Verified OK
+```
+
+`Verified OK` confirms:
+- The signature was produced using SuprSend's private key — the key that corresponds to `public_key.pem`. Only SuprSend's release pipeline has access to it.
+- `checksums.txt` is byte-for-byte identical to what was signed at release time.
+
+<Warning>
+  If you see `invalid signature when validating ASN1 encoded signature`, do not proceed with installation. Re-download all three verification files from the same release and retry. If the failure persists, [contact SuprSend support](mailto:support@suprsend.com).
+</Warning>
+
+---
+
+## Step 5 — Verify the package checksum
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    grep "suprsend_py_sdk-0.18.1-py3-none-any.whl" checksums.txt | shasum -a 256 --check
+    ```
+
+    **Expected output:**
+
+    ```
+    suprsend_py_sdk-0.18.1-py3-none-any.whl: OK
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    grep "suprsend_py_sdk-0.18.1-py3-none-any.whl" checksums.txt | sha256sum --check
+    ```
+
+    **Expected output:**
+
+    ```
+    suprsend_py_sdk-0.18.1-py3-none-any.whl: OK
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $filename = "suprsend_py_sdk-0.18.1-py3-none-any.whl"
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match [regex]::Escape($filename) }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$filename" -Algorithm SHA256).Hash.ToLower()
+
+    if ($expected -eq $actual) {
+      Write-Host "Checksum OK — $filename"
+    } else {
+      Write-Error "CHECKSUM MISMATCH — do not use this package"
+    }
+    ```
+
+    **Expected output:**
+
+    ```
+    Checksum OK — suprsend_py_sdk-0.18.1-py3-none-any.whl
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  To verify the `.tar.gz` instead, replace the filename in the command with `suprsend_py_sdk-0.18.1.tar.gz`.
+</Note>
+
+---
+
+## Step 6 — Install the package
+
+Once both verifications pass, install the SDK:
+
+```bash
+pip3 install suprsend-py-sdk
+```
+
+---
+
+## Full script
+
+Creates the working directory, downloads everything into it, verifies both the signature and the checksum, then installs.
+
+<Tabs>
+  <Tab title="macOS (Apple Silicon / Intel)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.18.1"
+    WHL="suprsend_py_sdk-${VERSION}-py3-none-any.whl"
+    BASE="https://github.com/suprsend/suprsend-py-sdk/releases/download/v${VERSION}"
+
+    mkdir suprsend-verify && cd suprsend-verify
+
+    echo "-> Downloading package..."
+    pip3 download suprsend-py-sdk==${VERSION} --no-deps -d .
+
+    echo "-> Downloading verification files..."
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/public_key.pem"
+
+    echo "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    echo "-> Verifying package checksum..."
+    grep "${WHL}" checksums.txt | shasum -a 256 --check
+
+    echo "-> Installing..."
+    pip3 install suprsend-py-sdk==${VERSION}
+
+    echo "Done. SuprSend Python SDK ${VERSION} installed and verified."
+    ```
+  </Tab>
+  <Tab title="Linux (x86_64 / ARM64)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.18.1"
+    WHL="suprsend_py_sdk-${VERSION}-py3-none-any.whl"
+    BASE="https://github.com/suprsend/suprsend-py-sdk/releases/download/v${VERSION}"
+
+    mkdir suprsend-verify && cd suprsend-verify
+
+    echo "-> Downloading package..."
+    pip3 download suprsend-py-sdk==${VERSION} --no-deps -d .
+
+    echo "-> Downloading verification files..."
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/checksums.txt.sig"
+    curl -sL -O "${BASE}/public_key.pem"
+
+    echo "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    echo "-> Verifying package checksum..."
+    grep "${WHL}" checksums.txt | sha256sum --check
+
+    echo "-> Installing..."
+    pip3 install suprsend-py-sdk==${VERSION}
+
+    echo "Done. SuprSend Python SDK ${VERSION} installed and verified."
+    ```
+  </Tab>
+  <Tab title="Windows (x86_64 / ARM64)">
+    ```powershell
+    $VERSION  = "0.18.1"
+    $filename = "suprsend_py_sdk-$VERSION-py3-none-any.whl"
+    $BASE     = "https://github.com/suprsend/suprsend-py-sdk/releases/download/v$VERSION"
+
+    New-Item -ItemType Directory -Name suprsend-verify
+    Set-Location suprsend-verify
+
+    Write-Host "-> Downloading package..."
+    pip3 download suprsend-py-sdk==$VERSION --no-deps -d .
+
+    Write-Host "-> Downloading verification files..."
+    Invoke-WebRequest "$BASE/checksums.txt"     -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/checksums.txt.sig" -OutFile checksums.txt.sig
+    Invoke-WebRequest "$BASE/public_key.pem"    -OutFile public_key.pem
+
+    Write-Host "-> Verifying signature..."
+    cosign verify-blob --key public_key.pem --bundle checksums.txt.sig checksums.txt
+
+    Write-Host "-> Verifying package checksum..."
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match [regex]::Escape($filename) }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$filename" -Algorithm SHA256).Hash.ToLower()
+    if ($expected -eq $actual) { Write-Host "Checksum OK — $filename" } else { Write-Error "CHECKSUM MISMATCH — do not use this package" }
+
+    Write-Host "-> Installing..."
+    pip3 install suprsend-py-sdk==$VERSION
+
+    Write-Host "Done. SuprSend Python SDK $VERSION installed and verified."
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Reference
+
+<AccordionGroup>
+  <Accordion title="Available release artifacts" id="available-release-artifacts">
+
+    All artifacts are available on the [GitHub releases page](https://github.com/suprsend/suprsend-py-sdk/releases) and the [PyPI files page](https://pypi.org/project/suprsend-py-sdk/#files).
+
+    | Artifact | Description |
+    |---|---|
+    | `suprsend_py_sdk-{version}-py3-none-any.whl` | Wheel — preferred for installation. Platform-independent. |
+    | `suprsend_py_sdk-{version}.tar.gz` | Source distribution. |
+
+  </Accordion>
+
+  <Accordion title="Security model">
+    SuprSend's signing private key is held exclusively by the automated release pipeline and never leaves the secure signing environment. `public_key.pem` is the public counterpart — it is published openly with every release and carries no risk of compromise.
+
+    The PyPI Verified details badge confirms that the GitHub repository linked on the PyPI project page is owned by the same account that publishes the package, providing an additional layer of provenance assurance independent of the Cosign signature.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+<Tip>
+  If you encounter an unexpected verification failure, reach out at [support@suprsend.com](mailto:support@suprsend.com) or open an issue on the [SuprSend Python SDK GitHub repository](https://github.com/suprsend/suprsend-py-sdk/issues).
+</Tip>
