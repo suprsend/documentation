@@ -93,48 +93,59 @@ Once your metrics are flowing into Datadog, you can set up monitors to get paged
 
 Alert when message delivery errors exceed a threshold — useful for catching vendor-side failures or misconfigurations before users notice.
 
-1. In Datadog, go to **Monitors → New Monitor** and select **Metric**.
-2. Under **Define the metric**, enter:
+1. In Datadog, go to [**Monitors → New Monitor**](https://app.datadoghq.com/monitors/create) and select [**Metric**](https://docs.datadoghq.com/monitors/types/metric/).
+2. Under **Choose the detection method**, select **Threshold Alert**.
+3. Under **Define the metric**, enter:
    ```
    sum:suprsend.messages.delivery_errors{*}.as_count()
    ```
-   Optionally scope it with tags — e.g. add `channel:email` to the **from** field to monitor a specific channel.
-3. Set the evaluation window to **last 5 minutes** and the aggregation to **sum**.
-4. Under **Set alert conditions**, choose **Threshold Alert** and set:
-   - **Alert threshold**: `10` (alert if more than 10 delivery errors in 5 minutes)
-   - **Warning threshold**: `5`
+   Set **Evaluate the bounds for the last** to **5 minutes**.
+4. Under **Set alert conditions**:
+   - **Trigger when the evaluated value is**: `above` the threshold
+   - **Alert threshold**: `50` — adjust based on your typical delivery volume. A good starting point is 1–2% of your average message volume per 5 minutes.
+   - **Warning threshold**: `20` — optional, but useful for early visibility before a full alert fires
+   - **If data is missing**: set to **Evaluate as zero**
 
-   Tune these values based on your normal delivery volume.
-5. Under **Notify your team**, add your notification channel (email, Slack, PagerDuty, etc.) and write a message. You can use Datadog template variables to include context:
+   <Frame caption="Metric and alert condition configuration in Datadog">
+     <img src="/images/docs/datadog-alert-threshold.png" />
+   </Frame>
+5. Under [**Configure notifications & automations**](https://docs.datadoghq.com/monitors/notify/), give the monitor a name (e.g. `SuprSend — Delivery Error Spike`) and add a message with context:
    ```
-   Delivery errors are elevated: {{value}} errors in the last 5 minutes.
-   Check SuprSend Logs for details: https://app.suprsend.com/logs
+   Delivery errors are elevated — {{value}} errors in the last 5 minutes.
+   Investigate: https://app.suprsend.com/logs
    ```
+   Add your notification recipients (email, Slack, PagerDuty, etc.) using **@ mentions** in the message body.
 6. Click **Save**.
 
 ### Example 2 — Alert on anomalous message delivery drop
 
-Alert when delivered message volume drops unexpectedly — useful for catching silent failures where messages stop flowing without a corresponding error.
+Alert when delivered message volume drops unexpectedly — useful for catching silent failures where messages stop flowing without a corresponding error spike.
 
-1. In Datadog, go to **Monitors → New Monitor** and select **Metric**.
-2. Under **Define the metric**, enter:
+1. In Datadog, go to [**Monitors → New Monitor**](https://app.datadoghq.com/monitors/create) and select **Metric**.
+2. Under **Choose the detection method**, select [**Anomaly Detection**](https://docs.datadoghq.com/monitors/types/anomaly/).
+3. Under **Define the metric**, enter:
    ```
    sum:suprsend.messages.delivered{*}.as_count()
    ```
-3. Set the evaluation window to **last 15 minutes**.
-4. Under **Set alert conditions**, choose **Anomaly Detection**.
-   - Set the algorithm to **Agile** (recommended for metrics with regular patterns).
-   - Set the **alert threshold** to **2 standard deviations**.
-   - Set the direction to **Below** (alert only when delivery drops below the expected range).
-5. Under **Notify your team**, add your notification channel and a message:
+   Set **Evaluate the bounds for the last** to **15 minutes**.
+4. Under **Set alert conditions**:
+   - **Trigger when the evaluated values have been**: `below` the bounds — so you're only alerted when delivery drops, not when it spikes
+   - **Alert threshold**: `75` — alert when 75% or more of the values in the window fall below the expected range
+   - Under **Advanced options → Anomaly detection algorithm options**: set deviations to `2` and keep the algorithm as **basic**
+
+   <Frame caption="Anomaly detection configuration in Datadog">
+     <img src="/images/docs/datadog-alert-anomaly.png" />
+   </Frame>
+5. Under [**Configure notifications & automations**](https://docs.datadoghq.com/monitors/notify/), give the monitor a name (e.g. `SuprSend — Delivery Drop Anomaly`) and add a message:
    ```
-   Message delivery has dropped below expected levels: {{value}} delivered in the last 15 minutes.
-   Check SuprSend Logs: https://app.suprsend.com/logs
+   Message delivery has dropped below expected levels — {{value}} messages delivered in the last 15 minutes.
+   Investigate: https://app.suprsend.com/logs
    ```
+   Add your notification recipients using **@ mentions** in the message body.
 6. Click **Save**.
 
 <Tip>
-  You can use the `$workflow_slug` or `$channel` template variables to create per-workflow or per-channel monitors, so you're alerted on exactly the slice that matters to you.
+  Scope either monitor to a specific workflow or channel by adding `workflow_slug:your-workflow` or `channel:email` to the metric query in step 3. This lets you create targeted monitors for your most critical notification flows.
 </Tip>
 
 ---
