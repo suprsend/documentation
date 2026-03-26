@@ -158,10 +158,10 @@ SuprSend streams the following `suprsend.*` counter metrics to Datadog. All coun
 
 Track the volume and health of every API call made to SuprSend.
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `suprsend.api_request.total` | Counter | Incremented for each API request received by SuprSend. Use the `status` tag to break down by outcome — `sent`, `in_progress`, `success`, `failed`, or `partial_failure`. |
-| `suprsend.api_request.errors` | Counter | Incremented when an API request results in an error. Group by `api_type` to identify which endpoint is failing, and by `error_severity` to prioritize investigation. |
+| Metric | Description |
+|--------|-------------|
+| `suprsend.api_request.total` | Total number of API requests received by SuprSend. Use the `status` tag to break down by outcome — `sent`, `in_progress`, `success`, `failed`, or `partial_failure`. |
+| `suprsend.api_request.errors` | API requests that failed to process due to an error. Group by `api_type` to identify which endpoint is failing, and by `error_severity` to prioritize investigation. |
 
 **Tags on API Request metrics**
 
@@ -171,6 +171,7 @@ Track the volume and health of every API call made to SuprSend.
 | `method` | HTTP method of the request | `POST`, `GET`, `PUT`, `PATCH` |
 | `status` | Outcome of the request | `sent`, `in_progress`, `success`, `failed`, `partial_failure` |
 | `workspace_key` | Identifier of the SuprSend workspace (environment) | `your_workspace_key` |
+| `workspace_slug` | Slug of the SuprSend workspace. Eg. `staging` |
 | `tenant_id` | Tenant ID if the request is scoped to a tenant | `tenant_abc` |
 | `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
 
@@ -178,11 +179,11 @@ Track the volume and health of every API call made to SuprSend.
 
 Monitor how your workflows and broadcasts are performing and quickly spot execution failures.
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `suprsend.workflow_execution.total` | Counter | Incremented each time a workflow execution starts. Use `workflow_slug` and `category` tags to drill down into specific workflows. |
-| `suprsend.workflow_execution.errors` | Counter | Incremented when a workflow execution encounters an error. Rich error context is available via `error_message`, `error_code`, and `error_type` tags. Node-level tags (`node_type`, `node_name`, `node_slug`) pinpoint exactly where in the workflow the failure occurred. |
-| `suprsend.broadcast_execution.errors` | Counter | Incremented when a broadcast execution encounters an error. Similar error tags are available to diagnose the failure. |
+| Metric | Description |
+|--------|-------------|
+| `suprsend.workflow_execution.total` | Total number of workflow executions started. Workflow executions are counted per-recipient. Use `workflow_slug` and `category` tags to drill down into specific workflows. |
+| `suprsend.workflow_execution.errors` | Workflow executions that failed to process due to an error. |
+| `suprsend.broadcast_execution.errors` | Broadcast executions that failed to process due to an error. |
 
 **Tags on Workflow Execution metrics**
 
@@ -195,25 +196,19 @@ Monitor how your workflows and broadcasts are performing and quickly spot execut
 | `workspace_slug` | Slug of the SuprSend workspace | `my-workspace` |
 | `workspace_key` | Identifier of the SuprSend workspace (environment) | `your_workspace_key` |
 | `tenant_id` | Tenant ID if the workflow is scoped to a tenant | `tenant_abc` |
-| `node_type` | Type of the workflow node where the error occurred (on error metrics only) | `channel`, `delay`, `batch`, `condition` |
-| `node_name` | Display name of the failing node (on error metrics only) | `Send Email`, `Wait 1 hour` |
-| `node_slug` | Slug identifier of the failing node (on error metrics only) | `send-email-1`, `wait-1h` |
-| `error_message` | Human-readable error description (on error metrics only) | `Template not found`, `Invalid recipient` |
-| `error_code` | Machine-readable error code (on error metrics only) | `TEMPLATE_NOT_FOUND`, `INVALID_RECIPIENT` |
-| `error_type` | Classification of the error (on error metrics only) | `validation`, `vendor`, `system` |
 | `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
 
 ### Messages
 
 Follow the full lifecycle of every message — from trigger through delivery, open, and click — and monitor delivery failures by vendor and channel.
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `suprsend.messages.triggered` | Counter | Incremented when SuprSend initiates a message send to a vendor. Slice by `channel` and `vendor` to see volume distribution. |
-| `suprsend.messages.delivered` | Counter | Incremented when the vendor confirms the message was delivered to the recipient. |
-| `suprsend.messages.delivery_errors` | Counter | Incremented when the vendor reports a delivery failure. Use `error_message` and `error_code` tags to diagnose failures, and `vendor` / `channel` tags to isolate the source. |
-| `suprsend.messages.seen` | Counter | Incremented when a recipient opens or views the message. Requires vendor webhook callbacks to be configured (see note below). |
-| `suprsend.messages.clicked` | Counter | Incremented when a recipient clicks a link in the message. Requires vendor webhook callbacks to be configured (see note below). |
+| Metric | Description |
+|--------|-------------|
+| `suprsend.messages.triggered` | Total number of messages triggered. Slice by `channel` and `vendor` to see volume distribution. |
+| `suprsend.messages.delivered` | Total number of messages delivered to the recipient. |
+| `suprsend.messages.delivery_errors` | Messages that failed to deliver due to an error. Use `vendor` / `channel` tags to isolate the error source. |
+| `suprsend.messages.seen` | Total number of messages seen by the recipient. Requires vendor webhook callbacks to be configured (see note below). |
+| `suprsend.messages.clicked` | Total number of messages clicked by the recipient. Requires vendor webhook callbacks to be configured (see note below). |
 
 **Tags on Message metrics**
 
@@ -224,13 +219,8 @@ Follow the full lifecycle of every message — from trigger through delivery, op
 | `tenant_id` | Tenant ID if the message is scoped to a tenant | `tenant_abc` |
 | `category` | Notification category of the parent workflow | `transactional`, `promotional` |
 | `channel` | Delivery channel used for the message | `email`, `sms`, `push`, `whatsapp`, `inbox`, `slack`, `ms_teams` |
-| `vendor` | Vendor used to deliver the message | `mailgun`, `twilio`, `firebase`, `sendgrid` |
+| `vendor` | Vendor used to deliver the message | `mailgun`, `twilio`, `firebase`, `sendgrid`, etc. |
 | `workflow_slug` | Slug of the workflow that generated the message | `welcome-flow`, `order-confirmation` |
-| `template_slug` | Slug of the template used to render the message | `welcome-email-v2`, `otp-sms` |
-| `error_message` | Human-readable error description (on error metrics only) | `Mailbox full`, `Invalid phone number` |
-| `error_code` | Machine-readable error code (on error metrics only) | `BOUNCED`, `INVALID_NUMBER` |
-| `error_type` | Classification of the error (on error metrics only) | `vendor`, `validation`, `system` |
-| `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
 
 <Info>
   - All metrics are scoped to the SuprSend environment (e.g. `production`, `staging`) via the `workspace_key` tag.
