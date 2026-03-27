@@ -5,7 +5,7 @@ description: "A practical guide to implementing common preference scenarios in S
 
 Notification preferences give users control over what they hear from your app, on which channel, and how often. Get them right and users stay engaged — they can mute what's noisy without losing what matters. Skip them and users will unsubscribe from everything.
 
-This guide covers nine preference patterns drawn from real-world use cases, from simple channel opt-in/opt-outs to complex multi-tenant setups. Each section explains what the pattern is, when to use it, how to configure it in SuprSend, and the code to implement it in your app.
+This guide covers eight preference patterns drawn from real-world use cases, from simple channel opt-in/opt-outs to complex multi-tenant setups. Each section explains what the pattern is, when to use it, how to configure it in SuprSend, and the code to implement it in your app.
 
 <Note>
   **New to preferences in SuprSend?** Read the [User Preferences overview](/docs/user-preferences) first — it covers how categories, channels, and the preference API response are structured. For multi-tenant setups, see [Tenant Preferences](/docs/tenant-preference).
@@ -30,20 +30,19 @@ The `channel_preferences` array in the API response drives the global All / Requ
   <img src="/images/channel.png" alt="Channel-level preferences" width="450" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and select a root-category (System, Transactional, or Promotional)
 2. Click **`+Section`** to create a section (e.g. "Product", "Billing"). Add a name and click **`Save Changes`**
 3. Click **`+Sub-Category`**, fill in the name, select the section, and set a default preference (**On**, **Off**, or **Can't Unsubscribe**)
 4. Click **`Publish Changes`**
 
-### Build in your app
+**Build in your app**
 
-Call `getPreferences()` in your parent component on page load and pass the result down as `preferenceData`. The response gives you two independent parts:
+Call [`getPreferences()`](/docs/js-preferences#get-preferences-data) in your parent component on page load and pass the result down as `preferenceData`. The response gives you two independent parts:
 
-- `channel_preferences` — render one row per channel with **All** / **Required** radio buttons. Read `is_restricted` to know which is currently selected: `false` = All, `true` = Required.
-
-Pass `ChannelLevelPreferenceOptions.ALL` or `ChannelLevelPreferenceOptions.REQUIRED` to `updateOverallChannelPreference` when the user changes their selection. Per-category channel checkboxes (which use `sections[].subcategories[].channels`) are covered in Section 2.
+- **`channel_preferences`** — render one row per channel with **All** / **Required** radio buttons. Read `is_restricted` to know which is currently selected: `false` = All, `true` = Required. Call [`updateOverallChannelPreference`](/docs/js-preferences#update-overall-channel-preference) with `ChannelLevelPreferenceOptions.ALL` or `ChannelLevelPreferenceOptions.REQUIRED` when the user changes their selection.
+- **`sections[].subcategories[].channels`** — per-category channel checkboxes that let users turn individual channels on or off within a specific notification type. This is covered in detail in Section 2.
 
 ```javascript
 import {
@@ -56,7 +55,6 @@ function ChannelPreferences({ preferenceData, setPreferenceData }) {
 
   // Global All vs Required control per channel
   // is_restricted: false = All, is_restricted: true = Required
-  // API value for "Required" is ChannelLevelPreferenceOptions.REQUIRED
   const handleOverallChannelChange = async (channel, status) => {
     const resp = await suprSendClient.user.preferences.updateOverallChannelPreference(
       channel.channel,
@@ -72,16 +70,22 @@ function ChannelPreferences({ preferenceData, setPreferenceData }) {
         <div key={i}>
           <p>{channel.channel}</p>
           <p>{channel.is_restricted ? "Allow required notifications only" : "Allow all notifications"}</p>
-          <input
-            type="radio"
-            checked={!channel.is_restricted}
-            onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.ALL)}
-          /> All
-          <input
-            type="radio"
-            checked={channel.is_restricted}
-            onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.REQUIRED)}
-          /> Required
+          <label>
+            <input
+              type="radio"
+              checked={!channel.is_restricted}
+              onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.ALL)}
+            />
+            All
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={channel.is_restricted}
+              onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.REQUIRED)}
+            />
+            Required
+          </label>
         </div>
       ))}
     </>
@@ -92,8 +96,6 @@ function ChannelPreferences({ preferenceData, setPreferenceData }) {
 <Tip>
   **When to use:** Your app sends on multiple channels and users want coarse control over each one. Examples: "Email me everything, but push only for required notifications", "I only want SMS for critical alerts." Common in consumer apps, marketplaces, and collaboration tools.
 </Tip>
-
-**Related docs:** [User Preferences](/docs/user-preferences) | [Manage Categories](/docs/managing-notification-categories) | [JS SDK Preferences](/docs/js-preferences)
 
 ---
 
@@ -107,7 +109,7 @@ This is the standard notification settings page that most apps need. The respons
   <img src="/images/category.png" alt="Category-level preferences" width="450" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and select a root-category
 2. Click **`+Section`** to create sections (e.g. "Product", "Billing", "Sales"). Add a name and click **`Save Changes`**
@@ -115,18 +117,18 @@ This is the standard notification settings page that most apps need. The respons
 4. Click **`Publish Changes`**
 5. To verify the preference page looks correct, go to **Developers → [Notification categories](/docs/managing-notification-categories)** and click **`Preview`** to see a live preview of the preference UI
 
-### Build in your app
+**Build in your app**
 
-Call `getPreferences()` in your parent component and pass `preferenceData` as a prop. Render sections as headings and subcategories as rows, each with a toggle and channel checkboxes below it.
+Call [`getPreferences()`](/docs/js-preferences#get-preferences-data) in your parent component and pass `preferenceData` as a prop. Render sections as headings and subcategories as rows, each with a toggle and channel checkboxes below it.
 
 Three things to handle carefully:
 
 - **`is_editable: false` on a subcategory** means the category is set to **Can't Unsubscribe** in SuprSend. Disable the toggle — users cannot opt out.
 - **`is_editable: false` on a channel inside a subcategory** means that specific channel is mandatory for that category and cannot be turned off. Disable the channel checkbox independently of the subcategory toggle. A category can have `is_editable: true` (user can toggle it off) while individual channels within it have `is_editable: false` (those channels cannot be removed).
-- **`channels` can be an empty array** for some subcategories. Use optional chaining (`subcategory?.channels?.map(...)`) to handle this safely.
+- **`channels` may be empty or absent** (e.g. when `show_opt_out_channels` is `false` for opted-out categories). Use optional chaining (`subcategory?.channels?.map(...)`) to handle this safely.
 
 <Note>
-  All preference updates (`updateCategoryPreference`, `updateChannelPreferenceInCategory`, `updateOverallChannelPreference`) are **optimistic** — the UI updates immediately and the actual API call happens in the background with a 1-second debounce. Set up these emitter listeners once when loading preferences to handle the confirmed result and catch server-side errors:
+  All preference updates ([`updateCategoryPreference`](/docs/js-preferences#update-category-preference), [`updateChannelPreferenceInCategory`](/docs/js-preferences#update-channel-preference-in-category), [`updateOverallChannelPreference`](/docs/js-preferences#update-overall-channel-preference)) are **optimistic** — the UI updates immediately and the actual API call happens in the background with a 1-second debounce. Set up these emitter listeners once when loading preferences to handle the confirmed result and catch server-side errors:
 
   ```javascript
   // Fires after the background API call succeeds — sync your UI state with confirmed data
@@ -148,7 +150,7 @@ function CategoryPreferences({ preferenceData, setPreferenceData }) {
   const suprSendClient = useSuprSendClient();
 
   // Toggle a category on or off
-  // value is true = opt_in, false = opt_out
+  // value: true = opt_in, false = opt_out
   const handleCategoryChange = async (subcategory, value) => {
     const resp = await suprSendClient.user.preferences.updateCategoryPreference(
       subcategory.category,
@@ -185,12 +187,24 @@ function CategoryPreferences({ preferenceData, setPreferenceData }) {
           {/* Replace with your own toggle/switch component */}
           <button
             disabled={!subcategory.is_editable}
-            onClick={() => handleCategoryChange(subcategory, subcategory.preference !== PreferenceOptions.OPT_IN)}
-            style={{ opacity: !subcategory.is_editable ? 0.5 : 1, background: subcategory.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !subcategory.is_editable ? 'not-allowed' : 'pointer' }}
+            onClick={() =>
+              handleCategoryChange(
+                subcategory,
+                subcategory.preference !== PreferenceOptions.OPT_IN
+              )
+            }
+            style={{
+              opacity: !subcategory.is_editable ? 0.5 : 1,
+              background: subcategory.preference === PreferenceOptions.OPT_IN ? "#2563EB" : "#D1D5DB",
+              borderRadius: "9999px",
+              padding: "2px 8px",
+              border: "none",
+              cursor: !subcategory.is_editable ? "not-allowed" : "pointer",
+            }}
           >
-            {subcategory.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
+            {subcategory.preference === PreferenceOptions.OPT_IN ? "On" : "Off"}
           </button>
-          {/* Channel checkboxes — channels can be an empty array, handle with ?. */}
+          {/* Channel checkboxes — channels may be empty or absent, handle with ?. */}
           <div>
             {subcategory?.channels?.map((channel, j) => (
               <button
@@ -214,32 +228,30 @@ function CategoryPreferences({ preferenceData, setPreferenceData }) {
   **When to use:** The default for most apps — the standard notification settings page. Examples: e-commerce (order updates on, promotions off), SaaS (product updates via email, billing via email + SMS), social apps (comments on, likes off).
 </Tip>
 
-**Related docs:** [User Preferences](/docs/user-preferences) | [Manage Categories](/docs/managing-notification-categories) | [Update category preference](/reference/update-user-category-preference)
-
 ---
 
 ## 3. Digest frequency
 
 Instead of one notification per event, users choose how often they want a summary — Daily, Weekly, or Off. A user who picks Daily gets one email at 09:00 summarising everything that happened that day instead of a notification for every single event.
 
-This works by storing the user's chosen schedule as a custom property on their profile using `user.set()`. The workflow's Digest node reads this property at runtime via a [dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) and fires at the schedule the user set.
+This works by storing the user's chosen schedule as a custom property on their profile using [`user.set()`](/docs/users). The workflow's Digest node reads this property at runtime via a [dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) and fires on the schedule the user set.
 
 <Frame caption="Digest preferences">
   <img src="/images/t1.png" alt="Digest preferences" width="450" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and create a sub-category for the notification type you want to digest (e.g. "Activity Summary"). Click **`+Sub-Category`**, fill in the name, and set a default preference
 2. Click **`Publish Changes`**
-3. In your workflow, add a **[Digest node](/docs/digest)** and set it to use a **dynamic schedule**. Point the dynamic schedule key at the user profile property where you store the schedule — e.g. `."$recipient".digestSchedule`. The Digest node will automatically use whatever schedule the user has saved. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
+3. In your workflow, add a **[Digest node](/docs/digest)** and set it to use a **dynamic schedule**. Point the dynamic schedule key at the user profile property where you store the schedule — e.g. `."$recipient".digestSchedule.category-slug` (where `category-slug` is the category slug). The Digest node will automatically use whatever schedule the user has saved for that category. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
 
-### Build in your app
+**Build in your app**
 
-Show radio buttons for Daily / Weekly / Off and a time picker for daily and weekly. On save, write the schedule to the user's profile with `user.set()`.
+Show radio buttons for Daily / Weekly / Off and a time picker for daily and weekly schedules. On save, write the schedule to the user's profile with [`user.set()`](/docs/users).
 
 <Warning>
-  This is a **profile update**, not a preference API call. Use `suprSendClient.user.set()` to save the digest schedule directly to the user's profile. The workflow's Digest node reads this property via the dynamic schedule key — not via the preference API.
+  This is a **profile update**, not a preference API call. Use [`suprSendClient.user.set()`](/docs/users) to save the digest schedule directly to the user's profile. The workflow's Digest node reads this property via the dynamic schedule key — not via the preference API.
 </Warning>
 
 ```javascript
@@ -251,16 +263,30 @@ function DigestPreferences() {
   const [frequency, setFrequency] = useState("daily");
   const [time, setTime] = useState("09:00");
 
-  // Save digest schedule as a user profile property.
+  // Save digest schedule as a user profile property, nested under the category slug.
   // In your workflow, set the Digest node's dynamic schedule key to:
-  //   ."$recipient".digestSchedule
+  //   ."$recipient".digestSchedule.category-slug  (replace with your category slug)
+  //
+  // Schema fields:
+  //   frequency    — "daily" | "weekly" | "hourly" | "minutely" | "monthly"
+  //   time         — "hh:mm" — the time at which the recurring schedule fires and the
+  //                  batch window closes (e.g. "09:00" fires daily at 9 AM)
+  //   tz_selection — "recipient" uses the recipient's $timezone profile property;
+  //                  leave empty "" and set tz_fixed for a hard-coded timezone
+  //   dtstart      — (optional) ISO-8601 datetime with timezone offset for the first
+  //                  schedule calculation, e.g. "2024-08-01T10:40:50+00:00".
+  //                  Defaults to current timestamp if omitted.
+  //
   // See: https://docs.suprsend.com/docs/digest#dynamic-schedule-send-digest-based-on-user-preference
   const handleSave = async () => {
     await suprSendClient.user.set({
       digestSchedule: {
-        frequency: frequency,      // "daily" | "weekly"
-        time: time,                // "09:00" — time the digest closes (hh:mm)
-        tz_selection: "recipient", // use the recipient's timezone from their profile
+        "category-slug": {        // replace with your category slug
+          frequency: frequency,      // "daily" | "weekly" — drives when the batch fires
+          time: time,                // "09:00" — time the recurring schedule fires (hh:mm)
+          tz_selection: "recipient", // use the recipient's timezone from their profile
+          // dtstart: "2024-08-01T10:40:50+00:00",  // optional: ISO-8601 with tz offset
+        },
       },
     });
   };
@@ -290,38 +316,50 @@ function DigestPreferences() {
   **When to use:** Users get too many individual notifications and want a summary instead. Examples: daily activity digest ("Here's what happened in your workspace today"), weekly analytics reports, aggregated comment or mention notifications, team standup summaries.
 </Tip>
 
-**Related docs:** [Digest](/docs/digest) | [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) | [Users API](/docs/users)
-
 ---
 
 ## 4. Hide categories by tenant plan
 
-In a multi-tenant app, different tenants (customers) should only see the notification categories relevant to their plan or configuration. A free-plan tenant sees a limited set of categories; a paid-plan tenant sees everything they've subscribed to. Categories hidden for a tenant don't appear in `getPreferences()` at all, and notifications for those categories are never sent to that tenant's users — even if a user previously opted in.
+<Note>
+  This guide has three tenant-related patterns. **Section 4** is for platform admins restricting what a tenant can access. **Section 6** is for tenant admins setting defaults for their own users. **Section 8** is for modelling each project as an independent tenant.
+</Note>
 
-The mechanism is `visible_to_subscriber` on the tenant's category settings. Set it to `false` to hide a category completely from that tenant's users.
+If you're building a multi-tenant app (e.g. a SaaS platform with free and paid plans), you probably don't want every tenant to see the same notification categories. A free-plan tenant shouldn't see categories for features they haven
+
+SuprSend lets you handle this with **[global tenant preferences](/docs/tenant-preference#platform-admin-controlling-tenant-access)**. As a platform admin, you can opt out specific categories or channels for any tenant. Once you do:
+
+- The opted-out categories and channels are **removed from [`getPreferences()`](/docs/js-preferences)** responses for all users in that tenant — they won't see them on the preference page.
+- **Notifications for those categories are not delivered** to the tenant's users.
+- These are **hard overrides** — neither the tenant admin's default preferences nor individual user preferences can re-enable them. See [Preference Evaluation](/docs/preference-evaluation) for the full resolution order.
 
 <Frame caption="Free-plan users see only core categories; paid-plan users see the full set">
   <img src="/images/tenant_res.png" alt="Tenant-restricted categories — free vs paid plan" width="560" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
-Go to **Tenants → select your tenant → Tenant Preference** in the SuprSend dashboard. For each category you want to restrict, set `visible_to_subscriber: false`.
+Go to **Tenants → select your tenant → Tenant Preference** in the SuprSend dashboard. The **Set Global Preference for Tenant** section gives you three controls:
 
-For programmatic management (e.g. automatically restricting categories when a customer downgrades their plan), use the API:
+- **Global Channel Opt-out** — block one or more channels (e.g. Email, In-App Inbox) across all categories for the tenant. Notifications on blocked channels are never delivered to any user in the tenant.
+- **Category Opt-out** — toggle a category off for the tenant. The category is removed from the tenant's preference API responses and notifications for that category are not delivered.
+- **Opt-out Channels in the Category** — block specific channels within a single category (e.g. disable SMS for "Newsletter" but keep it enabled for other categories).
+
+<Frame caption="Global tenant preference page in the SuprSend dashboard">
+  <img src="/images/tenant-global-pref.png" alt="Set Global Preference for Tenant — category and channel opt-outs" width="560" />
+</Frame>
+
+For programmatic management (e.g. automatically restricting categories when a customer downgrades their plan), use the [Tenant Preference API](/reference/update-tenant-default-preference):
 
 ```bash
 curl -X PATCH "https://hub.suprsend.com/v1/tenant/{tenant_id}/category/{category_slug}/" \
-  -H "Authorization: Bearer {secret_key}" \
+  -H "Authorization: Bearer {workspace_key}:{workspace_secret}" \
   -H "Content-Type: application/json" \
-  -d '{"preference": "opt_out", "visible_to_subscriber": false}'
+  -d '{"preference": "opt_out"}'
 ```
 
-Setting `visible_to_subscriber: false` does two things: it removes the category from the user's preference page, and it stops notifications for that category from being sent to that tenant's users — even if they previously opted in. See [Update Tenant Default Preference](/reference/update-tenant-default-preference).
+**Build in your app**
 
-### Build in your app
-
-Pass `tenantId` to `getPreferences()`. SuprSend filters the response server-side — **categories with `visible_to_subscriber: false` are not returned at all**. Your rendering code stays exactly the same as the category-level pattern; restricted tenants simply get fewer categories back.
+Pass `tenantId` to [`getPreferences()`](/docs/js-preferences#get-preferences-data). Categories opted out at the tenant level are excluded from the response server-side — **your rendering code stays the same regardless of tenant plan**.
 
 ```javascript
 import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
@@ -332,8 +370,7 @@ function TenantRestrictedPreferences({ tenantId }) {
   const [preferenceData, setPreferenceData] = useState();
 
   useEffect(() => {
-    // Only categories visible for this tenant are returned
-    // Free-plan tenants get fewer categories than paid-plan tenants
+    // Categories opted out at the tenant level are excluded from the response
     suprSendClient.user.preferences
       .getPreferences({ tenantId })
       .then((resp) => {
@@ -349,7 +386,7 @@ function TenantRestrictedPreferences({ tenantId }) {
     if (resp.status !== "error") setPreferenceData({ ...resp.body });
   };
 
-  // Render sections and subcategories — same pattern as Category-level preferences
+  // Render sections and subcategories — same pattern as Section 2
   return preferenceData?.sections?.map((section, i) => (
     <div key={i}>
       {section?.name && <h3>{section.name}</h3>}
@@ -359,10 +396,22 @@ function TenantRestrictedPreferences({ tenantId }) {
           {/* Replace with your own toggle/switch component */}
           <button
             disabled={!sub.is_editable}
-            onClick={() => handleCategoryChange(sub.category, sub.preference !== PreferenceOptions.OPT_IN)}
-            style={{ opacity: !sub.is_editable ? 0.5 : 1, background: sub.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !sub.is_editable ? 'not-allowed' : 'pointer' }}
+            onClick={() =>
+              handleCategoryChange(
+                sub.category,
+                sub.preference !== PreferenceOptions.OPT_IN
+              )
+            }
+            style={{
+              opacity: !sub.is_editable ? 0.5 : 1,
+              background: sub.preference === PreferenceOptions.OPT_IN ? "#2563EB" : "#D1D5DB",
+              borderRadius: "9999px",
+              padding: "2px 8px",
+              border: "none",
+              cursor: !sub.is_editable ? "not-allowed" : "pointer",
+            }}
           >
-            {sub.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
+            {sub.preference === PreferenceOptions.OPT_IN ? "On" : "Off"}
           </button>
         </div>
       ))}
@@ -375,271 +424,216 @@ function TenantRestrictedPreferences({ tenantId }) {
   **When to use:** Multi-tenant SaaS where each tenant's plan determines which notifications are available. Examples: free-plan tenants see only core alert categories, paid tenants see advanced analytics alerts and SLA breach alerts they've subscribed to.
 </Tip>
 
-**Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences) | [Preference Evaluation](/docs/preference-evaluation)
-
 ---
 
-## 5. Filter categories by department or role
+## 5. Filter categories with tags
 
-Different teams, roles, or departments need different notifications. A sales rep doesn't need deploy alerts; an engineer doesn't need pipeline updates. Instead of showing every category to every user and relying on them to configure it themselves, you filter the preference page automatically based on the user's department, role, or team — showing only the categories relevant to them.
+Not every user needs to see every notification category. A sales user only cares about Sales Newsletter, Cart & checkout, and New Leads — they don't need Budget Alerts or Expense Reports. A finance user is the opposite. And in a multi-module product, each module's alerts should live on its own tab.
 
-This uses **tags**. You assign tags to notification categories or sections in SuprSend (e.g. `sales`, `finance`, `engineering`). When fetching preferences, you pass the relevant tag and SuprSend returns only the matching categories. The user never sees a department picker — your app reads their department/role/team from their profile or session and passes the corresponding tag silently.
+This uses **[tags](/docs/user-preferences#filter-categories-with-tags)**. You assign tags to notification categories or sections in SuprSend, then pass the relevant tag to [`getPreferences()`](/docs/js-preferences) — SuprSend returns only the matching categories. When a tag is assigned at the **section level**, it automatically applies to all subcategories under that section via `effective_tags`.
 
-When a tag is assigned at the **section level**, it automatically applies to all subcategories under that section via `effective_tags`.
+Tags are flexible — they can drive two common patterns:
 
-<Frame caption="A sales user sees only sales-related notification categories">
-  <img src="/images/t2_sales.png" alt="Sales department preferences" width="450" />
-</Frame>
+- **Automatic filtering by role or department:** Your app reads the user's department/role/team from their profile or session and passes the tag silently. No filter UI is needed.
+- **User-selected filtering by module:** Your app shows a visible tab selector and re-fetches preferences with the selected tag.
 
-<Frame caption="A finance user sees only finance-related notification categories">
-  <img src="/images/t2_finance.png" alt="Finance department preferences" width="450" />
-</Frame>
+**Configure in SuprSend**
 
-### Configure in SuprSend
+Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and tag your sections or sub-categories. Two ways to structure this:
 
-1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)**
-2. For each sub-category (or section), add the tag that matches the department it belongs to. For example, tag your "Deal updates" and "Pipeline alerts" sub-categories with `sales`; tag "Deploy alerts" and "Incident alerts" with `engineering`; tag "Budget alerts" and "Expense reports" with `finance`. Tags added at the section level automatically apply to all sub-categories in that section via `effective_tags`
-3. Click **`Publish Changes`**
+- **Tag per section:** Click **`+Section`** to create a section (e.g. "Sales", "Finance"). Add a tag to the section (e.g. `sales`, `finance`). All sub-categories under that section inherit the tag automatically via `effective_tags`. Click **`Publish Changes`**.
+- **Tag per sub-category:** Create a section with all sub-categories under it. Select each sub-category and add its own tag (e.g. `sales`, `finance`, `product`). Filtering by tag returns that section with only the matching sub-categories.
 
-### Build in your app
+**Build in your app**
 
-Read the user's department from their profile or session, then pass it as the `tags` parameter to `getPreferences()`. No filter UI is needed — this happens entirely in code.
+Pass the tag to [`getPreferences()`](/docs/js-preferences) via the `tags` parameter. Where the tag comes from depends on your use case — either derived from the user's profile (automatic) or from a tab selector (user-selected). The `tags` parameter also supports logical filtering for more complex cases — see [Filter categories with tags](/docs/user-preferences#filter-categories-with-tags) for supported operators (`or`, `and`, `not`, `exists`).
 
-```javascript
-import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
-import { useState, useEffect } from "react";
+<Tabs>
+  <Tab title="Automatic (by role/department)">
+    Read the user's department from their profile or session and pass it as the tag. No filter UI is needed — a sales user automatically sees only sales categories, a finance user sees only finance categories.
 
-function DepartmentPreferences({ user }) {
-  const suprSendClient = useSuprSendClient();
-  const [preferenceData, setPreferenceData] = useState();
+    <Frame caption="Jane D. (Sales team) sees Sales Newsletter, Cart & checkout, and New Leads">
+      <img src="/images/t2_sales.png" alt="Sales department preferences" width="450" />
+    </Frame>
 
-  // Derive tag from user's department — fall back to "engineering" if not set
-  const tag = user?.department || "engineering";
+    <Frame caption="M. Kim (Finance team) sees Budget Alerts, Expense Reports, Invoice Reminders, and more">
+      <img src="/images/t2_finance.png" alt="Finance department preferences" width="450" />
+    </Frame>
 
-  useEffect(() => {
-    // Only categories tagged with the user's department are returned
-    // A sales user gets Sales Newsletter, Cart & checkout, etc.
-    // A finance user gets Budget Alerts, Expense Reports, etc.
-    suprSendClient.user.preferences
-      .getPreferences({ tags: tag })
-      .then((resp) => {
+    ```javascript
+    import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
+    import { useState, useEffect } from "react";
+
+    function DepartmentPreferences({ user }) {
+      const suprSendClient = useSuprSendClient();
+      const [preferenceData, setPreferenceData] = useState();
+
+      // Derive tag from user's department — e.g. "sales" or "finance"
+      const tag = user?.department || "sales";
+
+      useEffect(() => {
+        // Sales user gets: Sales Newsletter, Cart & checkout, New Leads
+        // Finance user gets: Budget Alerts, Expense Reports, Invoice Reminders, etc.
+        suprSendClient.user.preferences
+          .getPreferences({ tags: tag })
+          .then((resp) => {
+            if (resp.status !== "error") setPreferenceData({ ...resp.body });
+          });
+      }, [tag]);
+
+      const handleCategoryChange = async (category, value) => {
+        const resp = await suprSendClient.user.preferences.updateCategoryPreference(
+          category,
+          value ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
+        );
         if (resp.status !== "error") setPreferenceData({ ...resp.body });
-      });
-  }, [tag]);
+      };
 
-  const handleCategoryChange = async (category, value) => {
-    const resp = await suprSendClient.user.preferences.updateCategoryPreference(
-      category,
-      value ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
-    );
-    if (resp.status !== "error") setPreferenceData({ ...resp.body });
-  };
-
-  return preferenceData?.sections?.map((section, i) => (
-    <div key={i}>
-      {section?.name && <h3>{section.name}</h3>}
-      {section?.subcategories?.map((sub, j) => (
-        <div key={j}>
-          <span>{sub.name}</span>
-          {/* Replace with your own toggle/switch component */}
-          <button
-            disabled={!sub.is_editable}
-            onClick={() => handleCategoryChange(sub.category, sub.preference !== PreferenceOptions.OPT_IN)}
-            style={{ opacity: !sub.is_editable ? 0.5 : 1, background: sub.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !sub.is_editable ? 'not-allowed' : 'pointer' }}
-          >
-            {sub.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
-          </button>
+      return preferenceData?.sections?.map((section, i) => (
+        <div key={i}>
+          {section?.name && <h3>{section.name}</h3>}
+          {section?.subcategories?.map((sub, j) => (
+            <div key={j}>
+              <span>{sub.name}</span>
+              <button
+                disabled={!sub.is_editable}
+                onClick={() => handleCategoryChange(sub.category, sub.preference !== PreferenceOptions.OPT_IN)}
+                style={{ opacity: !sub.is_editable ? 0.5 : 1, background: sub.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !sub.is_editable ? 'not-allowed' : 'pointer' }}
+              >
+                {sub.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
-  ));
-}
-```
+      ));
+    }
+    ```
+  </Tab>
+  <Tab title="User-selected (by module)">
+    Render tab pills for each module. When the user switches tabs, re-fetch with the new tag.
 
-The `tags` parameter also supports logical filtering for more complex cases. See [Filter categories with tags](/docs/user-preferences#filter-categories-with-tags) for supported operators (`or`, `and`, `not`, `exists`).
+    <Frame caption="Users switch between modules to manage preferences for each one">
+      <img src="/images/t4.png" alt="Filter by module" width="450" />
+    </Frame>
+
+    ```javascript
+    import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
+    import { useState, useEffect } from "react";
+
+    function ModulePreferences() {
+      const suprSendClient = useSuprSendClient();
+      const [selectedTag, setSelectedTag] = useState("product");
+      const [preferenceData, setPreferenceData] = useState();
+
+      useEffect(() => {
+        suprSendClient.user.preferences
+          .getPreferences({ tags: selectedTag })
+          .then((resp) => {
+            if (resp.status !== "error") setPreferenceData({ ...resp.body });
+          });
+      }, [selectedTag]);
+
+      const handleCategoryChange = async (category, value) => {
+        const resp = await suprSendClient.user.preferences.updateCategoryPreference(
+          category,
+          value ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
+        );
+        if (resp.status !== "error") setPreferenceData({ ...resp.body });
+      };
+
+      return (
+        <>
+          {[
+            { label: "Product", tag: "product" },
+            { label: "Billing", tag: "billing" },
+          ].map(({ label, tag }) => (
+            <button
+              key={tag}
+              onClick={() => setSelectedTag(tag)}
+              style={{ fontWeight: selectedTag === tag ? "bold" : "normal" }}
+            >
+              {label}
+            </button>
+          ))}
+
+          {preferenceData?.sections?.map((section, i) => (
+            <div key={i}>
+              {section?.name && <h3>{section.name}</h3>}
+              {section?.subcategories?.map((cat, j) => (
+                <div key={j}>
+                  <span>{cat.name}</span>
+                  <button
+                    disabled={!cat.is_editable}
+                    onClick={() => handleCategoryChange(cat.category, cat.preference !== PreferenceOptions.OPT_IN)}
+                    style={{ opacity: !cat.is_editable ? 0.5 : 1, background: cat.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !cat.is_editable ? 'not-allowed' : 'pointer' }}
+                  >
+                    {cat.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
 
 <Tip>
-  **When to use:** Users in different roles should automatically see only relevant notifications, with no manual configuration required. Examples: sales reps see deal and pipeline alerts, engineers see deploy and incident alerts, finance sees billing and expense alerts.
+  **When to use:** Users in different roles, departments, or product modules should see only the notification categories relevant to them. Examples: sales users see Sales Newsletter and Cart & checkout; finance users see Budget Alerts and Expense Reports; a multi-module product where users switch between modules to manage alerts separately.
 </Tip>
-
-**Related docs:** [User Preferences](/docs/user-preferences) | [Manage Categories](/docs/managing-notification-categories)
 
 ---
 
 ## 6. Tenant admin controls
 
-In a B2B product, the person who configures notifications isn't the end user — it's an admin at the customer organisation. This pattern lets tenant admins control which categories are available to their users, what the defaults are, and which channels are enabled — all scoped to their tenant. End users then see only what their admin has left enabled.
+<Note>
+  Different from Section 4 (platform admin restricting tenant access). This section is about tenant admins configuring defaults for their own users. For per-project independent preferences, see Section 8.
+</Note>
 
-The admin view shows a table of categories with a default on/off toggle and a "Keep it visible?" checkbox per category, which maps directly to `visible_to_subscriber` in the API.
+In a B2B product, the person who configures notifications isn't the end user — it's an admin at the customer organisation. This pattern lets [tenant](/docs/tenant-preference) admins control which categories are available to their users, what the defaults are, and which channels are enabled — all scoped to their tenant. End users then see only what their admin has left enabled.
+
+The admin view shows a table of categories with a **default preference selector** (Opt-in / Opt-out / Mandatory) and a "Visible to users?" toggle per category. The visible toggle maps directly to `visible_to_subscriber` in the API.
 
 <Frame caption="Tenant admin customizing notification preferences for their organization">
   <img src="/images/t3.png" alt="Tenant admin preferences" width="450" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
 1. First ensure your notification categories are set up under **Developers → [Notification categories](/docs/managing-notification-categories)** and published
 2. Go to **Tenants → your tenant → Tenant Preference** in the SuprSend console — this is where tenant admins manage their org's defaults
 3. Provide tenant admins access to configure categories via the [Tenant Preference API](/docs/tenant-preference). They can enable/disable categories, set default On/Off, and control channel availability — all scoped to their tenant
 
-### Build in your app
+**Build in your app**
 
-Build two separate views:
+Build an admin settings page that calls the [Tenant Default Preference API](/reference/update-tenant-default-preference). Tenant admins control the following per category:
 
-**Admin view** — calls the Tenant Preference API to let the admin configure defaults and visibility per category. The columns in the admin UI map directly to API fields: the default on/off toggle maps to `preference`, the "Keep it visible?" checkbox maps to `visible_to_subscriber`.
+- **Default preference** (`preference: opt_in / opt_out / cant_unsubscribe`) — sets whether the category is on, off, or mandatory by default for all users in this tenant. SuprSend evaluates preferences in the order: user preference → tenant default → category default. If a user hasn't set their own preference, the tenant default applies.
+- **Visibility** (`visible_to_subscriber: true / false`) — controls whether the category appears on the end user's preference page at all. Set to `false` to hide categories that aren't relevant to this tenant's users.
+- **Channel controls** — `mandatory_channels` makes specific channels non-unsubscribable (when preference is `cant_unsubscribe`), `opt_in_channels` sets which channels are on by default, and `blocked_channels` disables channels across all categories for the tenant regardless of individual user preferences.
 
-**End-user view** — calls `getPreferences({ tenantId })` as usual. SuprSend filters the response automatically — users only see what their admin has left enabled. The rendering code is identical to the category-level pattern.
-
-```javascript
-import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
-import { useState, useEffect } from "react";
-
-// End-user view — only shows what the tenant admin has enabled
-function EndUserPreferences({ tenantId }) {
-  const suprSendClient = useSuprSendClient();
-  const [preferenceData, setPreferenceData] = useState();
-
-  useEffect(() => {
-    suprSendClient.user.preferences
-      .getPreferences({ tenantId })
-      .then((resp) => {
-        if (resp.status !== "error") setPreferenceData({ ...resp.body });
-      });
-  }, [tenantId]);
-
-  const handleCategoryChange = async (category, value) => {
-    const resp = await suprSendClient.user.preferences.updateCategoryPreference(
-      category,
-      value ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
-    );
-    if (resp.status !== "error") setPreferenceData({ ...resp.body });
-  };
-
-  return preferenceData?.sections?.map((section, i) => (
-    <div key={i}>
-      {section?.name && <h3>{section.name}</h3>}
-      {section?.subcategories?.map((sub, j) => (
-        <div key={j}>
-          <span>{sub.name}</span>
-          {/* Replace with your own toggle/switch component */}
-          <button
-            disabled={!sub.is_editable}
-            onClick={() => handleCategoryChange(sub.category, sub.preference !== PreferenceOptions.OPT_IN)}
-            style={{ opacity: !sub.is_editable ? 0.5 : 1, background: sub.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !sub.is_editable ? 'not-allowed' : 'pointer' }}
-          >
-            {sub.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
-          </button>
-        </div>
-      ))}
-    </div>
-  ));
-}
+```bash
+# Set default preference and visibility for a category within a tenant
+curl -X PATCH "https://hub.suprsend.com/v1/tenant/{tenant_id}/category/{category_slug}/" \
+  -H "Authorization: Bearer {workspace_key}:{workspace_secret}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "preference": "opt_in",
+    "visible_to_subscriber": true
+  }'
 ```
+
+For the end-user side, pass `tenantId` to [`getPreferences()`](/docs/js-preferences#get-preferences-data) — the rendering is the same as Section 2.
 
 <Tip>
   **When to use:** B2B or white-label products where each customer organisation's admin controls the notification experience for their users. Examples: one enterprise customer enables billing + security + product alerts while another only enables billing alerts; a white-label SaaS where each reseller configures the notification defaults for their own users.
 </Tip>
 
-**Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences)
-
 ---
 
-## 7. Filter categories by module
-
-Your product has distinct modules — like "Inflow alerts" and "Outflow alerts" in a data pipeline tool, or "Design" and "Engineering" in a project management tool. Users switch between modules and manage notifications for each one separately. The preference page re-fetches with a different tag each time the user switches tabs.
-
-This is the same tag mechanism as Department (Section 5), but driven by a **visible tab selector** in the UI rather than silently from the user's profile.
-
-<Frame caption="Filter by module">
-  <img src="/images/t4.png" alt="Filter by module" width="450" />
-</Frame>
-
-### Configure in SuprSend
-
-Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and tag your sections or sub-categories per module. Two ways to structure this:
-
-- **Option A — one section per module:** Click **`+Section`** to create a section per module (e.g. "Inflow alerts", "Outflow alerts"). Add a tag to the section (e.g. `inflow`). All sub-categories under that section inherit the tag automatically. Click **`Publish Changes`**.
-- **Option B — one section, per-subcategory tags:** Create a single section (e.g. "Projects") with all sub-categories under it. Select each sub-category and add its own tag (e.g. `project-alpha`, `project-beta`). Filtering by tag returns that section with only the matching sub-categories.
-
-### Build in your app
-
-Render tab pills for each module. When the user switches tabs, update `selectedTag` and re-call `getPreferences()` with the new tag. The rest of the rendering is the same as category-level preferences.
-
-```javascript
-import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
-import { useState, useEffect } from "react";
-
-function ModulePreferences() {
-  const suprSendClient = useSuprSendClient();
-  const [selectedTag, setSelectedTag] = useState("inflow");
-  const [preferenceData, setPreferenceData] = useState();
-
-  useEffect(() => {
-    // Re-fetch when the user switches modules — returns only categories for that tag
-    suprSendClient.user.preferences
-      .getPreferences({ tags: selectedTag })
-      .then((resp) => {
-        if (resp.status !== "error") setPreferenceData({ ...resp.body });
-      });
-  }, [selectedTag]);
-
-  const handleCategoryChange = async (category, value) => {
-    const resp = await suprSendClient.user.preferences.updateCategoryPreference(
-      category,
-      value ? PreferenceOptions.OPT_IN : PreferenceOptions.OPT_OUT
-    );
-    if (resp.status !== "error") setPreferenceData({ ...resp.body });
-  };
-
-  return (
-    <>
-      {/* Module tab selector */}
-      {[
-        { label: "Inflow alerts", tag: "inflow" },
-        { label: "Outflow alerts", tag: "outflow" },
-      ].map(({ label, tag }) => (
-        <button
-          key={tag}
-          onClick={() => setSelectedTag(tag)}
-          style={{ fontWeight: selectedTag === tag ? "bold" : "normal" }}
-        >
-          {label}
-        </button>
-      ))}
-
-      {/* Categories filtered by the selected module tag */}
-      {preferenceData?.sections?.map((section, i) => (
-        <div key={i}>
-          {section?.name && <h3>{section.name}</h3>}
-          {section?.subcategories?.map((cat, j) => (
-            <div key={j}>
-              <span>{cat.name}</span>
-              {/* Replace with your own toggle/switch component */}
-              <button
-                disabled={!cat.is_editable}
-                onClick={() => handleCategoryChange(cat.category, cat.preference !== PreferenceOptions.OPT_IN)}
-                style={{ opacity: !cat.is_editable ? 0.5 : 1, background: cat.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !cat.is_editable ? 'not-allowed' : 'pointer' }}
-              >
-                {cat.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
-              </button>
-            </div>
-          ))}
-        </div>
-      ))}
-    </>
-  );
-}
-```
-
-<Tip>
-  **When to use:** Your product has distinct modules and users want to manage notification preferences per module independently. Examples: a data pipeline tool with separate inflow and outflow alert tabs, a project management tool where users switch between team modules to manage alerts separately.
-</Tip>
-
-**Related docs:** [User Preferences](/docs/user-preferences) | [Manage Categories](/docs/managing-notification-categories)
-
----
-
-## 8. User-defined alert threshold
+## 7. User-defined alert threshold
 
 Some notifications are only useful when they cross a user-defined threshold. A storage alert at 1% full is noise; at 80% it's urgent. Users set their own trigger point, and the workflow only fires when the incoming metric crosses it.
 
@@ -649,17 +643,19 @@ The threshold value is a custom user profile property — not a preference setti
   <img src="/images/thresholdimg.png" alt="Threshold alerts" width="450" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)**. Click **`+Sub-Category`**, name it (e.g. "Usage alerts") and set a default preference. Click **`Publish Changes`**
-2. In your workflow, add a **[Branch node](/docs/branch)** that reads the threshold property from the user's profile and compares it to the incoming metric (e.g. fire when `usage_percent >= user.threshold_percent`). See [Workflows](/docs/workflows)
+2. Add a threshold condition in your workflow. You have two options depending on what you want to skip:
+   - **Branch node** — add a **[Branch node](/docs/branch)** inside the workflow that checks the threshold (e.g. `usage_percent >= ."$recipient".pref_conditions.usage-alerts.threshold`). If the condition isn't met, the branch doesn't execute but the rest of the workflow still runs.
+   - **Workflow trigger condition** — add the threshold check as a [trigger condition](/docs/workflows) at the start of the workflow. If the condition isn't met, the entire workflow is skipped and no notification is sent at all.
 
-### Build in your app
+**Build in your app**
 
-Call `getPreferences()` in your parent component and pass `preferenceData` as a prop. The preference page for this pattern has two independent parts rendered together:
+Call [`getPreferences()`](/docs/js-preferences#get-preferences-data) in your parent component and pass `preferenceData` as a prop. The preference page for this pattern has two independent parts rendered together:
 
-1. **Threshold picker** — a number input or slider. Saved via `user.set()` as a profile property. This is not a preference API call.
-2. **Category preference** — the standard toggle and channel checkboxes for the "Usage alerts" category. Saved via `updateCategoryPreference` and `updateChannelPreferenceInCategory` as usual.
+1. **Threshold picker** — a number input. Saved via [`user.set()`](/docs/users) under `pref_conditions.usage-alerts.threshold` (replace `usage-alerts` with your actual category slug).
+2. **Category preference** — the standard toggle and channel checkboxes for the "Usage alerts" category. Saved via [`updateCategoryPreference`](/docs/js-preferences#update-category-preference) and [`updateChannelPreferenceInCategory`](/docs/js-preferences#update-channel-preference-in-category) as usual.
 
 ```javascript
 import { PreferenceOptions, useSuprSendClient } from "@suprsend/react";
@@ -669,11 +665,17 @@ function ThresholdPreferences({ preferenceData, setPreferenceData }) {
   const suprSendClient = useSuprSendClient();
   const [threshold, setThreshold] = useState(80);
 
-  // Part 1: Save threshold to user profile — this is a profile update, not a preference call
-  // The workflow Branch node reads user.threshold_percent to decide when to fire
+  // Part 1: Save threshold to user profile — this is a profile update, not a preference call.
+  // In your workflow Branch node, reference the threshold as:
+  //   ."$recipient".pref_conditions.usage-alerts.threshold
+  // (replace "usage-alerts" with your actual category slug)
   const handleThresholdSave = async () => {
     await suprSendClient.user.set({
-      threshold_percent: threshold, // e.g. 80 means "alert me when usage hits 80%"
+      pref_conditions: {
+        "usage-alerts": {          // replace with your category slug
+          threshold: threshold,    // e.g. 80 means "alert me when usage hits 80%"
+        },
+      },
     });
   };
 
@@ -701,17 +703,30 @@ function ThresholdPreferences({ preferenceData, setPreferenceData }) {
       <button onClick={handleThresholdSave}>Set Alert</button>
 
       {/* Category preference — render the "Usage alerts" category with toggle + channels */}
-      {preferenceData?.sections?.flatMap((s) => s.subcategories || [])
+      {preferenceData?.sections
+        ?.flatMap((s) => s.subcategories || [])
         .filter((sub) => sub.category === "usage-alerts")
         .map((sub, i) => (
           <div key={i}>
             {/* Replace with your own toggle/switch component */}
             <button
               disabled={!sub.is_editable}
-              onClick={() => handleCategoryChange(sub.category, sub.preference !== PreferenceOptions.OPT_IN)}
-              style={{ opacity: !sub.is_editable ? 0.5 : 1, background: sub.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !sub.is_editable ? 'not-allowed' : 'pointer' }}
+              onClick={() =>
+                handleCategoryChange(
+                  sub.category,
+                  sub.preference !== PreferenceOptions.OPT_IN
+                )
+              }
+              style={{
+                opacity: !sub.is_editable ? 0.5 : 1,
+                background: sub.preference === PreferenceOptions.OPT_IN ? "#2563EB" : "#D1D5DB",
+                borderRadius: "9999px",
+                padding: "2px 8px",
+                border: "none",
+                cursor: !sub.is_editable ? "not-allowed" : "pointer",
+              }}
             >
-              {sub.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
+              {sub.preference === PreferenceOptions.OPT_IN ? "On" : "Off"}
             </button>
             {sub?.channels?.map((channel, j) => (
               <button
@@ -719,15 +734,17 @@ function ThresholdPreferences({ preferenceData, setPreferenceData }) {
                 disabled={!channel.is_editable}
                 onClick={() => {
                   if (!channel.is_editable) return;
-                  suprSendClient.user.preferences.updateChannelPreferenceInCategory(
-                    channel.channel,
-                    channel.preference === PreferenceOptions.OPT_IN
-                      ? PreferenceOptions.OPT_OUT
-                      : PreferenceOptions.OPT_IN,
-                    sub.category
-                  ).then((resp) => {
-                    if (resp.status !== "error") setPreferenceData({ ...resp.body });
-                  });
+                  suprSendClient.user.preferences
+                    .updateChannelPreferenceInCategory(
+                      channel.channel,
+                      channel.preference === PreferenceOptions.OPT_IN
+                        ? PreferenceOptions.OPT_OUT
+                        : PreferenceOptions.OPT_IN,
+                      sub.category
+                    )
+                    .then((resp) => {
+                      if (resp.status !== "error") setPreferenceData({ ...resp.body });
+                    });
                 }}
                 style={{ opacity: channel.preference === PreferenceOptions.OPT_IN ? 1 : 0.4 }}
               >
@@ -745,29 +762,35 @@ function ThresholdPreferences({ preferenceData, setPreferenceData }) {
   **When to use:** Users need to set their own trigger point for an alert, not just whether to receive it. Examples: cloud storage ("alert me at 80% full"), API rate limits ("notify at 90% of quota"), budget tracking ("warn me when spend hits 75%").
 </Tip>
 
-**Related docs:** [Workflows](/docs/workflows) | [Users API](/docs/users) | [User Preferences](/docs/user-preferences)
-
 ---
 
-## 9. Per-project preferences
+## 8. Per-project preferences
+
+<Note>
+  Different from Section 4 (platform admin restricting tenant access) and Section 6 (tenant admin setting defaults). This section models each project as a separate tenant so preferences are fully independent per project.
+</Note>
 
 Each project needs a completely independent set of preferences — its own category toggles, its own channel settings, its own defaults. Tags won't work here because tags only filter categories; they don't give each project its own independent channel-level preferences or defaults.
 
-The solution is to model each project as a **tenant** in SuprSend. Preferences are then scoped per tenant. When the user switches projects, you switch the `tenantId` passed to `getPreferences()`, and all reads and writes happen against that project's tenant.
+The solution is to model each project as a **[tenant](/docs/tenant-preference)** in SuprSend. Preferences are then scoped per tenant. When the user switches projects, you switch the `tenantId` passed to [`getPreferences()`](/docs/js-preferences#get-preferences-data), and all reads and writes happen against that project's tenant.
 
 <Frame caption="Project-level preferences — each project = tenant">
   <img src="/images/t5.png" alt="Project-level preferences" width="450" />
 </Frame>
 
-### Configure in SuprSend
+**Configure in SuprSend**
 
-1. Create **one tenant per project** in SuprSend (via **Tenants** in the dashboard or the Tenants API)
-2. For each tenant, go to **Tenants → your tenant → Tenant Preference** and configure which categories are enabled, what the defaults are, and which channels are available
+1. Create **one [tenant](/docs/tenant-preference) per project** in SuprSend (via **Tenants** in the dashboard or the [Tenants API](/docs/tenants)). You can also [create tenants via API](/reference/create-tenant)
+2. For each tenant, configure which categories are enabled, what the defaults are, and which channels are available — either from **Tenants → your tenant → Tenant Preference** in the dashboard, or via the [Tenant Default Preference API](/reference/update-tenant-default-preference)
 3. Ensure your notification categories are published under **Developers → [Notification categories](/docs/managing-notification-categories)**
 
-### Build in your app
+**Build in your app**
 
-Show a project selector. When the user picks a project, pass its tenant ID to `getPreferences()`. Render the full preference UI — channel-level (All / Required per channel) and category-level (toggles + channel checkboxes). All update calls are automatically scoped to the selected tenant.
+Show a project selector. When the user picks a project, pass its tenant ID to [`getPreferences()`](/docs/js-preferences#get-preferences-data). Render the full preference UI — channel-level (All / Required per channel) and category-level (toggles + channel checkboxes).
+
+<Note>
+  All preference update methods (`updateCategoryPreference`, `updateChannelPreferenceInCategory`, `updateOverallChannelPreference`) are automatically scoped to the `tenantId` from the most recent `getPreferences()` call — you do not pass `tenantId` directly to update methods. This means the SDK tracks one active tenant at a time globally. Avoid making concurrent `getPreferences()` calls with different `tenantId` values while updates are in flight — a concurrent fetch would change the active tenant context and cause any in-flight updates to be written against the wrong tenant.
+</Note>
 
 ```javascript
 import {
@@ -789,7 +812,9 @@ function ProjectPreferences() {
   const [preferenceData, setPreferenceData] = useState();
 
   useEffect(() => {
-    // Switching projects re-fetches preferences scoped to that project's tenant
+    // Switching projects re-fetches preferences scoped to that project's tenant.
+    // The SDK internally tracks this tenantId for all subsequent update calls
+    // until getPreferences() is called again with a different tenantId.
     suprSendClient.user.preferences
       .getPreferences({ tenantId: selectedTenantId })
       .then((resp) => {
@@ -797,9 +822,7 @@ function ProjectPreferences() {
       });
   }, [selectedTenantId]);
 
-  // Category toggle
-  // Per SDK docs, all updates are scoped to the tenantId from the last getPreferences() call.
-  // You do not pass tenantId to update methods — the SDK tracks it internally.
+  // Category toggle — scoped to the tenantId from the last getPreferences() call
   const handleCategoryChange = async (category, value) => {
     const resp = await suprSendClient.user.preferences.updateCategoryPreference(
       category,
@@ -843,16 +866,22 @@ function ProjectPreferences() {
       {preferenceData?.channel_preferences?.map((channel, i) => (
         <div key={i}>
           <p>{channel.channel}</p>
-          <input
-            type="radio"
-            checked={!channel.is_restricted}
-            onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.ALL)}
-          /> All
-          <input
-            type="radio"
-            checked={channel.is_restricted}
-            onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.REQUIRED)}
-          /> Required
+          <label>
+            <input
+              type="radio"
+              checked={!channel.is_restricted}
+              onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.ALL)}
+            />
+            All
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={channel.is_restricted}
+              onChange={() => handleOverallChannelChange(channel, ChannelLevelPreferenceOptions.REQUIRED)}
+            />
+            Required
+          </label>
         </div>
       ))}
 
@@ -866,16 +895,29 @@ function ProjectPreferences() {
               {/* Replace with your own toggle/switch component */}
               <button
                 disabled={!sub.is_editable}
-                onClick={() => handleCategoryChange(sub.category, sub.preference !== PreferenceOptions.OPT_IN)}
-                style={{ opacity: !sub.is_editable ? 0.5 : 1, background: sub.preference === PreferenceOptions.OPT_IN ? '#2563EB' : '#D1D5DB', borderRadius: '9999px', padding: '2px 8px', border: 'none', cursor: !sub.is_editable ? 'not-allowed' : 'pointer' }}
+                onClick={() =>
+                  handleCategoryChange(
+                    sub.category,
+                    sub.preference !== PreferenceOptions.OPT_IN
+                  )
+                }
+                style={{
+                  opacity: !sub.is_editable ? 0.5 : 1,
+                  background: sub.preference === PreferenceOptions.OPT_IN ? "#2563EB" : "#D1D5DB",
+                  borderRadius: "9999px",
+                  padding: "2px 8px",
+                  border: "none",
+                  cursor: !sub.is_editable ? "not-allowed" : "pointer",
+                }}
               >
-                {sub.preference === PreferenceOptions.OPT_IN ? 'On' : 'Off'}
+                {sub.preference === PreferenceOptions.OPT_IN ? "On" : "Off"}
               </button>
               {sub?.channels?.map((channel, k) => (
                 <button
                   key={k}
                   disabled={!channel.is_editable}
                   onClick={() => handleChannelInCategoryChange(channel, sub)}
+                  style={{ opacity: channel.preference === PreferenceOptions.OPT_IN ? 1 : 0.4 }}
                 >
                   {channel.channel}
                 </button>
@@ -892,5 +934,3 @@ function ProjectPreferences() {
 <Tip>
   **When to use:** Each project or sub-account needs completely independent preferences — its own defaults, its own channel settings, everything separate. Examples: an ad platform where each ad account has independent budget alert settings; a cloud hosting provider where production, staging, and dev each have separate alert preferences.
 </Tip>
-
-**Related docs:** [Tenant Preference](/docs/tenant-preference) | [User Preferences](/docs/user-preferences)
