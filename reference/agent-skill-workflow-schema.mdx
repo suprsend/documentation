@@ -4,11 +4,9 @@ sidebarTitle: "Workflow Schema"
 description: "Gives your AI agent the complete SuprSend workflow node schema — all node types, node_type values, and configuration fields."
 ---
 
-## Overview
+The `suprsend-workflow-schema` skill gives your agent the full SuprSend workflow JSON schema so it can generate complete, valid workflow JSON from a plain-English description — correct `node_type` values, proper field names, and working branch conditions, without looking anything up.
 
-The `suprsend-workflow-schema` skill gives your agent the full SuprSend workflow JSON schema. Workflows are defined as JSON conforming to `https://schema.suprsend.com/workflow/v1/schema.json`. Every workflow requires a trigger (event or API) and at least one delivery node. Between trigger and delivery, you can add function, branch, and data nodes to build sophisticated notification journeys.
-
-With this skill installed, your agent can generate complete, valid workflow JSON from a plain-English description — correct `node_type` values, proper field names, and working branch conditions.
+Workflows conform to `https://schema.suprsend.com/workflow/v1/schema.json`. See [Design Workflow](https://docs.suprsend.com/docs/design-workflow.md) for a full overview of how workflows are structured.
 
 ---
 
@@ -26,14 +24,40 @@ npx skills add suprsend/skills
 
 ---
 
-## What your agent can do
+## Advantages
 
-- Generate valid end-to-end workflow JSON from a plain-English prompt
-- Use correct `node_type` values for every node type without looking them up
-- Configure multi-channel, smart routing, and fallback delivery patterns
-- Build branch conditions and wait-until logic
-- Invoke external APIs and transform data mid-workflow
-- Push the generated workflow to SuprSend using the CLI
+- **Plain-English to valid JSON**: Describe a notification flow in natural language and get a complete, schema-compliant workflow file — correct `node_type` values, field names, and node wiring.
+- **All 20+ node types covered**: Delivery ([email, SMS, WhatsApp, push, inbox, Slack, Teams](https://docs.suprsend.com/docs/delivery-single-channel.md)), function ([delay](https://docs.suprsend.com/docs/delay.md), [batch](https://docs.suprsend.com/docs/batch.md), [digest](https://docs.suprsend.com/docs/digest.md), [time window](https://docs.suprsend.com/docs/time-window.md)), branch, data, and list/object operations — all with correct configuration fields.
+- **Multi-channel and smart routing**: Generate workflows that send across [multiple channels simultaneously](https://docs.suprsend.com/docs/delivery-multi-channel.md), or use [smart channel routing](https://docs.suprsend.com/docs/smart-delivery.md) with fallback delays until the user engages.
+- **Branch and wait-until logic**: Build [conditional paths](https://docs.suprsend.com/docs/branch.md) based on user events, data properties, or timeouts — including [`branch_waituntil`](https://docs.suprsend.com/docs/wait-until.md) nodes that pause until a condition is met or a deadline expires.
+- **External data and transforms**: [Fetch data from APIs](https://docs.suprsend.com/docs/fetch.md) mid-workflow and [transform variables](https://docs.suprsend.com/docs/data-transform.md) using Handlebars or JSONNET before sending notifications.
+- **CLI-ready output**: Workflows save to `suprsend/workflow/` with a `slug` field included, ready to push with `suprsend workflow push --commit=true` — no manual editing needed.
+
+---
+
+## Workflow file structure
+
+```
+suprsend/
+└── workflow/
+    ├── cart-abandonment.json
+    ├── payment-reminder.json
+    └── document-access-request.json
+```
+
+Each file must include a `slug` — the unique identifier used by the CLI to push or target a specific workflow:
+
+```json
+{
+  "$schema": "https://schema.suprsend.com/workflow/v1/schema.json",
+  "slug": "cart-abandonment",
+  "name": "Cart Abandonment Reminder"
+}
+```
+
+<Warning>
+  Workflows without a `slug` cannot be targeted with `suprsend workflow push --slug`. Always include it in generated JSON.
+</Warning>
 
 ---
 
@@ -41,87 +65,63 @@ npx skills add suprsend/skills
 
 ### Delivery nodes
 
-Send notifications to users. Every workflow must end with at least one delivery node.
+Every workflow must end with at least one delivery node. See [Single Channel](https://docs.suprsend.com/docs/delivery-single-channel.md) and [Multi-Channel](https://docs.suprsend.com/docs/delivery-multi-channel.md) docs for configuration details.
 
-| Node | `node_type` | Description |
-|---|---|---|
-| Email | `send_email` | Send via email |
-| SMS | `send_sms` | Send via SMS |
-| WhatsApp | `send_whatsapp` | Send via WhatsApp |
-| In-App Inbox | `send_inbox` | Send to in-app notification inbox |
-| Mobile Push | `send_mobile_push` | Send mobile push notification |
-| Web Push | `send_webpush` | Send web push notification |
-| Slack | `send_slack` | Send to Slack |
-| MS Teams | `send_ms_teams` | Send to Microsoft Teams |
-| Multi-Channel | `send_multi_channel` | Send across multiple channels simultaneously |
-| Smart Channel Routing | `send_smart_channel_routing` | Send sequentially across channels with delays until user engages |
-| HTTP API | `httpapi_webhook` | Notify an external endpoint (GET/POST/PUT/PATCH/DELETE) |
+| Node | `node_type` |
+|---|---|
+| Email | `send_email` |
+| SMS | `send_sms` |
+| WhatsApp | `send_whatsapp` |
+| In-App Inbox | `send_inbox` |
+| Mobile Push | `send_mobile_push` |
+| Web Push | `send_webpush` |
+| Slack | `send_slack` |
+| MS Teams | `send_ms_teams` |
+| Multi-Channel | `send_multi_channel` |
+| Smart Channel Routing | `send_smart_channel_routing` |
+| HTTP API | `httpapi_webhook` |
 
 ### Function nodes
 
-Control timing and aggregation of notifications.
-
-| Node | `node_type` | Description |
+| Node | `node_type` | Docs |
 |---|---|---|
-| Delay | `delay` | Pause for a fixed, dynamic, or relative duration |
-| Batch | `batch` | Aggregate multiple triggers into one notification |
-| Digest | `digest` | Send a batched summary on a recurring schedule |
-| Time Window | `timewindow` | Deliver only within specified days and time ranges |
+| Delay | `delay` | [Delay](https://docs.suprsend.com/docs/delay.md) |
+| Batch | `batch` | [Batch](https://docs.suprsend.com/docs/batch.md) |
+| Digest | `digest` | [Digest](https://docs.suprsend.com/docs/digest.md) |
+| Time Window | `timewindow` | [Time Window](https://docs.suprsend.com/docs/time-window.md) |
 
 ### Branch nodes
 
-Route notifications through different paths based on conditions.
-
-| Node | `node_type` | Description |
+| Node | `node_type` | Docs |
 |---|---|---|
-| Branch | `branch` | If/else routing based on conditions |
-| Wait Until | `branch_waituntil` | Pause until a condition is met or a timeout expires |
+| Branch | `branch` | [Branch](https://docs.suprsend.com/docs/branch.md) |
+| Wait Until | `branch_waituntil` | [Wait Until](https://docs.suprsend.com/docs/wait-until.md) |
 
 ### Data nodes
 
-Fetch, transform, or update data during workflow execution.
-
-| Node | `node_type` | Description |
+| Node | `node_type` | Docs |
 |---|---|---|
-| Fetch | `httpapi_fetch` | GET data from an external API |
-| Data Transform | `transform` | Generate or modify variables using Handlebars or JSONNET |
-| Invoke Workflow | `invokeworkflow` | Trigger another SuprSend workflow as a step |
-| Update User Profile | `userupdate` | Modify recipient or actor profile properties |
+| Fetch | `httpapi_fetch` | [Fetch](https://docs.suprsend.com/docs/fetch.md) |
+| Data Transform | `transform` | [Data Transform](https://docs.suprsend.com/docs/data-transform.md) |
+| Invoke Workflow | `invokeworkflow` | [Invoke Workflow](https://docs.suprsend.com/docs/invoke-workflow.md) |
+| Update User Profile | `userupdate` | [Update User Profile](https://docs.suprsend.com/docs/update-user-profile.md) |
 
 ### List & Object nodes
 
-Manage user list memberships and object subscriptions.
-
-| Node | `node_type` | Description |
+| Node | `node_type` | Docs |
 |---|---|---|
-| Add User to List | `subscriberlistoperation_adduser` | Add recipient/actor to a subscriber list |
-| Remove User from List | `subscriberlistoperation_removeuser` | Remove recipient/actor from a list |
-| Subscribe to Object | `objectoperation_addsubscription` | Add user to an object subscription |
-| Unsubscribe from Object | `objectoperation_removesubscription` | Remove user from an object subscription |
-
----
-
-## Example prompts
-
-**Cart abandonment:**
-> "Create a cart abandonment workflow. Wait 1 hour, then check if the cart is still active. If yes, send email and push simultaneously. If not opened within 24 hours, send a WhatsApp follow-up."
-
-**Document access request:**
-> "Build a document access request workflow. Notify the document owner via email immediately. If no response in 24 hours, send a Slack message as a fallback."
-
-**Payment reminder with smart routing:**
-> "Create a payment reminder workflow using smart channel routing — try email first, wait 2 hours, then try SMS if there's no engagement."
-
-**Notify and check status:**
-> "Send a notification and check back after 30 minutes via a fetch node to see if the user has completed the action. If not, send a reminder."
+| Add User to List | `subscriberlistoperation_adduser` | [Add User to List](https://docs.suprsend.com/docs/add-user-to-list.md) |
+| Remove User from List | `subscriberlistoperation_removeuser` | [Remove User from List](https://docs.suprsend.com/docs/remove-user-from-list.md) |
+| Subscribe to Object | `objectoperation_addsubscription` | [Subscribe to Object](https://docs.suprsend.com/docs/subscribe-to-object.md) |
+| Unsubscribe from Object | `objectoperation_removesubscription` | [Unsubscribe from Object](https://docs.suprsend.com/docs/unsubscribe-from-object.md) |
 
 ---
 
 ## Known limitations
 
-<Warning>
-  Agents may struggle with complex `expression_v1` event conditions inside branch nodes. Review generated branch conditions before pushing to production. This is being actively improved.
-</Warning>
+| Limitation | Impact | What to do |
+|---|---|---|
+| Agents may produce incorrect `expression_v1` conditions inside `branch_waituntil` nodes | Branch logic could silently evaluate wrong, routing notifications down the incorrect path | Always review generated branch conditions before pushing. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md) for correct syntax |
 
 ---
 
@@ -129,13 +129,13 @@ Manage user list memberships and object subscriptions.
 
 <CardGroup cols={2}>
   <Card title="Workflow Schema Guide" icon="book" href="https://github.com/suprsend/skills/blob/HEAD/skills/suprsend-workflow-schema/references/workflow-schema-guide.md">
-    Detailed field definitions, schema reference, and usage examples.
+    Detailed field definitions and schema reference on GitHub.
   </Card>
-  <Card title="Design Workflow" icon="diagram-project" href="/docs/design-workflow">
-    SuprSend workflow documentation — nodes, settings, and trigger options.
+  <Card title="Design Workflow" icon="diagram-project" href="https://docs.suprsend.com/docs/design-workflow.md">
+    How to design, test, and publish workflows on the dashboard.
   </Card>
   <Card title="suprsend-cli skill" icon="terminal" href="/reference/agent-skill-cli">
-    Use the CLI skill to push generated workflows to SuprSend.
+    Push generated workflows to SuprSend.
   </Card>
   <Card title="Agent Skills Overview" icon="grid" href="/reference/agent-skills">
     Back to the Agent Skills overview.

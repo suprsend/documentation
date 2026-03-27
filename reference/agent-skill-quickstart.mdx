@@ -1,0 +1,93 @@
+---
+title: "Quickstart"
+sidebarTitle: "Quickstart"
+description: "Install SuprSend Agent Skills and build your first workflow in under 5 minutes."
+---
+
+## Install Skills
+
+```bash
+npx skills add suprsend/skills
+```
+
+The installer detects which agents are on your machine and asks which to install to. Choose project-scoped (committed to your repo) or global.
+
+<Tip>
+  **Commit Skills to your repo.** Your whole team gets the same agent behavior with no extra setup.
+</Tip>
+
+### Install a single skill
+
+```bash
+npx skills add https://github.com/suprsend/skills --skill suprsend-workflow-schema
+npx skills add https://github.com/suprsend/skills --skill suprsend-cli
+npx skills add https://github.com/suprsend/skills --skill suprsend-docs-support
+```
+
+### Where skills are installed
+
+| Agent | Directory |
+|---|---|
+| Amp, Cursor, Cline, Codex, Copilot, Warp, Kimi CLI, OpenCode, and more | `.agents/skills/` |
+| Claude Code | `.claude/skills/` |
+| Continue | `.continue/skills/` |
+| Augment | `.augment/skills/` |
+
+After installation, skills are passive — nothing extra to run. Open your agent, describe what you want to build, and the agent loads the relevant skill automatically.
+
+---
+
+## Walkthrough: cart abandonment workflow in Cursor
+
+### 1. Install Skills
+
+```bash
+npx skills add suprsend/skills
+```
+
+Select **Cursor** when prompted. Skills install to `.cursor/skills/` in your project.
+
+### 2. Describe the workflow
+
+Open Cursor (`Cmd+L` / `Ctrl+L`) and paste:
+
+```
+Create a SuprSend cart abandonment workflow JSON with slug "cart-abandonment".
+Save to suprsend/workflow/cart-abandonment.json.
+
+Requirements:
+- Trigger: cart_abandoned event
+- branch_waituntil node: hold for 1 hour, exit early if cart_completed arrives matching on cart_id
+- On timeout: send email + mobile push via send_multi_channel [email, androidpush, iospush]
+- Template: "cart-abandonment-reminder"
+- Conform to https://schema.suprsend.com/workflow/v1/schema.json
+```
+
+The `suprsend-workflow-schema` skill activates automatically and generates correct `node_type` values, branch structure, and field names.
+
+### 3. Review and push
+
+Open `suprsend/workflow/cart-abandonment.json` and verify the structure — especially any `branch_waituntil` conditions.
+
+```bash
+suprsend profile list
+suprsend profile use --name my-workspace   # if needed
+suprsend workflow push --slug cart-abandonment --commit=true
+```
+
+### 4. Verify
+
+Go to [app.suprsend.com](https://app.suprsend.com) → **Workflows**. Your workflow is live.
+
+---
+
+## Before you push — common gotchas
+
+| What goes wrong | Why it happens | How to fix it |
+|---|---|---|
+| `workflow push myfile.json` silently pushes 0 | The command expects a directory or `--slug`, not a file path | Use `--slug cart-abandonment` or `--dir suprsend/workflow/` |
+| Workflow is pushed but no notifications fire | Pushed workflows are **drafts by default** | Add `--commit=true` to your push command |
+| "Successfully pushed: 0" with no error | Wrong active profile or workspace | Run `suprsend profile list` and switch with `suprsend profile use --name <n>` |
+| Workflow JSON can't be targeted by slug | Missing `slug` field in the JSON | Always include `"slug": "your-slug"` in generated workflow files |
+| Validation error on push | Referenced schema or category doesn't exist in the target workspace | Push schema and category before pushing workflows |
+| Branch logic routes notifications wrong | Agents may produce incorrect `expression_v1` conditions | Review `branch_waituntil` conditions before pushing. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md) |
