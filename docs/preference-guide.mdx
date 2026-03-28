@@ -22,7 +22,7 @@ Users control what they receive on each channel. For every channel your app uses
 - **All** — receive all notifications on this channel, except categories they've explicitly turned off
 - **Required** — receive only notifications from categories marked as mandatory (Can't Unsubscribe)
 
-Separately, users can also turn individual channels on or off per notification category — for example, keeping Email on for "Product Updates" but turning off WhatsApp for the same category. These are the per-category channel checkboxes shown in the **BY TOPIC** section of the screenshot.
+Separately, users can also turn individual channels on or off per notification category — for example, keeping Email on for "Product Updates" but turning off WhatsApp for the same category. These are the per-category channel checkboxes shown in the **CHANNELS BY TOPIC** section of the screenshot.
 
 The `channel_preferences` array in the API response drives the global All / Required control. Each item has a `channel` name and an `is_restricted` boolean: `false` means All, `true` means Required. The per-category channel preferences live under `sections[].subcategories[].channels`.
 
@@ -33,8 +33,8 @@ The `channel_preferences` array in the API response drives the global All / Requ
 **Configure in SuprSend**
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and select a root-category (System, Transactional, or Promotional)
-2. Click **`+Section`** to create a section (e.g. "Product", "Billing"). Add a name and click **`Save Changes`**
-3. Click **`+Sub-Category`**, fill in the name, select the section, and set a default preference (**On**, **Off**, or **Can't Unsubscribe**)
+2. Optionally, click **`+Section`** to create a section (e.g. "Product", "Billing"). Sections are used to group sub-categories on the preference page. Section doesn't have it's own preference.
+3. Click **`+Sub-Category`**, fill in the name, select the section (if set), and set a default preference (**On**, **Off**, or **Can't Unsubscribe**)
 4. Click **`Publish Changes`**
 
 **Build in your app**
@@ -112,10 +112,9 @@ This is the standard notification settings page that most apps need. The respons
 **Configure in SuprSend**
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and select a root-category
-2. Click **`+Section`** to create sections (e.g. "Product", "Billing", "Sales"). Add a name and click **`Save Changes`**
-3. Click **`+Sub-Category`** for each notification type, select its section, and set a default preference (**On**, **Off**, or **Can't Unsubscribe**)
+2. Click **`+Section`** to create sections (e.g. "Product", "Billing", "Sales"). Sections are used to group sub-categories on the preference page. Section doesn't have it's own preference.
+3. Click **`+Sub-Category`** for each notification type, select its section (if set), and set a default preference (**On**, **Off**, or **Can't Unsubscribe**). You can also choose which channels should be opt_in by default in case of `On` preference.
 4. Click **`Publish Changes`**
-5. To verify the preference page looks correct, go to **Developers → [Notification categories](/docs/managing-notification-categories)** and click **`Preview`** to see a live preview of the preference UI
 
 **Build in your app**
 
@@ -244,7 +243,7 @@ This works by storing the user's chosen schedule as a custom property on their p
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)** and create a sub-category for the notification type you want to digest (e.g. "Activity Summary"). Click **`+Sub-Category`**, fill in the name, and set a default preference
 2. Click **`Publish Changes`**
-3. In your workflow, add a **[Digest node](/docs/digest)** and set it to use a **dynamic schedule**. Point the dynamic schedule key at the user profile property where you store the schedule — e.g. `."$recipient".digestSchedule.category-slug` (where `category-slug` is the category slug). The Digest node will automatically use whatever schedule the user has saved for that category. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
+3. In your workflow, add a **[Digest node](/docs/digest)** and set it to use a **dynamic schedule**. Point the dynamic schedule key at the user profile property where you store the schedule — e.g. `."$recipient".digestSchedule.category-slug` (where `category-slug` is the slug of preference category). The Digest node will automatically use whatever schedule the user has saved for that category. See [Dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference)
 
 **Build in your app**
 
@@ -313,7 +312,7 @@ function DigestPreferences() {
 ```
 
 <Tip>
-  **When to use:** Users get too many individual notifications and want a summary instead. Examples: daily activity digest ("Here's what happened in your workspace today"), weekly analytics reports, aggregated comment or mention notifications, team standup summaries.
+  **When to use:** Users get too many individual notifications and want a summary instead. Examples: daily activity digest ("Here's what happened in your workspace today"), weekly analytics reports, aggregated comment or mention notifications.
 </Tip>
 
 ---
@@ -324,7 +323,7 @@ function DigestPreferences() {
   This guide has three tenant-related patterns. **Section 4** is for platform admins restricting what a tenant can access. **Section 6** is for tenant admins setting defaults for their own users. **Section 8** is for modelling each project as an independent tenant.
 </Note>
 
-If you're building a multi-tenant app (e.g. a SaaS platform with free and paid plans), you probably don't want every tenant to see the same notification categories. A free-plan tenant shouldn't see categories for features they haven
+If you're building a multi-tenant app (e.g. a SaaS platform with free and paid plans), you probably don't want every tenant to see the same notification categories. A free-plan tenant shouldn't see categories for features they haven't subscribed to.
 
 SuprSend lets you handle this with **[global tenant preferences](/docs/tenant-preference#platform-admin-controlling-tenant-access)**. As a platform admin, you can opt out specific categories or channels for any tenant. Once you do:
 
@@ -347,15 +346,6 @@ Go to **Tenants → select your tenant → Tenant Preference** in the SuprSend d
 <Frame caption="Global tenant preference page in the SuprSend dashboard">
   <img src="/images/tenant-global-pref.png" alt="Set Global Preference for Tenant — category and channel opt-outs" width="560" />
 </Frame>
-
-For programmatic management (e.g. automatically restricting categories when a customer downgrades their plan), use the [Tenant Preference API](/reference/update-tenant-default-preference):
-
-```bash
-curl -X PATCH "https://hub.suprsend.com/v1/tenant/{tenant_id}/category/{category_slug}/" \
-  -H "Authorization: Bearer {workspace_key}:{workspace_secret}" \
-  -H "Content-Type: application/json" \
-  -d '{"preference": "opt_out"}'
-```
 
 **Build in your app**
 
@@ -426,7 +416,7 @@ function TenantRestrictedPreferences({ tenantId }) {
 
 ---
 
-## 5. Filter categories with tags
+## 5. Filter categories with modules, roles, or departments
 
 Not every user needs to see every notification category. A sales user only cares about Sales Newsletter, Cart & checkout, and New Leads — they don't need Budget Alerts or Expense Reports. A finance user is the opposite. And in a multi-module product, each module's alerts should live on its own tab.
 
@@ -592,9 +582,9 @@ Pass the tag to [`getPreferences()`](/docs/js-preferences) via the `tags` parame
   Different from Section 4 (platform admin restricting tenant access). This section is about tenant admins configuring defaults for their own users. For per-project independent preferences, see Section 8.
 </Note>
 
-In a B2B product, the person who configures notifications isn't the end user — it's an admin at the customer organisation. This pattern lets [tenant](/docs/tenant-preference) admins control which categories are available to their users, what the defaults are, and which channels are enabled — all scoped to their tenant. End users then see only what their admin has left enabled.
+In a B2B product, the person who configures notifications isn't the end user — it's generally pre-configured by account admin. This pattern lets [tenant](/docs/tenant-preference) admins control which categories are available to their users, what the defaults are, and which channels are enabled — all scoped to their account. End users then see only what their admin has left enabled.
 
-The admin view shows a table of categories with a **default preference selector** (Opt-in / Opt-out / Mandatory) and a "Visible to users?" toggle per category. The visible toggle maps directly to `visible_to_subscriber` in the API.
+The admin view shows a table of categories with a **default preference selector** (Opt-in / Opt-out / Mandatory) and a toggle per category. The toggle maps directly to `visible_to_subscriber` in the API.
 
 <Frame caption="Tenant admin customizing notification preferences for their organization">
   <img src="/images/t3.png" alt="Tenant admin preferences" width="450" />
@@ -603,15 +593,14 @@ The admin view shows a table of categories with a **default preference selector*
 **Configure in SuprSend**
 
 1. First ensure your notification categories are set up under **Developers → [Notification categories](/docs/managing-notification-categories)** and published
-2. Go to **Tenants → your tenant → Tenant Preference** in the SuprSend console — this is where tenant admins manage their org's defaults
-3. Provide tenant admins access to configure categories via the [Tenant Preference API](/docs/tenant-preference). They can enable/disable categories, set default On/Off, and control channel availability — all scoped to their tenant
+2. Provide tenant admins access to configure categories via the [Tenant Preference API](/docs/tenant-preference). They can enable/disable categories, set default On/Off, and control channel availability — all scoped to their tenant
 
 **Build in your app**
 
 Build an admin settings page that calls the [Tenant Default Preference API](/reference/update-tenant-default-preference). Tenant admins control the following per category:
 
 - **Default preference** (`preference: opt_in / opt_out / cant_unsubscribe`) — sets whether the category is on, off, or mandatory by default for all users in this tenant. SuprSend evaluates preferences in the order: user preference → tenant default → category default. If a user hasn't set their own preference, the tenant default applies.
-- **Visibility** (`visible_to_subscriber: true / false`) — controls whether the category appears on the end user's preference page at all. Set to `false` to hide categories that aren't relevant to this tenant's users.
+- **Visibility** (`visible_to_subscriber: true / false`) — controls whether the category appears on the end user's preference page at all. Set to `false` to hide and turn off categories that aren't relevant to this tenant's users.
 - **Channel controls** — `mandatory_channels` makes specific channels non-unsubscribable (when preference is `cant_unsubscribe`), `opt_in_channels` sets which channels are on by default, and `blocked_channels` disables channels across all categories for the tenant regardless of individual user preferences.
 
 ```bash
@@ -637,7 +626,7 @@ For the end-user side, pass `tenantId` to [`getPreferences()`](/docs/js-preferen
 
 Some notifications are only useful when they cross a user-defined threshold. A storage alert at 1% full is noise; at 80% it's urgent. Users set their own trigger point, and the workflow only fires when the incoming metric crosses it.
 
-The threshold value is a custom user profile property — not a preference setting. The preference controls whether the alert is on or off and which channels it goes to. The threshold controls *when* the workflow fires. Both parts are needed.
+The threshold value is a custom user profile property — not a preference setting. The preference controls whether the alert is on or off and which channels it goes to. The threshold controls *when* the workflow fires.
 
 <Frame caption="Threshold alerts">
   <img src="/images/thresholdimg.png" alt="Threshold alerts" width="450" />
@@ -647,8 +636,8 @@ The threshold value is a custom user profile property — not a preference setti
 
 1. Go to **Developers → [Notification categories](/docs/managing-notification-categories)**. Click **`+Sub-Category`**, name it (e.g. "Usage alerts") and set a default preference. Click **`Publish Changes`**
 2. Add a threshold condition in your workflow. You have two options depending on what you want to skip:
-   - **Branch node** — add a **[Branch node](/docs/branch)** inside the workflow that checks the threshold (e.g. `usage_percent >= ."$recipient".pref_conditions.usage-alerts.threshold`). If the condition isn't met, the branch doesn't execute but the rest of the workflow still runs.
-   - **Workflow trigger condition** — add the threshold check as a [trigger condition](/docs/workflows) at the start of the workflow. If the condition isn't met, the entire workflow is skipped and no notification is sent at all.
+   - **Skip a step in the workflow** — add a **[Branch node](/docs/branch)** inside the workflow that checks the threshold (e.g. `usage_percent >= ."$recipient".pref_conditions.usage-alerts.threshold`). If the condition isn't met, the branch doesn't execute but the rest of the workflow still runs.
+   - **Do not execute the workflow** — add the threshold check as a [trigger condition](/docs/workflows) at the start of the workflow. If the condition isn't met, the entire workflow is skipped and no notification is sent at all.
 
 **Build in your app**
 
@@ -781,7 +770,7 @@ The solution is to model each project as a **[tenant](/docs/tenant-preference)**
 **Configure in SuprSend**
 
 1. Create **one [tenant](/docs/tenant-preference) per project** in SuprSend (via **Tenants** in the dashboard or the [Tenants API](/docs/tenants)). You can also [create tenants via API](/reference/create-tenant)
-2. For each tenant, configure which categories are enabled, what the defaults are, and which channels are available — either from **Tenants → your tenant → Tenant Preference** in the dashboard, or via the [Tenant Default Preference API](/reference/update-tenant-default-preference)
+2. For each tenant, configure which categories are enabled, what the defaults are, and which channels are available via the [Tenant Default Preference API](/reference/update-tenant-default-preference)
 3. Ensure your notification categories are published under **Developers → [Notification categories](/docs/managing-notification-categories)**
 
 **Build in your app**
