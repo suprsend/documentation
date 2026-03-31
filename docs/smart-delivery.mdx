@@ -1,98 +1,147 @@
 ---
-title: "Smart Channel Routing"
-description: "Send multi-channel notifications sequentially with a delay between each channel to reduce bombarding."
+title: "Smart Channel Routing — Multi-Channel Notification Delivery"
+description: "Learn how SuprSend's Smart Channel Routing delivers notifications sequentially across email, SMS, WhatsApp, push, and other outside-app channels — reducing notification fatigue, cutting costs, and improving engagement rates."
+keywords:
+  - smart channel routing
+  - multi-channel notification delivery
+  - notification routing rules
+  - reduce notification fatigue
+  - sequential notification delivery
+  - omnichannel messaging
+  - notification time to live
+  - push email sms routing
+  - in-app inbox notification
+  - notification engagement optimization
+  - SuprSend workflow
+  - user notification preferences
+  - outside-app channels
+  - notification cost optimization
+  - success metric notifications
+sidebarTitle: "Smart Channel Routing"
+og:title: "Smart Channel Routing | SuprSend Docs"
+og:description: "Send multi-channel notifications the smart way — SuprSend routes across email, SMS, WhatsApp, and push sequentially with configurable delays, always trying Inbox first to minimize cost and noise."
 ---
 
-Smart Channel Routing is an optimal way of sending multi-channel notifications without bombarding your users. In case of smart routing, you send notification sequentially on channels with a delay rather than bombarding users on all channels at once. Example, If you have a template with 4 channels, the delivery on rest of the channels are skipped if the user sees or interacts with the message on 1 channel. This way, you can achieve the uptick in engagement (delivery, seen and interaction rate) without unnecessary noise and also save cost of paid notification channels.
+Smart Channel Routing is SuprSend's approach to multi-channel notification delivery that eliminates notification fatigue. Instead of blasting all channels simultaneously, notifications are delivered **sequentially across outside-app channels** — with a configurable delay between each attempt — and stop the moment the user engages.
 
-![](/images/docs/1479f37-image.png)
+This reduces unnecessary noise on paid channels (like SMS and WhatsApp), lowers delivery costs, and improves overall notification engagement rates including delivery, open, and interaction rates.
 
-The content of the notification is designed with [templates](/docs/templates). In SuprSend, you can design the content of multiple channels within a single template group.
+> **Key behavior:** The **Inbox channel is always attempted first**, immediately and outside the routing queue, before any outside-app channel is triggered. Users who are active in your app are reached instantly — without consuming paid channels unnecessarily. If the user engages via Inbox, all outside-app deliveries are skipped.
 
-## How Smart Channel Routing node is executed?
+<Frame caption="Smart Channel Routing flow diagram showing sequential delivery across channels">
+  <img src="/images/docs/1479f37-image.png" />
+</Frame>
+
+Notification content for each channel is configured using [templates](/docs/templates). SuprSend lets you design content for all channels — email, SMS, WhatsApp, push, Inbox, and more — within a single template group.
+
+---
+
+## How Smart Channel Routing Works
 
 <Steps>
-  <Step title="Identify Applicable Channels">
-    The First step is to identify applicable channels for delivery in user profile. Applicable channels are the subset of the following:
+  <Step title="Inbox is always attempted first">
+    If **Inbox** is active on both the template and the user profile, SuprSend delivers the notification to Inbox **immediately** — before any outside-app channel is evaluated. This step is independent of the routing queue and does not consume any time-to-live budget.
 
-    - **Active channels on template**
-
-      Active channels are published and live channels in the template. For WhatsApp and SMS (Indian vendors), templates become live upon approval by the respective provider.
-    - **Active channels in user profile**
-
-      Available channels in user profile which are not marked inactive. A set channel becomes inactive in case the channel is`removed `or`unset`using [SDK or API](/docs/users#via-sdk) or it is marked inactive by SuprSend.
-    - **Channels where user preference is set as opt-in**
-
-      If you are using SuprSend preference centre to take user preferences, check if the user preference is`opt-in`for the given channel and notification category (defined in workflow settings). You can check user preference using [get user preference API](/reference/get-user-category-preferences).
+    Inbox is prioritized because it is a zero-cost in-app channel. If the user's [success metric](/docs/smart-delivery#success-metric) is achieved via Inbox (e.g., they open or interact with the notification), all outside-app channel deliveries are skipped, saving cost and reducing notification noise.
   </Step>
-  <Step title="Finalize channel order using routing rule">
-    Currently, the order of channel is defined to [optimize on](/docs/smart-delivery#optimize-on) cost (channels are tried from low to high cost picked from their vendor form). We'll also be introducing options to optimize on engagement so that notifications is sent on the channel with higher chances of open and click first.
+  <Step title="Identify applicable outside-app channels">
+    After the Inbox attempt, SuprSend evaluates which outside-app channels (email, SMS, WhatsApp, push, Slack, MS Teams, etc.) are eligible. Eligible channels are the intersection of:
+
+    - **Active channels on the template** — Published and live channels. For WhatsApp and SMS with Indian vendors, templates must be approved by the provider before they go live.
+    - **Active channels in the user profile** — Channels available in the user profile that are not marked inactive. A channel is deactivated if it is `removed` or `unset` via [SDK or API](/docs/users#via-sdk), or is marked inactive by SuprSend.
+    - **Channels where the user is opted in** — If you use SuprSend's preference centre, only channels with `opt-in` status for the given channel and notification category are included. Verify user opt-in status with the [get user preference API](/reference/get-user-category-preferences).
   </Step>
-  <Step title="Send notification with delay between each trigger using time to live">
-    Now, the **notification will be delivered on each channel in the order with** [time-interval](/docs/smart-delivery#time-to-live) **\[time_to_live / (number_of_channels - 1)\] apart** . e.g., if you have 3 active channels with time to live of 1 hour, notification will be delivered to each channel at 30 minutes apart till the [success metric](/docs/smart-delivery#success-metric) is not achieved. Once success metric is achieved, notification delivery on further channels is skipped.
+  <Step title="Order outside-app channels using routing rules">
+    The sequence of outside-app channel delivery is determined by the configured [routing rule](/docs/smart-delivery#routing-rules). By default, channels are ordered to [optimize on cost](/docs/smart-delivery#optimize-on) — attempted from lowest to highest cost, based on vendor configuration.
+
+    > Optimization on engagement metrics (open rate, click-through rate) is coming soon, enabling smarter routing based on which channel a user is most likely to respond to.
+  </Step>
+  <Step title="Deliver sequentially using time-to-live intervals">
+    Notifications are sent to each outside-app channel in order, separated by a time interval calculated as:
+```
+    delay = time_to_live ÷ (number_of_outside-app_channels − 1)
+```
+
+    **Example:** 3 active outside-app channels + 1 hour time-to-live → notifications sent 30 minutes apart across each channel.
+
+    Delivery halts as soon as the configured [success metric](/docs/smart-delivery#success-metric) is met. Channels remaining in the queue are skipped.
   </Step>
 </Steps>
 
-## Setting routing rules
+---
 
-Routing rules define how the notifications will be routed across channels.
+## Setting Routing Rules
 
-### Optimize on
+Routing rules control how notifications are sequenced and delivered across outside-app channels.
 
-This is used to define the order of channels based on the metric that you want to optimize. e.g., if you want to optimize on cost, SuprSend will internally set the order of channel in the ascending order of cost where the lowest cost channel is tried first.
+### Optimize On
 
-> We'll be introducing the option to manually set the channel order and optimize on other metrics like engagement.
+Defines the channel ordering strategy. When set to **cost**, SuprSend arranges outside-app channels in ascending order of cost — ensuring free or low-cost channels (like web push) are always tried before paid ones (like SMS or WhatsApp).
 
-### Time to live
+> Coming soon: manual channel ordering and optimization on engagement signals like open rate, click rate, and response time.
 
-Time to live defines the delay in delivery between 2 subsequent channels. Notification will be delivered on each channel in the order with time-interval of \[time_to_live / (number_of_channels - 1)\] apart. e.g., if you 3 channels with time to live of 1 hour, notification will be delivered to each channel at 20 minutes apart till the success metric is achieved.
+### Time to Live
 
-### Must send to
+Time to live (TTL) defines the **total delivery window** for outside-app channel routing. The inter-channel delay is:
+```
+inter-channel delay = TTL ÷ (number_of_outside-app_channels − 1)
+```
 
-These are the channels on which notification has to be sent immediately, irrespective of the channel order.
+**Example:** 3 outside-app channels with a 1-hour TTL → each channel is attempted 20 minutes apart.
+
+> **Note:** TTL applies only to outside-app channels. Inbox is always delivered immediately and does not consume any portion of the TTL window.
+
+### Must Send To
+
+Channels listed under **Must Send To** are delivered **immediately and unconditionally**, bypassing the sequential routing order. Use this for channels that must always receive the notification regardless of whether success has already been achieved on another channel.
 
 ### Success Metric
 
-Success Metric can be any event which defines the target user activity that you want to drive with your sent notification. In case of channel routing, it stops delivery on further channels when success metric is achieved. You can define 2 types of success metrics:
+The success metric is the trigger that halts further channel delivery. Once a user satisfies the success metric, all remaining queued channels are skipped. Two types are supported:
 
-1. **Notification Status**
+1. **Notification Status** — A status event on any delivered channel: `Delivered`, `Seen`, or `Interacted / Clicked`. For example, if your goal is for the user to open the notification, set the success metric to `Notification Status — Seen`.
 
-   Success Metric can be notification status (delivery, seen, interaction / click) of any of the sent channels. e.g., if the target of your notification is user opening the notification, you can set your success metric as `Notification Status - Seen`.
-2. **Custom Event**
+2. **Custom Event** — Any platform event that indicates the desired user action. For example, on a payment reminder workflow, set the success metric to `Invoice Paid` to stop routing once payment is confirmed.
 
-   It can be any other custom event that you want your user to perform on the platform in response to the sent notification. e.g., in case of payment reminder notification, you can set the success metric as`Invoice Paid`.
+---
 
 ## Override Channels
 
-You can use this field to pass channel list dynamically using data in your event property. This feature comes in handy when user channels are dynamically defined at the user level for each workflow. For instance, when booking an appointment, your users are dynamically defining their preferred channel to receive booking updates for each appointment.
+Override Channels lets you **dynamically pass the channel list at runtime** using event properties — useful when a user's preferred delivery channel varies per event. For example, when booking an appointment, a user might select their preferred notification channel (SMS, email, WhatsApp) for that specific booking.
 
-For more consistent channel preferences, like user wanting to receive all communication via email only, or defining preferred communication channel for a notifications category (like booking updates), we recommend updating it using [user preferences](/docs/user-preferences).
+For persistent, user-level preferences — such as a user always preferring email, or setting a default channel per notification category — use [user preferences](/docs/user-preferences) instead.
 
-To override channels, include the channels array in event property and add the corresponding key in the override channels field on SuprSend workflow form.
+**To configure channel override:**
 
-![](/images/docs/eb7ac2c-image.png)
+1. Include a `channels` array in the event properties payload.
+2. Map the corresponding event property key to the **Override Channels** field on the SuprSend workflow form.
 
-The expected channel values are: `\\\["email", "sms", "whatsapp", "androidpush", "iospush", "webpush", "slack", "inbox", "ms_teams"\\\]`
+<Frame caption="Override channels configuration in SuprSend workflow">
+  <img src="/images/docs/eb7ac2c-image.png" />
+</Frame>
 
-You can add channel array as a [JQ-expression](https://jqlang.github.io/jq/manual/). So, in case your channel values do not match with the one mentioned in the above table, you can transform it using the JQ-expression. Below are some examples of how to add duration key in JQ format:
-
-1. General format for duration key at parent level is`.channels`
-2. If channel is a nested event property key like shown below, enter it in the format `.user.channels`.
-
-<CodeGroup>
-
-```json json
-properties = {
-  "user": {
-    "name": "Steve",
-    "channels": ["email","inbox]
-  }
+**Accepted channel values:**
+```json
+["email", "sms", "whatsapp", "androidpush", "iospush", "webpush", "slack", "inbox", "ms_teams"]
 ```
 
-</CodeGroup>
+Channel values can be mapped using a [JQ expression](https://jqlang.github.io/jq/manual/) to handle non-standard formats:
+
+| Event property structure | JQ expression |
+|---|---|
+| `{ "channels": [...] }` (top-level) | `.channels` |
+| `{ "user": { "channels": [...] } }` (nested) | `.user.channels` |
+```json
+{
+  "user": {
+    "name": "Steve",
+    "channels": ["email", "inbox"]
+  }
+}
+```
 
 <Warning>
-  When the channel key specified is missing, or resolves to an invalid value, workflow execution will stop and corresponding error will be logged in the logs
+  If the specified channel key is missing or resolves to an invalid value, workflow execution stops immediately and the error is logged.
 </Warning>
 
 ---
@@ -100,12 +149,19 @@ properties = {
 ## Frequently Asked Questions
 
 <AccordionGroup>
-  <Accordion title="How channel routing works when a user has multiple identities of the same channel. e.g., if there are multiple email ids in a user profile?" >
-    Routing happens at channel identity level. So, if there are multiple email ids, notification will be sent to one email id and then on another after a delay.
+  <Accordion title="Why is Inbox always attempted first in Smart Channel Routing?">
+    Inbox is a zero-cost, in-app channel. Attempting it first means users who are actively using your app receive the notification immediately — before any paid channels like SMS or WhatsApp are triggered. If the user engages via Inbox, the entire outside-app routing queue is skipped, reducing cost and notification noise without sacrificing delivery effectiveness.
   </Accordion>
-  <Accordion title="How does channel routing work if I have vendor routing enabled as well?" >
-    Vendor routing is independent of channel routing and doesn't add to the delay in channel routing.
+  <Accordion title="Does Inbox delivery count against the time-to-live window?">
+    No. Inbox is delivered immediately and independently of the outside-app routing queue. The time-to-live budget applies exclusively to outside-app channels (email, SMS, WhatsApp, push, etc.).
+  </Accordion>
+  <Accordion title="How does channel routing work when a user has multiple identities on the same channel (e.g., multiple email addresses)?">
+    Routing operates at the channel identity level. If a user has multiple email addresses, the notification is sent to each address sequentially with the configured inter-channel delay between each attempt.
+  </Accordion>
+  <Accordion title="How does Smart Channel Routing interact with vendor routing?">
+    Vendor routing is independent of Smart Channel Routing. Vendor-level failover does not contribute to or affect the inter-channel delay in Smart Channel Routing.
+  </Accordion>
+  <Accordion title="Can I use Smart Channel Routing to optimize for engagement rather than cost?">
+    Cost-based optimization is available today. Engagement-based optimization — where SuprSend automatically routes to the channel a user is most likely to respond on — is on the roadmap and will be introduced in a future release.
   </Accordion>
 </AccordionGroup>
-
----
