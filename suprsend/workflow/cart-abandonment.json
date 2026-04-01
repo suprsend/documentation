@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.suprsend.com/workflow/v1/schema.json",
+  "slug": "cart-abandonment",
+  "name": "Cart abandonment — email & in-app",
+  "description": "Waits up to 1 hour after cart_abandoned. If cart_completed arrives for the same cart_id, exits without sending. Otherwise sends email and in-app (inbox) via one multi-channel step.",
+  "is_enabled": true,
+  "trigger_type": "event",
+  "trigger_events": ["cart_abandoned"],
+  "category": "transactional",
+  "tags": ["cart", "abandonment", "email", "in-app"],
+  "tree": {
+    "nodes": [
+      {
+        "node_type": "branch_waituntil",
+        "name": "Wait for checkout or 1 hour",
+        "description": "Exit early when cart_completed matches cart_id; otherwise wait 1 hour then send reminder.",
+        "branches": [
+          {
+            "name": "Purchase completed",
+            "description": "User checked out — skip abandonment reminder.",
+            "is_default": false,
+            "conditions": [
+              {
+                "type": "future_event",
+                "event_name": "cart_completed",
+                "event_conditions": [
+                  {
+                    "variable_ns": "$future_event",
+                    "variable": "cart_id",
+                    "op": "==",
+                    "value": ".cart_id"
+                  }
+                ]
+              }
+            ],
+            "nodes": [
+              {
+                "name": "End — no reminder",
+                "node_type": "transform",
+                "description": "No notification; workflow completes after purchase.",
+                "variables": [
+                  {
+                    "key": "_skip_abandonment",
+                    "value_lang": "jsonnet",
+                    "value": "true"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Max wait — send reminder",
+            "description": "No matching cart_completed within 1 hour — send abandonment reminder.",
+            "is_default": true,
+            "conditions": [
+              {
+                "type": "delay",
+                "delay_properties": {
+                  "delay_type": "fixed",
+                  "value": "1h"
+                }
+              }
+            ],
+            "nodes": [
+              {
+                "node_type": "send_multi_channel",
+                "name": "Send email and in-app reminder",
+                "description": "Requires a template that supports email + inbox channels.",
+                "template": "cart-abandonment-reminder",
+                "channels": ["email", "inbox"]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
