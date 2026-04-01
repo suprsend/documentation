@@ -1,258 +1,273 @@
 ---
-title: "Design Template"
-description: "How to create, manage, and test templates in SuprSend."
+title: "Manage Templates"
+description: "Understand how templates work in SuprSend — how to create them, manage versions, personalise content with variables, and use variants for multi-lingual or tenant-specific messaging."
 ---
 
-Templates are the content block of your notification. In SuprSend, content for all channels (SMS, email, chat, push etc.) is grouped under a single template group for simplified management. Your template can have 2 types of content:
+## What is a Template?
 
-- **Static Content**: This remains the same for all users and contains your core message or design.
-- **Dynamic Content**: These are placeholders for user or tenant-specific information, such as first names, booking amounts, appointment times, and more. The variables are populated dynamically based on the data provided in your workflow or event request.
+A **template** is where you author the notification content that gets sent to your users. It is a named, versioned container that holds channel content — Email, SMS, WhatsApp, Push, In-App Inbox, Slack, MS Teams — all in one place.
 
-<Accordion title="Benefits of Using Templates with SuprSend">
-- **Unified Content Management**: Content for all channels is grouped together in a single template, making it easy to manage your content in one place.
-- **WYSWYG editors**: Designing a template is a piece of cake with drag-and-drop and form editors. Your product managers and designers can take control of content creation without involving developers.
-- [Multi-Lingual support:](/docs/templates#adding-multiple-languages) You can add content for multiple languages in a single template and the user will receive notification in their preferred language
-- **Create white-labeled notifications for your** [tenants](/docs/tenants) **with ease**: You can create tenants for your own company and each of your tenants. Use it to dynamically change your email template styling to match the tenant's identity.
-- **Easy to iterate**: You can directly design and store templates on the SuprSend dashboard, decoupling templates from your code.
-- [Version control](/docs/templates#template-versions): Each template change is published as a new version, so you can always track historical changes. You can also monitor user engagement for each version and retain the one that performs better. Trigger a test notification on your current live version to see the content preview on your actual device before pushing it to production.
-- **Add / Remove channels without touching code**: To add any channel to your existing template group, you need to simply design a template for that channel on SuprSend platform and publish it. Notifications will start going through that channel, with no alterations to your existing code.
-</Accordion>
+You reference a template in a [workflow](/docs/workflows) by its **slug**. When the workflow runs, SuprSend picks the right variant for the recipient, renders the content with live data, and routes it across the appropriate channels.
 
+Templates are **decoupled from your code**. Once integrated, your engineers never need to touch notification content again — product and marketing teams can create, update, and ship changes entirely from the dashboard, CLI, or via MCP.
 
-## Create Template
+---
 
-SuprSend's template designer empowers you to create beautiful templates with easy drag-and-drop editor
+## Key Concepts
 
-<Steps>
-  <Step title="Create a template">
-    ![](/images/docs/e551cb0-image.png)
+Before building templates, it helps to understand three things that shape how they work:
 
-    Add a template name and Click on '`Save`'.
+### Channels live inside a template
 
-    ![](/images/docs/0ae3096-image.png)
+A single template holds content for every channel you want to reach users on. If your _Order Shipped_ notification goes out over Email, SMS, and Push, all three are authored inside one template — not three separate ones. This keeps related content together and lets you manage a notification holistically.
 
-    The new Template will be created, which you can see on the top of 'Templates' listing page. Click on the template to start editing.
-  </Step>
-  <Step title="Select the Channel">
-    Select the channel that you want to edit and enable it.
+### Everything is version-controlled
 
-    ![](/images/docs/a06f3be-image.png)
-  </Step>
-  <Step title="Add template content">
-    ![](/images/docs/501c227-image.png)
-  </Step>
-</Steps>
+Every time you commit a template, SuprSend creates an immutable, numbered version (V1, V2, V3…). The most recently committed version is always the **live** version — the one actually used when a notification sends. Previous versions are retained indefinitely in history for auditing and reference.
 
-You can get the detailed guide to design the template for each channel in their respective documents:
+You always edit in an isolated working copy. Your changes are invisible to live traffic until you explicitly commit.
 
-<CardGroup cols="3">
-  <Card title="Email" icon="envelope-dot" iconType="solid" href="/docs/email-template">
+### Variants control what gets sent to whom
 
-  </Card>
-  <Card title="SMS" icon="comment-sms" iconType="solid" href="/docs/sms-template">
+Within a template, you can have multiple **variants** of the same channel content — each targeting a different locale, tenant, or runtime condition. SuprSend evaluates all variants at send time and delivers the first one that matches. If none match, it falls back to the `default` variant. This is how you build multi-lingual, multi-tenant, or A/B-tested notifications without maintaining separate templates.
 
-  </Card>
-  <Card title="Inbox" icon="inbox-full" iconType="solid" href="/docs/in-app-inbox-template">
+---
 
-  </Card>
-</CardGroup>
+## Template Lifecycle
 
-**Push channels:**
-
-<CardGroup cols="3">
-  <Card title="Android Push" icon="android" iconType="solid" href="/docs/android-push-template">
-
-  </Card>
-  <Card title="iOSpush" icon="apple" iconType="solid" href="/docs/ios-push-template">
-
-  </Card>
-  <Card title="Web Push" icon="mobile-screen" iconType="solid" href="/docs/web-push-template">
-
-  </Card>
-</CardGroup>
-
-**Chat:**
-
-<CardGroup cols="3">
-  <Card title="Slack" icon="slack" iconType="solid" href="/docs/slack-template">
-
-  </Card>
-  <Card title="WhatsApp" icon="Whatsapp" iconType="solid" href="/docs/whatsapp-template">
-
-  </Card>
-  <Card title="MS Teams" icon="windows" iconType="solid" href="/docs/ms-teams-template">
-
-  </Card>
-</CardGroup>
-
-## Template versions
-
-SuprSend creates a new version every time you publish a template. This is to ensure that you have historical reference to all the changes done in your template. Helps with audit trails and understanding which template content performed better in terms of user engagement.
-
-- A **draft version** is created by default. You'll always do your changes in the draft version and publish the template once finalized.
-- The recent published template will become the **live version** . All your notifications will be using the live template version.
-- Earlier published versions will become inactive as soon as you publish a new template. You can see inactive template versions by selecting '`All`' tab from the top right side options.
-
-![](/images/docs/7deea89-image.png)
-
-## Adding variable content
-SuprSend supports dynamic templating so you can personalize notifications using data from your workflow, user profile, and tenant settings. Templates use two languages:
-
-- Handlebars — Email, SMS, WhatsApp, and Inbox
-- JSONNET — Slack and MS Teams
-
-To start using dynamic variables, first add sample data in the **Mock Data** panel of the template editor.
-
-### 1. Add mock data
-
-Mock data helps you:
-- Define the structure of variables up front, reducing mismatches between the template and actual payload.
-- Get auto-suggestions while designing templates, avoiding typos.
-- Consistently reuse the same variables across all channels within a template.
-- Preview the final rendered notification and send test messages using sample values.
-
-![](/images/docs/d055e38-image.png)
-
-Sample mock data:
-
-<CodeGroup>
-
-```json json
-{
-  "name": "Steve",
-  "items": [
-    {
-      "item": "Jager-Smith Premium",
-      "tracking_id": "FMPP14677458796",
-      "delivery_date": "22 June, 2023"
-    },
-    {
-      "item": "Winget Women Cap",
-      "tracking_id": "FMPP7734374844765",
-      "delivery_date": "23 June, 2023"
-    }
-  ],
-  "amount": "$3,249",
-  "tracking_link": "https://www.example.com/track"
-}
+```
+Create template → Add channels → Author content → Commit → Live
+                                       ↑                      |
+                                  Edit again  ←──── (new edit session)
 ```
 
-</CodeGroup>
+A template starts as a **Draft** — it has no committed version yet. The first commit makes it **Live**. After that, every edit session starts from the current live version, and changes only take effect on the next commit.
 
-### 2. Available data types and their syntax
-There are four primary sources of dynamic data you can pull into your templates.
+---
 
-#### Input Payload
-This includes:
-- Data from your trigger payload
-- Data added or modified during the workflow via data transform, batch/digest, webhook/fetch, etc.
+## Creating a Template
 
-Referring this data in the template as:
-| Data Type | Handlebars | JSONNET |
-| -------- | ----------------- | -------------- |
-| Parent level keys | `{{var1}}` | `data.var1` |
-| URL or any variable whose values can have special characters like &, ?, =, etc. | `{{{url}}}` (enclose in triple curly braces to avoid HTML-escaping) | `data.url` |
-| Nested keys | `{{var1.var2.var3}}` | `data.var1.var2.var3` |
-| Array index | `{{var1.[0].name}}` | `data.var1[0].name` |
-| Keys with capital letters and spaces | `{{[first_name]}}` | `data['first_name']` |
-| Batching data | `{{$batched_events_count}}` | `data['$batched_events_count']` |
+Go to **Templates** in the left sidebar and click **+ New Template**.
 
-For more advanced logic or complex functions, refer to the full set of available options in the [Handlebars Helpers documentation](/docs/handlebars-helpers).
+Give it a **Name** and a **Slug**. The name is a display label you can change anytime. The slug is the identifier used in your workflow and API calls — it is set at creation and **cannot be changed afterwards**, so pick something stable and descriptive (e.g. `order-shipped`, `password-reset`).
 
-#### User properties
-For per-user personalization, you can use user properties in your templates. These properties are automatically available from each user's profile and can be referenced using `$user`, `$actor` or `$recipient` variables.
+After creation, you select which **channels** to enable: Android Push, Email, In-App Inbox, iOS Push, MS Teams, Slack, SMS, Web Push, or WhatsApp. SuprSend creates a `default` variant for each channel you pick, and you land in the editor ready to start.
+
+You can add or remove channels at any time later without touching any code.
+
+<Tip>
+  If you create a template from inside a Workflow node, it is automatically linked to that workflow and its slug is pre-filled. This is the fastest path when building a new notification from scratch.
+</Tip>
+
+---
+
+## Authoring Content
+
+### The editor
+
+The template editor has a **Variants** panel on the left and the **channel editor** on the right. The channel editor is where you write content — visually for Email, or with form fields for SMS, Push, and the other channels.
+
+Every channel in the Variants panel expands to show its variants. Click a variant to open it as a tab in the editor. You can have multiple variants open at once, making it easy to work across locales or configurations side by side.
+
+### Static vs dynamic content
+
+Template content can be static (fixed for all users) or dynamic (personalised per recipient). For dynamic content, SuprSend uses **Handlebars** syntax for Email, SMS, WhatsApp, and Inbox, and **JSONNET** for Slack and MS Teams.
+
+The most important habit: before writing any `{{variable}}` in your template, define it in the **Variables panel** (`{}` in the left sidebar). This gives you autocomplete, a consistent preview, and catches missing data before you commit.
+
+### Variable sources
+
+Variables in your template can come from four places:
+
+**1. Your trigger payload** — data you send when you trigger the workflow, or data shaped by workflow nodes (transforms, batch/digest, webhook fetch).
+
+| What you're referencing | Handlebars | JSONNET |
+| --- | --- | --- |
+| Top-level key | `{{name}}` | `data.name` |
+| Nested key | `{{order.address.city}}` | `data.order.address.city` |
+| Array item | `{{items.[0].name}}` | `data.items[0].name` |
+| URL with special characters | `{{{tracking_url}}}` | `data.tracking_url` |
+| Key with spaces or capitals | `{{[First Name]}}` | `data['First Name']` |
+| Batched event count | `{{$batched_events_count}}` | `data['$batched_events_count']` |
+
+**2. Recipient properties** — pulled automatically from the user's profile. No need to pass these in your payload.
 
 | Handlebars | JSONNET |
-| -------- | ----------------- |
-| `$user.name` | `data['$user'].name` |
-| `$recipient.name` | `data['$recipient'].name` |
-| `$actor.name` | `data['$actor'].name` |
+| --- | --- |
+| `{{$recipient.name}}` | `data['$recipient'].name` |
+| `{{$actor.name}}` | `data['$actor'].name` |
 
-#### Tenant properties
-If you are using tenant branding, you can include tenant properties in your templates to dynamically display details such as logo, address, and colors. The email designer also provides a Tenant component with pre-designed header, footer, and button, making it easier for you to add tenant branding to your templates.
+**3. Tenant properties** — available when the notification is sent in a [tenant](/docs/tenants) context. Used for white-labelled notifications.
 
-| Handlebars | JSONNET | 
-| -------- | ----------------- |
-| `$brand.brand_name` | `data['$brand'].brand_name` |
-| `$brand.properties.address` | `data['$brand'].properties.address` |
+| Handlebars | JSONNET |
+| --- | --- |
+| `{{$brand.brand_name}}` | `data['$brand'].brand_name` |
+| `{{$brand.properties.address}}` | `data['$brand'].properties.address` |
 
+**4. Batching data** — when events are batched in a workflow, SuprSend injects `$batched_events` (array of all events) and `$batched_events_count` automatically.
 
-## Preview and publish
+For conditionals, loops, and helpers, see [Handlebars Helpers](/docs/handlebars-helpers).
 
-You can see the notification preview on the right side of your editor for most of the channels. Variables in template are replaced with the values from '**mock data'** for preview
+### The Variables panel
 
-**For email**, preview option is available in the bottom left side menu
+The **Variables `{}`** panel in the left sidebar is your development environment for variables. It has two modes:
 
-![](/images/docs/257ce40-image.png)
+- **Input Payload** — define sample values that stand in for real trigger data. Enable batching here to simulate how batched content renders.
+- **Recipient** — search for a real user by name. Their live profile properties load as the variable context, letting you preview exactly what that user would receive.
 
-**For Slack**, you can click on '`Load preview`' button to see the preview
+Variables defined here power the live preview in the editor, the Test feature, and autocomplete while you type `{{`.
 
-![](/images/docs/b99e377-image.png)
+---
 
-Once finalized, you can publish the template by clicking on '`Publish template`**'** button on the draft version
+## Variants
 
-![](/images/docs/4314582-image.png)
+Variants are the mechanism for sending different content to different recipients from the same template. Each variant has its own channel content, a locale, an optional tenant scope, and optional conditions.
 
-## Test template
+### How SuprSend picks a variant
 
-You can send test notifications directly from the template editor page to see how the message will appear on user's device. To send a test notification,
+At send time, SuprSend evaluates variants from top to bottom in the order they appear in the panel. The **first variant whose conditions all match** is the one that gets sent. If no variant matches, it falls back to the `default` variant.
 
-<Steps>
-  <Step title='Click on the  "Test"  button '>
-    You can find the `Test` button on the top right corner.
-  </Step>
-  <Step title="Add Distinct ID">
-    Add the `distinct_id` of the [user](/docs/users), and click on search. It will show all the available channels for the user.
-  </Step>
-  <Step title="Choose the relevant channels">
-    Select those channels on which you'd like to test, and then click on `Trigger Test using mock data` . This will trigger a test notification.
-  </Step>
-  <Step title="Go to Logs">
-    You can go to the logs in order to monitor the real-time status of your sent notification.
-  </Step>
-</Steps>
+This means **order matters**. Put your most specific variants at the top.
 
-JSON data added in the global **"Mock Data"** button will be used to render variables in the template. Make sure to add mock data for all the variables added in the template else notifications will fail.
+### What you can target
 
-![](https://files.readme.io/756a565-ezgif.com-video-to-gif_1.gif)
+| Target | How |
+| --- | --- |
+| **Language / locale** | Set the `Locale` field on the variant. SuprSend matches it against the recipient's `$preferred_language` profile property. |
+| **Tenant** | Set the `Tenant` field. The variant only matches when the notification is sent for that specific tenant. |
+| **Any runtime property** | Add **Conditions** — rules that evaluate recipient properties, tenant properties, or workflow data against a value using operators like `=`, `!=`, `contains`, `<`, `>`. |
 
-** Defining template in your workflow request **
+Multiple conditions on a variant use AND logic — all must match. Click **+ OR** to add a condition group; the variant matches if any group passes.
 
-The  serves as a unique identifier for referencing a template in [workflows created through API](/docs/trigger-workflow#triggering-workflow-via-api). To copy the slug name, click on the clipboard next to the Template name.
+### Creating a variant
 
-![](/images/docs/9ae2913-image.png)
+In edit mode, click the **Add Variant** button in the top bar. Set:
+- **Channels** — which channels this variant covers (one variant can span multiple channels)
+- **ID** — a unique name for this variant within the template (e.g. `hindi`, `enterprise-tier`, `experiment-b`)
+- **Locale** — defaults to `en`
+- **Tenant** — optional; restricts matching to a specific tenant
+- **Conditions** — optional; additional matching rules
 
-** Edit template name and other details **
+The `default` variant is created automatically for every channel and cannot be deleted. It is always the fallback.
 
-You can edit the **template description, name, and add tags** to the template by clicking on the edit icon next to the its name.
+### Managing variants
 
-- We recommend adding your template trigger logic and other relevant notes pertaining to the notification in the `description` . This is helpful for later reference and note keeping.
-- `Tags` are used for better organization of the templates on listing page. You can group similar templates using tags. Tags can then be used to [filter](/docs/templates#view-and-filter-your-template-list) out templates on listing page and also while [fetching templates through API](/reference/get-template-list).
+You can **edit**, **duplicate**, or **delete** variants from their context menu in the Variants panel. Use duplicate when creating a new locale or experiment variant that shares structure with an existing one.
 
-![](/images/docs/c17d0f4-image.png)
+<Warning>
+Deleted variants and their content cannot be recovered.
+</Warning>
 
-## Clone template
+---
 
-To avoid designing templates from scratch, you can clone your existing templates and design on top of it.
+## Committing
 
-![](https://files.readme.io/aa55ca0-ezgif.com-video-to-gif_2.gif)
+When your content is ready, click **Commit** in the top-right corner of the editor.
 
-## Adding multiple languages
+Committing does two things simultaneously:
+1. Snapshots the current state of every channel and variant into a new numbered version.
+2. Makes that version live — all notifications triggered from this point forward use the new content.
 
-SuprSend allows you to create notifications in multiple languages in the same template. Once the languages are added, SuprSend will pick the preferred language from user's profile and send the message as per the user's preferred language. You can add template languages using **Language** option from the top-right corner burger menu. For more details, check [steps and guidelines on adding language](/docs/multi-lingual-template).
+There is no separate "publish" step. Commit is publish.
 
-![](/images/docs/237c2db-image.png)
+While you are in edit mode, the live version is unaffected. Recipients continue receiving the previous committed version until you commit. The yellow banner at the top of the editor reminds you of this: _"You're in edit mode. Changes you make here won't affect published content."_
 
-## Archive template
+Clicking **Exit** discards your uncommitted changes and returns the template to its last committed state.
 
-You can archive your unused templates by clicking on "Archive" option from the top-right corner burger menu. Templates can't be recovered once archived.
+---
 
-## View and filter your template list
+## Version History
 
-All of your active templates will be visible on the template listing page. You can filter your templates by `channel`, `tag`, `status` or just get the templates which were '**edited by you'**.
+Every commit is recorded in the **History** panel (clock icon in the left sidebar). You get:
 
-![](/images/docs/20eceae-image.png)
+- A chronological list of versions — V1, V2, V3 — with author and timestamp. The current live version is marked **Live**.
+- A **diff view** for each version showing which channel–variant combinations were `Updated` or `Unchanged` in that commit.
+- A **Preview** of the full rendered content for any historical version.
 
-Archived templates can be seen by clicking on `Archived` tab from the top right side options
+History is read-only. You cannot roll back to a previous version directly, but you can use a historical version as reference while editing.
 
-![](/images/docs/033a92a-Screenshot_2023-09-28_at_5.25.08_PM.png)
+---
+
+## Testing Before You Commit
+
+Use the **Test** button (top-right, available in both view and edit mode) to send a real notification to a real device before committing.
+
+1. Enter a user's `distinct_id` and search — SuprSend loads their profile and shows available channels.
+2. Select the channels to test.
+3. Click **Trigger Test using mock data** — the notification sends immediately using values from your Variables panel.
+4. Check [Logs](/docs/logging) for delivery status.
+
+<Warning>
+Every variable in the template must have a value in the Variables panel before testing. Missing values cause that channel's notification to fail rendering and not send.
+</Warning>
+
+---
+
+## Managing Templates
+
+### Metadata
+
+Every template has a **Name**, **Slug**, **Description**, and **Tags**. Access these via the **ⓘ icon** next to the template name in the editor breadcrumb, or from **⋮ → Edit Metadata**.
+
+- Use **Description** to document what event triggers this template, who owns it, and any business rules. Future teammates (and AI agents) will thank you.
+- Use **Tags** to group related templates on the listing page and in the [Templates API](/reference/get-template-list).
+
+The slug is the only immutable field — it cannot be changed after creation.
+
+### Cloning
+
+Click **Clone Template** (duplicate icon in the top bar) to copy a template — all its channels, variants, conditions, and content. The clone is created as a Draft with a new name and slug.
+
+Cloning works within a workspace and across workspaces. Use cross-workspace cloning to promote a staging template to production.
+
+### Importing content
+
+In edit mode, the **Import Content** button (arrow icon in the top bar) lets you import an HTML file directly into the current channel editor. Use this when your design team delivers polished email HTML from an external tool.
+
+### Deleting
+
+Go to **⋮ → Delete** in the editor top bar to delete a template.
+
+<Warning>
+Deletion is permanent. Before deleting, check the **Linked Workflow** column on the listing page and remove the template from any active workflows to prevent send failures.
+</Warning>
+
+---
+
+## Finding Templates
+
+The **Templates listing page** shows all templates in the workspace with their status, linked workflow, enabled channels, last updated timestamp, and last used timestamp.
+
+Use the **Search** bar to find templates by name, slug, or description.
+
+Use **Filters and Sort** to narrow by channel, status (`Live` / `Draft`), linked workflow slug, or tags, and to sort by last updated or last used.
+
+The **Approvals tab** shows templates with commits pending review. When approvals are enabled in your workspace, team members without publish rights can commit changes that land here for a reviewer to approve before going live.
+
+---
+
+## Using Templates in Workflows
+
+Templates are referenced in workflows by their **slug**. You can copy the slug from the listing page (clipboard icon) or from the ⓘ metadata popup in the editor.
+
+When you create a template directly from a Workflow's template node, the link is set automatically — no manual configuration needed.
+
+For API-triggered workflows, pass the slug in your payload. See [Trigger Workflow](/docs/trigger-workflow).
+
+---
+
+## Channel Editors
+
+Each channel has its own editor built for that format. See the individual guides:
+
+<CardGroup cols="3">
+  <Card title="Email" icon="envelope-dot" iconType="solid" href="/docs/email-template" />
+  <Card title="SMS" icon="comment-sms" iconType="solid" href="/docs/sms-template" />
+  <Card title="In-App Inbox" icon="inbox-full" iconType="solid" href="/docs/in-app-inbox-template" />
+  <Card title="Android Push" icon="android" iconType="solid" href="/docs/android-push-template" />
+  <Card title="iOS Push" icon="apple" iconType="solid" href="/docs/ios-push-template" />
+  <Card title="Web Push" icon="mobile-screen" iconType="solid" href="/docs/web-push-template" />
+  <Card title="Slack" icon="slack" iconType="solid" href="/docs/slack-template" />
+  <Card title="WhatsApp" icon="whatsapp" iconType="solid" href="/docs/whatsapp-template" />
+  <Card title="MS Teams" icon="windows" iconType="solid" href="/docs/ms-teams-template" />
+</CardGroup>
