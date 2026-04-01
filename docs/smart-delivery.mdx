@@ -22,7 +22,7 @@ og:title: "Smart Channel Routing | SuprSend Docs"
 og:description: "Send multi-channel notifications the smart way — SuprSend routes across email, SMS, WhatsApp, and push sequentially with configurable delays, always trying Inbox first to minimize cost and noise."
 ---
 
-Smart Channel Routing is SuprSend's approach to multi-channel notification delivery that eliminates notification fatigue. Instead of blasting all channels simultaneously, notifications are delivered **sequentially across outside-app channels** — with a configurable delay between each attempt — and stop the moment the user engages.
+Smart Channel Routing is SuprSend's approach to **outside-app** multi-channel notification delivery — across channels like email, SMS, WhatsApp, and push. **Inbox is not part of the routing queue** — it is always delivered immediately and independently, before any outside-app channel is evaluated. Instead of blasting all channels simultaneously, outside-app notifications are delivered **sequentially** — with a configurable delay between each attempt — and stop the moment the user engages.
 
 This reduces unnecessary noise on paid channels (like SMS and WhatsApp), lowers delivery costs, and improves overall notification engagement rates including delivery, open, and interaction rates.
 
@@ -39,8 +39,10 @@ Notification content for each channel is configured using [templates](/docs/temp
 ## How Smart Channel Routing Works
 
 <Steps>
-  <Step title="Inbox is always attempted first">
+  <Step title="Inbox is always attempted first — outside the routing queue">
     If **Inbox** is active on both the template and the user profile, SuprSend delivers the notification to Inbox **immediately** — before any outside-app channel is evaluated. This step is independent of the routing queue and does not consume any time-to-live budget.
+
+    Because Inbox is not an outside-app channel, it does **not** count toward the TTL delay formula. If your workflow has only Inbox + one outside-app channel (e.g., email), the outside-app channel fires immediately — there is no delay to divide.
 
     Inbox is prioritized because it is a zero-cost in-app channel. If the user's [success metric](/docs/smart-delivery#success-metric) is achieved via Inbox (e.g., they open or interact with the notification), all outside-app channel deliveries are skipped, saving cost and reducing notification noise.
   </Step>
@@ -62,7 +64,9 @@ Notification content for each channel is configured using [templates](/docs/temp
     delay = time_to_live ÷ (number_of_outside-app_channels − 1)
 ```
 
-    **Example:** 3 active outside-app channels + 1 hour time-to-live → notifications sent 30 minutes apart across each channel.
+    **Example:** 3 active **outside-app** channels + 1 hour TTL → notifications sent 30 minutes apart.
+
+    **Important:** Inbox is excluded from this count. A template with Inbox + Email + SMS has **2 outside-app channels**, not 3 — so the delay would be 60 minutes ÷ (2 − 1) = **60 minutes between email and SMS**.
 
     Delivery halts as soon as the configured [success metric](/docs/smart-delivery#success-metric) is met. Channels remaining in the queue are skipped.
   </Step>
@@ -87,9 +91,20 @@ Time to live (TTL) defines the **total delivery window** for outside-app channel
 inter-channel delay = TTL ÷ (number_of_outside-app_channels − 1)
 ```
 
-**Example:** 3 outside-app channels with a 1-hour TTL → each channel is attempted 20 minutes apart.
+**Example:** 3 active **outside-app** channels + 1 hour TTL → notifications sent 30 minutes apart.
 
-> **Note:** TTL applies only to outside-app channels. Inbox is always delivered immediately and does not consume any portion of the TTL window.
+**Important:** Inbox is excluded from this count. A template with Inbox + Email + SMS has **2 outside-app channels**, not 3 — so the delay would be 60 minutes ÷ (2 − 1) = **60 minutes between email and SMS**.
+
+<Warning>
+  TTL and inter-channel delays apply **only to outside-app channels** (email, SMS, 
+  WhatsApp, push, Slack, etc.). Inbox is always delivered immediately and is never 
+  counted in the channel total for the delay formula.
+
+  **Example:** If your template has Inbox + Email (2 channels total), the routing 
+  queue contains only **1 outside-app channel** (email). With only 1 outside-app 
+  channel, there is no inter-channel delay — email fires immediately after Inbox. 
+  TTL delays only take effect when 2 or more outside-app channels are active.
+</Warning>
 
 ### Must Send To
 
@@ -163,5 +178,21 @@ Channel values can be mapped using a [JQ expression](https://jqlang.github.io/jq
   </Accordion>
   <Accordion title="Can I use Smart Channel Routing to optimize for engagement rather than cost?">
     Cost-based optimization is available today. Engagement-based optimization — where SuprSend automatically routes to the channel a user is most likely to respond on — is on the roadmap and will be introduced in a future release.
+  </Accordion>
+  <Accordion title="I set a TTL delay but my email still fired immediately alongside Inbox — why?">
+    TTL delays only apply between **outside-app channels**. Inbox is delivered immediately 
+    and is excluded from the routing queue entirely.
+
+    If your template has only **Inbox + one outside-app channel** (e.g., email), there are 
+    no other outside-app channels to delay against — so email fires right away. The delay 
+    formula requires at least 2 outside-app channels to produce a meaningful interval:
+
+    ```
+    delay = TTL ÷ (number of outside-app channels − 1)
+    ```
+
+    To introduce a delay before email, add a second outside-app channel (e.g., push or SMS) 
+    to the template, or use a **Wait Until** node before the Smart Channel Routing node in 
+    your workflow.
   </Accordion>
 </AccordionGroup>
