@@ -13966,6 +13966,1197 @@ paths:
           $ref: '#/components/responses/NotFoundError'
           description: Workspace not found
 
+  # =============================================
+  # V2 Template Management APIs
+  # =============================================
+
+  /v2/{workspace}/template/:
+    get:
+      summary: List Templates
+      description: Retrieve a list of all templates in a workspace. Returns templates with basic metadata.
+      operationId: list-templates-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: List Templates
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v2/{workspace}/template/?mode=draft" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: ["draft", "live"]
+            default: draft
+          description: Which version of templates to return — `draft` (default) or `live`.
+      responses:
+        '200':
+          description: Successfully retrieved list of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: Total number of templates matching the query
+                        example: 24
+                      limit:
+                        type: integer
+                        description: Number of results returned per page
+                        example: 10
+                      offset:
+                        type: integer
+                        description: Offset value passed in the request
+                        example: 0
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slug:
+                          type: string
+                          description: Unique template slug
+                          example: "order-shipped"
+                        name:
+                          type: string
+                          description: Human-readable template name
+                          example: "Order Shipped"
+                        description:
+                          type: string
+                          nullable: true
+                          description: Template description
+                        enabled_channels:
+                          type: array
+                          items:
+                            type: string
+                          description: Channels enabled for this template
+                          example: ["email", "sms", "inbox"]
+                        tags:
+                          type: array
+                          items:
+                            type: string
+                          description: Tags attached to the template
+                        status:
+                          type: string
+                          enum: ["draft", "active"]
+                          description: Current template status
+                        created_at:
+                          type: string
+                          format: date-time
+                        updated_at:
+                          type: string
+                          format: date-time
+              example:
+                meta:
+                  count: 24
+                  limit: 10
+                  offset: 0
+                results:
+                  - slug: "order-shipped"
+                    name: "Order Shipped"
+                    description: "Notification when an order is shipped"
+                    enabled_channels: ["email", "sms", "inbox"]
+                    tags: ["transactional"]
+                    status: "active"
+                    created_at: "2025-03-15T10:30:00.000000Z"
+                    updated_at: "2025-06-20T14:22:00.000000Z"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+          description: AuthenticationFailed
+
+  /v2/{workspace}/template/{template_slug}/:
+    get:
+      summary: Get Template Details
+      description: Fetch detailed information about a specific template, including its metadata, enabled channels, and status.
+      operationId: get-template-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Template Details
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/?mode=draft" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: ["draft", "live"]
+            default: draft
+          description: Which version of the template to fetch — `draft` (default) or `live`.
+      responses:
+        '200':
+          description: Successfully retrieved template details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slug:
+                    type: string
+                    example: "order-shipped"
+                  name:
+                    type: string
+                    example: "Order Shipped"
+                  description:
+                    type: string
+                    nullable: true
+                  enabled_channels:
+                    type: array
+                    items:
+                      type: string
+                    example: ["email", "sms", "inbox"]
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                  status:
+                    type: string
+                    enum: ["draft", "active"]
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+              example:
+                slug: "order-shipped"
+                name: "Order Shipped"
+                description: "Notification when an order is shipped"
+                enabled_channels: ["email", "sms", "inbox"]
+                tags: ["transactional"]
+                status: "active"
+                created_at: "2025-03-15T10:30:00.000000Z"
+                updated_at: "2025-06-20T14:22:00.000000Z"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template not found
+
+    post:
+      summary: Create or Update Template
+      description: |
+        Creates a new template or updates an existing one. If a template with the given slug already exists, it will be updated with the provided fields.
+        
+        Changes are saved in **draft** mode. Use the [Commit API](/reference/commit-template-v2) to publish draft changes to live.
+      operationId: upsert-template-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Create/Update Template
+          source: |
+            curl -X POST "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "name": "Order Shipped",
+                "description": "Notification when an order is shipped",
+                "tags": ["transactional"],
+                "enabled_channels": ["email", "sms", "inbox"]
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug for the template. Used as the identifier in workflows and API calls.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Human-readable name for the template.
+                  example: "Order Shipped"
+                description:
+                  type: string
+                  description: Optional description of the template's purpose.
+                  example: "Notification when an order is shipped"
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional tags for organizing templates.
+                  example: ["transactional"]
+                enabled_channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: ["email", "sms", "whatsapp", "inbox", "slack", "ms_teams", "androidpush", "iospush", "webpush"]
+                  description: List of channels to enable for this template.
+                  example: ["email", "sms", "inbox"]
+      responses:
+        '200':
+          description: Template created or updated successfully
+          content:
+            application/json:
+              example:
+                slug: "order-shipped"
+                name: "Order Shipped"
+                description: "Notification when an order is shipped"
+                enabled_channels: ["email", "sms", "inbox"]
+                tags: ["transactional"]
+                status: "draft"
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+
+  /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/:
+    post:
+      summary: Create or Update Variant
+      description: |
+        Creates a new variant or updates an existing one for a specific channel within a template.
+        
+        Each variant is uniquely identified by the combination of `template_slug`, `channel`, and `variant_id`. The variant content schema depends on the channel — see the [variant schema reference](https://schema.suprsend.com/template/v2/variant_schema.json) for channel-specific content structures.
+      operationId: upsert-variant-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Create/Update Variant
+          source: |
+            curl -X POST "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/email/variant/default/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "locale": "en",
+                "tenant_id": null,
+                "conditions": [],
+                "content": {
+                  "subject": "Your order has shipped!",
+                  "body": {
+                    "type": "raw",
+                    "raw": {
+                      "html": "<h1>Order Shipped</h1><p>Hi {{name}}, your order {{order_id}} is on its way.</p>"
+                    }
+                  }
+                }
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the parent template.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["email", "sms", "whatsapp", "inbox", "slack", "ms_teams", "androidpush", "iospush", "webpush"]
+          description: Channel for this variant.
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+          description: |
+            Unique identifier for the variant. Use `default` for the default variant, or a custom ID for targeting specific audiences.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - locale
+                - content
+              properties:
+                locale:
+                  type: string
+                  description: Locale code for the variant (e.g. `en`, `es`, `fr`).
+                  minLength: 2
+                  maxLength: 6
+                  example: "en"
+                tenant_id:
+                  type: string
+                  nullable: true
+                  description: Tenant ID if this variant is tenant-specific. Pass `null` for the global variant.
+                  example: null
+                conditions:
+                  type: array
+                  nullable: true
+                  description: |
+                    Runtime conditions that determine when this variant is used. Uses the [expression_v1 format](https://schema.suprsend.com/template/v2/variant_schema.json) — same structure as workflow trigger conditions. Each condition is an AND expression with comparison args.
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        const: "expression_v1"
+                      expression_v1:
+                        type: object
+                        properties:
+                          op:
+                            type: string
+                            const: "AND"
+                          args:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                variable_ns:
+                                  type: string
+                                  nullable: true
+                                  enum: ["", "$actor", "$recipient", "$brand", "$organization"]
+                                variable:
+                                  type: string
+                                op:
+                                  type: string
+                                  enum: ["==", "!=", ">", ">=", "<", "<=", "EMPTY", "NON_EMPTY", "CONTAINS", "NOT_CONTAINS", "ARRAY_INTERSECTS", "NOT_ARRAY_INTERSECTS", "DATETIME_EQUALS", "DATETIME_LT", "DATETIME_GT"]
+                                value:
+                                  type: string
+                  example: []
+                content:
+                  type: object
+                  description: |
+                    Channel-specific content for the variant. The schema varies by channel. See the full content schema reference at [schema.suprsend.com](https://schema.suprsend.com/template/v2/variant_schema.json).
+                    
+                    **Channel content schemas:**
+                    - Email: `subject`, `body` (with `type`: `raw`/`designer`/`plain_text`)
+                    - SMS: `body` (text content)
+                    - WhatsApp: WhatsApp interactive message format
+                    - Inbox: In-app notification content
+                    - Slack: Slack Block Kit message
+                    - MS Teams: Adaptive Card format
+                    - Android/iOS/Web Push: `title`, `body`, action URL, image
+                needs_vendor_approval:
+                  type: boolean
+                  description: Whether the content requires vendor approval before sending. Applicable only for **SMS** channel.
+                  default: false
+                seq_no:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  description: Ordering of the variant within a `[channel + tenant_id + locale]` combination. Lower numbers are evaluated first.
+                vendor_approvals:
+                  type: array
+                  description: |
+                    Vendor approval entries for channels that require approval (WhatsApp, SMS). Can be added later via the [Vendor Approval API](/reference/update-vendor-approval-v2).
+                  items:
+                    type: object
+                    properties:
+                      vendor_slug:
+                        type: string
+                        description: Vendor slug (e.g. `twilio-whatsapp`, `msg91-sms`)
+                      vendor_uid:
+                        type: string
+                        description: Vendor unique identifier (e.g. WABA ID)
+                      vendor_template_name:
+                        type: string
+                        description: Template name as set during vendor approval
+                      approval_status:
+                        type: string
+                        enum: ["pending", "sent_for_approval", "approved", "rejected", "upload_failed"]
+                  example: []
+      responses:
+        '200':
+          description: Variant created or updated successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template or channel not found
+
+  /v2/{workspace}/template/{template_slug}/variant/:
+    get:
+      summary: List All Variants
+      description: Fetch all variants across all channels for a given template.
+      operationId: list-all-variants-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: List All Variants
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/variant/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+      responses:
+        '200':
+          description: Successfully retrieved all variants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Variant identifier
+                        channel:
+                          type: string
+                          description: Channel this variant belongs to
+                        locale:
+                          type: string
+                          description: Locale code
+                        tenant_id:
+                          type: string
+                          nullable: true
+                        seq_no:
+                          type: integer
+                          nullable: true
+                        conditions:
+                          type: array
+                        content:
+                          type: object
+              example:
+                results:
+                  - id: "default"
+                    channel: "email"
+                    locale: "en"
+                    tenant_id: null
+                    seq_no: null
+                    conditions: []
+                    content:
+                      subject: "Your order has shipped!"
+                      body:
+                        type: "raw"
+                        raw:
+                          html: "<h1>Order Shipped</h1>"
+                  - id: "default"
+                    channel: "sms"
+                    locale: "en"
+                    tenant_id: null
+                    seq_no: null
+                    conditions: []
+                    content:
+                      body: "Your order {{order_id}} has shipped."
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template not found
+
+  /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/:
+    get:
+      summary: List Channel Variants
+      description: Fetch all variants for a specific channel within a template.
+      operationId: list-channel-variants-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: List Channel Variants
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/email/variant/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["email", "sms", "whatsapp", "inbox", "slack", "ms_teams", "androidpush", "iospush", "webpush"]
+          description: Channel to fetch variants for.
+      responses:
+        '200':
+          description: Successfully retrieved variants for the channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        channel:
+                          type: string
+                        locale:
+                          type: string
+                        tenant_id:
+                          type: string
+                          nullable: true
+                        seq_no:
+                          type: integer
+                          nullable: true
+                        conditions:
+                          type: array
+                        content:
+                          type: object
+              example:
+                results:
+                  - id: "default"
+                    channel: "email"
+                    locale: "en"
+                    tenant_id: null
+                    seq_no: null
+                    conditions: []
+                    content:
+                      subject: "Your order has shipped!"
+                      body:
+                        type: "raw"
+                        raw:
+                          html: "<h1>Order Shipped</h1>"
+                  - id: "spanish-variant"
+                    channel: "email"
+                    locale: "es"
+                    tenant_id: null
+                    seq_no: 2
+                    conditions: []
+                    content:
+                      subject: "¡Tu pedido ha sido enviado!"
+                      body:
+                        type: "raw"
+                        raw:
+                          html: "<h1>Pedido Enviado</h1>"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template or channel not found
+
+  /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/:
+    get:
+      summary: Get Variant Details
+      description: Fetch the full details of a specific variant, including its content, conditions, and vendor approval status.
+      operationId: get-variant-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Variant Details
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/email/variant/default/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["email", "sms", "whatsapp", "inbox", "slack", "ms_teams", "androidpush", "iospush", "webpush"]
+          description: Channel of the variant.
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the variant.
+      responses:
+        '200':
+          description: Successfully retrieved variant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  channel:
+                    type: string
+                  locale:
+                    type: string
+                  tenant_id:
+                    type: string
+                    nullable: true
+                  seq_no:
+                    type: integer
+                    nullable: true
+                  conditions:
+                    type: array
+                  content:
+                    type: object
+                  needs_vendor_approval:
+                    type: boolean
+                  vendor_approvals:
+                    type: array
+              example:
+                id: "default"
+                channel: "email"
+                locale: "en"
+                tenant_id: null
+                seq_no: null
+                conditions: []
+                content:
+                  subject: "Your order has shipped!"
+                  body:
+                    type: "raw"
+                    raw:
+                      html: "<h1>Order Shipped</h1><p>Hi {{name}}, your order {{order_id}} is on its way.</p>"
+                needs_vendor_approval: false
+                vendor_approvals: []
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template, channel, or variant not found
+
+  /v2/{workspace}/template/{template_slug}/mock_data/:
+    get:
+      summary: Get Mock Data
+      description: Fetch the mock data configured for a template. Mock data is used for previewing and testing templates.
+      operationId: get-template-mock-data-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Mock Data
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/mock_data/?mode=draft" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: ["draft", "live"]
+            default: draft
+          description: Which version of mock data to fetch — `draft` (default) or `live`.
+      responses:
+        '200':
+          description: Successfully retrieved mock data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payload:
+                    type: object
+                    description: Variable payload used for template preview
+                  tenant_id:
+                    type: string
+                    description: Tenant ID used for preview
+                  is_batch:
+                    type: boolean
+                    description: Whether this is a batch notification preview
+                  batch_count:
+                    type: integer
+                    description: Number of batched events (relevant only if `is_batch` is true)
+                  recipient_sub_type:
+                    type: string
+                    enum: ["user", "object"]
+                    description: Type of recipient
+                  recipient_distinct_id:
+                    type: string
+                    description: Distinct ID of the recipient user (if `recipient_sub_type` is `user`)
+                  recipient_object:
+                    type: object
+                    description: Recipient object details (if `recipient_sub_type` is `object`)
+                    properties:
+                      object_type:
+                        type: string
+                      id:
+                        type: string
+                  actor_sub_type:
+                    type: string
+                    enum: ["user", "object"]
+                  actor_distinct_id:
+                    type: string
+                  actor_object:
+                    type: object
+                    properties:
+                      object_type:
+                        type: string
+                      id:
+                        type: string
+              example:
+                payload:
+                  order_id: "ORD-12345"
+                  name: "John"
+                  items:
+                    - product_name: "Wireless Mouse"
+                      price: 29.99
+                tenant_id: "default"
+                is_batch: false
+                batch_count: 1
+                recipient_sub_type: "user"
+                recipient_distinct_id: "user_123"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template not found
+
+    patch:
+      summary: Update Mock Data
+      description: Update the mock data used for previewing and testing a template. This data populates variable placeholders in template previews.
+      operationId: update-template-mock-data-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Update Mock Data
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/mock_data/" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "payload": {
+                  "order_id": "ORD-12345",
+                  "name": "John"
+                },
+                "tenant_id": "default",
+                "is_batch": false,
+                "batch_count": 1,
+                "recipient_sub_type": "user",
+                "recipient_distinct_id": "user_123"
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: object
+                  description: Variable data payload for template preview. Keys should match the variables used in your template content.
+                tenant_id:
+                  type: string
+                  description: Tenant ID to use for preview. Pass `"default"` for the default tenant.
+                  example: "default"
+                is_batch:
+                  type: boolean
+                  description: Whether to preview as a batch notification.
+                  default: false
+                batch_count:
+                  type: integer
+                  description: Number of batched events to simulate. Only relevant when `is_batch` is `true`.
+                  example: 2
+                recipient_sub_type:
+                  type: string
+                  enum: ["user", "object"]
+                  description: Type of recipient — `user` for individual users, `object` for object subscriptions.
+                  example: "user"
+                recipient_distinct_id:
+                  type: string
+                  description: Distinct ID of the recipient user. Required when `recipient_sub_type` is `user`.
+                  example: "user_123"
+                recipient_object:
+                  type: object
+                  description: Recipient object details. Required when `recipient_sub_type` is `object`.
+                  properties:
+                    object_type:
+                      type: string
+                      example: "departments"
+                    id:
+                      type: string
+                      example: "sales"
+                actor_sub_type:
+                  type: string
+                  enum: ["user", "object"]
+                  description: Type of actor (the user/object who triggered the notification).
+                  example: "user"
+                actor_distinct_id:
+                  type: string
+                  description: Distinct ID of the actor user. Relevant when `actor_sub_type` is `user`.
+                  example: "admin_user_1"
+                actor_object:
+                  type: object
+                  description: Actor object details. Relevant when `actor_sub_type` is `object`.
+                  properties:
+                    object_type:
+                      type: string
+                      example: "departments"
+                    id:
+                      type: string
+                      example: "leads"
+      responses:
+        '200':
+          description: Mock data updated successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template not found
+
+  /v2/{workspace}/template/{template_slug}/commit/:
+    patch:
+      summary: Commit Template
+      description: |
+        Publish all draft changes for a template to live. This creates a new immutable version snapshot. Once committed, the changes become active and are used for all subsequent notifications.
+        
+        Pass an optional `commit_message` query parameter to describe the changes being published.
+      operationId: commit-template-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Commit Template
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/commit/?commit_message=Updated%20email%20subject%20line" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{}'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template to commit.
+        - in: query
+          name: commit_message
+          schema:
+            type: string
+          description: A short message describing the changes being committed.
+          example: "Updated email subject line"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+            example: {}
+      responses:
+        '200':
+          description: Template committed successfully
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template not found
+
+  /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/discard/:
+    patch:
+      summary: Discard Variant
+      description: |
+        Discard a variant that requires vendor approval. This is only applicable for **WhatsApp** and **SMS** channels where vendor approval is required before sending.
+        
+        Only works on the `live` version of the variant.
+      operationId: discard-variant-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Discard Variant
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/whatsapp/variant/default/discard/?mode=live" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "comment": "Content no longer needed for this campaign"
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["whatsapp", "sms"]
+          description: Channel of the variant to discard. Only `whatsapp` and `sms` are supported.
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the variant to discard.
+        - in: query
+          name: mode
+          required: true
+          schema:
+            type: string
+            enum: ["live"]
+          description: Must be `live`. Discard only operates on the live version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - comment
+              properties:
+                comment:
+                  type: string
+                  description: Reason for discarding the variant.
+                  example: "Content no longer needed for this campaign"
+      responses:
+        '200':
+          description: Variant discarded successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template, channel, or variant not found
+
+  /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/vendor_approval/:
+    patch:
+      summary: Add/Update Vendor Approval
+      description: |
+        Add or update a vendor approval entry for a variant that requires vendor approval (WhatsApp, SMS channels).
+        
+        This API operates on the **live** version only. Use it to record the approval status from your messaging vendor (e.g. Twilio, Gupshup, Meta) after submitting the template for approval.
+      operationId: update-vendor-approval-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Add Vendor Approval (Approved)
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/whatsapp/variant/default/vendor_approval/?mode=live" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "approval_status": "approved",
+                "vendor_slug": "twilio-whatsapp",
+                "vendor_uid": "waba_id-123221",
+                "vendor_template_name": "tpl_v12",
+                "vendor_template_id": "1232",
+                "vendor_locale_code": "en",
+                "vendor_template_category": "UTILITY"
+              }'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Unique slug of the template.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["whatsapp", "sms"]
+          description: Channel of the variant. Only `whatsapp` and `sms` support vendor approvals.
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the variant.
+        - in: query
+          name: mode
+          required: true
+          schema:
+            type: string
+            enum: ["live"]
+          description: Must be `live`. Vendor approvals only apply to the live version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approval_status
+                - vendor_slug
+                - vendor_uid
+              properties:
+                approval_status:
+                  type: string
+                  enum: ["pending", "sent_for_approval", "approved", "rejected"]
+                  description: Current approval status from the vendor.
+                  example: "approved"
+                vendor_slug:
+                  type: string
+                  description: Vendor identifier (e.g. `twilio-whatsapp`, `gupshup-whatsapp`, `msg91-sms`).
+                  example: "twilio-whatsapp"
+                vendor_uid:
+                  type: string
+                  description: Vendor-specific unique identifier (e.g. WABA ID for WhatsApp).
+                  example: "waba_id-123221"
+                vendor_template_name:
+                  type: string
+                  description: Template name as registered with the vendor.
+                  example: "tpl_v12"
+                vendor_template_id:
+                  type: string
+                  description: Template ID assigned by the vendor after approval. **Required when `approval_status` is `approved`**.
+                  example: "1232"
+                vendor_locale_code:
+                  type: string
+                  description: Locale code registered with the vendor.
+                  example: "en"
+                vendor_template_category:
+                  type: string
+                  description: Template category assigned by the vendor (WhatsApp-specific, e.g. `UTILITY`, `MARKETING`).
+                  example: "UTILITY"
+                provider_template_id:
+                  type: string
+                  description: Additional provider template ID. **Required when `vendor_slug` is `msg91-sms` and `approval_status` is `approved`**.
+                comment:
+                  type: string
+                  description: Rejection reason or comment. **Required when `approval_status` is `rejected`**.
+      responses:
+        '200':
+          description: Vendor approval entry updated successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+          description: Template, channel, or variant not found
+
 x-readme:
   headers: []
   explorer-enabled: true
