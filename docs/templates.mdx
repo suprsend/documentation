@@ -1,59 +1,56 @@
 ---
-title: "Manage Templates"
-description: "Understand how templates work in SuprSend — how to create them, manage versions, personalise content with variables, and use variants for multi-lingual or tenant-specific messaging."
+title: "Creating & Managing Templates"
+description: "Create templates, author content across channels, personalise with variables, set up variants, commit versions, and manage the full template lifecycle from the dashboard or CLI."
 ---
 
-## What is a Template?
+## Finding and Filtering Templates
 
-A **template** is where you author the notification content that gets sent to your users. It is a named, versioned container that holds channel content — Email, SMS, WhatsApp, Push, In-App Inbox, Slack, MS Teams — all in one place.
+Go to **Templates** in the left sidebar. The listing shows all templates in the workspace:
 
-You reference a template in a [workflow](/docs/workflows) by its **slug**. When the workflow runs, SuprSend picks the right variant for the recipient, renders the content with live data, and routes it across the appropriate channels.
+<Frame caption="Templates listing page">
+  <img src="/images/docs/templates-listing.png" />
+</Frame>
 
-Templates are **decoupled from your code**. Once integrated, your engineers never need to touch notification content again — product and marketing teams can create, update, and ship changes entirely from the dashboard, CLI, or via MCP.
+| Column | Description |
+| --- | --- |
+| **Template Information** | Display name and slug. Click the clipboard icon to copy the slug. |
+| **Status** | `Live` — at least one committed version exists. `Draft` — no version has been committed yet. |
+| **Linked Workflow** | Workflow this template is attached to, if any. |
+| **Enabled Channels** | Channels with content in this template. Overflow shown as `+N`. |
+| **Last Updated** | Timestamp and author of the most recent change. |
+| **Last Used** | Timestamp of the last notification sent using this template. |
 
----
+**Search** by name, slug, or description using the search bar. **Filters and Sort** lets you narrow by channel, status (`Live` / `Draft`), linked workflow slug, or tags, and sort by last updated or last used.
 
-## Key Concepts
+### Approvals tab
 
-Before building templates, it helps to understand three things that shape how they work:
+When template approvals are enabled in your workspace, team members without publish permissions can make edits and commit — those commits land in the **Approvals** tab instead of going live immediately. A reviewer approves or rejects the commit from this tab before it takes effect. This gives organisations a gating mechanism for content changes in production.
 
-### Channels live inside a template
-
-A single template holds content for every channel you want to reach users on. If your _Order Shipped_ notification goes out over Email, SMS, and Push, all three are authored inside one template — not three separate ones. This keeps related content together and lets you manage a notification holistically.
-
-### Everything is version-controlled
-
-Every time you commit a template, SuprSend creates an immutable, numbered version (V1, V2, V3…). The most recently committed version is always the **live** version — the one actually used when a notification sends. Previous versions are retained indefinitely in history for auditing and reference.
-
-You always edit in an isolated working copy. Your changes are invisible to live traffic until you explicitly commit.
-
-### Variants control what gets sent to whom
-
-Within a template, you can have multiple **variants** of the same channel content — each targeting a different locale, tenant, or runtime condition. SuprSend evaluates all variants at send time and delivers the first one that matches. If none match, it falls back to the `default` variant. This is how you build multi-lingual, multi-tenant, or A/B-tested notifications without maintaining separate templates.
-
----
-
-## Template Lifecycle
-
-```
-Create template → Add channels → Author content → Commit → Live
-                                       ↑                      |
-                                  Edit again  ←──── (new edit session)
-```
-
-A template starts as a **Draft** — it has no committed version yet. The first commit makes it **Live**. After that, every edit session starts from the current live version, and changes only take effect on the next commit.
+<Frame caption="Approvals tab showing commits pending review">
+  <img src="/images/docs/templates-approvals-tab.png" />
+</Frame>
 
 ---
 
 ## Creating a Template
 
-Go to **Templates** in the left sidebar and click **+ New Template**.
+Go to **Templates** and click **+ New Template**.
 
-Give it a **Name** and a **Slug**. The name is a display label you can change anytime. The slug is the identifier used in your workflow and API calls — it is set at creation and **cannot be changed afterwards**, so pick something stable and descriptive (e.g. `order-shipped`, `password-reset`).
+<Frame caption="Create Template dialog">
+  <img src="/images/docs/templates-create-dialog.png" />
+</Frame>
 
-After creation, you select which **channels** to enable: Android Push, Email, In-App Inbox, iOS Push, MS Teams, Slack, SMS, Web Push, or WhatsApp. SuprSend creates a `default` variant for each channel you pick, and you land in the editor ready to start.
+**Name** — a human-readable display label. Can be changed at any time.
 
-You can add or remove channels at any time later without touching any code.
+**Slug** — the unique identifier used in workflows and API calls (e.g. `order-shipped`, `password-reset`). Auto-generated from the name. **Cannot be changed after creation** — choose it carefully.
+
+After creation, you land on the channel picker. Select one or more channels to enable: Android Push, Email, In-App Inbox, iOS Push, MS Teams, Slack, SMS, Web Push, WhatsApp. SuprSend creates a `default` variant for each selected channel and opens the editor.
+
+<Frame caption="Select channels for your template">
+  <img src="/images/docs/templates-channel-selection.png" />
+</Frame>
+
+You can add or remove channels at any time without touching code.
 
 <Tip>
   If you create a template from inside a Workflow node, it is automatically linked to that workflow and its slug is pre-filled. This is the fastest path when building a new notification from scratch.
@@ -63,142 +60,181 @@ You can add or remove channels at any time later without touching any code.
 
 ## Authoring Content
 
-### The editor
+### Static and dynamic content
 
-The template editor has a **Variants** panel on the left and the **channel editor** on the right. The channel editor is where you write content — visually for Email, or with form fields for SMS, Push, and the other channels.
+Template content can be **static** (fixed for all users) or **dynamic** (personalised per recipient). For dynamic content, SuprSend uses:
 
-Every channel in the Variants panel expands to show its variants. Click a variant to open it as a tab in the editor. You can have multiple variants open at once, making it easy to work across locales or configurations side by side.
+- **[Handlebars](/docs/handlebars-helpers)** — Email, SMS, WhatsApp, and In-App Inbox
+- **JSONNET** — Slack and MS Teams
 
-### Static vs dynamic content
+The most important habit before writing any `{{variable}}` in your template: define it first in the **Variables panel** (`{}` in the left sidebar). This gives you autocomplete as you type, a consistent live preview, and catches missing data before you commit.
 
-Template content can be static (fixed for all users) or dynamic (personalised per recipient). For dynamic content, SuprSend uses **Handlebars** syntax for Email, SMS, WhatsApp, and Inbox, and **JSONNET** for Slack and MS Teams.
+<Frame caption="In-App Inbox editor with live notification preview">
+  <img src="/images/docs/templates-inbox-editor.png" />
+</Frame>
 
-The most important habit: before writing any `{{variable}}` in your template, define it in the **Variables panel** (`{}` in the left sidebar). This gives you autocomplete, a consistent preview, and catches missing data before you commit.
+### The Variables panel
 
-### Variable sources
+The Variables panel has two sections:
 
-Variables in your template can come from four places:
+- **Input Payload** — define sample values that simulate your trigger payload. Toggle **Enable batching** to simulate batched event content. The panel computes `$batched_events` and `$batched_events_count` automatically.
+- **Recipient** — search for a real user by name or email. Their live profile properties load as the variable context, so you can preview exactly what that specific user would receive.
 
-**1. Your trigger payload** — data you send when you trigger the workflow, or data shaped by workflow nodes (transforms, batch/digest, webhook fetch).
+Variables defined here power the live preview, the Test flow, and `{{` autocomplete across all channels.
 
-| What you're referencing | Handlebars | JSONNET |
+<Frame caption="Variables panel showing Input Payload, Recipient, and Tenant sections alongside the Android Push editor">
+  <img src="/images/docs/templates-android-push-editor.png" />
+</Frame>
+
+### Variable sources and syntax
+
+Variables can come from four sources. Reference them differently depending on which editor language your channel uses.
+
+**1. Trigger payload** — data sent when the [workflow](/docs/workflows) is triggered, including data shaped by workflow nodes (transforms, [batch](/docs/batch)/[digest](/docs/digest), [webhook fetch](/docs/fetch)).
+
+| Data shape | Handlebars | JSONNET |
 | --- | --- | --- |
 | Top-level key | `{{name}}` | `data.name` |
 | Nested key | `{{order.address.city}}` | `data.order.address.city` |
 | Array item | `{{items.[0].name}}` | `data.items[0].name` |
-| URL with special characters | `{{{tracking_url}}}` | `data.tracking_url` |
+| URL / string with special characters | `{{{tracking_url}}}` *(triple braces)* | `data.tracking_url` |
 | Key with spaces or capitals | `{{[First Name]}}` | `data['First Name']` |
 | Batched event count | `{{$batched_events_count}}` | `data['$batched_events_count']` |
 
-**2. Recipient properties** — pulled automatically from the user's profile. No need to pass these in your payload.
+**2. Recipient and user properties** — pulled automatically from the user's profile. No need to pass in your payload.
 
 | Handlebars | JSONNET |
 | --- | --- |
 | `{{$recipient.name}}` | `data['$recipient'].name` |
+| `{{$user.name}}` | `data['$user'].name` |
 | `{{$actor.name}}` | `data['$actor'].name` |
 
-**3. Tenant properties** — available when the notification is sent in a [tenant](/docs/tenants) context. Used for white-labelled notifications.
+**3. Tenant properties** — available when a notification is sent in a [tenant](/docs/tenants) context. Used for white-labelled notifications.
 
 | Handlebars | JSONNET |
 | --- | --- |
 | `{{$brand.brand_name}}` | `data['$brand'].brand_name` |
 | `{{$brand.properties.address}}` | `data['$brand'].properties.address` |
 
-**4. Batching data** — when events are batched in a workflow, SuprSend injects `$batched_events` (array of all events) and `$batched_events_count` automatically.
+**4. Batching data** — when events are batched in a workflow, SuprSend injects `$batched_events` (array of all batched events) and `$batched_events_count` automatically.
 
-For conditionals, loops, and helpers, see [Handlebars Helpers](/docs/handlebars-helpers).
+For conditionals, loops, date formatting, and helper functions, see [Handlebars Helpers](/docs/handlebars-helpers).
 
-### The Variables panel
+### Sample payload
 
-The **Variables `{}`** panel in the left sidebar is your development environment for variables. It has two modes:
-
-- **Input Payload** — define sample values that stand in for real trigger data. Enable batching here to simulate how batched content renders.
-- **Recipient** — search for a real user by name. Their live profile properties load as the variable context, letting you preview exactly what that user would receive.
-
-Variables defined here power the live preview in the editor, the Test feature, and autocomplete while you type `{{`.
+<CodeGroup>
+```json Input Payload
+{
+  "name": "Alex",
+  "order_id": "ORD-9284",
+  "items": [
+    {
+      "name": "Wireless Headphones",
+      "tracking_id": "TRK-14677458796",
+      "delivery_date": "12 Apr, 2026"
+    }
+  ],
+  "amount": "$129.00",
+  "tracking_url": "https://example.com/track/ORD-9284"
+}
+```
+</CodeGroup>
 
 ---
 
 ## Variants
 
-Variants are the mechanism for sending different content to different recipients from the same template. Each variant has its own channel content, a locale, an optional tenant scope, and optional conditions.
+Variants let you send different content to different recipients from the same template — without duplicating the template. For the full guide on creating, managing, and targeting variants, see [Template Variants](/docs/template-variants).
 
-### How SuprSend picks a variant
+### How variant matching works
 
-At send time, SuprSend evaluates variants from top to bottom in the order they appear in the panel. The **first variant whose conditions all match** is the one that gets sent. If no variant matches, it falls back to the `default` variant.
+At send time, SuprSend evaluates variants from **top to bottom** in the Variants panel. The first variant whose conditions all match is delivered. If no variant matches, the `default` variant is sent.
 
-This means **order matters**. Put your most specific variants at the top.
+**Order matters.** Put your most specific variants at the top. The `default` variant should always be last — it is the universal fallback.
 
 ### What you can target
 
 | Target | How |
 | --- | --- |
-| **Language / locale** | Set the `Locale` field on the variant. SuprSend matches it against the recipient's `$preferred_language` profile property. |
-| **Tenant** | Set the `Tenant` field. The variant only matches when the notification is sent for that specific tenant. |
-| **Any runtime property** | Add **Conditions** — rules that evaluate recipient properties, tenant properties, or workflow data against a value using operators like `=`, `!=`, `contains`, `<`, `>`. |
+| **Language / locale** | Set the `Locale` field. SuprSend matches it against the recipient's `$preferred_language` profile property at send time. See [Multi-lingual Templates](/docs/multi-lingual-template). |
+| **Tenant** | Set the `Tenant` field. The variant matches only when the notification is triggered for that specific tenant ID. |
+| **Any runtime property** | Add **Conditions** — rules that evaluate recipient properties, tenant properties, or workflow payload data against a value using operators: `=`, `!=`, `<`, `>`, `<=`, `>=`, `contains`, `not contains`. |
 
-Multiple conditions on a variant use AND logic — all must match. Click **+ OR** to add a condition group; the variant matches if any group passes.
+Multiple conditions on a variant use **AND** logic — all must match. Click **+ OR** to add a condition group; the variant matches if any group passes (OR logic across groups).
 
 ### Creating a variant
 
-In edit mode, click the **Add Variant** button in the top bar. Set:
-- **Channels** — which channels this variant covers (one variant can span multiple channels)
-- **ID** — a unique name for this variant within the template (e.g. `hindi`, `enterprise-tier`, `experiment-b`)
-- **Locale** — defaults to `en`
-- **Tenant** — optional; restricts matching to a specific tenant
-- **Conditions** — optional; additional matching rules
+In edit mode, click **Add Variant** in the top bar. Fill in:
 
-The `default` variant is created automatically for every channel and cannot be deleted. It is always the fallback.
+| Field | Required | Description |
+| --- | --- | --- |
+| **Channels** | Yes | Which channels this variant covers. One variant can span multiple channels. |
+| **ID** | Yes | Unique name within the template (e.g. `hindi`, `enterprise-plan`, `experiment-b`). Alphanumeric, `_`, `-`, `.`. Max 128 chars. |
+| **Locale** | Yes | Target locale. Defaults to `en`. |
+| **Tenant** | No | Restrict to a specific tenant ID. Max 64 chars. |
+| **Conditions** | No | Additional matching rules evaluated at send time. |
+
+The `default` variant is created automatically for every channel and **cannot be deleted**. It is always the fallback.
 
 ### Managing variants
 
-You can **edit**, **duplicate**, or **delete** variants from their context menu in the Variants panel. Use duplicate when creating a new locale or experiment variant that shares structure with an existing one.
+Right-click a variant in the Variants panel or use its context menu to **Edit**, **Duplicate**, or **Delete** it. Use **Duplicate** as a starting point when creating a new locale or experiment variant that shares structure with an existing one.
 
 <Warning>
-Deleted variants and their content cannot be recovered.
+  Deleted variants and their content cannot be recovered.
 </Warning>
 
 ---
 
 ## Committing
 
-When your content is ready, click **Commit** in the top-right corner of the editor.
+Click **Commit** in the top-right corner of the editor when your content is ready.
 
-Committing does two things simultaneously:
-1. Snapshots the current state of every channel and variant into a new numbered version.
+Committing does two things at once:
+1. Snapshots every channel and variant into a new numbered version.
 2. Makes that version live — all notifications triggered from this point forward use the new content.
 
-There is no separate "publish" step. Commit is publish.
+**There is no separate publish step. Commit is publish.**
 
-While you are in edit mode, the live version is unaffected. Recipients continue receiving the previous committed version until you commit. The yellow banner at the top of the editor reminds you of this: _"You're in edit mode. Changes you make here won't affect published content."_
+The previous live version becomes inactive as soon as a new version is committed. All previous versions are retained in history — they can be referenced but not restored without pushing and committing again.
 
-Clicking **Exit** discards your uncommitted changes and returns the template to its last committed state.
+While in edit mode, the live version is completely unaffected. The yellow banner at the top of the editor makes this explicit: *"You're in edit mode. Changes you make here won't affect published content."*
+
+<Frame caption="Edit mode — the yellow banner confirms changes won't affect live content until you commit">
+  <img src="/images/docs/templates-whatsapp-editor.png" />
+</Frame>
+
+Clicking **Exit** discards all uncommitted changes in the current session and returns the editor to the last committed state. There is no autosave.
 
 ---
 
 ## Version History
 
-Every commit is recorded in the **History** panel (clock icon in the left sidebar). You get:
+Every commit is recorded in the **History** panel (clock icon in the left sidebar).
 
-- A chronological list of versions — V1, V2, V3 — with author and timestamp. The current live version is marked **Live**.
-- A **diff view** for each version showing which channel–variant combinations were `Updated` or `Unchanged` in that commit.
-- A **Preview** of the full rendered content for any historical version.
+The left pane lists versions newest-first — version number, author, timestamp. The current live version is marked **Live** in green.
 
-History is read-only. You cannot roll back to a previous version directly, but you can use a historical version as reference while editing.
+Selecting a version shows a diff table on the right: every **Channel + Variant** combination with an **Action** column marking each as `Updated` or `Unchanged` in that commit. This makes it easy to audit exactly what changed in any given commit.
+
+<Frame caption="Version History showing commit diff across channels and variants">
+  <img src="/images/docs/templates-version-history.png" />
+</Frame>
+
+Click **Preview** (top-right of the history view) to see the full rendered content of any historical version.
 
 ---
 
 ## Testing Before You Commit
 
-Use the **Test** button (top-right, available in both view and edit mode) to send a real notification to a real device before committing.
+The **Test** button (top-right corner, available in both view and edit mode) sends a real notification to a real device so you can verify rendering end-to-end before committing. See [Testing the Template](/docs/testing-the-template) for the full guide.
 
-1. Enter a user's `distinct_id` and search — SuprSend loads their profile and shows available channels.
+1. Enter a user's `distinct_id` and click **Search** — SuprSend loads their profile and shows available channels.
 2. Select the channels to test.
 3. Click **Trigger Test using mock data** — the notification sends immediately using values from your Variables panel.
-4. Check [Logs](/docs/logging) for delivery status.
+4. Go to [Logs](/docs/logging) to verify delivery status and inspect rendering details.
 
 <Warning>
-Every variable in the template must have a value in the Variables panel before testing. Missing values cause that channel's notification to fail rendering and not send.
+  Every `{{variable}}` in the template must have a corresponding value in the Variables panel. A variable with no value causes that channel's notification to fail rendering and not send.
 </Warning>
 
 ---
@@ -207,62 +243,86 @@ Every variable in the template must have a value in the Variables panel before t
 
 ### Metadata
 
-Every template has a **Name**, **Slug**, **Description**, and **Tags**. Access these via the **ⓘ icon** next to the template name in the editor breadcrumb, or from **⋮ → Edit Metadata**.
+Every template has a **Name**, **Slug**, **Description**, and **Tags**. Access via the **ⓘ icon** next to the template name in the breadcrumb, or **⋮ → Edit Metadata**.
 
-- Use **Description** to document what event triggers this template, who owns it, and any business rules. Future teammates (and AI agents) will thank you.
-- Use **Tags** to group related templates on the listing page and in the [Templates API](/reference/get-template-list).
-
-The slug is the only immutable field — it cannot be changed after creation.
+- **Description** — document what event triggers this template, who owns it, and any business rules. Useful for teammates and AI agents working with the template later.
+- **Tags** — group related templates for filtering on the listing page and via the [Templates API](/reference/get-template-list).
+- **Slug** — the only immutable field. Cannot be changed after creation.
 
 ### Cloning
 
-Click **Clone Template** (duplicate icon in the top bar) to copy a template — all its channels, variants, conditions, and content. The clone is created as a Draft with a new name and slug.
+Click **Clone Template** (duplicate icon in the top bar) to copy a template — all channels, variants, conditions, and content — as a new Draft with a new name and slug.
 
-Cloning works within a workspace and across workspaces. Use cross-workspace cloning to promote a staging template to production.
+Cloning works within the same workspace and **across workspaces**. Use cross-workspace cloning to promote a staging template to production without rebuilding it.
 
 ### Importing content
 
-In edit mode, the **Import Content** button (arrow icon in the top bar) lets you import an HTML file directly into the current channel editor. Use this when your design team delivers polished email HTML from an external tool.
+In edit mode, the **Import Content** button (arrow icon in the top bar) imports an HTML file directly into the current channel editor. Use this when your design team delivers email HTML from an external tool.
+
+### Archiving
+
+To retire a template without deleting it, archive it from the **⋮ menu**. Archived templates are hidden from the active listing page but can be viewed by selecting the **Archived** tab. 
+
+<Warning>
+  Archived templates cannot be recovered.
+</Warning>
 
 ### Deleting
 
-Go to **⋮ → Delete** in the editor top bar to delete a template.
+**⋮ → Delete** permanently removes the template.
 
 <Warning>
-Deletion is permanent. Before deleting, check the **Linked Workflow** column on the listing page and remove the template from any active workflows to prevent send failures.
+  Deletion is permanent and cannot be undone. Before deleting, check the **Linked Workflow** column on the listing page and remove the template from any active workflows to prevent send failures.
 </Warning>
-
-### Managing via CLI
-
-You can also manage templates entirely from the command line — list, pull, edit locally, push, and commit without opening the dashboard. See [CLI Template Commands](/reference/cli-template-overview) for the full reference.
-
----
-
-## Finding Templates
-
-The **Templates listing page** shows all templates in the workspace with their status, linked workflow, enabled channels, last updated timestamp, and last used timestamp.
-
-Use the **Search** bar to find templates by name, slug, or description.
-
-Use **Filters and Sort** to narrow by channel, status (`Live` / `Draft`), linked workflow slug, or tags, and to sort by last updated or last used.
-
-The **Approvals tab** shows templates with commits pending review. When approvals are enabled in your workspace, team members without publish rights can commit changes that land here for a reviewer to approve before going live.
 
 ---
 
 ## Using Templates in Workflows
 
-Templates are referenced in workflows by their **slug**. You can copy the slug from the listing page (clipboard icon) or from the ⓘ metadata popup in the editor.
+Templates are referenced in [workflows](/docs/workflows) by their **slug**.
 
-When you create a template directly from a Workflow's template node, the link is set automatically — no manual configuration needed.
+- **Created from a workflow node** — slug is pre-filled and the template is automatically linked to that workflow.
+- **Linked manually on the dashboard** — enter the slug in the workflow's Template node.
+- **API-triggered workflows** — pass the slug in your API payload. See [Trigger Workflow](/docs/trigger-workflow).
 
-For API-triggered workflows, pass the slug in your payload. See [Trigger Workflow](/docs/trigger-workflow).
+To copy the slug: click the clipboard icon on the listing page, or open the ⓘ popup in the editor.
+
+---
+
+## Managing Templates via CLI
+
+All template operations are available from the command line — useful for CI/CD pipelines, scripted environment promotion, and code-first workflows.
+
+```bash
+# List templates
+suprsend template list
+
+# Pull a template and all its variants to local files
+suprsend template pull --slug order-shipped
+
+# Push local changes as a draft
+suprsend template push --slug order-shipped
+
+# Commit the draft to live
+suprsend template commit order-shipped
+
+# Push and commit in one step
+suprsend template push --slug order-shipped --commit --commit-message "Add Hindi variant"
+```
+
+See the full [CLI Template Reference](/reference/cli-template-overview) for all commands and flags.
 
 ---
 
 ## Channel Editors
 
-Each channel has its own editor built for that format. See the individual guides:
+Each channel has its own dedicated editor — with a form on the left and a live device preview on the right.
+
+<Frame caption="Web Push editor with desktop notification preview">
+  <img src="/images/docs/templates-webpush-editor.png" />
+</Frame>
+
+See the individual guides:
 
 <CardGroup cols="3">
   <Card title="Email" icon="envelope-dot" iconType="solid" href="/docs/email-template" />
