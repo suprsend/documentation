@@ -5,12 +5,23 @@ description: "Design, personalise, and send HTML email notifications using SuprS
 
 ## Overview
 
-The email editor gives you a full visual design environment alongside direct HTML and plain text access. Every email template has two parts that are always in sync:
+The email editor supports three distinct editing modes, accessible via the sub-tabs at the top of the editor:
 
-- **Design Editor** — drag-and-drop canvas for building HTML emails visually
-- **Plain Text** — a plain-text version sent alongside the HTML for email clients that don't render HTML
+<CardGroup cols={3}>
+  <Card title="Design Editor" icon="palette" iconType="solid">
+    Drag-and-drop visual canvas. Build emails without writing code using pre-built content blocks, rows, and columns.
+  </Card>
+  <Card title="HTML Editor" icon="code" iconType="solid">
+    Raw HTML code editor for full control. Write or paste your own HTML and CSS directly.
+  </Card>
+  <Card title="Plain Text" icon="align-left" iconType="solid">
+    Plain-text version of the email for clients that don't render HTML. Improves deliverability for technical audiences.
+  </Card>
+</CardGroup>
 
-Switch between them using the sub-tabs at the top of the editor.
+<Warning>
+  **Commit behavior:** The email has two content tracks — **Design/HTML** and **Plain Text**. The Design and HTML editors share the same content (switching between them shows the same email in visual vs. code form). When you commit, the version that was **last edited** (Design/HTML or Plain Text) is what gets published. If you make changes in the Design editor and then switch to HTML, you'll see those same changes in code form — they are the same content.
+</Warning>
 
 ---
 
@@ -30,10 +41,10 @@ The **Subject**, **From Name**, and **From Email** are displayed in the header r
 | --- | --- | --- |
 | **Subject** | Yes | The email subject line. Supports Handlebars — e.g. `Your order {{order_id}} has shipped`. |
 | **From Name** | No | The display name recipients see in their inbox — e.g. `Acme Support` or `{{$brand.brand_name}}`. |
-| **From Email** | No | The sending address — e.g. `no-reply@acme.com`. Must be a verified domain in your vendor settings. |
+| **From Email** | No | The sending address — e.g. `no-reply@acme.com`. Must be a verified domain in your [vendor settings](/docs/vendors). |
 
 <Info>
-  If **From Name** and **From Email** are left blank, SuprSend falls back to the values configured in your vendor settings. Set them here only when you need to override the vendor default — for example, to send from a tenant-specific address.
+  If **From Name** and **From Email** are left blank, SuprSend falls back to the values configured in your [vendor settings](/docs/vendors). Set them here only when you need to override the vendor default — for example, to send from a tenant-specific address.
 </Info>
 
 ### Other Settings
@@ -42,17 +53,17 @@ Expand **Other Settings** in the modal for additional email headers and delivery
 
 | Field | Description |
 | --- | --- |
-| **Preheader Text** | Preview text shown in the inbox below the subject line before the email is opened. If not set, email clients pull the first line of body text. |
-| **Cc** | One or more addresses to carbon-copy, comma-separated. |
-| **Bcc** | One or more addresses to blind carbon-copy, comma-separated. |
-| **Reply To** | The address replies go to when a recipient clicks Reply. |
-| **Add Multiple Tos** | Send the same email to additional recipients beyond the primary user, comma-separated. |
-| **Email Markup JSON** | Structured JSON-LD markup for rich inbox features like Google Actions (one-click RSVP, order tracking directly from Gmail). See [Email Markup](#email-markup) below. |
+| **Preheader Text** | Preview text shown in the inbox below the subject line before the email is opened. If not set, email clients automatically pull the first line of body text — which is often a navigation link or logo alt text, not ideal. Set this explicitly for better inbox appearance. |
+| **Cc** | One or more addresses to carbon-copy, comma-separated. Supports variables — e.g. `{{manager_email}}`. |
+| **Bcc** | One or more addresses to blind carbon-copy, comma-separated. Supports variables. |
+| **Reply To** | The address replies go to when a recipient clicks Reply. Supports variables — e.g. `{{$brand.properties.support_email}}`. |
+| **Add Multiple Tos** | Send the same email to additional recipients beyond the primary user, comma-separated. Supports variables. |
+| **Email Markup JSON** | Structured JSON-LD markup for rich inbox features like order tracking cards, one-click RSVP, or flight boarding passes in Gmail. See [Email Markup](#email-markup) below. |
 
-All fields support Handlebars variables. Click **Save** to apply.
+All fields support Handlebars variables — you can use `{{variable}}` in Subject, From Name, From Email, Cc, Bcc, Reply To, Preheader, and Email Markup. Click **Save** to apply.
 
 <Tip>
-  Preheader text is one of the highest-leverage fields in email. A subject + preheader pair like `Your order has shipped` / `Estimated delivery Friday — tap to track` gives recipients full context before they open.
+  Preheader text is one of the highest-leverage fields in email. Without it, the inbox preview shows the first line of your email body — often something unhelpful like "View in browser" or alt text. A subject + preheader pair like `Your order has shipped` / `Estimated delivery Friday — tap to track` gives recipients full context before they open.
 </Tip>
 
 ---
@@ -85,94 +96,421 @@ Drag any content block from the **Content** tab on the right and drop it onto th
 
 ## Content Blocks
 
-Drag these from the **Content** tab onto the canvas.
+Drag these from the **Content** tab on the right panel onto the canvas. Click any placed block to select it — its settings appear in the right panel. Every block has a **quick settings toolbar** that appears on hover with shortcuts for move, duplicate, delete, and display conditions.
 
-| Block | Description |
+### Heading
+
+Styled heading for section titles and key information.
+
+| Setting | Description |
 | --- | --- |
-| **Columns** | Multi-column layout container for side-by-side content sections. |
-| **Button** | CTA button with configurable label, link, colors, and padding. |
-| **Divider** | Horizontal rule for visual separation between sections. |
-| **Heading** | Styled heading text. Configure font size, weight, color, and alignment. |
-| **Paragraph** | Body text block. Supports rich formatting and Handlebars variables. |
-| **Image** | Inline image with alt text, link, width, and alignment settings. |
-| **Menu** | A row of navigation links — useful for header nav or footer links. |
-| **HTML** | Raw HTML block for custom markup directly inside the email canvas. |
-| **Table** | Tabular data layout — useful for order line items or pricing tables. |
-| **Tenant** | Pre-built branded block that auto-populates from your tenant's properties. See [Tenant Block](#tenant-block). |
+| **Text** | The heading content. Type directly into the block on the canvas. Supports Handlebars — e.g. `Hi {{$recipient.first_name}}`. |
+| **Font Family** | Typeface for the heading. Overrides the global Body font. |
+| **Font Size** | Size in pixels (e.g. 24px, 32px). |
+| **Font Weight** | Regular, Bold, or other weights depending on font. |
+| **Text Color** | Hex color code or color picker. Overrides the global Body text color. |
+| **Text Alignment** | Left, Center, or Right. |
+| **Line Height** | Spacing between lines as a percentage (e.g. 140%). |
+| **Padding** | Top, Right, Bottom, Left padding in pixels. Controls spacing around the heading. |
+
+<Tip>
+  Use the **inline toolbar** that appears when you select text inside a heading to apply bold, italic, underline, links, and merge tags without leaving the canvas.
+</Tip>
+
+### Paragraph
+
+Body text block for content, descriptions, and personalized messages.
+
+| Setting | Description |
+| --- | --- |
+| **Text** | Rich-text content. Type directly into the block. Supports Handlebars variables. |
+| **Font Family** | Typeface override for this block. |
+| **Font Size** | Size in pixels. |
+| **Font Weight** | Regular, Bold, etc. |
+| **Text Color** | Hex color code or color picker. |
+| **Text Alignment** | Left, Center, Right, or Justify. |
+| **Line Height** | Spacing between lines as a percentage. |
+| **Padding** | Top, Right, Bottom, Left padding. |
+
+**Inline text toolbar** (appears when text is selected inside the block):
+
+| Control | Description |
+| --- | --- |
+| **Bold / Italic / Underline** | Standard text formatting. |
+| **Link** | Wrap selected text in a hyperlink. Supports variables in the URL — e.g. `{{{tracking_url}}}`. |
+| **Text Color** | Change color of selected text only. |
+| **Merge Tags** | Insert a variable from the Variables panel as a clickable tag. |
+
+### Button
+
+Call-to-action button with full style control.
+
+| Setting | Description |
+| --- | --- |
+| **Label** | Button text. Supports Handlebars — e.g. `Track Order {{order_id}}`. |
+| **URL** | Link the button opens. Use triple braces for URLs with special characters — `{{{action_url}}}`. |
+| **Background Color** | Button fill color. Hex code or color picker. |
+| **Text Color** | Label text color. |
+| **Border Color** | Border outline color. Set the same as background for no visible border, or use a contrasting color for an outlined style. |
+| **Border Radius** | Corner rounding in pixels. `0` = sharp corners, `4` = subtle rounding, `20+` = pill shape. |
+| **Font Family** | Typeface for the button label. |
+| **Font Size** | Label font size in pixels. |
+| **Font Weight** | Bold, Regular, etc. |
+| **Width** | `auto` (fits content) or a fixed pixel width. Set `100%` for a full-width button. |
+| **Text Alignment** | Alignment of the label inside the button. |
+| **Padding** | Inner padding (top, right, bottom, left) controls the button's clickable area. |
+| **Container Padding** | Outer spacing around the button block. |
+
+### Image
+
+Inline image with link and sizing controls.
+
+| Setting | Description |
+| --- | --- |
+| **Image URL** | Direct URL to the image. You can also upload from the **Uploads** tab or pick from **Images** tab. Supports Handlebars — `{{product_image_url}}`. |
+| **Alt Text** | Accessibility description shown when the image can't load. |
+| **Link URL** | Makes the image clickable. Supports variables — `{{{product_url}}}`. |
+| **Width** | Image width in pixels or percentage. Leave blank for auto (natural size). |
+| **Alignment** | Left, Center, or Right. |
+| **Padding** | Spacing around the image. |
+
+**Three ways to add images:**
+1. **Upload** — Drag an image into the **Uploads** tab or click **Upload Image**. Uploaded images are hosted by SuprSend and available across all templates.
+2. **Stock images** — Search the **Images** tab for free images from Unsplash, Pexels, and Pixabay. Click to insert.
+3. **External URL** — Paste any public image URL directly into the Image URL field. Use a Handlebars variable for dynamic images.
+
+### Columns
+
+Multi-column layout container for placing blocks side by side.
+
+| Setting | Description |
+| --- | --- |
+| **Column Count** | Number of columns (1–4). |
+| **Column Widths** | Proportional width of each column (e.g. 50/50, 33/67, 25/25/50). |
+| **Background Color** | Background for the entire columns row. |
+| **Padding** | Outer padding around the columns container. |
+
+Each column is an independent drop zone — drag any block (Paragraph, Button, Image, etc.) into a specific column.
+
+### HTML Block
+
+Raw HTML block for custom markup that goes beyond what the visual blocks offer — custom tables, embedded styles, advanced layouts, or third-party widget snippets.
+
+| Setting | Description |
+| --- | --- |
+| **HTML Content** | Raw HTML code. Renders directly in the email. |
+| **Padding** | Spacing around the HTML block. |
+
+Click the block to open the code editor. Write or paste any valid email HTML. The canvas renders a live preview of your markup. Supports Handlebars variables inside the HTML.
+
+```html
+<div style="background: #f0f4ff; padding: 16px; border-radius: 8px;">
+  <p style="margin: 0; color: #333;">Hello {{$recipient.first_name}}, your code is:</p>
+  <h2 style="margin: 8px 0 0; color: #2E70E8;">{{verification_code}}</h2>
+</div>
+```
+
+<Warning>
+  Email clients have limited CSS support. Avoid external stylesheets, flexbox, grid, and `position`. Use inline styles and table-based layouts for maximum compatibility. Check support at [campaignmonitor.com/css](https://www.campaignmonitor.com/css/).
+</Warning>
+
+### Divider
+
+Horizontal rule for visual separation.
+
+| Setting | Description |
+| --- | --- |
+| **Line Color** | Divider line color. |
+| **Line Style** | Solid, Dashed, or Dotted. |
+| **Line Width** | Thickness in pixels. |
+| **Width** | Percentage of the content area the divider spans. |
+| **Alignment** | Left, Center, or Right. |
+| **Padding** | Spacing above and below. |
+
+### Table
+
+Tabular data layout for order line items, pricing breakdowns, or comparison grids.
+
+| Setting | Description |
+| --- | --- |
+| **Rows / Columns** | Add or remove rows and columns. |
+| **Header Row** | Toggle a styled header row. |
+| **Cell Padding** | Inner padding for each cell. |
+| **Border** | Border color and width around cells. |
+| **Text Alignment** | Per-column text alignment. |
+
+Cell contents support Handlebars variables and inline formatting.
+
+### Menu
+
+A horizontal row of navigation links — typically used for header nav or footer links.
+
+| Setting | Description |
+| --- | --- |
+| **Menu Items** | Each item has a **Label** and **URL**. Add, remove, or reorder items. |
+| **Separator** | Character between links (e.g. `|`, `·`, or empty). |
+| **Font Family / Size / Color** | Text styling for all menu items. |
+| **Text Alignment** | Left, Center, or Right. |
+| **Padding** | Spacing around the menu. |
+
+---
+
+## Rows and Columns
+
+The email canvas is structured as a stack of **rows**. Each row can contain one or more **columns**, and each column holds content blocks (Paragraph, Button, Image, etc.). This gives you full control over layout at three levels: row, column, and block.
+
+### Row Settings
+
+Click a row (the outer container) to see its settings in the right panel. Every row has these controls:
+
+| Setting | Description |
+| --- | --- |
+| **Background Color** | Background fill for the entire row. Useful for alternating section colors or full-width color bands. |
+| **Background Image** | Set a background image behind the row content. |
+| **Content Alignment** | Left or center-align the content within the row. |
+| **Columns** | Number of columns in this row and their width distribution. |
+| **Padding** | Outer padding for the row (top, right, bottom, left). |
+
+**Row actions** (available in the quick toolbar on hover):
+
+| Action | Description |
+| --- | --- |
+| **Move Up / Down** | Reorder rows in the email. Drag the handle or use arrow buttons. |
+| **Duplicate** | Copy the entire row — including all columns and their content blocks — and insert the copy directly below. |
+| **Delete** | Remove the row and all its contents. |
+| **Save Block** | Save this row as a reusable block in the **Blocks** library. See [Saved Blocks](#saved-blocks). |
+
+### Column Settings
+
+Inside a row, each column is an independent drop zone with its own settings:
+
+| Setting | Description |
+| --- | --- |
+| **Background Color** | Background fill for this specific column. |
+| **Vertical Alignment** | Top, Middle, or Bottom alignment of content within the column. |
+| **Padding** | Inner spacing for this column. |
+| **Border** | Add a border around the column (color, width, style). |
+
+**Working with columns:**
+
+- **Drag and drop** — Drag content blocks from the right panel directly into a specific column.
+- **Resize** — Hover between two adjacent columns to see the resize handle. Drag it to adjust column width proportions (e.g. change a 50/50 split to 30/70).
+- **Copy** — Duplicate a column with all its contents using the column's quick toolbar.
+- **Column-level overrides** — Each column can have its own background color, padding, and border independent of the row and sibling columns.
+
+<Tip>
+  Use column-level background colors to create side-by-side content cards — for example, a product image on the left with a white background and product details on the right with a light grey background.
+</Tip>
 
 ---
 
 ## Tenant Block
 
-The Tenant block renders a branded header using the active tenant's properties — logo, brand colors, and footer bar — pulled automatically at send time from the tenant's configuration.
+<Frame caption="Tenant block types — Header, Button, and Footer">
+  <img src="/images/docs/tenant-block-types.png" />
+</Frame>
 
-The **Block Type** dropdown lets you choose between `Header` and other layout variants. Settings when selected:
+The Tenant block is a special pre-built component that **dynamically renders branded content from the active [tenant's](/docs/tenants) properties** at send time. It eliminates the need to create separate templates for each tenant — one template serves all tenants, with branding applied automatically.
+
+<Info>
+  The Tenant block pulls all its data from the tenant linked to the notification at send time. When you have 50 tenants, you author **one** template — each tenant's recipients see their own logo, colors, and brand name without any extra work.
+</Info>
+
+### Block Types
+
+The **Block Type** dropdown in the Tenant block settings offers three pre-built branded layouts:
+
+<CardGroup cols={3}>
+  <Card title="Header" icon="heading" iconType="solid">
+    Branded header with logo, background color, and bottom accent bar.
+  </Card>
+  <Card title="Button" icon="square" iconType="solid">
+    CTA button that automatically uses the tenant's brand colors.
+  </Card>
+  <Card title="Footer" icon="shoe-prints" iconType="solid">
+    Branded footer with brand name, address, and unsubscribe links.
+  </Card>
+</CardGroup>
+
+#### Tenant Header
+
+A branded header block with the tenant's logo and colors.
 
 | Setting | Description |
 | --- | --- |
-| **Background Color Code** | Hex code for the block background. Overrides the tenant's primary color if set. |
+| **Background Color Code** | Hex override for the header background. If left blank, uses `$brand.primary_color`. |
 | **Background Color Picker** | Visual color picker alternative. |
 | **Logo Height** | Height of the tenant logo in pixels (default: 80). |
 | **Logo Width** | Width of the tenant logo in pixels (default: 150). |
-| **BottomBar Color Code** | Hex code for the colored bar at the bottom of the header block. |
+| **BottomBar Color Code** | Hex code for the accent bar at the bottom of the header. If blank, uses `$brand.secondary_color`. |
 
-The block pulls `$brand.logo`, `$brand.primary_color`, `$brand.secondary_color`, and `$brand.tertiary_color` at send time. To preview with a real tenant's branding, select a tenant from the **Tenant** dropdown in the Variables panel.
+**Pulled automatically:** `$brand.logo` for the logo image, `$brand.primary_color` for the background.
 
-<Info>
-  You can also reference tenant properties manually anywhere in the email using `{{$brand.brand_name}}`, `{{$brand.properties.address}}`, etc. The Tenant block is a convenience wrapper — it does not limit where tenant data can appear.
-</Info>
+#### Tenant Button
+
+A CTA button that is pre-styled with the tenant's brand colors.
+
+| Setting | Description |
+| --- | --- |
+| **Label** | Button text. Supports Handlebars. |
+| **URL** | Button link. Supports Handlebars. |
+| **Background Color** | If left blank, uses `$brand.primary_color`. |
+| **Text Color** | If left blank, uses white or a contrast color. |
+
+The tenant button uses the tenant's primary color as the default fill, so each tenant's emails get a consistently branded CTA without any manual configuration per tenant.
+
+#### Tenant Footer
+
+A branded footer block with the tenant's name, address, and standard links.
+
+| Setting | Description |
+| --- | --- |
+| **Background Color** | If left blank, uses a neutral/light background. |
+| **Text Color** | Footer text color. |
+
+**Pulled automatically:** `$brand.brand_name`, `$brand.properties.address`, and other tenant properties you include.
+
+### How Tenant Colors Work
+
+SuprSend pulls these color properties from the tenant configuration at send time:
+
+| Tenant Property | Usage | Example |
+| --- | --- | --- |
+| `$brand.primary_color` | Header background, button fill, accent elements | `#2E70E8` |
+| `$brand.secondary_color` | Bottom bar, secondary accents, outlined buttons | `#1A4FA0` |
+| `$brand.tertiary_color` | Subtle highlights, tertiary accents | `#F0F4FF` |
+| `$brand.logo` | Logo image URL used in the header block | `https://cdn.acme.com/logo.png` |
+| `$brand.brand_name` | Company/tenant name displayed in footer and text | `Acme Corp` |
+
+To use the secondary color instead of the primary for a header background, set the **Background Color Code** to `{{$brand.secondary_color}}` in the block settings. The same approach works for any color field across any block — not just Tenant blocks.
+
+### Using Tenant Properties Anywhere
+
+The Tenant block is a convenience wrapper, but you can reference tenant data **anywhere** in the email using Handlebars:
+
+```handlebars
+<!-- In a Paragraph block -->
+Thanks for being a {{$brand.brand_name}} customer!
+
+<!-- In a Button's background color field -->
+{{$brand.primary_color}}
+
+<!-- In any text block for a custom tenant property -->
+Support: {{$brand.properties.support_email}}
+Visit us: {{$brand.properties.website_url}}
+Office: {{$brand.properties.address}}
+```
+
+<Tip>
+  Set custom properties on your [tenants](/docs/tenants) (via dashboard or [API](/reference/create-update-tenants)) and reference them with `{{$brand.properties.<key>}}`. Common examples: support email, website URL, office address, social links, legal entity name.
+</Tip>
+
+### Previewing Tenant Branding
+
+To preview how a specific tenant's branding looks in the editor, open the **Variables `{}`** panel in the left sidebar and select a tenant from the **Tenant** dropdown. The canvas updates live with that tenant's logo, colors, and properties.
 
 ---
 
 ## Saved Blocks
 
-The **Blocks** tab is a library of reusable content blocks saved across your workspace. Use it to maintain consistent components — footers, headers, disclaimer sections — across multiple templates without rebuilding them.
+The **Blocks** tab in the right panel is a library of reusable content blocks saved across your workspace. Use it to maintain consistent components — footers, headers, disclaimer sections — across multiple templates without rebuilding them.
 
-Blocks are searchable and organised by name. Click any block to insert it at the bottom of the canvas, or drag it to a specific position. Any block you build can be saved to this library for reuse.
+### Saving a Block
+
+To save a row as a reusable block:
+
+1. Hover over any row on the canvas and click the **Save Block** icon in the quick toolbar.
+2. Give the block a descriptive name (e.g. "Standard Footer", "Promotional Header", "Legal Disclaimer").
+3. The block is saved to the workspace-level **Blocks** library.
+
+### Using Saved Blocks
+
+Blocks are searchable by name in the **Blocks** tab. Click any block to insert it at the bottom of the canvas, or drag it to a specific position.
+
+### Cross-Template Reuse
+
+Saved blocks are available across **all templates** in the workspace. If you save a "Standard Footer" block in one template, every other template in the workspace can insert it from the Blocks library.
+
+<Warning>
+  Saved blocks are a **design-time convenience**, not a centrally managed component. When you insert a saved block, it becomes a local copy in that template. Updating the saved block later does **not** automatically update previously inserted copies. Think of it as a reusable starting point, not a shared component.
+</Warning>
 
 ---
 
 ## Body Settings
 
-The **Body** tab controls global visual defaults for the entire email.
+The **Body** tab in the right panel controls global visual defaults for the entire email. These act as the **base layer** — set them once and every content block inherits them by default. Individual blocks can override any of these settings when needed.
 
 | Setting | Description |
 | --- | --- |
-| **Text Color** | Default text color. Individual blocks can override this. |
-| **Background Color** | The outer background behind the email content area. |
-| **Content Width** | Width of the email content column in pixels (default: 500px). |
-| **Content Alignment** | Left-aligned or center-aligned content column. |
-| **Font Family** | Default typeface for the email. |
+| **Text Color** | Default text color for all text blocks. Individual blocks can override this. |
+| **Link Color** | Default color for hyperlinks across the email. Set your brand link color here instead of styling every link individually. |
+| **Background Color** | The outer background behind the email content area. Visible on wider screens where the content column doesn't fill the viewport. |
+| **Content Width** | Width of the email content column in pixels (default: 500px). Increase for wider emails with multi-column layouts; keep narrow for single-column text-heavy emails. |
+| **Content Alignment** | Left-aligned or center-aligned content column within the viewport. |
+| **Font Family** | Default typeface for the entire email. |
 | **Font Weight** | Default font weight — Regular, Bold, etc. |
 
----
-
-## Images
-
-The **Images** tab gives access to a stock image library and AI image generation without leaving the editor.
-
-- **Search** millions of free images from Unsplash, Pexels, and Pixabay — all licensed under Creative Commons Zero (CC0).
-- **AI image generation** — describe what you need and the AI generates a custom image. Click **See the Magic** to open the generation flow.
-
-Click any image to insert it into a selected Image block, or drag it directly onto the canvas.
+<Info>
+  Body settings establish sensible defaults so you don't repeat the same styling on every block. Set your brand's text color, link color, and font family here once — then only override at the block level when you need a different style for a specific section (e.g. a white-text section on a dark background).
+</Info>
 
 ---
 
-## Uploads
+## Images and Uploads
 
-The **Uploads** tab is your workspace image library. Upload images by clicking **Upload Image** or dragging files into the drop zone. Uploaded images are stored and searchable by name, available across all templates in the workspace.
+The right panel has two tabs for managing images:
+
+- **Images** — Search millions of free stock images from Unsplash, Pexels, and Pixabay (CC0 licensed). Also includes **AI image generation** — describe what you need and click **See the Magic**.
+- **Uploads** — Your workspace image library. Upload images by clicking **Upload Image** or dragging files into the drop zone. Uploaded images are hosted by SuprSend, available across all templates.
+
+Click any image to insert it into the selected Image block, or drag it directly onto the canvas.
+
+---
+
+## HTML Editor
+
+The **HTML** sub-tab (also accessible via the **HTML** button in the top-right of the Design Editor) gives you direct access to the email's HTML source code.
+
+### When to Use HTML Editor
+
+- You have a pre-built HTML email template from your design team or an external tool.
+- You need advanced layouts, custom CSS, or markup that the drag-and-drop editor doesn't support.
+- You're comfortable with email HTML and want full control over the output.
+
+### How It Works
+
+- Write or paste HTML directly into the code editor. The canvas renders a live preview.
+- Supports Handlebars variables inside the HTML — `{{variable}}`, `{{{unescaped_url}}}`, `{{#each items}}`.
+- The Design Editor and HTML Editor **share the same content**. Switching between them shows the same email in visual vs. code form. Changes in either view are reflected in the other.
+
+<Warning>
+  **Email clients strip certain HTML and CSS.** Different email clients (Gmail, Outlook, Apple Mail, Yahoo) each have their own rendering engine and strip different tags and styles. Common issues:
+  
+  - `<style>` blocks in `<head>` may be stripped — use **inline styles** instead.
+  - `flexbox`, `grid`, and `position` are not supported — use **table-based layouts**.
+  - `background-image` on `<div>` is inconsistent — use `<td>` with `background` attribute.
+  - `max-width` is ignored in some Outlook versions.
+  - Web fonts (`@font-face`) fall back to system fonts in most clients.
+  
+  Check CSS support by client at [campaignmonitor.com/css](https://www.campaignmonitor.com/css/). When in doubt, **send a test email** to verify rendering across clients.
+</Warning>
 
 ---
 
 ## Plain Text
 
-The **Plain Text** sub-tab lets you write or manage a plain-text version of the email. Email clients that cannot render HTML display this version. A live **Preview** panel on the right shows the plain text exactly as it will be sent.
+The **Plain Text** sub-tab lets you write or manage a plain-text version of the email. Email clients that cannot render HTML display this version instead. A live **Preview** panel on the right shows the plain text exactly as it will be sent.
 
-**How it works:**
+### Why Plain Text Matters
+
+Adding a well-crafted plain text version improves **deliverability** — spam filters score emails higher when they include both HTML and plain text parts. It's especially valuable for technically oriented audiences who use text-only email clients or have HTML rendering disabled.
+
+### How It Works
 
 - If left blank, SuprSend **auto-generates** plain text from your HTML content at commit time.
 - If you write your own plain text, it is used as-is and auto-generation is skipped for that variant.
-- Click **Fetch from HTML** at any time to pull the current HTML content into the Plain Text editor as a starting point.
+- Click **Fetch from HTML** at any time to pull the current HTML content into the Plain Text editor as a starting point, then edit it.
 
 <Note>
   Plain text auto-generation happens at commit time, not as you type. Click **Fetch from HTML** to see what the auto-generated version will look like before committing.
@@ -195,10 +533,10 @@ For URLs and strings containing special characters (`&`, `?`, `=`), use triple b
 | Trigger payload | `{{order_id}}` | Data sent when the workflow triggers |
 | Nested key | `{{order.shipping.city}}` | Nested object property |
 | Array item | `{{items.[0].name}}` | First item in an array |
-| Recipient profile | `{{$recipient.first_name}}` | Properties from the user's SuprSend profile |
-| Tenant branding | `{{$brand.brand_name}}` | Properties from the linked tenant |
-| Tenant custom property | `{{$brand.properties.address}}` | Custom properties set on the tenant |
-| Batched event count | `{{$batched_events_count}}` | Number of events batched in this send |
+| Recipient profile | `{{$recipient.first_name}}` | Properties from the [user's SuprSend profile](/docs/users) |
+| Tenant branding | `{{$brand.brand_name}}` | Properties from the linked [tenant](/docs/tenants) |
+| Tenant custom property | `{{$brand.properties.address}}` | Custom properties set on the [tenant](/docs/tenants) |
+| Batched event count | `{{$batched_events_count}}` | Number of events [batched](/docs/batch) in this send |
 
 ### Merge Tags
 
@@ -228,6 +566,10 @@ For conditionals, loops, date formatting, and other helpers, see [Handlebars Hel
 ## Display Conditions
 
 Display conditions let you show or hide a content block based on the value of a variable — for example, showing a branding watermark only to free-plan users, or a discount banner only to users in a specific region.
+
+<Frame caption="Display condition on an email block">
+  <img src="/images/docs/dcc458e-display_email.png" />
+</Frame>
 
 Display conditions are applied at the **block level**. Create a separate block for any content you want to conditionally show or hide.
 
@@ -275,15 +617,99 @@ Use `and` to show the block only when all conditions are true:
 
 ## Email Markup
 
-The **Email Markup JSON** field in Email Settings accepts [schema.org JSON-LD](https://developers.google.com/gmail/markup/reference) markup — used to add rich inbox actions directly in Gmail (one-click RSVP, order tracking, event highlights, etc.).
+The **Email Markup JSON** field in Email Settings accepts [schema.org JSON-LD](https://developers.google.com/gmail/markup/reference) markup — used to add rich interactive features directly in Gmail and other supported clients. This enables actions like one-click RSVP, order tracking cards, and flight boarding passes without the recipient opening the email.
 
-**Before using Email Markup:**
+### Examples
 
-You must [register with Google](https://docs.google.com/forms/d/e/1FAIpQLSfT5F1VJXtBjGw2mLxY2aX557ctPTsCrJpURiKJjYeVrugHBQ/viewform) before sending Email Markup to recipients. Review the [Google Registration Guidelines](https://developers.google.com/gmail/markup/registering-with-google) to ensure your application is successful.
+<Accordion title="Order shipping confirmation (like Amazon)">
+  Displays a tracking card directly in the Gmail inbox with order status and delivery date.
 
-**Testing before registration:** Google allows markup testing when the sender email and recipient email are the same account — e.g. sending from `support@yourcompany.com` to `support@yourcompany.com`.
+  ```json
+  {
+    "@context": "http://schema.org",
+    "@type": "Order",
+    "merchant": {
+      "@type": "Organization",
+      "name": "{{$brand.brand_name}}"
+    },
+    "orderNumber": "{{order_id}}",
+    "orderStatus": "http://schema.org/OrderDelivered",
+    "potentialAction": {
+      "@type": "TrackAction",
+      "target": "{{{tracking_url}}}"
+    }
+  }
+  ```
+</Accordion>
 
-Supports Handlebars variables in the markup JSON.
+<Accordion title="Event RSVP (one-click response)">
+  Adds RSVP buttons (Yes / No / Maybe) directly in the Gmail inbox.
+
+  ```json
+  {
+    "@context": "http://schema.org",
+    "@type": "Event",
+    "name": "{{event_name}}",
+    "startDate": "{{event_date}}",
+    "location": {
+      "@type": "Place",
+      "name": "{{venue_name}}",
+      "address": "{{venue_address}}"
+    },
+    "potentialAction": {
+      "@type": "RsvpAction",
+      "handler": {
+        "@type": "HttpActionHandler",
+        "url": "{{{rsvp_url}}}"
+      },
+      "attendance": ["http://schema.org/RsvpAttendance/Yes", "http://schema.org/RsvpAttendance/No", "http://schema.org/RsvpAttendance/Maybe"]
+    }
+  }
+  ```
+</Accordion>
+
+<Accordion title="Flight boarding pass">
+  Displays a flight information card with departure, arrival, and boarding details.
+
+  ```json
+  {
+    "@context": "http://schema.org",
+    "@type": "FlightReservation",
+    "reservationNumber": "{{reservation_id}}",
+    "reservationFor": {
+      "@type": "Flight",
+      "flightNumber": "{{flight_number}}",
+      "departureAirport": {
+        "@type": "Airport",
+        "iataCode": "{{departure_code}}",
+        "name": "{{departure_airport}}"
+      },
+      "arrivalAirport": {
+        "@type": "Airport",
+        "iataCode": "{{arrival_code}}",
+        "name": "{{arrival_airport}}"
+      },
+      "departureTime": "{{departure_time}}"
+    }
+  }
+  ```
+</Accordion>
+
+### Setup Requirements
+
+<Steps>
+  <Step title="Register with Google">
+    You must [register with Google](https://docs.google.com/forms/d/e/1FAIpQLSfT5F1VJXtBjGw2mLxY2aX557ctPTsCrJpURiKJjYeVrugHBQ/viewform) before sending Email Markup to production recipients. Review the [Google Registration Guidelines](https://developers.google.com/gmail/markup/registering-with-google) to ensure your application is approved.
+  </Step>
+  <Step title="Test before registration">
+    Google allows markup testing when the sender and recipient email are the **same account** — e.g. sending from `support@yourcompany.com` to `support@yourcompany.com`. Use this to verify your markup renders correctly before registration.
+  </Step>
+  <Step title="Add markup to your template">
+    Paste your JSON-LD into the **Email Markup JSON** field in Email Settings. The markup supports Handlebars variables for dynamic data.
+  </Step>
+</Steps>
+
+For the full list of supported markup types and actions, see the [Gmail Markup Reference](https://developers.google.com/gmail/markup/reference).
 
 ---
 
@@ -307,25 +733,55 @@ Click **Test** in the top-right corner to send a real email to a real inbox. See
 
 ## Committing
 
-Click **Commit** in the top bar to publish the current state as a new live version. This includes the Design Editor content, Plain Text, sender settings, and subject. The plain text version is auto-generated from HTML at commit time if left empty.
+Click **Commit** in the top bar to publish the current state as a new live version. A commit snapshots everything: Design/HTML content, Plain Text, Email Settings (subject, from, preheader, cc, bcc, etc.), and Email Markup.
+
+**What gets committed:**
+
+- The **Design/HTML content** — the Design Editor and HTML Editor share the same underlying content, so whichever you edited last is what gets committed.
+- The **Plain Text** version — if left blank, SuprSend auto-generates it from the HTML at commit time.
+- All **Email Settings** — subject, from name, from email, preheader, cc, bcc, reply-to, email markup JSON.
+
+<Info>
+  The Design Editor and HTML Editor are two views of the same content — not two separate templates. If you build an email in the Design Editor, switch to HTML and make a code change, then commit, the committed version includes that HTML change. The last editor you used doesn't matter; they always stay in sync.
+</Info>
 
 ---
 
 ## Frequently Asked Questions
 
 <Accordion title="My rendered email looks different from the editor preview in Gmail or Outlook.">
-  Email clients strip certain HTML and CSS tags while rendering to prevent security risks. Use alternative tags where needed. Check supported CSS by client at [campaignmonitor.com/css](https://www.campaignmonitor.com/css/).
+  Email clients strip certain HTML and CSS tags during rendering for security reasons. Each client has its own rendering engine — Gmail strips `<style>` blocks, Outlook uses the Word rendering engine (no CSS `border-radius`, `background-image`, or `max-width`), and Apple Mail is the most permissive. 
+  
+  **Best practices:**
+  - Use **inline styles** instead of `<style>` blocks.
+  - Use **table-based layouts** instead of flexbox or grid.
+  - Always **send a test email** and check it across multiple clients before committing.
+  - Check CSS support by client at [campaignmonitor.com/css](https://www.campaignmonitor.com/css/).
 </Accordion>
 
 <Accordion title="When should I use double braces vs triple braces for variables?">
   Use `{{variable}}` for most cases — double braces HTML-escape values by default, which prevents injection. Use `{{{variable}}}` only when the value contains special characters like `&`, `?`, or `=` that would be incorrectly escaped (e.g. tracking URLs).
 </Accordion>
 
+<Accordion title="What is the difference between the Design Editor and HTML Editor?">
+  They are two views of the **same content**. The Design Editor shows a drag-and-drop visual canvas, while the HTML Editor shows the raw HTML source. Changes in one are reflected in the other. Use whichever you prefer — the committed output is identical regardless of which view you edited in.
+</Accordion>
+
+<Accordion title="Do saved blocks update across templates when I edit them?">
+  No. Saved blocks are a **design-time copy**, not a centrally managed component. When you insert a saved block into a template, it becomes a local copy. Updating the original saved block does not propagate changes to previously inserted copies. Re-insert the block if you want the latest version.
+</Accordion>
+
+<Accordion title="Why should I add a Plain Text version?">
+  Including a plain-text version alongside HTML improves **email deliverability** — spam filters score emails with both parts higher than HTML-only emails. It also ensures your message is readable for recipients who use text-only email clients or have HTML rendering disabled, which is common in technical and security-conscious audiences.
+</Accordion>
+
 ---
 
 ## Further Reading
 
-- [Handlebars Helpers](/docs/handlebars-helpers)
-- [Tenant Templates](/docs/tenant-templates)
-- [Testing the Template](/docs/testing-the-template)
-- [Template Variants](/docs/template-variants)
+- [Handlebars Helpers](/docs/handlebars-helpers) — conditionals, loops, date formatting, and helper functions
+- [Tenant Templates](/docs/tenant-templates) — tenant-specific branding and content
+- [Testing the Template](/docs/testing-the-template) — send to a real device before committing
+- [Template Variants](/docs/template-variants) — target different content by tenant, locale, or condition
+- [Multi-lingual Templates](/docs/multi-lingual-template) — deliver in each recipient's preferred language
+- [Template Management API](/reference/list-templates-v2) — manage templates programmatically via the API

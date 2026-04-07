@@ -1,51 +1,108 @@
 ---
-title: "Internationalization"
-description: "Guide on handling multiple languages in the template & publish language-specific versions."
+title: "Multi-lingual Templates"
+description: "Deliver notifications in each recipient's preferred language from a single template. Add language variants, author content per locale, and publish selectively."
 ---
 
-SuprSend allows you to create notifications in multiple languages in the same template. Once the languages are added, SuprSend will pick the preferred language from user's profile and send the message as per the user's language. You can set user preferred language using our [Python](/docs/python-create-user-profile#set-preferred-language) or [Node](/docs/node-create-user-profile#set-preferred-language) SDK
+SuprSend automatically delivers notifications in a recipient's preferred language — no conditional logic in your code, no separate templates per locale. You add language variants to a single template, author content for each locale, and publish. At send time, SuprSend matches the recipient's language preference and delivers the right version.
 
-English is the default fallback language. So users with no language preference set or preferred language for which content is not present in template will get the notification in English language.
+---
 
-You can enable multi-lingual templates by simply following the below steps:
+## How language selection works
 
-<Steps>
-  <Step title="Add Languages">
-    In any template, English (en) language in enabled by default. To add other languages, click on `Language` button on the top right side of template editor.
+Every template channel has a default variant in English (`en`). When a notification is triggered:
 
-    ![](/images/docs/900b12b-lang_button.png)
+1. SuprSend reads the recipient's `$preferred_language` property from their [profile](/docs/users).
+2. If a published variant exists for that language, it is delivered.
+3. If no match is found — either because the language isn't in the template, or the recipient has no language preference set — the **English (`en`) default** is delivered.
 
-    This will open language selection modal. Search the required language, add it and save the changes.
+English is always the fallback. You cannot remove or unpublish the default English variant.
 
-    ![](https://files.readme.io/f3b4017-ezgif.com-gif-maker_5.gif)
-  </Step>
+To set a recipient's preferred language, use the Python or Node SDK:
 
-  <Step title="Add content for each language and Save">
-    Once the required languages are added, you'll see the enabled languages in the side panel - draft version. The languages are set at template group level, that is it will be enabled for all the channels at once. However, you can choose which language content to publish at the time of publishing the draft.
+- [Python SDK — set preferred language](/docs/python-create-user-profile#set-preferred-language)
+- [Node SDK — set preferred language](/docs/node-create-user-profile#set-preferred-language)
 
-    Add the content for each of these languages.
-  </Step>
+---
 
-  <Step title="Publish Languages">
-    After making the changes, click on `Publish draft button`.
+## Step 1 — Add languages to the template
 
-    ![](/images/docs/5fa1c5c-lang_publish.png)
+Languages are configured at the **template group level** — enabling a language makes it available across all channels simultaneously.
 
-    Add a relevant version name and Click on `Next`.
+Open any template and click **Language** in the top-right of the editor. The language selection modal opens. Search for the language you need, select it, and save.
 
-    ![](/images/docs/d2818ad-version_name.png)
+The enabled languages appear in the left panel under the draft version. Each language gets its own content slot for every channel.
 
-    Select the languages that you want to Publish. English language will be published by default.
+---
 
-    ![](/images/docs/0307e31-final_publish.png)
+## Step 2 — Author content for each language
 
-    <Warning>
-      If you see an error message below any language (Spanish in above image), that means there are some missing fields in the template form for that language. You'll not be able to publish the language with incomplete information. 
-      You can go back, add the missing fields for that language and publish it again or skip this language and publish.
-    </Warning>
+Switch between languages in the left panel to author content for each locale. Channel editors work identically across languages — the same fields, variables, and formatting options are available.
 
-    That's it. Published languages can now be seen in the live version.
-  </Step>
-</Steps>
+Variables (`{{name}}`, `{{order_id}}`, etc.) work the same way across all languages — see [variable sources and syntax](/docs/templates#variable-sources-and-syntax). The variable values come from the trigger payload and recipient profile at send time — you do not need separate payload keys per language.
 
-***
+> **Tip:** Use **Import Variant** in the editor to copy content from another language as a starting point, then translate. Faster than authoring from scratch when the structure of the message is the same across locales.
+
+---
+
+## Step 3 — Publish language variants
+
+Click **Publish Changes**. The publish flow has an additional step for multi-lingual templates:
+
+1. Enter a version name (auto-generated as V1, V2, …) and optional description.
+2. On the next screen, select which languages to publish. English is always included.
+
+You can publish languages selectively — for example, publish English and French now, and add German later when that content is ready. Unpublished languages are never sent.
+
+> **Validation:** If a language has incomplete fields (a required channel field left empty), an error appears next to that language. You cannot publish an incomplete language — either complete the missing fields and return to publish it, or skip it and publish the other languages first.
+
+Published languages appear in the live version immediately. Recipients with a matching language preference receive that version from the next notification onward.
+
+---
+
+## Managing languages after publishing
+
+**Adding a new language** — click **Language**, add the new locale, author its content, and publish. Existing live languages are unaffected.
+
+**Updating content for a language** — edit the language's content in the draft, then publish. Publishing a new version affects all languages included in that publish. Languages not included in a publish remain at their previous live version.
+
+**Removing a language** — open the Language modal, deselect the language, and save. This removes it from draft. Publishing after removal takes that language out of the live version — recipients who previously received that language will fall back to English.
+
+---
+
+## Multi-lingual variants
+
+Language and [variants](/docs/template-variants) compose. You can have a Spanish variant for one tenant and a different Spanish variant for another — each with its own conditions.
+
+When SuprSend selects a variant at send time, it evaluates all conditions including language. The most specific matching variant wins. For example:
+
+| Variant | Conditions | Wins when |
+|---|---|---|
+| Default (en) | (none) | No other variant matches |
+| Spanish | `$recipient.language = es` | Any Spanish-language recipient |
+| Acme Spanish | `$recipient.language = es` + `$tenant.id = acme` | Acme tenant + Spanish language |
+
+See [Template Variants](/docs/template-variants) for the full selection logic.
+
+---
+
+## WhatsApp and SMS: approval per language
+
+For [WhatsApp](/docs/whatsapp-template) and [DLT](/docs/dlt-guidelines) SMS, each language variant is a separate template at the vendor end. Approval is handled per language:
+
+- Publishing puts each language variant into **Approval Pending** independently.
+- The **Approve / Reject** button appears at the language level when hovering on the variant.
+- A language goes live only after it is approved with the primary vendor.
+- If a [fallback vendor](/docs/vendor-fallback) is configured, approval must be confirmed for each vendor.
+
+See [Template Variants — Approval flow](/docs/template-variants#approval-flow-whatsapp-and-sms) for the full approval modal walkthrough.
+
+---
+
+## Related
+
+- [Template variants](/docs/template-variants)
+- [Creating and managing templates](/docs/templates)
+- [Testing a template](/docs/testing-the-template)
+- [Handlebars helpers](/docs/handlebars-helpers)
+- [Python SDK — set preferred language](/docs/python-create-user-profile#set-preferred-language)
+- [Node SDK — set preferred language](/docs/node-create-user-profile#set-preferred-language)
