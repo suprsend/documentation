@@ -3,6 +3,19 @@ title: "Slack Template"
 description: "How to design Slack templates using text editor or JSONNET editor for rich block kit templates."
 ---
 
+## Choosing between Text and JSONNET
+
+| Scenario | Recommended editor |
+|---|---|
+| Simple alerts, status updates, log messages | **Text** — fastest to set up, uses Handlebars for variables. |
+| Notifications with buttons, images, or structured layouts | **JSONNET** — full Block Kit support for rich interactive messages. |
+| Batched/digest notifications with dynamic lists | **JSONNET** — use `for` loops to iterate over `data["$batched_events"]`. |
+| Quick prototyping | **Text** — write it in 30 seconds, upgrade to JSONNET later if needed. |
+
+<Info>
+  You can switch between Text and JSONNET at any time. Content is saved independently for each mode — switching does not overwrite the other.
+</Info>
+
 ## Edit Template
 
 SuprSend provides two ways to design Slack templates:
@@ -479,37 +492,81 @@ Total events: {{$batched_events_count}}
 
 </CodeGroup>
 
-## Preview Template
+## Common patterns
 
-1. Add mock JSON data using the `Mock data` button for all variables used in the template
-2. Click `Load Preview` to see the rendered template
-3. For JSONNET templates, click `View in Slack Block Kit` to see the actual Slack UI preview
+**Thread-aware notifications** — Slack automatically threads messages sent to the same channel with the same `thread_ts`. If your workflow sends updates about the same resource (e.g., deployment progress), pass a consistent `thread_ts` in the trigger payload to keep messages threaded.
+
+**Mentioning users** — use `<@SLACK_USER_ID>` in your template to @mention a user. You can pass the Slack user ID as a variable: `<@{{assignee_slack_id}}>`.
+
+**Linking to resources** — Slack uses `<URL|display text>` syntax for links. In JSONNET, use string interpolation: `"*<" + data.url + "|" + data.title + ">*"`.
+
+**Emoji** — add emoji using `:emoji_name:` syntax (e.g., `:white_check_mark:`, `:warning:`). Slack renders these as native emoji in the message.
+
+## Variants
+
+Create different template variants for multi-lingual messaging, tenant-specific content, or A/B testing. Add conditions based on tenant, recipient language, or any data from your workflow trigger. The first variant in order matching all its conditions is sent at runtime. The **default** variant acts as a fallback when no specific variant conditions are met.
+
+For details on creating, managing, and selecting variants, see [Template Variants](/docs/template-variants).
+
+## Preview template
+
+1. Add sample data in the **Variables panel** for all variables used in the template.
+2. Click **Load Preview** to see the rendered template.
+3. For JSONNET templates, click **View on Slack Builder** to see the actual Slack UI preview.
 
 <Warning>
-  You must add mock data for all variables in your template. Missing mock data will cause rendering errors and prevent the preview from loading.
+  You must add mock data for all variables in your template. Missing data causes rendering errors and prevents the preview from loading.
 </Warning>
 
 <Frame>
   <img src="https://files.readme.io/b481ef6-slack_preview.gif" alt="Slack Preview Demo" />
 </Frame>
 
-## Publish Template
+## Commit and publish
 
-Once your template is ready, click **Publish Draft** and provide a version name to publish it. The published template becomes the live version and will be used whenever the associated workflow is triggered.
+Once your template is ready, click **Commit** and provide a version name to publish it. The committed version becomes live and is used in all subsequent workflow runs.
 
-## Test Template
+## Test template
 
-Use this option to send a test message in Slack and preview how it will appear in user's device.
-Click the Test button, then enter the user's distinct_id and select the Slack channel where the test message should be sent.
+Send a test message to preview how it appears in Slack. Click the **Test** button, enter the user's distinct ID, and select the Slack channel for delivery. For details, see [Testing Templates](/docs/testing-the-template).
 
 <Note>
-  Template testing only uses the published Live version, so make sure to publish your changes before testing.
+  Testing uses the live version. Commit your changes before testing to see the latest content.
 </Note>
 
-## Promote to Production
-
-You can clone template across workspaces by using Clone -\> Outside Template option. Clone -\> Within template can be used to clone within different languages and versions of the same template.
-
 <Tip>
-  **Best Practice**: Always design templates in your staging workspace first, then promote them to production. This ensures thorough testing of the changes without impacting end users.
+  **Best Practice:** Design templates in your staging workspace first, then promote to production using the share icon in the editor.
 </Tip>
+
+## Best practices
+
+- **Text vs JSONNET** — start with the Text editor for simple alerts. Only switch to JSONNET when you need structured layouts, buttons, or images. JSONNET adds complexity.
+- **Block Kit validation** — always click **View on Slack Builder** to validate your JSONNET output before committing. Slack silently drops invalid blocks instead of showing an error.
+- **Message length** — Slack truncates messages over 4000 characters. For digest/batched notifications with many items, consider showing the top 5-10 items and adding a "View all" button.
+- **Buttons** — use `"style": "primary"` (green) for the main action and `"style": "danger"` (red) for destructive actions. Default (no style) renders as grey.
+- **Mrkdwn formatting** — Slack uses its own `mrkdwn` format, not standard Markdown. Key differences: bold is `*text*` (single asterisk), italic is `_text_`, strikethrough is `~text~`, and code blocks use triple backticks.
+- **Batched notifications** — when using [batch](/docs/batch) or [digest](/docs/digest) nodes in your workflow, reference `data["$batched_events"]` and `data["$batched_events_count"]` to iterate over the collected events. See Template Example 4 above for the full pattern.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="How do I mention a user in a Slack message?">
+    Use `<@SLACK_USER_ID>` syntax. Pass the Slack user ID as a variable: `<@{{assignee_slack_id}}>`. The user will receive an @mention notification in Slack.
+  </Accordion>
+
+  <Accordion title="Why isn't my JSONNET preview loading?">
+    All variables used in the JSONNET template must have sample values in the Variables panel. Missing mock data causes rendering errors. Add values for every `data.variable` reference, then click **Load Preview** again.
+  </Accordion>
+
+  <Accordion title="Can I use Handlebars in the JSONNET editor?">
+    No. The JSONNET editor uses JSONNET syntax (`data.variable_name`), not Handlebars (`{{variable_name}}`). Handlebars is only for the Text editor. See the [variable syntax table](#adding-dynamic-content) for the comparison.
+  </Accordion>
+
+  <Accordion title="How do I send batched/digest notifications to Slack?">
+    Use a [batch](/docs/batch) or [digest](/docs/digest) node in your workflow, then reference `data["$batched_events"]` and `data["$batched_events_count"]` in your JSONNET template. See Template Example 4 (Pending Task Digest) for the full working pattern with `for` loops.
+  </Accordion>
+
+  <Accordion title="What happens if a variable is missing at send time?">
+    SuprSend discards the Slack notification for that user. Other channels in the same template group are still sent if they render successfully.
+  </Accordion>
+</AccordionGroup>

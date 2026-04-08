@@ -1,63 +1,124 @@
 ---
 title: "SMS Template"
-description: "How to design and publish SMS template."
+description: "How to design, publish, and get approval for SMS templates — both DLT and non-DLT."
 ---
-
-## Design Template
 
 You can design SMS template on SuprSend with a simple form editor tool. You can add variables with `Handlebarsjs` language. You can check how the message will look in the preview section on the right side.
 
 The SMS template has 3 parts:
-    - **Message type** (Transactional, Promotional, Engagement),
-    - **Header** (template headers added in the SMS integration settings),
-    - **Body** (SMS template is added here).
+- **Message type** (Transactional, Promotional, Engagement),
+- **Header** (template headers added in the SMS integration settings),
+- **Body** (SMS template is added here).
 
-Once designed, you can save the SMS template by clicking on "Save" button. When you are ready, you can Publish Draft by providing a name to the version. This will create a version in 'Pending Approval' state.
+Once designed, you can commit the SMS template by clicking on **Commit**. For DLT templates, this will create a version in **Approval Pending** state.
 
-Every SMS template goes through an approval process, where the templates are submitted to the registered DLT portal for review, where the SMS is reviewed based on the **DLT guidelines** and SMS either gets approved or rejected.
-
-SuprSend handles the template approval process for you. All you have to do is create a template on SuprSend while following DLT template guidelines, and wait for the approval / rejection of template. Accordingly, the published template version's state will move to `Live` or `Rejected`. Once the version goes `Live`, you can use the template to send to your users.
-
-<Frame>
-  <img src="/images/docs/cff11fd-SMS_Notification_template.png" />
+<Frame caption="SMS editor with live device preview">
+  <img src="/images/docs/templates-editor-sms.png" />
 </Frame>
+
+## SMS types
+
+| Type | Description | Approval required? |
+|---|---|---|
+| **DLT** | Templates registered with a DLT portal (required in India). Has header, message type, and body fields. | Yes — submitted to your DLT portal for review. |
+| **Non-DLT** | Standard SMS templates for regions without DLT requirements. Only has a body field. | No — goes live immediately on commit. |
 
 ## SMS fields description
 
-
-| Field        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Message Type | There are 3 types of message - (1) **Transactional**- Service implicit or Informative messages which are triggered corresponding to a user's action either done at the time of sending the message or based on past data. All other OTPs other than bank OTPs also fall in this category. *e.g.- delivery updates, E-commerce website OTPs etc.* (2) **Promotional**- All the marketing related messages where we have not taken any explicit consent from the user. *e.g.- messages sent to promote or sell a product* (3) **Engagement**- Service Explicit or Engagement messages which are triggered to re-engage the users back to platform like promoting new features and offers. *e.g.- new feature promotion, discount offer messages to existing customers etc.* |
-| Header       | Header should be registered with DLT. Separate headers would be there for all the message types                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Body         | SMS template added here should follow DLT template guidelines. Click here to view all DLT guidelines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-
-<Info>
-  Please note that to send the SMS, you will need to integrate SMS vendor with SuprSend. Please visit the 'Vendor Integration Guideline' section to see vendors list and how to integrate them.
-</Info>
+| Field | Description |
+|---|---|
+| Message Type | There are 3 types of message — (1) **Transactional** — Service implicit or informative messages triggered corresponding to a user's action either done at the time of sending the message or based on past data. All OTPs other than bank OTPs also fall in this category. *e.g., delivery updates, E-commerce website OTPs etc.* (2) **Promotional** — All marketing related messages where explicit consent has not been taken from the user. *e.g., messages sent to promote or sell a product.* (3) **Engagement** — Service explicit or engagement messages triggered to re-engage users back to the platform like promoting new features and offers. *e.g., new feature promotion, discount offer messages to existing customers etc.* |
+| Header | Header should be registered with DLT. Separate headers exist for each message type. |
+| Body | SMS template added here should follow DLT template guidelines. See [DLT Guidelines](/docs/dlt-guidelines) for details. |
 
 <Note>
-  **Vendor Integration Required** 📘
-
-  Please note that to send the SMS, you will need to integrate SMS vendor with SuprSend. Please visit the 'Vendor Integration Guideline' section to see vendors list and how to integrate them.
+  To send SMS, you will need to integrate an SMS vendor with SuprSend. Please visit the [SMS vendor integrations](/docs/acl-sinch) section to see the vendors list and how to integrate them.
 </Note>
+
+## DLT approval flow
+
+DLT SMS templates go through a vendor approval process:
+
+1. Design and commit the template — it enters **Approval Pending** state.
+2. SuprSend handles submission to the DLT portal. You'll be notified when the template is approved or rejected.
+3. On approval, the version goes **Live**. On rejection, it returns to **Draft** for revision.
+
+Templates pending approval are visible in the **Approvals** tab on the [template listing page](/docs/templates#view-and-filter-your-template-list). For DLT guidelines, see [DLT Guidelines](/docs/dlt-guidelines).
+
+## Character limits and encoding
+
+| Encoding | Characters per segment | When it applies |
+|---|---|---|
+| GSM-7 | 160 (single), 153 per part (multi-part) | Standard Latin characters, digits, basic punctuation |
+| UCS-2 (Unicode) | 70 (single), 67 per part (multi-part) | Emojis, non-Latin scripts (Hindi, Arabic, Chinese, etc.), or special characters like `€`, `{`, `}` |
+
+Messages exceeding one segment are split into multi-part SMS. Each part is billed separately by your vendor. A single Unicode character (like an emoji) forces the entire message into UCS-2 encoding, reducing capacity from 160 to 70 characters.
+
+<Tip>
+  To keep costs down, avoid emojis and special Unicode characters in transactional SMS. Use them deliberately in marketing/engagement messages where open rates justify the extra cost.
+</Tip>
+
+## Common scenarios
+
+<AccordionGroup>
+  <Accordion title="OTP / verification code">
+    | Field | Value |
+    |---|---|
+    | Body | `Your verification code is {{otp_code}}. It expires in {{expiry_minutes}} minutes. Do not share this code with anyone.` |
+    | Message Type | Transactional |
+
+    Keep OTP messages under one segment (160 characters). No URLs needed — just the code and expiry.
+  </Accordion>
+
+  <Accordion title="Order / delivery update">
+    | Field | Value |
+    |---|---|
+    | Body | `Hi {{$recipient.name}}, your order #{{order_id}} has been shipped! Track it here: {{{tracking_url}}}` |
+    | Message Type | Transactional |
+
+    Use triple curly braces `{{{tracking_url}}}` for URLs to avoid HTML-escaping special characters like `&` and `?`.
+  </Accordion>
+
+  <Accordion title="Appointment reminder">
+    | Field | Value |
+    |---|---|
+    | Body | `Reminder: Your appointment with {{provider_name}} is on {{appointment_date}} at {{appointment_time}}. Reply CONFIRM to confirm or CANCEL to cancel.` |
+    | Message Type | Transactional |
+
+    Pair with a [delay node](/docs/delay) or [time window](/docs/time-window) in your workflow to send at the right time before the appointment.
+  </Accordion>
+
+  <Accordion title="Promotional offer">
+    | Field | Value |
+    |---|---|
+    | Body | `Flash sale! Get {{discount}}% off on all items. Shop now: {{{shop_url}}}. Valid till {{expiry_date}}. Reply STOP to opt out.` |
+    | Message Type | Promotional |
+
+    Always include opt-out language for promotional messages. Keep the CTA clear and the URL short.
+  </Accordion>
+</AccordionGroup>
+
+## Variants
+
+Create different template variants for multi-lingual messaging, tenant-specific content, or A/B testing. Add conditions based on tenant, recipient language, or any data from your workflow trigger. The first variant in order matching all its conditions is sent at runtime. The **default** variant acts as a fallback when no specific variant conditions are met.
+
+For details on creating, managing, and selecting variants, see [Template Variants](/docs/template-variants).
 
 ## Adding dynamic content in SMS
 
-There will always be the case where you would be required to add dynamic content to a template, so as to personalise it for your users. To achieve this, you can add variables in the template, which will be replaced with the dynamic content at the time of sending email. To send actual values to replace variables at the time of communication trigger, use one of our frontend or backend SDKs. Here is a step by step guide on how to add dynamic content in a template:
+There will always be the case where you would be required to add dynamic content to a template, so as to personalise it for your users. To achieve this, you can add variables in the template, which will be replaced with the dynamic content at the time of sending SMS. To send actual values to replace variables at the time of communication trigger, use one of our frontend or backend SDKs. Here is a step-by-step guide on how to add dynamic content in a template:
 
 <Steps>
-  <Step title="Declaring Variables in the global 'Mock data' button:">
-    If you are at this stage, it is assumed that you have declared the variables along with sample values in the global **Mock data** button. To see how to declare variables before using them in designing templates, refer to [this section in the Templates documentation](/docs/templates#adding-dynamic-content).
+  <Step title="Add variables in the Variables panel">
+    Add sample data in the **Variables panel** (Input Payload section) on the left side of the editor. If you have declared the variables and added sample data, they will come as auto-suggestions when you type a curly bracket `{`. This removes the chances of error like variable mismatch at the time of template rendering. To see how to declare variables before using them in designing templates, refer to [this section in the Templates documentation](/docs/templates#adding-variable-content).
   </Step>
 
-  <Step title="Using variables in the templates:">
-    Once the variables are declared, you can use them while designing template for any channel. We support `handlebarsjs` to add variables in the template. As a general rule, all the variables have to be entered within double curly brackets: `{{variable\_name}}`
+  <Step title="Use variables in the template">
+    Once the variables are declared, you can use them while designing template for any channel. We support `handlebarsjs` to add variables in the template. As a general rule, all the variables have to be entered within double curly brackets: `{{variable_name}}`
 
-    If you have declared the variables and added sample data in the global `Mock data` button, then they will come as auto-suggestions when you type a curly bracket `{`. This will remove the chances of error like variable mismatch at the time of template rendering.
+    Note that you will be able to enter a variable name even when you have not declared it in the Variables panel. To manually enter the variable name, follow the [handlebarsjs guide here](https://handlebarsjs.com/guide/#what-is-handlebars).
 
-    Note that you will be able to enter a variable name even when you have not declared it inside the `Variables` button. To manually enter the variable name, follow the [handlerbarsjs guide here](https://handlebarsjs.com/guide/#what-is-handlebars).
-
-    Below are some examples of how to enter variables in the template design. For illustration, we are using the same sample variable names that we declared in the `Templates` section:
+    Below are some examples of how to enter variables in the template design:
 
     <CodeGroup>
       ```json json
@@ -89,20 +150,55 @@ There will always be the case where you would be required to add dynamic content
       ```
     </CodeGroup>
 
-
-
-    To enter a nested variable, enter in the format `{{var1.var2.var3}}`. Eg. to refer to city in the example above, you need to enter `{{event.location.city}}`
-
-    * If you have any space in the variable name, enclose it in square bracket `{{event.[first name]}}`
-
-    * To refer to an array element, enter in format `{{var1.[index].var2}}` . Eg. to refer to `product_name` of the first element of the array `array` , enter `{{array.[0].product_name}}`
+    - To enter a nested variable, enter in the format `{{var1.var2.var3}}`. E.g. to refer to city in the example above, you need to enter `{{event.location.city}}`
+    - If you have any space in the variable name, enclose it in square bracket `{{event.[first name]}}`
+    - To refer to an array element, enter in format `{{var1.[index].var2}}`. E.g. to refer to `product_name` of the first element of the array `array`, enter `{{array.[0].product_name}}`
   </Step>
 </Steps>
 
 <Warning>
   At the time of sending communication, if there is a variable present in the template whose value is not rendered due to mismatch or missing, SuprSend will simply discard the template and not send that particular notification to your user.
 
-  Please note that the rest of the templates will be sent. Eg. if there is an error in rendering Android Push template, but SMS template is successfully rendered, Android Push notification will not be triggered, but SMS notification will be triggered by SuprSend.
+  Please note that the rest of the templates will be sent. E.g. if there is an error in rendering Android Push template, but SMS template is successfully rendered, Android Push notification will not be triggered, but SMS notification will be triggered by SuprSend.
 </Warning>
 
-***
+## Best practices
+
+- **Keep it short** — SMS is for concise, actionable messages. Aim for one segment (160 GSM-7 characters). Every additional segment doubles the cost.
+- **Identify yourself** — start with your brand name or use a registered sender ID so recipients know who the message is from.
+- **Include a clear CTA** — one action per message. "Track your order", "Confirm your appointment", "Use code X".
+- **Use URL shorteners carefully** — some carriers flag shortened URLs as spam. If using a shortener, use a branded domain.
+- **DLT compliance (India)** — ensure your template body exactly matches the DLT-registered content. Even minor punctuation differences cause rejection. Variables must align with `{#var#}` placeholders registered in the DLT portal.
+- **Time-sensitive messages** — pair SMS with a [delay node](/docs/delay) or [time window](/docs/time-window) in your workflow to avoid sending at inconvenient hours.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="What is the difference between DLT and non-DLT SMS?">
+    DLT (Distributed Ledger Technology) is a regulatory requirement in India. DLT templates must be registered with a DLT portal, have an approved header (sender ID), and go through an approval process before going live. Non-DLT SMS is for regions without this regulation — templates go live immediately on commit.
+  </Accordion>
+
+  <Accordion title="Why was my DLT template rejected?">
+    Common reasons: the template body doesn't exactly match the content registered on the DLT portal (even minor punctuation differences count), the header is not registered for the selected message type, or the variable placeholders don't align with `{#var#}` format in the DLT registration.
+  </Accordion>
+
+  <Accordion title="Why is my SMS being sent as multiple segments?">
+    SMS has a per-segment character limit — 160 for GSM-7 (standard Latin) and 70 for UCS-2 (Unicode). If your message exceeds one segment, it splits into multiple parts, each billed separately. A single emoji or non-Latin character forces the entire message into UCS-2 encoding, cutting capacity from 160 to 70 characters. Check the [character limits table](#character-limits-and-encoding) for details.
+  </Accordion>
+
+  <Accordion title="How do I add URLs in SMS without them breaking?">
+    Use triple curly braces `{{{url}}}` instead of double `{{url}}`. Double braces HTML-escape special characters like `&`, `?`, `=` — which breaks URLs. Triple braces output the raw value without escaping.
+  </Accordion>
+
+  <Accordion title="Can I send SMS to users in different languages?">
+    Yes — use [template variants](/docs/template-variants). Create a variant for each language with a `$recipient.language` condition. SuprSend automatically picks the variant matching the recipient's preferred language. The default variant acts as the English fallback.
+  </Accordion>
+
+  <Accordion title="How do I test an SMS template before going live?">
+    Click the **Test** button in the top-right corner of the editor. Enter a recipient's distinct ID, select the SMS channel, choose a notification category and tenant, then click **Send Test**. Tests use the live version, so commit your changes first. See [Testing Templates](/docs/testing-the-template) for details.
+  </Accordion>
+
+  <Accordion title="What happens if a variable is missing at send time?">
+    SuprSend discards the SMS notification for that user. Other channels in the same template group (email, push, etc.) are still sent if they render successfully. Always ensure your workflow trigger includes all variables used in the template.
+  </Accordion>
+</AccordionGroup>

@@ -1,58 +1,94 @@
 ---
 title: "iOS Push Template"
-description: "How to design simple iOS Push template with click action and image."
+description: "How to design iOS Push templates with image and action URL support."
 ---
 
-## Design Template
+You can design template with a simple form editor tool. You can add variables with `Handlebarsjs` language. You can check how the message will look in the preview section on the right side. Once designed, commit the push notification template by clicking **Commit**.
 
-You can design template with a simple form editor tool. You can add variables with `Handlebarsjs` language. You can check how the message will look in the preview section on the right side. Once designed, you can save the push notification template by clicking on Save Draft. When you are ready, you can Publish Draft by providing a name to the version. This will become the Live version, and will be used whenever the associated workflow is triggered.
-
-<Frame>
-  <img src="/images/docs/84562e4-Screenshot_2022-07-07_at_6.35.24_PM.png" />
+<Frame caption="iOS Push editor with live device preview">
+  <img src="/images/docs/templates-editor-ios-push.png" />
 </Frame>
 
 ## iOS Push notification fields description
 
-| Field | Description                                                                                                                                                     |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Title | Small message text box. Note that this field will be displayed in single line only, and very long content can get curtailed. Use handlebarsjs to add variables. |
-| Body  | Large message text box. Use handlebarsjs to add variables.                                                                                                      |
+| Field | Description |
+|---|---|
+| Title | Small message text box. Note that this field will be displayed in single line only, and very long content can get curtailed. Use Handlebars to add variables. |
+| Body | Large message text box. Use Handlebars to add variables. |
+| Image URL | *Optional.* Public URL for a rich notification image. Formats: PNG, JPG, JPEG. |
+| Action URL | *Optional.* URL opened when the user taps the notification. Supports deep links and Handlebars variables. |
+
+## Rich notifications (images)
+
+To display images in iOS push notifications, your app must include a **Notification Service Extension**. Without it, the `Image URL` field is ignored and only the title and body are shown.
 
 <Note>
-  📘 **Note:**
-
-
-
-  By default, Clicking on the Notification will redirect the users to your iOS App. We'll be soon be adding the option to add custom Action URL
+  The SuprSend iOS SDK includes the service extension setup. If you're using the SDK, rich notifications work out of the box. See [iOS SDK integration](/docs/ios-integration) for setup details.
 </Note>
+
+Supported image formats: JPEG, PNG, GIF. Max size: 10 MB. Images are displayed in the expanded notification view (long-press or swipe down on the notification).
+
+## Deep linking
+
+The **Action URL** supports both web URLs and custom URL schemes:
+
+| URL type | Format | Behaviour |
+|---|---|---|
+| Web URL | `https://yourapp.com/orders/123` | Opens in Safari (or your app if [Universal Links](https://developer.apple.com/ios/universal-links/) are configured) |
+| Custom scheme | `yourapp://orders/123` | Opens the matching view controller in your app |
+| Universal Link | `https://yourapp.com/orders/123` (with Associated Domains) | Opens your app directly |
+
+## Common scenarios
+
+<AccordionGroup>
+  <Accordion title="Delivery update">
+    | Field | Value |
+    |---|---|
+    | Title | `Your order is out for delivery` |
+    | Body | `Order #{{order_id}} will arrive by {{eta}}. Tap to track.` |
+    | Image URL | `{{product_image_url}}` |
+    | Action URL | `https://yourapp.com/track/{{order_id}}` |
+  </Accordion>
+
+  <Accordion title="Social engagement">
+    | Field | Value |
+    |---|---|
+    | Title | `{{actor_name}} liked your post` |
+    | Body | `"{{post_excerpt}}"` |
+    | Action URL | `yourapp://posts/{{post_id}}` |
+  </Accordion>
+
+  <Accordion title="Restock reminder">
+    | Field | Value |
+    |---|---|
+    | Title | `Running low?` |
+    | Body | `It might be time to restock {{product_name}}.` |
+    | Image URL | `{{product_image_url}}` |
+    | Action URL | `https://yourapp.com/product/{{product_id}}` |
+  </Accordion>
+</AccordionGroup>
+
+## Variants
+
+Create different template variants for multi-lingual messaging, tenant-specific content, or A/B testing. Add conditions based on tenant, recipient language, or any data from your workflow trigger. The first variant in order matching all its conditions is sent at runtime. The **default** variant acts as a fallback when no specific variant conditions are met.
+
+For details on creating, managing, and selecting variants, see [Template Variants](/docs/template-variants).
 
 ## Adding dynamic content in iOS Push
 
 There will always be the case where you would require to add dynamic content to a template, so as to personalise it for your users. To achieve this, you can add variables in the template, which will be replaced with the dynamic content at the time of sending the message. You'll need to pass these while triggering the communication from one of our frontend or backend SDKs.
 
-Here is a step-by-step guide on how to add dynamic content in iOS Push:
-
 <Steps>
-  <Step title="Declaring Variables in the global `Mock data` button">
-    If you are at this stage, it is assumed that you have declared the variables along with sample values in the global `Mock data` button. To see how to declare variables before using them in designing templates, refer to [this section in the Templates documentation](/docs/templates#adding-dynamic-content).
+  <Step title="Add variables in the Variables panel">
+    Add sample data in the **Variables panel** (Input Payload section) on the left side of the editor. If you have declared the variables, they will come as auto-suggestions when you type a curly bracket `{`. To see how to declare variables, refer to [this section in the Templates documentation](/docs/templates#adding-variable-content).
   </Step>
 
-  <Step title="Using variables in the templates">
-    Once the variables are declared, you can use them while designing the iOS Push template. We support `handlebarsjs` to add variables in the template. As a general rule, all the variables have to be entered within double curly brackets: `{{variable\_name}}`
+  <Step title="Use variables in the template">
+    We support `handlebarsjs` to add variables in the template. As a general rule, all the variables have to be entered within double curly brackets: `{{variable_name}}`
 
+    Note that you will be able to enter a variable name even when you have not declared it in the Variables panel. To manually enter the variable name, follow the [handlebarsjs guide here](https://handlebarsjs.com/guide/#what-is-handlebars).
 
-
-    If you have declared the variables in the global `Mock data` button, then they will come as auto-suggestions when you type a curly bracket `{`. This will remove the chances of errors like variable mismatch at the time of template rendering.
-
-
-
-    Note that you will be able to enter a variable name even when you have not declared it inside the `Mock data` button. To manually enter the variable name, follow the [handlerbarsjs guide here](https://handlebarsjs.com/guide/#what-is-handlebars).
-
-
-
-    Below is an example of how to enter variables in the template design. For illustration, we are using the same sample variable names that we declared in the `Templates` section:
-
-
+    Below is an example:
 
     <CodeGroup>
       ```json json
@@ -84,32 +120,42 @@ Here is a step-by-step guide on how to add dynamic content in iOS Push:
       ```
     </CodeGroup>
 
-    1. To enter a nested variable, enter in the format `{{var1.var2.var3}}`. E.g. to refer to city in the example above, you need to enter `{{event.location.city}}`
+    - To enter a nested variable: `{{event.location.city}}`
+    - To refer to an array element: `{{array.[0].product_name}}`
+    - If you have a space in the variable name: `{{event.[first name]}}`
 
-    2. To refer to an array element, enter in format `{{var1.[*index*].var2}}. E.g. to refer to `product\_name`of the first element of the array`array`, enter `\{\{array.\[0].product\_name}}\`
-
-    3. If you have any space in the variable name, enclose it in square bracket `{{event.[first name]}}`
-
-    You will be able to see the sample values in the Preview section, as well as in the Live version when you publish a draft. If you cannot see your variable being rendered with the sample value, check one of the following:
-
-    * Make sure you have entered the variable name and the sample value in the `Mock data` button.
-
-    * Make sure you have entered the correct variable name in the template, as per the `handlebarsjs` guideline.
-
-    <Frame>
-      <img src="/images/docs/207c726-Screenshot_2022-07-07_at_6.29.33_PM.png" />
-    </Frame>
-
-    <Warning>
-      **What happens if there is variable mismatch at the time of sending?**
-
-
-
-      At the time of sending communication, if there is a variable present in the template whose value is not rendered due to mismatch or missing, SuprSend will simply discard the template and not send that particular notification to your user.
-
-      Please note that the rest of the templates will be sent. E.g. if there is an error in rendering iOS Push template, but email template is successfully rendered, iOS Push notification will not be triggered, but email notification will be triggered by SuprSend.
-    </Warning>
+    You will be able to see the sample values in the Preview section. If a variable isn't rendering, check:
+    1. The variable is defined in the Variables panel.
+    2. The variable name matches the Handlebars syntax exactly.
   </Step>
 </Steps>
 
-***
+<Warning>
+  At the time of sending communication, if there is a variable present in the template whose value is not rendered due to mismatch or missing, SuprSend will simply discard the template and not send that particular notification to your user.
+
+  Please note that the rest of the templates will be sent. E.g. if there is an error in rendering iOS Push template, but email template is successfully rendered, iOS Push notification will not be triggered, but email notification will be triggered by SuprSend.
+</Warning>
+
+## Best practices
+
+- **Title length** — keep under 30 characters. iOS shows titles on a single line on the lock screen; longer text is truncated.
+- **Body length** — 4 lines are visible in the expanded view. Front-load the key information in the first line.
+- **Action URL** — always set an action URL. Without it, tapping the notification just opens your app's default screen, which is disorienting.
+- **Rich images** — use high-quality images (min 1024x1024 for best rendering). GIFs play in the expanded view and are effective for product showcases.
+- **Badge count** — SuprSend increments the app badge count by 1 for each notification. Clear the badge in your app when the user opens it or reads notifications.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why aren't images showing in my iOS push notification?">
+    Your app needs a **Notification Service Extension** to display rich media. If you're using the SuprSend iOS SDK, this is included. Otherwise, you need to add the extension manually. See [iOS SDK integration](/docs/ios-integration).
+  </Accordion>
+
+  <Accordion title="How do I set up deep links for iOS push?">
+    Use Universal Links (`https://` URLs with Associated Domains configured) or custom URL schemes (`yourapp://path`). Universal Links are preferred as they work as both web fallback and in-app navigation.
+  </Accordion>
+
+  <Accordion title="What happens if a variable is missing at send time?">
+    SuprSend discards the iOS Push notification for that user. Other channels in the same template group are still sent if they render successfully.
+  </Accordion>
+</AccordionGroup>

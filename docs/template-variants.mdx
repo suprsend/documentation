@@ -1,0 +1,176 @@
+---
+title: "Template Variants"
+description: "Serve different message content to different audiences — by tenant, language, or any condition — from a single template. SuprSend picks the right variant at send time automatically."
+---
+
+Variants let you send different content to different recipients without duplicating templates or building conditional logic in your code. One template, one slug, one place to make content changes — SuprSend handles which version each recipient gets.
+
+---
+
+## How variants work
+
+Every template channel has one **default** variant. You add named variants with conditions. At send time, SuprSend evaluates those conditions against the trigger payload and recipient profile, then delivers the best match. If nothing matches, the default is sent.
+
+When to use variants:
+
+- **Multi-tenant** — each customer sees notification content specific to their brand or product context, without a separate template per [tenant](/docs/tenants).
+- **Localisation** — one template serves multiple languages. See [Multi-lingual Templates](/docs/multi-lingual-template).
+- **A/B testing** — different copy to different audience segments to measure engagement via [Analytics](/docs/analytics).
+
+---
+
+## Variant selection
+
+At send time, SuprSend evaluates all variants for a channel. Selection follows these rules in order:
+
+1. **All conditions on a variant must match** — partial matches are skipped entirely.
+2. The **first variant in order** that matches all its conditions is sent. If you want a specific variant to take priority, move it higher in the list.
+3. If no variant matches, the **default variant** is sent as the fallback.
+
+**Example — layered conditions:**
+
+| Variant | Conditions | Wins when |
+|---|---|---|
+| Default | (none) | No other variant matches |
+| Spanish | `$recipient.language = es` | Any Spanish-language recipient |
+| Acme Spanish | `$recipient.language = es` + `$tenant.id = acme` | Acme tenant + Spanish language |
+
+A trigger for an Acme tenant recipient with `language = es` qualifies both "Spanish" and "Acme Spanish". Whichever appears first in the variant order is sent — so place more specific variants (like "Acme Spanish") above general ones (like "Spanish") to ensure the right match.
+
+---
+
+## The Variants panel
+
+Open the **Variants** tab (share icon) in the left panel of the template editor. It has two sections:
+
+**Open tabs** — variants currently open in the editor. Each entry shows the channel icon, variant name, and language. Click any entry to switch to that editor tab.
+
+**All variants** — every variant in the template, grouped by channel (Email, In-App Inbox, Slack, MS Teams, etc.). Expand a channel to see its variants. Click a variant to open it.
+
+<Frame caption="Variants panel showing open tabs and all variants grouped by channel">
+  <img src="/images/docs/templates-editor-slack-variants.png" />
+</Frame>
+
+---
+
+## Creating a variant
+
+Click the **+** icon next to the default variant tab. The creation modal asks for:
+
+**Name and slug**
+
+The name is what you see in the editor. The slug is what the API uses to fetch variant content — keep it stable after creation.
+
+> The slug is auto-derived from the name at creation time. Renaming a variant later does not update the slug automatically. If you use the slug to fetch content via the Fetch Template API, changing it is a breaking change.
+
+**Conditions**
+
+Conditions determine when this variant is selected instead of another.
+
+A `$recipient.language` condition is pre-filled as a starting point — you can change its value but not remove this condition type from the variant.
+
+| Condition key | Behaviour |
+|---|---|
+| `$recipient.language` | Matches against the recipient's preferred language from their profile |
+| `$tenant.id` | Value field becomes a searchable tenant dropdown |
+| Any other key | Enter a fixed value or a `{{variable}}` from your trigger payload |
+
+You can add multiple conditions to a single variant. All conditions must match for the variant to qualify.
+
+---
+
+## Editing a variant
+
+Click **Edit** on any variant to open it in the editor. Editing always works on the **draft version** — the live version is never directly modified. Content saves automatically as you type.
+
+Each variant is edited and published independently. Publishing one variant does not affect others in the same template.
+
+> **Tip:** Use **Import Variant** in the editor to seed a new variant with content from another variant in this template, a different template, or a SuprSend sample. Faster than starting from scratch when variants share most of their content.
+
+---
+
+## Publishing a variant
+
+Click **Publish Changes** to make the draft version live. You'll be prompted for:
+
+- **Version name** — auto-generated (V1, V2, V3…) but editable.
+- **Version description** — optional; useful for changelogs and audit trails.
+
+Once published, the variant is live immediately and used in all subsequent workflow runs that match its conditions.
+
+**WhatsApp and SMS variants** enter an **Approval Pending** state after publishing rather than going live immediately. See [Approval flow](#approval-flow-whatsapp-and-sms) below.
+
+---
+
+## Approval flow (WhatsApp and SMS)
+
+WhatsApp and [DLT](/docs/dlt-guidelines) SMS templates require [vendor](/docs/vendors) approval before they can be sent. Publishing puts the variant into **Approval Pending** — an **Approve / Reject** button appears when you hover on the variant.
+
+Clicking it opens a modal:
+
+1. **Already approved or needs uploading?**
+   - If already approved at the vendor portal: enter the approved template ID and template name from the vendor portal.
+   - If not yet approved: the modal shows the template content to upload manually at the vendor portal.
+2. **Select status** — Approved or Rejected.
+   - If rejected: enter the rejection reason.
+3. For **[multi-lingual variants](/docs/multi-lingual-template)**, approval is handled per language — each language is uploaded and approved separately at the vendor end. The approval button appears at the language level.
+4. If a **[fallback vendor](/docs/vendor-fallback)** is configured, you must confirm approval (or rejection) for each vendor separately.
+
+The variant goes live as soon as it is approved with the primary vendor. Rejection returns it to Draft for revision.
+
+---
+
+## Variant actions
+
+From the Variants panel or the variant tab menu (**⋮**):
+
+| Action | Description |
+|---|---|
+| **Edit variant** | Change the variant's name, slug, or conditions. |
+| **Duplicate** | Copy the variant with the same content. Useful when two variants are mostly identical with minor differences. |
+| **Delete** | Permanently remove the variant. The default variant cannot be deleted. |
+| **Test variant** | Send a [test notification](/docs/testing-the-template) using this variant's content. Uses the live version — publish before testing. |
+
+---
+
+## Version history and rollback
+
+Click the **History** tab (clock icon) in the left panel to see every published version.
+
+<Frame caption="Version history with per-variant breakdown">
+  <img src="/images/docs/templates-version-history.png" />
+</Frame>
+
+Each entry shows the version number, status (Live / Draft), author, timestamp, and a per-channel per-variant breakdown — whether each was **Updated** or **Unchanged** in that version.
+
+**To roll back:** click any previous version, then click **Rollback**. A confirmation modal appears. Rolling back moves the live pointer to that version — newer versions are not deleted.
+
+> **WhatsApp and SMS:** Rollback is only available for versions published after the current template system was introduced. If the vendor auth of the active configuration differs from the rollback version, you'll see a warning that the template will re-enter approval state.
+
+---
+
+## Common patterns
+
+**Single template for multiple tenants**
+
+Create one variant per tenant using a `$tenant.id` condition. Use the default variant as the fallback for tenants without a custom variant. Onboarding a new tenant becomes a template edit — no workflow change, no deployment.
+
+**Layered localisation with per-tenant content**
+
+Add a language variant for each locale (`$recipient.language = fr`, `$recipient.language = de`, etc.). For tenants that need both brand customisation and localisation, combine conditions: `$tenant.id = acme` + `$recipient.language = fr`. The more specific variant wins automatically — no ordering required.
+
+**A/B testing with controlled rollout**
+
+Create a challenger variant with a condition targeting a subset of your audience — for example, a custom attribute like `$recipient.cohort = beta`. Compare [delivery metrics](/docs/analytics). To promote the challenger: adjust its conditions to match the broader audience, or delete the control variant and update the default.
+
+---
+
+## Related
+
+- [Templates overview](/docs/templates-overview)
+- [Creating and managing templates](/docs/templates)
+- [Multi-lingual templates](/docs/multi-lingual-template)
+- [Tenant templates](/docs/tenant-templates)
+- [Testing a template](/docs/testing-the-template)
+- [Handlebars helpers](/docs/handlebars-helpers)
+- [Template API](/reference/get-template-list) — manage templates and variants programmatically
