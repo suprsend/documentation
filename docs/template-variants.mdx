@@ -43,39 +43,76 @@ A trigger for an Acme tenant recipient with `language = es` qualifies both "Span
 
 Open the **Variants** tab (share icon) in the left panel of the template editor. It has two sections:
 
-**Open tabs** — variants currently open in the editor. Each entry shows the channel icon, variant name, and language. Click any entry to switch to that editor tab.
+**Open Tabs** — variants currently open in the editor. Each entry shows the channel icon, variant name, and language. Click any entry to switch to that editor tab.
 
-**All variants** — every variant in the template, grouped by channel (Email, In-App Inbox, Slack, MS Teams, etc.). Expand a channel to see its variants. Click a variant to open it.
+**All Variants** — every variant in the template, grouped by channel (Email, SMS, In-App Inbox, Slack, MS Teams, Android Push, iOS Push, Web Push). Expand a channel to see its variants. Click a variant to open it.
 
-<Frame caption="Variants panel showing open tabs and all variants grouped by channel">
-  <img src="/images/docs/templates-editor-slack-variants.png" />
+<Frame caption="Variants panel — Open Tabs and All Variants grouped by channel">
+  <img src="/images/docs/templates-variants-panel-full.png" />
 </Frame>
 
 ---
 
 ## Creating a variant
 
-Click the **+** icon next to the default variant tab. The creation modal asks for:
+Click the **+** button next to "All Variants" in the left panel. A menu appears with two options:
 
-**Name and slug**
+- **New Channel** — add a new channel to the template. This opens the channel selection screen where you select one or more channels and click **Add Channels**.
+- **New Variant** — create a new variant with conditions for an existing channel.
 
-The name is what you see in the editor. The slug is what the API uses to fetch variant content — keep it stable after creation.
+<Frame caption="Add New Channel or New Variant">
+  <img src="/images/docs/templates-variants-add-menu.png" />
+</Frame>
 
-> The slug is auto-derived from the name at creation time. Renaming a variant later does not update the slug automatically. If you use the slug to fetch content via the Fetch Template API, changing it is a breaking change.
+**Adding a new channel** — selecting **New Channel** shows the full channel selection grid. Pick the channels you want to add and click **Add Channels**.
 
-**Conditions**
+<Frame caption="Select channels to add to the template">
+  <img src="/images/docs/templates-variants-new-channel.png" />
+</Frame>
 
-Conditions determine when this variant is selected instead of another.
+**Creating a new variant** — selecting **New Variant** opens the Create Variant modal:
 
-A `$recipient.language` condition is pre-filled as a starting point — you can change its value but not remove this condition type from the variant.
+<Frame caption="Create Variant modal — Channels, ID, Locale, Tenant, and Conditions">
+  <img src="/images/docs/templates-variants-create-modal.png" />
+</Frame>
 
-| Condition key | Behaviour |
+**Fields in the Create Variant modal:**
+
+| Field | Description |
 |---|---|
-| `$recipient.language` | Matches against the recipient's preferred language from their profile |
-| `$tenant.id` | Value field becomes a searchable tenant dropdown |
-| Any other key | Enter a fixed value or a `{{variable}}` from your trigger payload |
+| **Channels** | Select one or more channels this variant applies to (e.g., SMS, Email). *(Required)* |
+| **ID** | Unique identifier for the variant. Can contain alphanumeric characters, underscore, hyphen, and dot. Max 128 characters. *(Required)* |
+| **Locale** | Language for the variant (e.g., English, Spanish, Hindi). *(Required)* |
+| **Tenant** | Tenant ID this variant is scoped to. Leave empty for non-tenant-specific variants. |
+| **Conditions** | Rules that determine when this variant is sent. See [Condition operators](#condition-operators) below. |
 
-You can add multiple conditions to a single variant. All conditions must match for the variant to qualify.
+<Info>
+  The modal confirms: _"This variant will be sent when below conditions match. The first variant in the order matching the condition will be sent."_
+</Info>
+
+### Condition operators
+
+Conditions are built using **Data Type** (Recipient, Actor, Tenant, or Input Payload), **Property** (the field name), **Operator**, and **Value**. You can combine multiple conditions with **+ OR** logic.
+
+| Operator | Description |
+|---|---|
+| `==` | Equals |
+| `!=` | Not equals |
+| `>` | Greater than |
+| `>=` | Greater than or equal to |
+| `<` | Less than |
+| `<=` | Less than or equal to |
+| `contains` | Value contains the substring |
+| `not contains` | Value does not contain the substring |
+| `is empty` | Value is empty or null |
+| `is not empty` | Value is not empty |
+| `datetime is` | Datetime equals a specific value |
+| `datetime is before` | Datetime is before a specific value |
+| `datetime is after` | Datetime is after a specific value |
+| `intersects (array)` | Array has at least one common element |
+| `not intersects (array)` | Array has no common elements |
+
+All conditions on a variant must match for it to qualify. Use **+ OR** to add alternative condition groups.
 
 ---
 
@@ -85,20 +122,24 @@ Click **Edit** on any variant to open it in the editor. Editing always works on 
 
 Each variant is edited and published independently. Publishing one variant does not affect others in the same template.
 
-> **Tip:** Use **Import Variant** in the editor to seed a new variant with content from another variant in this template, a different template, or a SuprSend sample. Faster than starting from scratch when variants share most of their content.
+> **Tip:** Use **Import Content** to seed a new variant with content from another variant in this template or a different template. Faster than starting from scratch when variants share most of their content. See [Import content](/docs/templates#import-content) for details.
 
 ---
 
-## Publishing a variant
+## Committing changes
 
-Click **Publish Changes** to make the draft version live. You'll be prompted for:
+Click **Commit** in the top-right corner to make your draft changes live. The Commit Changes modal shows a summary of all changes — variants edited, deleted, or with errors, plus any template settings changes. You can deselect specific changes you don't want to commit.
 
-- **Version name** — auto-generated (V1, V2, V3…) but editable.
-- **Version description** — optional; useful for changelogs and audit trails.
+<Frame caption="Commit Changes modal — review and selectively commit variants">
+  <img src="/images/docs/templates-commit-modal.png" />
+</Frame>
 
-Once published, the variant is live immediately and used in all subsequent workflow runs that match its conditions.
+- **Description** — add a message describing the changes (e.g., "Updated variant for web-push"). This appears in the version history.
+- **Version name** — auto-generated (V1, V2, V3…) and not editable.
 
-**WhatsApp and SMS variants** enter an **Approval Pending** state after publishing rather than going live immediately. See [Approval flow](#approval-flow-whatsapp-and-sms) below.
+Once committed, the changes are live immediately and used in all subsequent workflow runs.
+
+**WhatsApp and SMS variants** enter an **Approval Pending** state after committing rather than going live immediately. See [Approval flow](#approval-flow-whatsapp-and-sms) below.
 
 ---
 
@@ -122,26 +163,39 @@ The variant goes live as soon as it is approved with the primary vendor. Rejecti
 
 ## Variant actions
 
-From the Variants panel or the variant tab menu (**⋮**):
+### On a variant (three-dot menu)
 
-| Action | Description |
-|---|---|
-| **Edit variant** | Change the variant's name, slug, or conditions. |
-| **Duplicate** | Copy the variant with the same content. Useful when two variants are mostly identical with minor differences. |
-| **Delete** | Permanently remove the variant. The default variant cannot be deleted. |
-| **Test variant** | Send a [test notification](/docs/testing-the-template) using this variant's content. Uses the live version — publish before testing. |
+Click the three-dot menu (**⋮**) next to any variant name to see the **Duplicate** option.
+
+<Frame caption="Three-dot menu on a variant — Duplicate">
+  <img src="/images/docs/templates-variants-duplicate-menu.png" />
+</Frame>
+
+Clicking **Duplicate** opens the Duplicate Variant modal with the same fields as Create Variant — Channels, ID, Locale, Tenant, and Conditions. The content of the original variant is copied into the new one. Adjust the ID and conditions, then click **Create**.
+
+<Frame caption="Duplicate Variant modal">
+  <img src="/images/docs/templates-variants-duplicate-modal.png" />
+</Frame>
+
+### On a channel (three-dot menu)
+
+Click the three-dot menu (**⋮**) next to a channel name to see the **Disable Channel** option.
+
+You can disable a channel from the Variants panel without deleting its content. Right-click on a channel name (or hover to reveal the option) and select **Disable Channel**. The channel's content is preserved but notifications will not be sent on that channel until it is re-enabled.
+
+<Frame caption="Disable Channel — content is preserved, notifications are paused">
+  <img src="/images/docs/templates-variants-disable-channel.png" />
+</Frame>
 
 ---
 
 ## Version history and rollback
 
-Click the **History** tab (clock icon) in the left panel to see every published version.
+Click the **History** tab (clock icon) in the left panel to see every published version. Each entry shows the version number (V1, V2, ...), commit description, author, and timestamp on the left. Clicking a version shows a per-channel, per-variant breakdown on the right — with the Action column showing **Updated**, **Added**, or **Unchanged** for each variant.
 
-<Frame caption="Version history with per-variant breakdown">
-  <img src="/images/docs/templates-version-history.png" />
+<Frame caption="Version history — per-channel, per-variant breakdown with action status">
+  <img src="/images/docs/templates-version-history-full.png" />
 </Frame>
-
-Each entry shows the version number, status (Live / Draft), author, timestamp, and a per-channel per-variant breakdown — whether each was **Updated** or **Unchanged** in that version.
 
 **To roll back:** click any previous version, then click **Rollback**. A confirmation modal appears. Rolling back moves the live pointer to that version — newer versions are not deleted.
 
@@ -157,7 +211,7 @@ Create one variant per tenant using a `$tenant.id` condition. Use the default va
 
 **Layered localisation with per-tenant content**
 
-Add a language variant for each locale (`$recipient.language = fr`, `$recipient.language = de`, etc.). For tenants that need both brand customisation and localisation, combine conditions: `$tenant.id = acme` + `$recipient.language = fr`. The more specific variant wins automatically — no ordering required.
+Add a language variant for each locale (`$recipient.language = fr`, `$recipient.language = de`, etc.). For tenants that need both brand customisation and localisation, combine conditions: `$tenant.id = acme` + `$recipient.language = fr`. Place the more specific variant (tenant + language) above the general one (language only) in the variant order so it matches first.
 
 **A/B testing with controlled rollout**
 
@@ -165,12 +219,92 @@ Create a challenger variant with a condition targeting a subset of your audience
 
 ---
 
-## Related
+## Variant evaluation at send time
 
-- [Templates overview](/docs/templates-overview)
-- [Creating and managing templates](/docs/templates)
-- [Multi-lingual templates](/docs/multi-lingual-template)
-- [Tenant templates](/docs/tenant-templates)
-- [Testing a template](/docs/testing-the-template)
-- [Handlebars helpers](/docs/handlebars-helpers)
-- [Template API](/reference/get-template-list) — manage templates and variants programmatically
+When a [workflow](/docs/workflows) triggers a notification, SuprSend evaluates variants for each enabled channel independently. Here's the exact evaluation flow:
+
+<Steps>
+  <Step title="Resolve tenant and locale">
+    SuprSend resolves the **tenant** from the `tenant_id` in the workflow trigger, and the **locale** from the recipient's `preferred_language` in their user profile.
+
+    **Tenant** and **locale** are soft properties — they have fallback behaviour:
+    - If a variant exists for the specific tenant + locale, it is used.
+    - If not, SuprSend falls back to the specific tenant + default locale (English).
+    - If no tenant-specific variant exists, it falls back to the default tenant + recipient's locale.
+    - Final fallback: default tenant + default locale (the **default** variant).
+  </Step>
+
+  <Step title="Evaluate conditions">
+    For each variant (in order, top to bottom), SuprSend checks if **all** conditions match against the trigger payload, recipient profile, and tenant data.
+
+    - All conditions on a variant must match — partial matches are skipped.
+    - The **first variant in order** that matches all its conditions is selected.
+    - Conditions on properties other than tenant and locale are **hard checks** — there is no fallback. If a condition like `$recipient.plan == "pro"` doesn't match, that variant is skipped entirely.
+  </Step>
+
+  <Step title="Send or fallback">
+    If a matching variant is found, its content is rendered and sent. If no variant matches, the **default** variant is sent.
+
+    If the default variant also has missing required content (e.g., empty body), the notification for that channel is skipped.
+  </Step>
+</Steps>
+
+**Fallback hierarchy summary:**
+
+| Property | Fallback behaviour |
+|---|---|
+| **Tenant** (`$tenant.id`) | Falls back to default tenant if no match |
+| **Locale** (`$recipient.language`) | Falls back to default locale (English) if no match |
+| **All other conditions** | No fallback — variant is skipped if any condition doesn't match |
+
+<Info>
+  Ordering matters. If two variants both match (e.g., a general "Spanish" variant and a more specific "Acme + Spanish" variant), the one **higher in the list** wins. Drag variants to reorder them — the default variant always stays at the bottom and cannot be moved.
+</Info>
+
+---
+
+## Best practices
+
+- **Order specific variants first** — place variants with more conditions (e.g., tenant + language) above general ones (e.g., language only). The first match wins.
+- **Use the default variant as a fallback** — always keep meaningful content in the default variant. It's the safety net when no other variant matches.
+- **Keep conditions simple** — one or two conditions per variant is usually enough. Complex condition chains are harder to debug and maintain.
+- **Test before committing** — use the [Test](/docs/testing-the-template) button to send a test notification with specific tenant and recipient values to verify the correct variant is picked.
+- **Name variants descriptively** — use names like `acme-spanish` or `pro-users-hindi` rather than `variant-1`, `variant-2`. The name appears in the editor and version history.
+- **Don't duplicate content unnecessarily** — if two variants differ by only a few words, use [Import content](/docs/templates#import-content) to copy the base and edit only what's different.
+- **Disable channels instead of deleting** — if you temporarily don't want to send on a channel, [disable it](#on-a-channel-three-dot-menu) instead of deleting. Content is preserved for when you re-enable.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="What happens if no variant matches?">
+    The **default** variant is sent. Every template always has a default variant that cannot be deleted. It acts as the fallback for all recipients who don't match any specific variant's conditions.
+  </Accordion>
+
+  <Accordion title="How does ordering affect which variant is sent?">
+    Variants are evaluated top to bottom. The first variant whose conditions all match is sent — subsequent variants are not evaluated. Drag variants to reorder them. The default variant always stays at the bottom.
+  </Accordion>
+
+  <Accordion title="What are soft vs hard condition checks?">
+    **Soft checks** (tenant and locale) have fallback behaviour — if a specific tenant or language variant doesn't exist, SuprSend falls back through the hierarchy (tenant+locale → tenant+default locale → default tenant+locale → default). **Hard checks** (all other conditions like `$recipient.plan == "pro"`) have no fallback — if the condition doesn't match, the variant is skipped.
+  </Accordion>
+
+  <Accordion title="Can I have different variants for different channels?">
+    Yes. Variants are per-channel — you can have 3 variants for Email, 1 for SMS, and none (just default) for Push. Each channel is evaluated independently at send time.
+  </Accordion>
+
+  <Accordion title="How do I test which variant will be sent for a specific user?">
+    Click the **Test** button in the editor and use the "Selected Variant" tab. Enter a recipient, select a tenant, and send a test. The variant whose conditions match the test data will be used. See [Testing Templates](/docs/testing-the-template).
+  </Accordion>
+
+  <Accordion title="Can I duplicate a variant across channels?">
+    Not directly. Duplicate creates a copy within the same channel. To create similar content on another channel, use [Import content](/docs/templates#import-content) to copy from the source variant into a new variant on the target channel.
+  </Accordion>
+
+  <Accordion title="What happens when I disable a channel?">
+    Notifications stop being sent on that channel, but the content is preserved. Re-enabling the channel makes it active again with the same content. This is useful for temporary pauses without losing work.
+  </Accordion>
+
+  <Accordion title="Can I reorder variants?">
+    Yes. Drag variants up or down in the Variants panel to change their evaluation order. The default variant always stays at the bottom and cannot be moved above other variants.
+  </Accordion>
+</AccordionGroup>
