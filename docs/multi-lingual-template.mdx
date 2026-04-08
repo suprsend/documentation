@@ -3,62 +3,77 @@ title: "Multi-lingual Templates"
 description: "Deliver notifications in each recipient's preferred language from a single template."
 ---
 
-SuprSend allows you to create notifications in multiple languages in the same template. Once the languages are added, SuprSend picks the preferred language from the user's profile and sends the message accordingly. You can set a user's preferred language using the [Python](/docs/python-create-user-profile#set-preferred-language) or [Node](/docs/node-create-user-profile#set-preferred-language) SDK.
+SuprSend allows you to create notifications in multiple languages within a single template. At send time, SuprSend picks the right language based on the recipient's profile and sends the message accordingly.
 
 English is the default fallback language. Users with no language preference set — or whose preferred language has no content in the template — receive the notification in English.
 
-## Adding languages
+## How it works
+
+Multi-lingual delivery is powered by [template variants](/docs/template-variants). Each language is a separate variant with a **locale** condition. When a notification is triggered:
+
+1. SuprSend checks the recipient's `preferred_language` from their [user profile](/docs/users).
+2. If a variant exists for that language, it is used.
+3. If no matching language variant exists, SuprSend falls back to the **default** variant (English).
+
+<Info>
+  Language (`locale`) is a **soft condition** — it has automatic fallback behaviour. If a specific language variant doesn't exist, SuprSend falls back gracefully to the default. This is different from hard conditions (like payload-based conditions) which have no fallback.
+</Info>
+
+## Setting a user's preferred language
+
+Set the `preferred_language` property on the user profile using any of the backend SDKs:
+
+- [Python SDK](/docs/python-create-user-profile#set-preferred-language)
+- [Node.js SDK](/docs/node-create-user-profile#set-preferred-language)
+- [Java SDK](/docs/java-create-user-profile)
+- [Go SDK](/docs/go-create-user-profile)
+- [REST API](/reference/edit-user-profile)
+
+The language value should be a standard locale code (e.g., `en`, `es`, `fr`, `hi`, `de`, `pt-BR`).
+
+## Creating language variants
 
 <Steps>
-  <Step title="Open the language settings">
-    In any template, English (en) is enabled by default. To add other languages, click the **Language** option from the top-right overflow menu (**⋮**) in the template editor.
-
-    <Frame>
-      <img src="/images/docs/900b12b-lang_button.png" />
-    </Frame>
-
-    This opens the language selection modal. Search for the required language, add it, and save.
-
-    <Frame>
-      <img src="https://files.readme.io/f3b4017-ezgif.com-gif-maker_5.gif" />
-    </Frame>
+  <Step title="Open the Variants panel">
+    In the template editor, click the **Variants** tab (share icon) in the left panel. Click the **+** button and select **New Variant**.
   </Step>
 
-  <Step title="Add content for each language">
-    Once languages are added, you'll see them listed in the editor. Languages are set at the template group level — they are enabled for all channels at once. However, you can choose which languages to commit when publishing.
-
-    Add content for each language in the respective editor tab.
+  <Step title="Set the locale">
+    In the Create Variant modal:
+    - **Channels** — select the channels this variant applies to.
+    - **ID** — give it a descriptive ID (e.g., `default-es`, `default-fr`).
+    - **Locale** — select the language (e.g., Spanish, French, Hindi).
+    - **Tenant** — leave empty unless this is a tenant-specific language variant.
+    - **Conditions** — locale is automatically used as the matching condition. You can add additional conditions if needed.
   </Step>
 
-  <Step title="Commit the template">
-    After making changes, click **Commit**.
+  <Step title="Author content in the target language">
+    The variant opens in the editor. Author the content in the selected language. Use [Import content](/docs/templates#import-content) to copy the default English variant as a starting point, then translate the text while keeping the layout intact.
+  </Step>
 
-    <Frame>
-      <img src="/images/docs/5fa1c5c-lang_publish.png" />
-    </Frame>
-
-    Add a relevant version name and click **Next**.
-
-    <Frame>
-      <img src="/images/docs/d2818ad-version_name.png" />
-    </Frame>
-
-    Select the languages you want to publish. English is committed by default.
-
-    <Frame>
-      <img src="/images/docs/0307e31-final_publish.png" />
-    </Frame>
-
-    <Warning>
-      If you see an error below a language (e.g., Spanish in the screenshot above), it means there are missing required fields for that language. You cannot commit a language with incomplete content. Go back and fill in the missing fields, or skip that language and commit the rest.
-    </Warning>
-
-    Published languages are now live and will be used in subsequent workflow runs.
+  <Step title="Commit">
+    Click **Commit** to make the variant live. The commit modal shows all variants being committed — you can deselect any you're not ready to publish.
   </Step>
 </Steps>
 
-## How language selection works
+<Tip>
+  When creating language variants, use **Import content** to copy from the default English variant first. This preserves the layout, images, and structure — you only need to translate the text.
+</Tip>
 
-At send time, SuprSend checks the recipient's `preferred_language` property from their user profile. If content exists for that language in the template, it is used. Otherwise, the English (en) fallback is sent.
+## Combining language with tenant
 
-For variant-based language targeting, see [Template Variants](/docs/template-variants).
+For tenants that need both brand customisation and localisation, create variants with combined conditions — e.g., a variant with locale `es` + tenant `acme` for Acme's Spanish-speaking customers.
+
+The [fallback hierarchy](/docs/template-variants#variant-evaluation-at-send-time) works as:
+1. Tenant + language (most specific) → e.g., Acme + Spanish
+2. Tenant + default language → e.g., Acme + English
+3. Default tenant + language → e.g., Default + Spanish
+4. Default tenant + default language → the **default** variant
+
+Place more specific variants (tenant + language) above general ones (language only) in the variant order.
+
+## Related
+
+- [Template Variants](/docs/template-variants) — full guide on creating and managing variants
+- [Template Variants — Evaluation at send time](/docs/template-variants#variant-evaluation-at-send-time) — fallback hierarchy details
+- [Creating & Managing Templates](/docs/templates) — the main templates guide
