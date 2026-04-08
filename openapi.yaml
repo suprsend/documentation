@@ -27,39 +27,74 @@ components:
     TemplateVariant:
       type: object
       properties:
-        id:
+        $schema:
           type: string
-          description: Variant identifier.
-          example: "default"
+          description: Schema URL for variant validation.
+          example: "https://schema.suprsend.com/template/v2/variant_schema.json"
         channel:
           type: string
           description: Channel this variant belongs to.
           example: "email"
-        locale:
+        id:
           type: string
-          description: Locale code.
-          example: "en"
+          description: Variant identifier.
+          example: "default"
         tenant_id:
           type: string
           nullable: true
           description: Tenant this variant is scoped to, or null for default.
-        hash:
+        locale:
           type: string
-          description: Content hash for change detection.
-        seq_no:
-          type: integer
-          description: Ordering within the channel + tenant + locale combination.
+          description: Locale code.
+          example: "en"
         conditions:
           type: array
           description: Conditions for variant selection at send time.
           items:
             type: object
+        hash:
+          type: string
+          description: Content hash for change detection.
+        needs_vendor_approval:
+          type: boolean
+          description: Whether this variant requires vendor approval (SMS DLT, WhatsApp).
+        sysgen_template_name:
+          type: string
+          nullable: true
+          description: System-generated template name for vendor approval.
+        approval_status:
+          type: string
+          enum: ["auto_approved", "pending", "sent_for_approval", "approved", "rejected"]
+          description: Current approval status of the variant.
+        discard_comment:
+          type: string
+          nullable: true
+          description: Reason provided when a variant is discarded.
+        approval_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the variant was approved.
+        has_error:
+          type: boolean
+          description: Whether the variant has validation errors.
+        seq_no:
+          type: integer
+          description: Ordering within the channel + tenant + locale combination.
+        action:
+          type: string
+          nullable: true
+          description: Action taken in the latest commit (Updated, Added, Unchanged, or null).
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the variant was created.
         content:
           type: object
-          description: Channel-specific content. Structure varies by channel.
+          description: Channel-specific content. Structure varies by channel. Only returned in variant detail endpoint.
         vendor_approvals:
           type: array
-          description: Vendor approval entries (WhatsApp/SMS only).
+          description: Vendor approval entries (WhatsApp/SMS only). Only returned in variant detail endpoint.
           items:
             type: object
     Workflow:
@@ -14064,26 +14099,31 @@ paths:
                   meta:
                     type: object
                     properties:
+                      count:
+                        type: integer
+                        description: Total number of templates matching the query
+                        example: 22
                       limit:
                         type: integer
-                        example: 20
+                        example: 10
                       offset:
                         type: integer
                         example: 0
-                      total:
-                        type: integer
-                        example: 25
                   results:
                     type: array
                     items:
                       type: object
                       properties:
+                        $schema:
+                          type: string
+                          description: Schema URL for template validation
+                          example: "https://schema.suprsend.com/template/v2/schema.json"
                         name:
                           type: string
-                          example: "Order confirmed"
+                          example: "Order Confirmation Email"
                         slug:
                           type: string
-                          example: "order-confirmed"
+                          example: "order-confirmation-email"
                         description:
                           type: string
                           nullable: true
@@ -14091,23 +14131,23 @@ paths:
                           type: array
                           items:
                             type: string
-                        version_no:
-                          type: integer
-                          nullable: true
                         enabled_channels:
                           type: array
                           items:
                             type: string
-                          example: ["email", "sms"]
+                          example: ["email", "inbox"]
+                        status:
+                          type: string
+                          enum: ["draft", "active"]
+                          example: "active"
+                        version_no:
+                          type: integer
+                          nullable: true
                         hash:
                           type: string
                         commit_message:
                           type: string
                           nullable: true
-                        status:
-                          type: string
-                          enum: ["draft", "active"]
-                          example: "draft"
                         created_at:
                           type: string
                           format: date-time
@@ -14118,6 +14158,19 @@ paths:
                           type: string
                           format: date-time
                           nullable: true
+                        last_triggered_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                          description: Timestamp of the last workflow run that used this template
+                        updated_by:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            email:
+                              type: string
+                          description: User who last updated the template
                         channels:
                           type: array
                           items:
@@ -14125,34 +14178,60 @@ paths:
                             properties:
                               channel:
                                 type: string
-                              is_enabled:
+                              is_active:
                                 type: boolean
                               variants_count:
                                 type: integer
               example:
                 meta:
-                  limit: 20
+                  count: 22
+                  limit: 10
                   offset: 0
-                  total: 25
                 results:
-                  - name: "Order confirmed"
-                    slug: "order-confirmed"
-                    description: null
+                  - $schema: "https://schema.suprsend.com/template/v2/schema.json"
+                    slug: "order-confirmation-email"
+                    created_at: "2026-04-07T10:39:28.502737Z"
+                    last_triggered_at: "2026-04-07T16:45:34.549989Z"
+                    name: "Order Confirmation Email"
+                    description: "Email template for order confirmation notifications"
                     tags: []
-                    version_no: 3
-                    enabled_channels: ["email", "sms"]
-                    hash: "abc123"
-                    commit_message: "Updated subject line"
+                    enabled_channels: ["email"]
                     status: "active"
-                    created_at: "2025-10-01T00:00:00Z"
-                    updated_at: "2025-10-01T00:00:00Z"
-                    active_at: "2025-10-01T00:00:00Z"
+                    version_no: 4
+                    hash: "637edaabc624d09db3793829ea872a3516ed0362ce79ee3875607fc7317381b9"
+                    commit_message: null
+                    active_at: "2026-04-07T16:42:13.821446Z"
+                    updated_at: "2026-04-07T16:42:13.827644Z"
+                    updated_by:
+                      name: "Jane Smith"
+                      email: "jane.smith@example.com"
                     channels:
                       - channel: "email"
-                        is_enabled: true
-                        variants_count: 2
-                      - channel: "sms"
-                        is_enabled: true
+                        is_active: true
+                        variants_count: 1
+                  - $schema: "https://schema.suprsend.com/template/v2/schema.json"
+                    slug: "payment-confirmation"
+                    created_at: "2026-04-07T07:05:13.747248Z"
+                    last_triggered_at: null
+                    name: "Payment Confirmation"
+                    description: "Payment confirmation notification with order details"
+                    tags: []
+                    enabled_channels: ["email", "inbox"]
+                    status: "active"
+                    version_no: 2
+                    hash: "ea6007ab4cffac8f110e15145eedbd40b5897fcc880717411416b9cdb64b170e"
+                    commit_message: null
+                    active_at: "2026-04-07T07:27:53.708887Z"
+                    updated_at: "2026-04-07T07:27:53.715438Z"
+                    updated_by:
+                      name: "Alex Johnson"
+                      email: "alex.johnson@example.com"
+                    channels:
+                      - channel: "email"
+                        is_active: true
+                        variants_count: 1
+                      - channel: "inbox"
+                        is_active: true
                         variants_count: 1
         '401':
           $ref: '#/components/responses/AuthenticationError'
@@ -14200,17 +14279,50 @@ paths:
               schema:
                 type: object
               example:
-                name: "Order confirmed"
+                $schema: "https://schema.suprsend.com/template/v2/schema.json"
                 slug: "order-confirmed"
-                description: "Sent when an order is placed"
-                tags: ["transactional"]
-                version_no: 3
-                enabled_channels: ["email", "sms"]
+                created_at: "2026-04-01T05:57:21.081312Z"
+                last_triggered_at: null
+                name: "Order Confirmed"
+                description: null
+                tags: []
+                enabled_channels: ["email"]
                 status: "active"
-                created_at: "2025-10-01T00:00:00Z"
-                updated_at: "2025-10-01T00:00:00Z"
+                version_no: 1
+                hash: "16abf987215a02b655d5ef6a8f7f8cc150ffb03fd83b6c235d6c4cc2070ec170"
+                commit_message: null
+                active_at: "2026-04-01T09:22:02.382889Z"
+                updated_at: "2026-04-01T09:22:02.386223Z"
+                updated_by:
+                  name: "Sam Wilson"
+                  email: "sam.wilson@example.com"
+                channels:
+                  - channel: "email"
+                    is_active: true
+                    variants_count: 1
         '404':
-          $ref: '#/components/responses/NotFoundError'
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  error_code:
+                    type: string
+                  type:
+                    type: string
+                  message:
+                    type: string
+                  detail:
+                    type: string
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "template (slug: 'order-confirmed') not found"
+                detail: "template (slug: 'order-confirmed') not found"
         '401':
           $ref: '#/components/responses/AuthenticationError'
     post:
@@ -14286,14 +14398,30 @@ paths:
               schema:
                 type: object
               example:
-                name: "Order Confirmed"
-                slug: "order-confirmed"
-                description: "Sent when an order is placed"
-                tags: ["transactional"]
-                enabled_channels: ["email", "sms"]
+                $schema: "https://schema.suprsend.com/template/v2/schema.json"
+                slug: "welcome-onboarding"
+                created_at: "2026-04-01T05:57:21.081312Z"
+                last_triggered_at: null
+                name: "Welcome Onboarding"
+                description: "Welcome email for new users"
+                tags: ["onboarding", "welcome"]
+                enabled_channels: ["email", "slack"]
                 status: "draft"
-                created_at: "2025-10-01T00:00:00Z"
-                updated_at: "2025-10-01T00:00:00Z"
+                version_no: null
+                hash: "74335de96f6ddc077b90310ff746a8f8cd64852acbbe260c626be54ff28bed0d"
+                commit_message: null
+                active_at: null
+                updated_at: "2026-04-08T09:24:38.918548Z"
+                updated_by:
+                  name: "API Service"
+                  email: "service-token@api.example.com"
+                channels:
+                  - channel: "email"
+                    is_active: false
+                    variants_count: 1
+                  - channel: "slack"
+                    is_active: false
+                    variants_count: 1
         '401':
           $ref: '#/components/responses/AuthenticationError'
 
@@ -14336,16 +14464,86 @@ paths:
                   meta:
                     type: object
                     properties:
+                      count:
+                        type: integer
                       limit:
                         type: integer
                       offset:
-                        type: integer
-                      total:
                         type: integer
                   results:
                     type: array
                     items:
                       $ref: '#/components/schemas/TemplateVariant'
+              example:
+                meta:
+                  count: 4
+                  limit: 10
+                  offset: 0
+                results:
+                  - $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                    channel: "email"
+                    id: "default"
+                    tenant_id: null
+                    locale: "en"
+                    conditions: []
+                    hash: "dd176370a4b99c735e30f70bc98c61983671072c40db70750c3ada9e5edcabc1"
+                    needs_vendor_approval: false
+                    sysgen_template_name: null
+                    approval_status: "auto_approved"
+                    discard_comment: null
+                    approval_at: "2026-04-07T10:39:28.502737Z"
+                    has_error: false
+                    seq_no: 1
+                    action: null
+                    created_at: "2026-04-07T10:39:28.510000Z"
+                  - $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                    channel: "email"
+                    id: "spanish"
+                    tenant_id: null
+                    locale: "es"
+                    conditions: []
+                    hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                    needs_vendor_approval: false
+                    sysgen_template_name: null
+                    approval_status: "auto_approved"
+                    discard_comment: null
+                    approval_at: "2026-04-07T11:00:00.000000Z"
+                    has_error: false
+                    seq_no: 2
+                    action: null
+                    created_at: "2026-04-07T11:00:00.000000Z"
+                  - $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                    channel: "sms"
+                    id: "default"
+                    tenant_id: null
+                    locale: "en"
+                    conditions: []
+                    hash: "3d99f9fa848e1997f23ebf634cdf7db37ef36f05d3433b6c14727abf494c2c56"
+                    needs_vendor_approval: true
+                    sysgen_template_name: "order_shipped_en_v1"
+                    approval_status: "approved"
+                    discard_comment: null
+                    approval_at: "2026-04-07T12:00:00.000000Z"
+                    has_error: false
+                    seq_no: 1
+                    action: null
+                    created_at: "2026-04-07T12:00:00.000000Z"
+                  - $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                    channel: "inbox"
+                    id: "default"
+                    tenant_id: null
+                    locale: "en"
+                    conditions: []
+                    hash: "e71a233fa3af63e04beb3df6da90e7e506eef159b2599c3b42f3518b1a589c20"
+                    needs_vendor_approval: false
+                    sysgen_template_name: null
+                    approval_status: "auto_approved"
+                    discard_comment: null
+                    approval_at: "2026-04-07T10:45:00.000000Z"
+                    has_error: false
+                    seq_no: 1
+                    action: null
+                    created_at: "2026-04-07T10:45:00.000000Z"
         '404':
           $ref: '#/components/responses/NotFoundError'
         '401':
@@ -14396,10 +14594,55 @@ paths:
                 properties:
                   meta:
                     type: object
+                    properties:
+                      count:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
                   results:
                     type: array
                     items:
                       $ref: '#/components/schemas/TemplateVariant'
+              example:
+                meta:
+                  count: 2
+                  limit: 10
+                  offset: 0
+                results:
+                  - $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                    channel: "email"
+                    id: "default"
+                    tenant_id: null
+                    locale: "en"
+                    conditions: []
+                    hash: "dd176370a4b99c735e30f70bc98c61983671072c40db70750c3ada9e5edcabc1"
+                    needs_vendor_approval: false
+                    sysgen_template_name: null
+                    approval_status: "auto_approved"
+                    discard_comment: null
+                    approval_at: "2026-04-07T10:39:28.502737Z"
+                    has_error: false
+                    seq_no: 1
+                    action: null
+                    created_at: "2026-04-07T10:39:28.510000Z"
+                  - $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                    channel: "email"
+                    id: "spanish"
+                    tenant_id: null
+                    locale: "es"
+                    conditions: []
+                    hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                    needs_vendor_approval: false
+                    sysgen_template_name: null
+                    approval_status: "auto_approved"
+                    discard_comment: null
+                    approval_at: "2026-04-07T11:00:00.000000Z"
+                    has_error: false
+                    seq_no: 2
+                    action: null
+                    created_at: "2026-04-07T11:00:00.000000Z"
         '404':
           $ref: '#/components/responses/NotFoundError'
         '401':
@@ -14445,11 +14688,53 @@ paths:
           description: Variant identifier.
       responses:
         '200':
-          description: Variant details retrieved
+          description: Variant details retrieved. Includes full `content` and `vendor_approvals` objects.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TemplateVariant'
+              example:
+                $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                channel: "email"
+                id: "default"
+                tenant_id: null
+                locale: "en"
+                conditions: []
+                hash: "dd176370a4b99c735e30f70bc98c61983671072c40db70750c3ada9e5edcabc1"
+                needs_vendor_approval: false
+                sysgen_template_name: null
+                approval_status: "auto_approved"
+                discard_comment: null
+                approval_at: "2026-04-07T10:39:28.502737Z"
+                content:
+                  $schema: "https://schema.suprsend.com/template/v2/channel/email_schema.json"
+                  templating_language: "handlebars"
+                  from_name: "Acme Store"
+                  from_address: "noreply@acme-store.com"
+                  extra_to: ""
+                  cc: ""
+                  bcc: ""
+                  reply_to: ""
+                  subject: "Order Confirmed - #{{order.number}}"
+                  body:
+                    type: "raw"
+                    raw:
+                      html: "<html><body><h1>Order Confirmed!</h1><p>Hi {{customer.name}}, your order #{{order.number}} has been confirmed.</p><p>Total: {{order.total}}</p></body></html>"
+                      text: "Hi {{customer.name}}, your order #{{order.number}} has been confirmed. Total: {{order.total}}"
+                    designer:
+                      html: "..."
+                      text: "..."
+                      design_json: {}
+                      display_conditions: []
+                    preheader: "Your order #{{order.number}} is confirmed"
+                    plain_text: null
+                    email_markup: ""
+                errors: {}
+                vendor_approvals: []
+                has_error: false
+                seq_no: 1
+                action: null
+                created_at: "2026-04-07T10:39:28.510000Z"
         '404':
           $ref: '#/components/responses/NotFoundError'
         '401':
@@ -14564,11 +14849,54 @@ paths:
                     type: object
       responses:
         '200':
-          description: Variant created or updated successfully
+          description: Variant created or updated successfully. Returns the full variant including rendered content.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TemplateVariant'
+              example:
+                $schema: "https://schema.suprsend.com/template/v2/variant_schema.json"
+                channel: "email"
+                id: "default"
+                tenant_id: null
+                locale: "en"
+                conditions: []
+                hash: "97f031b56ba642d137758652ce21dda6962ecee81d544fcf245661898107bcb9"
+                needs_vendor_approval: false
+                sysgen_template_name: null
+                approval_status: "auto_approved"
+                discard_comment: null
+                approval_at: "2026-04-07T10:39:28.502737Z"
+                content:
+                  $schema: "https://schema.suprsend.com/template/v2/channel/email_schema.json"
+                  templating_language: "handlebars"
+                  from_name: "Acme Store"
+                  from_address: "noreply@acme-store.com"
+                  extra_to: ""
+                  cc: ""
+                  bcc: ""
+                  reply_to: ""
+                  subject: "Your order has been shipped - #{{order.number}}"
+                  body:
+                    type: "raw"
+                    raw:
+                      html: "<html><body><h1>Order Shipped!</h1><p>Hi {{customer.name}},</p><p>Your order <strong>#{{order.number}}</strong> has been shipped and is on its way.</p><p>Expected delivery: {{order.delivery_date}}</p><p><a href=\"{{{order.tracking_url}}}\">Track your order</a></p></body></html>"
+                      text: "Hi {{customer.name}}, Your order #{{order.number}} has been shipped. Expected delivery: {{order.delivery_date}}. Track: {{{order.tracking_url}}}"
+                    designer:
+                      html: "..."
+                      text: "..."
+                      design_json: {}
+                      merge_tags: []
+                      display_conditions: []
+                    preheader: "Your order #{{order.number}} is on its way"
+                    plain_text: null
+                    email_markup: ""
+                errors: {}
+                vendor_approvals: []
+                has_error: false
+                seq_no: 1
+                action: null
+                created_at: "2026-04-07T10:39:28.510000Z"
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
@@ -14608,20 +14936,99 @@ paths:
             default: draft
       responses:
         '200':
-          description: Mock data retrieved
+          description: Mock data retrieved. Returns both the raw `data` (what the user configured) and the `transformed_data` (resolved values including tenant, recipient, actor properties, and batched events).
           content:
             application/json:
               schema:
                 type: object
+                properties:
+                  data:
+                    type: object
+                    description: The raw mock data configuration set by the user.
+                    properties:
+                      payload:
+                        type: object
+                      tenant_id:
+                        type: string
+                        nullable: true
+                      is_batch:
+                        type: boolean
+                      batch_count:
+                        type: integer
+                      recipient_sub_type:
+                        type: string
+                        enum: ["user", "object"]
+                      recipient_object:
+                        type: object
+                        nullable: true
+                      recipient_distinct_id:
+                        type: string
+                        nullable: true
+                      actor_sub_type:
+                        type: string
+                        enum: ["user", "object"]
+                      actor_object:
+                        type: object
+                        nullable: true
+                      actor_distinct_id:
+                        type: string
+                        nullable: true
+                  transformed_data:
+                    type: object
+                    description: Resolved data used for rendering previews — includes tenant branding, recipient/actor profiles, batched events, and preference URLs.
               example:
-                payload:
-                  order_id: "ORD-1234"
-                  amount: "$99.99"
-                tenant_id: "default"
-                is_batch: false
-                batch_count: 2
-                recipient_sub_type: "user"
-                recipient_distinct_id: "user-123"
+                data:
+                  payload:
+                    order_id: "ORD-8821"
+                    order_total: "$149.99"
+                    delivery_date: "2026-04-10"
+                    tracking_url: "https://yourapp.com/track/ORD-8821"
+                  tenant_id: "tenant_abc"
+                  is_batch: false
+                  batch_count: 2
+                  recipient_sub_type: "user"
+                  recipient_object: null
+                  recipient_distinct_id: "user_12345"
+                  actor_sub_type: "user"
+                  actor_object: null
+                  actor_distinct_id: null
+                transformed_data:
+                  order_id: "ORD-8821"
+                  order_total: "$149.99"
+                  delivery_date: "2026-04-10"
+                  tracking_url: "https://yourapp.com/track/ORD-8821"
+                  $batch_key: "evaluated batch_key"
+                  $batched_events:
+                    - order_id: "ORD-8821"
+                      order_total: "$149.99"
+                    - order_id: "ORD-8821"
+                      order_total: "$149.99"
+                  $batched_events_count: 2
+                  $brand:
+                    brand_id: "tenant_abc"
+                    brand_name: "Acme Inc."
+                    logo: "https://cdn.acme.com/logo.png"
+                    primary_color: "#1a73e8"
+                    secondary_color: "#34a853"
+                    tertiary_color: "#ffffff"
+                    embedded_preference_url: "https://preferences.example.com/embed"
+                    hosted_preference_domain: "preferences.example.com"
+                    blocked_channels: null
+                    social_links:
+                      website: "https://www.example.com"
+                      linkedin: "https://linkedin.com/company/example"
+                      twitter: ""
+                    properties: {}
+                    timezone: "America/New_York"
+                  $user:
+                    name: "Jamie Rivera"
+                    email: "jamie.rivera@example.com"
+                  $recipient:
+                    name: "Jamie Rivera"
+                    email: "jamie.rivera@example.com"
+                  $actor: {}
+                  $embedded_preference_url: "https://preferences.example.com/embed"
+                  $hosted_preference_url: "https://preferences.example.com/?key=xxxxxxxxxxxxxxx"
         '404':
           $ref: '#/components/responses/NotFoundError'
         '401':
@@ -14715,11 +15122,72 @@ paths:
                       type: string
       responses:
         '200':
-          description: Mock data updated successfully
+          description: Mock data updated successfully. Returns the same structure as Get Mock Data — both `data` (raw config) and `transformed_data` (resolved values).
           content:
             application/json:
               schema:
                 type: object
+              example:
+                data:
+                  payload:
+                    user:
+                      name: "Pat Morgan"
+                    event:
+                      status: "shipped"
+                  tenant_id: "default"
+                  is_batch: false
+                  batch_count: 2
+                  recipient_sub_type: "user"
+                  recipient_object: null
+                  recipient_distinct_id: "user_12345"
+                  actor_sub_type: "user"
+                  actor_object: null
+                  actor_distinct_id: "actor_67890"
+                transformed_data:
+                  user:
+                    name: "Pat Morgan"
+                  event:
+                    status: "shipped"
+                  $batch_key: "evaluated batch_key"
+                  $batched_events:
+                    - user:
+                        name: "Pat Morgan"
+                      event:
+                        status: "shipped"
+                    - user:
+                        name: "Pat Morgan"
+                      event:
+                        status: "shipped"
+                  $batched_events_count: 2
+                  $brand:
+                    brand_id: "default"
+                    brand_name: "My Company"
+                    logo: "https://cdn.example.com/logo.png"
+                    primary_color: "#2E70E8"
+                    secondary_color: "#63A3F7"
+                    tertiary_color: "#FFFFFF"
+                    embedded_preference_url: "https://preferences.example.com/embed"
+                    hosted_preference_domain: "preferences.example.com"
+                    blocked_channels: null
+                    social_links:
+                      website: "https://www.example.com"
+                      linkedin: "https://linkedin.com/company/example"
+                    properties: {}
+                    timezone: null
+                  $user:
+                    name: "Jamie Rivera"
+                    email: "jamie.rivera@example.com"
+                    distinct_id: "user_12345"
+                  $recipient:
+                    name: "Jamie Rivera"
+                    email: "jamie.rivera@example.com"
+                    distinct_id: "user_12345"
+                  $actor:
+                    name: "Taylor Chen"
+                    email: "taylor.chen@example.com"
+                    distinct_id: "actor_67890"
+                  $embedded_preference_url: "https://preferences.example.com/embed"
+                  $hosted_preference_url: "https://preferences.example.com/?key=xxxxxxxxxxxxxxx"
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
@@ -14773,6 +15241,31 @@ paths:
             application/json:
               schema:
                 type: object
+              example:
+                $schema: "https://schema.suprsend.com/template/v2/schema.json"
+                slug: "order-confirmed"
+                created_at: "2026-04-07T10:39:28.502737Z"
+                last_triggered_at: null
+                name: "Order Confirmed"
+                description: "Sent when an order is placed"
+                tags: ["transactional"]
+                enabled_channels: ["email", "sms"]
+                status: "active"
+                version_no: 3
+                hash: "637edaabc624d09db3793829ea872a3516ed0362ce79ee3875607fc7317381b9"
+                commit_message: "Updated subject line for Q2 campaign"
+                active_at: "2026-04-08T12:00:00.000000Z"
+                updated_at: "2026-04-08T12:00:00.000000Z"
+                updated_by:
+                  name: "Dana Lee"
+                  email: "dana.lee@example.com"
+                channels:
+                  - channel: "email"
+                    is_active: true
+                    variants_count: 2
+                  - channel: "sms"
+                    is_active: true
+                    variants_count: 1
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
@@ -14957,6 +15450,32 @@ paths:
             application/json:
               schema:
                 type: object
+        '400':
+          description: Validation error — one or more variants have issues
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  error_code:
+                    type: string
+                  type:
+                    type: string
+                  message:
+                    type: string
+                  detail:
+                    type: array
+                    items:
+                      type: string
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "[\"one of more variants about to be committed have issues.\\n[1] email:default errors: {'body.raw.html': ['missing']}\\n[2] slack:default errors: {'body_text': ['missing']}\"]"
+                detail:
+                  - "one of more variants about to be committed have issues.\n[1] email:default errors: {'body.raw.html': ['missing']}\n[2] slack:default errors: {'body_text': ['missing']}"
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
