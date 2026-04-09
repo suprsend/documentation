@@ -1,144 +1,184 @@
 ---
-title: "Overview"
-description: "Author notification content for every channel in one place. Personalise with variables, version every change, and target the right message to the right recipient — without touching your code."
+title: "Quickstart"
+description: "Create your first notification template in SuprSend — from scratch to a real test notification in under 5 minutes."
 ---
 
-Without templates, every content change is a deployment. A **template** decouples _what you send_ from _how you send it_ — it holds notification content for every channel in one versioned container, referenced in [workflows](/docs/workflows) by a **slug**, and editable from the dashboard, [CLI](/reference/cli-intro), or [API](/reference/get-template-list) without touching your codebase.
+A **template** holds the content for your notifications — the subject line, body text, images, buttons, and variables — for every channel in one place. You don't need separate templates for Email, SMS, and Push. One template covers all of them.
 
-## Core Concepts
+This quickstart walks you through creating a template, writing content, adding variables, and sending a test notification.
 
-<CardGroup cols={2}>
-  <Card title="Slug" icon="tag" iconType="solid">
-    Immutable identifier set at creation (e.g. `order-shipped`).
-  </Card>
-  <Card title="Channel" icon="tower-broadcast" iconType="solid">
-    Email, SMS, WhatsApp, Push, Inbox, Slack, or MS Teams — one template holds all.
-  </Card>
-  <Card title="Variant" icon="bullseye" iconType="solid">
-    Alternate content per tenant, language, or condition. See [Template Variants](/docs/template-variants).
-  </Card>
-  <Card title="Version" icon="code-branch" iconType="solid">
-    Published snapshot (V1, V2, …). Rollback moves the live pointer without deleting history.
-  </Card>
-</CardGroup>
+---
+
+## Step 1 — Create a template
+
+Go to **Templates** in the sidebar and click **+ New Template**.
+
+<Frame caption="Create Template — Name and Slug">
+  <img src="/images/docs/templates-create-modal-new.png" />
+</Frame>
+
+Enter a **Name** (e.g., "Order Shipped") and a **Slug** (e.g., `order-shipped`). The slug is what your [workflow](/docs/workflows) uses to reference this template — it can't be changed later.
+
+---
+
+## Step 2 — Pick your channels
+
+Select the channels you want to send on — for example, **Email** and **SMS**. You don't need a separate template for each channel. One template group holds content for all channels.
+
+<Frame caption="Select channels">
+  <img src="/images/docs/templates-channel-selection.png" />
+</Frame>
+
+You can always add more channels later by clicking the **+** tab in the editor.
+
+---
+
+## Step 3 — Write your content
+
+The editor opens on your first channel. Each channel has its own editor with a live preview on the right. If you're editing an existing template, click **Edit** first — templates open in read-only view mode by default.
+
+Write your static text, then add **variables** for personalisation. Variables are placeholders like `{{order_id}}` or `{{$recipient.name}}` that get replaced with real data when the notification is sent.
+
+For example, an SMS body might look like:
+
+```
+Hi {{$recipient.name}}, your order #{{order_id}} has shipped! Track it here: {{{tracking_url}}}
+```
+
+Use `{{double braces}}` for regular values and `{{{triple braces}}}` for URLs (to avoid escaping `&` and `?` characters).
+
+Switch between channel tabs to write content for each channel. Each channel's editor is different — see the [channel editor guides](#channel-editors) for details.
+
+---
+
+## Step 4 — Set up your variables
+
+Before variables render in the preview, you need to add sample data. Open the **Variables panel** (`{}` icon in the left sidebar).
+
+**Input Payload** — paste a sample JSON matching what your workflow trigger sends:
+
+```json
+{
+  "order_id": "ORD-1234",
+  "tracking_url": "https://yourapp.com/track/ORD-1234"
+}
+```
+
+**Recipient** — search for a test user by email or distinct ID. Their profile properties (name, email, phone) load into `$recipient`.
+
+**Tenant** — if you're using [tenants](/docs/tenants), select one to load its branding (`$brand.brand_name`, `$brand.logo`, etc.).
+
+Once your data is set up, variables in the editor render in the live preview instantly. Type `{{` in any field to get auto-suggestions.
+
+For the full variable reference, see [Adding dynamic content](/docs/templates#the-variables-panel).
+
+---
+
+## Step 5 — Preview
+
+The live preview on the right updates as you type. Check each channel tab to make sure the content looks right.
+
+Select different **Recipients** and **Tenants** in the Variables panel to see how the template renders for different users and brands.
+
+---
+
+## Step 6 — Commit
+
+Click **Commit** in the top bar to publish your template. This creates a live version — all future workflow triggers that reference this template's slug will use this content.
 
 <Info>
-  **Draft vs. Live** — Editing always happens on the draft. Live traffic is never affected until you publish. A template with no published version is never sent.
+  Editing always works on a draft. Live notifications are never affected until you commit. You can exit and come back — your draft is saved.
 </Info>
 
 ---
 
-## How a Template Gets Delivered
+## Step 7 — Test
+
+Send a real notification to verify everything works end-to-end.
 
 <Steps>
-  <Step title="Lookup">
-    When a workflow runs, SuprSend looks up the template by its slug and identifies which channels are enabled.
+  <Step title="Create a test user (if you don't have one)">
+    You need a user with at least one channel identity (email address, phone number, or device token). Create one from the [Users page](https://app.suprsend.com/users), via [API](/docs/users), or ask the AI copilot in the dashboard.
   </Step>
-  <Step title="Select content">
-    For each channel, SuprSend picks which content to send. If you've added [variants](/docs/template-variants) with conditions, the first matching variant is used. If there are no variants — or no conditions match — the `default` content is sent. Most templates work fine with just the default, no variants needed.
+  <Step title="Click Test">
+    Click the **Test** button in the top-right corner. Enter your test user, pick the channels to test, and click **Send Test**.
+
+    You can test a single channel or all channels at once — the "Template Group" tab sends on every enabled channel simultaneously.
   </Step>
-  <Step title="Render">
-    Variables (`{{order_id}}`, `{{$recipient.name}}`, etc.) are replaced with actual values from the trigger payload and recipient profile.
-  </Step>
-  <Step title="Dispatch">
-    The rendered message is sent via the configured [vendor](/docs/vendors) for that channel.
+  <Step title="Check Logs">
+    Go to **[Logs](/docs/logging)** to confirm delivery. If a variable was missing or a channel failed, the error shows up here.
   </Step>
 </Steps>
 
----
-
-## Template Lifecycle
-
-```mermaid
-%%{init: {'theme': 'neutral', 'themeVariables': {'fontSize': '14px'}}}%%
-flowchart LR
-    A["Create Template"] --> B["Add Channels"]
-    B --> C["Author Content"]
-    C --> D["Commit"]
-    D --> E["🟢 Live"]
-    E -- "Edit" --> C
-```
-
-First publish makes a template **Live**. Every subsequent edit opens an isolated draft — live traffic is unaffected until you publish again.
+<Warning>
+  Tests use the **live version** — commit first, then test. For WhatsApp and SMS (DLT), the template must be approved before you can test.
+</Warning>
 
 ---
 
-## Guides
+## Step 8 — Use in a workflow
 
-<CardGroup cols={2}>
-  <Card title="Creating & Managing Templates" icon="pen-to-square" iconType="solid" href="/docs/templates">
-    Create, author, publish, version, and manage templates end-to-end.
-  </Card>
-  <Card title="Template Variants" icon="copy" iconType="solid" href="/docs/template-variants">
-    Target different content by tenant, locale, or any runtime condition.
-  </Card>
-  <Card title="Multi-lingual Templates" icon="language" iconType="solid" href="/docs/multi-lingual-template">
-    Deliver notifications in each recipient's preferred language.
-  </Card>
-  <Card title="Testing Templates" icon="flask" iconType="solid" href="/docs/testing-the-template">
-    Send a real notification to a real device before publishing.
-  </Card>
-  <Card title="Handlebars Helpers" icon="code" iconType="solid" href="/docs/handlebars-helpers">
-    Conditionals, loops, date formatting, and helper functions for dynamic content.
-  </Card>
-  <Card title="Template Management API" icon="gear" iconType="solid" href="/reference/get-template-list">
-    Manage templates programmatically via the REST API.
-  </Card>
-</CardGroup>
+Your template is ready. Reference it in a [workflow](/docs/workflows) delivery node by its **slug**. Every time the workflow triggers for a user, SuprSend renders the template with the trigger payload and sends it on the enabled channels.
+
+Copy the slug from the clipboard icon next to the template name.
 
 ---
 
-## AI Tools for Template Authoring
+## Key concepts
 
-SuprSend integrates with AI tools at multiple levels to help you author, validate, and debug templates faster.
+**One template, all channels** — you don't need a separate template for Email, SMS, and Push. Add all channels to one template. When the workflow triggers, SuprSend sends on every enabled channel — one API call, multiple channels.
 
-<CardGroup cols={2}>
-  <Card title="AI Copilot" icon="sparkles" iconType="solid" href="https://app.suprsend.com">
-    Press `Cmd + /` in the dashboard to ask questions or debug templates.
-  </Card>
-  <Card title="MCP Server" icon="plug" iconType="solid" href="/reference/cli-intro">
-    Connect your IDE's AI assistant to your workspace via `suprsend start-mcp-server`.
-  </Card>
-  <Card title="LLM-Friendly Docs" icon="robot" iconType="solid" href="https://docs.suprsend.com/llms.txt">
-    Feed docs to any LLM — `docs.suprsend.com/llms.txt` or `/llms-full.txt`.
-  </Card>
-  <Card title="Ready-to-Use Prompts" icon="message-bot" iconType="solid" href="/docs/email-template#validate-with-ai">
-    Copy-paste prompts in every channel editor doc for validation, optimization, and debugging.
-  </Card>
-</CardGroup>
+**Draft vs Live** — editing always works on a draft. Live notifications are unaffected until you commit. You can exit without committing and your draft is preserved.
+
+**Variables** — personalise with `{{$recipient.name}}`, `{{order_id}}`, `{{$brand.brand_name}}`, etc. Two templating languages: [Handlebars](/docs/handlebars-helpers) (Email, SMS, WhatsApp, Push, Inbox) and [JSONNET](/docs/jsonnet-templates) (Slack, MS Teams).
+
+**Variants** — need different content for different languages, tenants, or segments? Use [variants](/docs/template-variants) instead of creating separate templates.
+
+**Versions** — every commit creates a new version. Roll back to any previous version from the History tab.
 
 ---
 
-## Channel Editors
+## Channel editors
 
-Each channel has a dedicated editor with channel-specific fields and a live device preview.
+Each channel has a dedicated editor. See the guide for your channel:
 
 <CardGroup cols="3">
   <Card title="Email" icon="envelope-dot" iconType="solid" href="/docs/email-template">
-    HTML designer, code editor, or plain text.
+    Designer, HTML, or plain text.
   </Card>
   <Card title="SMS" icon="comment-sms" iconType="solid" href="/docs/sms-template">
-    DLT and non-DLT flows with vendor approval.
+    Single text field. DLT for India.
   </Card>
   <Card title="WhatsApp" icon="whatsapp" iconType="solid" href="/docs/whatsapp-template">
-    Pre-approved message templates.
+    Header, body, footer, buttons.
   </Card>
   <Card title="Android Push" icon="android" iconType="solid" href="/docs/android-push-template">
-    Title, body, image, action URL, buttons, and sound.
+    Title, body, image, buttons.
   </Card>
   <Card title="iOS Push" icon="apple" iconType="solid" href="/docs/ios-push-template">
-    Title, body, image, and action URL.
+    Title, body, image, action URL.
   </Card>
   <Card title="Web Push" icon="mobile-screen" iconType="solid" href="/docs/web-push-template">
-    Title, body, image, action URL, and buttons.
+    Title, body, image, buttons.
   </Card>
   <Card title="In-App Inbox" icon="inbox-full" iconType="solid" href="/docs/in-app-inbox-template">
-    Rich cards with avatar, buttons, tags, and expiry.
+    Cards with avatar, buttons, expiry.
   </Card>
   <Card title="Slack" icon="slack" iconType="solid" href="/docs/slack-template">
-    Text or Block Kit via Handlebars or JSONNET.
+    Text or Block Kit (JSONNET).
   </Card>
   <Card title="MS Teams" icon="windows" iconType="solid" href="/docs/ms-teams-template">
-    Text or Adaptive Card via Handlebars or JSONNET.
+    Markdown or Adaptive Card (JSONNET).
   </Card>
 </CardGroup>
+
+---
+
+## Next steps
+
+- [Creating & Managing Templates](/docs/templates) — the full reference for templates
+- [Template Variants](/docs/template-variants) — different content per tenant, language, or condition
+- [Multi-lingual Templates](/docs/multi-lingual-template) — deliver in each recipient's preferred language
+- [Handlebars Helpers](/docs/handlebars-helpers) — conditionals, loops, date formatting
+- [JSONNET Templates](/docs/jsonnet-templates) — rich layouts for Slack and MS Teams
+- [Template Management API](/reference/list-templates-v2) — manage templates programmatically

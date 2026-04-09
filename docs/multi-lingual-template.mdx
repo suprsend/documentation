@@ -1,113 +1,149 @@
 ---
 title: "Multi-lingual Templates"
-description: "Deliver notifications in each recipient's preferred language from a single template."
+description: "Deliver notifications in each recipient's preferred language using translation keys or language variants."
 ---
 
-SuprSend allows you to create notifications in multiple languages within a single template. At send time, SuprSend picks the right language based on the recipient's profile and sends the message accordingly.
+SuprSend supports two ways to localise notification templates. The right approach depends on what changes between languages.
 
-English is the default fallback language. Users with no language preference set — or whose preferred language has no content in the template — receive the notification in English.
+| Approach | Use when | How it works |
+|---|---|---|
+| **[Translations](#translations-recommended)** (recommended) | The text changes per language, but the template structure (layout, images, buttons) stays the same. | Use translation keys (`{{t "key"}}`) in your template. SuprSend resolves the key to the user's language at send time from your uploaded translation files. |
+| **[Language variants](#language-variants)** | The entire content differs per language — different images, layouts, buttons, or structure. Not just text. | Create a separate variant per language with a `locale` condition. Each variant has its own full content. |
 
-## How it works
+For most use cases, **Translations** is the right choice. It's simpler, easier to maintain, and scales better. Use variants only when you genuinely need different content structure per language.
 
-Multi-lingual delivery is powered by [template variants](/docs/template-variants). Each language is a separate variant with a **locale** condition. When a notification is triggered:
+---
 
-1. SuprSend checks the recipient's `preferred_language` from their [user profile](/docs/users).
-2. If a variant exists for that language, it is used.
-3. If no matching language variant exists, SuprSend falls back to the **default** variant (English).
+## Setting the user's language
 
-<Info>
-  Language (`locale`) is a **soft condition** — it has automatic fallback behaviour. If a specific language variant doesn't exist, SuprSend falls back gracefully to the default. This is different from hard conditions (like payload-based conditions) which have no fallback.
-</Info>
-
-## Setting a user's preferred language
-
-Set the `preferred_language` property on the user profile using any of the backend SDKs:
+Before either approach works, each user needs a locale set on their profile. Use any backend SDK or the API:
 
 - [Python SDK](/docs/python-create-user-profile#set-preferred-language)
 - [Node.js SDK](/docs/node-create-user-profile#set-preferred-language)
-- [Java SDK](/docs/java-create-user-profile)
-- [Go SDK](/docs/go-create-user-profile)
-- [REST API](/reference/edit-user-profile)
+- [REST API](/reference/edit-user-profile) — set the `$locale` property
 
-The language value should be a standard locale code (e.g., `en`, `es`, `fr`, `hi`, `de`, `pt-BR`).
-
-## Creating language variants
-
-<Steps>
-  <Step title="Open the Variants panel">
-    In the template editor, click the **Variants** tab (share icon) in the left panel. Click the **+** button and select **New Variant**.
-  </Step>
-
-  <Step title="Set the locale">
-    In the Create Variant modal:
-    - **Channels** — select the channels this variant applies to.
-    - **ID** — give it a descriptive ID (e.g., `default-es`, `default-fr`).
-    - **Locale** — select the language (e.g., Spanish, French, Hindi).
-    - **Tenant** — leave empty unless this is a tenant-specific language variant.
-    - **Conditions** — locale is automatically used as the matching condition. You can add additional conditions if needed.
-  </Step>
-
-  <Step title="Author content in the target language">
-    The variant opens in the editor. Author the content in the selected language. Use [Import content](/docs/templates#import-content) to copy the default English variant as a starting point, then translate the text while keeping the layout intact.
-  </Step>
-
-  <Step title="Commit">
-    Click **Commit** to make the variant live. The commit modal shows all variants being committed — you can deselect any you're not ready to publish.
-  </Step>
-</Steps>
-
-<Tip>
-  When creating language variants, use **Import content** to copy from the default English variant first. This preserves the layout, images, and structure — you only need to translate the text.
-</Tip>
-
-## Combining language with tenant
-
-For tenants that need both brand customisation and localisation, create variants with combined conditions — e.g., a variant with locale `es` + tenant `acme` for Acme's Spanish-speaking customers.
-
-The [fallback hierarchy](/docs/template-variants#variant-evaluation-at-send-time) works as:
-1. Tenant + language (most specific) → e.g., Acme + Spanish
-2. Tenant + default language → e.g., Acme + English
-3. Default tenant + language → e.g., Default + Spanish
-4. Default tenant + default language → the **default** variant
-
-Place more specific variants (tenant + language) above general ones (language only) in the variant order.
-
-## Validate with AI
-
-Copy these prompts into ChatGPT, Claude, or your IDE's AI assistant.
-
-<AccordionGroup>
-  <Accordion title="Translate a notification template to another language">
-    ```text
-    Translate this notification into [target language, e.g. Spanish].
-
-    Channel: [email / SMS / push / WhatsApp / inbox]
-    Content: [paste subject, body, buttons, etc.]
-
-    Preserve all {{Handlebars}} variables exactly as-is. Adapt tone
-    for the locale. Keep the same structure. Flag anything that needs
-    cultural adaptation (dates, currency, idioms). Stay within the
-    channel's character limits.
-    ```
-  </Accordion>
-
-  <Accordion title="Review translated templates for quality">
-    ```text
-    Review this translation for quality.
-
-    Original (English): [paste]
-    Translation ([language]): [paste]
-
-    Check: variables preserved, meaning accuracy, tone, grammar,
-    character limits (SMS/WhatsApp), date/number localization.
-    ```
-  </Accordion>
-</AccordionGroup>
+The value should be a standard locale code: `en`, `es`, `fr`, `hi`, `de`, `pt-BR`, etc.
 
 ---
 
-## Related
+## Translations (recommended)
 
-- [Template Variants](/docs/template-variants) — full guide on creating and managing variants
-- [Template Variants — Evaluation at send time](/docs/template-variants#variant-evaluation-at-send-time) — fallback hierarchy details
-- [Creating & Managing Templates](/docs/templates) — the main templates guide
+Translations let you keep **one template** and manage all language text in separate JSON files. The template uses **translation keys** instead of raw text — at send time, SuprSend looks up the key in the user's language file and renders the translated text.
+
+### How it works
+
+1. **Upload translation files** — JSON files with key-value pairs, one per language (e.g., `en.json`, `es.json`, `fr.json`). Upload from the [dashboard](https://app.suprsend.com/en/staging/developers/translations), [CLI](/reference/cli-translation-overview), or [API](/reference/add-translation).
+
+2. **Use translation keys in your template** — instead of writing raw text, use the `t` helper:
+
+<CodeGroup>
+```handlebars Handlebars (Email, SMS, Push, Inbox)
+{{t "order_shipped" order_id=order_id}}
+```
+```jsonnet JSONNET (Slack, MS Teams)
+t("order_shipped", {order_id: data.order_id})
+```
+</CodeGroup>
+
+3. **SuprSend resolves at send time** — reads the user's locale, finds the matching translation file, and renders the translated text with interpolated variables.
+
+### Example
+
+Translation files:
+
+```json en.json
+{
+  "order_shipped": "Your order #{{order_id}} has been shipped!",
+  "track_button": "Track Order"
+}
+```
+
+```json es.json
+{
+  "order_shipped": "Tu pedido #{{order_id}} ha sido enviado!",
+  "track_button": "Rastrear Pedido"
+}
+```
+
+Template (same for all languages):
+
+```handlebars
+{{t "order_shipped" order_id=order_id}}
+```
+
+A user with locale `es` receives: *"Tu pedido #ORD-1234 ha sido enviado!"*
+
+### Fallback logic
+
+If the user's locale file or key is missing, SuprSend falls back:
+
+1. Exact locale (e.g., `es-MX.json`)
+2. General language (e.g., `es.json`)
+3. Default language (`en.json`)
+
+Always maintain an `en.json` as the base fallback.
+
+### When to use Translations
+
+- The template layout, images, and buttons are the same across languages — only the text differs.
+- You want a single template to serve all languages without creating variants.
+- You're scaling to many languages and don't want to maintain separate content per language.
+- You want to manage translations outside the template editor (via files, CLI, or API).
+
+For the full reference — managing translation files, pluralization, namespaces, interpolation, and version history — see [Translations](/docs/translations).
+
+---
+
+## Language variants
+
+For cases where the **entire content differs per language** — not just text, but different images, layouts, buttons, or structure — use language variants.
+
+### When to use variants instead of translations
+
+- The email design is structurally different per language (e.g., RTL layout for Arabic, different images for Japanese market).
+- A specific language version needs completely different content (not just a translation of the same message).
+- You want to visually author each language version separately in the editor.
+
+### How to create a language variant
+
+1. Open the template editor, click **+** in the Variants panel, and select **New Variant**.
+2. Set the **Locale** to the target language (e.g., Spanish).
+3. Give it a descriptive **ID** (e.g., `default-es`).
+4. Author the content for that language. Use [Import content](/docs/templates#import-content) to copy the default English variant as a starting point.
+5. Commit.
+
+At send time, SuprSend checks the recipient's locale and sends the matching language variant. If no match, the **default** variant (English) is sent.
+
+<Tip>
+  **AI prompt — translate a template:** *"Translate this notification into [language]. Channel: [email/SMS/push/WhatsApp]. Content: [paste]. Preserve all Handlebars variables exactly as-is. Adapt tone for the locale. Flag anything needing cultural adaptation (dates, currency, idioms). Stay within character limits."*
+</Tip>
+
+### Combining language with tenant
+
+For tenants that need both brand customisation and localisation, create variants with combined conditions — e.g., locale `es` + tenant `acme` for Acme's Spanish-speaking users.
+
+The fallback order: tenant+locale → tenant+default locale → default tenant+locale → default.
+
+Name these descriptively: `acme-es`, `uber-fr`, `default-hi`.
+
+---
+
+## Which approach should I use?
+
+<AccordionGroup>
+  <Accordion title="My notifications are the same structure in every language, just different text">
+    Use **Translations**. Create translation files per language and use `t` keys in your template. One template, zero variants.
+  </Accordion>
+
+  <Accordion title="My email has different images, layout, or buttons per language">
+    Use **Language variants**. Create a variant per language with its own full content.
+  </Accordion>
+
+  <Accordion title="Can I use both in the same template?">
+    Yes. You can use translation keys inside a variant. For example, a tenant-specific variant for Acme could still use `t` keys for localised text — so Acme's Spanish users get both Acme branding and Spanish text without creating `acme-es` as a separate variant.
+  </Accordion>
+
+  <Accordion title="I'm scaling to 10+ languages. Which is easier to maintain?">
+    Translations, by far. With variants, you'd need to maintain 10+ content versions per channel per template. With translations, you maintain one template and 10 JSON files that can be managed via CLI or API.
+  </Accordion>
+</AccordionGroup>
