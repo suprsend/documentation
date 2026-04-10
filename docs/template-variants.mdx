@@ -11,10 +11,20 @@ Every template starts with a **default** variant. Add more only when you need th
 
 ## When to use variants
 
-- **Multi-tenant** — Uber's users see Uber branding, Acme's see Acme's. One template serves all [tenants](/docs/tenants).
-- **Multi-lingual** — one variant per language. SuprSend picks based on the recipient's preferred language. See [Multi-lingual Templates](/docs/multi-lingual-template).
-- **Payload-based** — different content based on trigger data (e.g., `plan == "pro"` gets a premium message).
-- **A/B testing** — different copy to different segments. Compare in [Analytics](/docs/analytics). Note: A/B variants need manual maintenance — use when you have a clear hypothesis, not as a default.
+<CardGroup cols={2}>
+  <Card title="Multi-tenant" icon="buildings" iconType="solid">
+    Each tenant's users see their own branding — logos, colours, copy. One template serves all [tenants](/docs/tenants).
+  </Card>
+  <Card title="Multi-lingual" icon="language" iconType="solid">
+    One variant per language. SuprSend auto-selects based on the recipient's preferred language. See [Multi-lingual Templates](/docs/multi-lingual-template).
+  </Card>
+  <Card title="Payload-based" icon="code-branch" iconType="solid">
+    Different content based on trigger data — e.g., `plan == "pro"` gets a premium message.
+  </Card>
+  <Card title="A/B testing" icon="flask" iconType="solid">
+    Different copy to different segments. Compare in [Analytics](/docs/analytics). Needs manual maintenance — use for specific hypotheses, not as a default.
+  </Card>
+</CardGroup>
 
 ---
 
@@ -93,17 +103,37 @@ For **WhatsApp** and **SMS (DLT)** variants, committing puts the variant into **
 
 ## How selection works at send time
 
-When a notification is triggered, SuprSend evaluates variants **top to bottom** in the order they appear in the panel. The first one whose conditions all match is sent. If nothing matches, the **default** is sent.
+When a notification is triggered, SuprSend evaluates all non-default variants in the order they appear in the panel. The first one whose conditions all match is sent. If no variant matches, the **default** (always at the top) is sent as the fallback.
 
 - All conditions on a variant must be true — partial matches are skipped.
 - **Tenant** and **locale** are soft checks with fallback: tenant+locale → tenant+default locale → default tenant+locale → default.
 - All other conditions (like `$recipient.plan == "pro"`) are hard checks — no fallback, the variant is just skipped.
 
-Drag variants in the panel to reorder. Place specific variants (e.g., `uber-es`) above general ones (e.g., `default-es`) so they match first.
-
 <Frame caption="Variants panel — all variants grouped by channel">
   <img src="/images/docs/templates-variants-panel-full.png" />
 </Frame>
+
+### Ordering variants
+
+Order determines priority. If two variants both match a recipient's data, the one **higher in the list** wins. You can drag and drop variants to change their position.
+
+- The **default** variant always stays at the top — it's the fallback and cannot be moved. No other variant can be placed above it.
+- All other variants can be freely reordered by dragging.
+- Place more specific variants (e.g., `uber-es`) above general ones (e.g., `default-es`) to ensure they match first.
+
+If a variant isn't being picked when you expect it to, check its position — a broader variant above it may be matching first.
+
+### Testing variant selection
+
+To verify the right variant is being picked for a specific condition, **test the full template group** — not a single variant. Testing a single variant sends that variant's content directly (bypassing conditions). Testing the template group runs the actual selection logic:
+
+1. Click **Test** → select the **Template Group** tab.
+2. Enter a **Recipient** whose profile matches the condition you want to test.
+3. Select a **Tenant** if your variant has a tenant condition.
+4. Click **Send Test** — SuprSend evaluates all variant conditions and sends the matching one.
+5. Check [Logs](/docs/logging) to confirm which variant was selected.
+
+This is the only way to verify that ordering and conditions work as expected end-to-end.
 
 ---
 
@@ -165,6 +195,6 @@ After setting up any pattern, [test with a specific tenant and recipient](/docs/
   </Accordion>
 
   <Accordion title="Can I reorder variants?">
-    Yes. Drag them up or down in the panel. The default always stays at the bottom.
+    Yes. Drag them up or down in the panel. The default always stays at the top and cannot be moved.
   </Accordion>
 </AccordionGroup>
