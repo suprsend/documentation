@@ -13,13 +13,15 @@ By default, self-hosted SuprSend uses a passwordless email+code flow for dashboa
 
 ## What WorkOS provides
 
-| Feature | How SuprSend uses it |
+WorkOS supplies the hosted identity layer; SuprSend connects it to your dashboard, API, and mail path. Together they replace the default email+code screen with enterprise-friendly sign-in while keeping org data in sync.
+
+| WorkOS capability | What SuprSend uses it for |
 | --- | --- |
-| AuthKit (hosted auth UI) | Login and signup flows for the dashboard |
-| User Management | User creation, email verification |
-| Organization Management | Maps WorkOS orgs to SuprSend organizations |
-| Webhooks | Sends magic-link login emails via your SMTP |
-| Session Management | Tracks sessions for clean logout |
+| **AuthKit** (hosted auth UI) | Login and sign-up flows rendered by WorkOS instead of the built-in dashboard auth UI. |
+| **User Management** | Creating users and enforcing email verification before a user can complete sign-in. |
+| **Organization Management** | Aligning WorkOS organizations with SuprSend organizations so membership and access stay consistent. |
+| **Webhooks** | Receiving magic-link events so the API can send one-time login codes through your configured SMTP. |
+| **Session Management** | Validating and ending sessions so authentication and logout behave predictably across the dashboard. |
 
 ---
 
@@ -45,10 +47,10 @@ In the WorkOS dashboard, create a new application (or use an existing one) and n
 
 ### 1.2 Add the redirect URI
 
-Under **Redirects**, add your frontend signing-callback page as an allowed redirect URI:
+Under **Redirects**, add your frontend callback page as an allowed redirect URI:
 
 ```
-https://app.yourdomain.com/signing-callback
+https://app.yourdomain.com/en/callback
 ```
 
 Replace `app.yourdomain.com` with your actual dashboard domain.
@@ -167,27 +169,17 @@ sequenceDiagram
     FE->>API: POST workos_login_url/ (with redirect_url)
     API-->>FE: Returns WorkOS AuthKit URL
     FE->>WOS: Redirect to AuthKit (user authenticates)
-    WOS-->>FE: Redirect to /signing-callback?code=...&state=...
+    WOS-->>FE: Redirect to /en/callback?code=...&state=...
     FE->>API: POST /v2/user/workos_signin_callback/ {code}
     API->>WOS: Exchange code → user info + org_id
-    alt Existing user with active membership
-        API-->>FE: LOGIN_SUCCESSFUL + JWT cookies
-    else New user (no org yet)
-        API-->>FE: NEW_ORG_ONBOARDING_INITIATED
-        FE->>U: Show org setup form
-        U->>FE: Submit org name, timezone
-        FE->>API: POST /v2/user/workos/org_onboard/
-        API->>WOS: create_organization()
-        API-->>FE: LOGIN_SUCCESSFUL + JWT cookies
-    end
+    API-->>FE: LOGIN_SUCCESSFUL + JWT cookies
 ```
 
-### Login response types
+**Login response types**
 
 | `response_type` | Meaning | Frontend action |
 | --- | --- | --- |
 | `LOGIN_SUCCESSFUL` | User authenticated, membership active | Set auth state, redirect to dashboard |
-| `NEW_ORG_ONBOARDING_INITIATED` | First-time user, no org yet | Show org setup form |
 | `MEMBERSHIP_DEACTIVATED` | Membership exists but is inactive | Show deactivation message |
 | `LINK_INVALID` / `LINK_EXPIRED` | Code exchange failed | Show error with retry option |
 
@@ -215,20 +207,22 @@ SuprSend registers a webhook endpoint at `/v1/workos_webhook/` to receive events
 
 ---
 
-## Troubleshooting
+## FAQ
 
-**Login redirects to email+code form instead of WorkOS**
+<AccordionGroup>
+  <Accordion title="Why does the dashboard still show email+code instead of WorkOS?">
+    Ensure `viteDisableWorkosLoginFlow` is `"false"` or unset in `suprsendApp.config`. Run `helm upgrade` with your values file so the dashboard image is rebuilt with the updated setting; the frontend reads this flag at build time.
+  </Accordion>
 
-Check that `viteDisableWorkosLoginFlow` is `"false"` (or unset) in `suprsendApp.config`, then re-run `helm upgrade` so the frontend is rebuilt with the new value.
+  <Accordion title="Why do I see LINK_INVALID after returning from WorkOS?">
+    - Check that the redirect URI in the WorkOS dashboard **exactly** matches your callback URL (e.g. `https://app.yourdomain.com/en/callback`).
+    - Confirm `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` match the Client ID and Secret Key from WorkOS (API Keys) and are applied to the API deployment.
+  </Accordion>
 
-**`LINK_INVALID` error after WorkOS redirect**
-
-- Verify the redirect URI registered in the WorkOS dashboard exactly matches your frontend callback URL (`https://app.yourdomain.com/signing-callback`).
-- Confirm `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` are correctly set.
-
-**Magic-link login emails not being sent**
-
-- Confirm the `magic_auth.created` event is enabled on the WorkOS webhook.
-- Confirm the `WORKOS_WEBHOOK_SECRET` in your Kubernetes secret matches the secret shown in the WorkOS webhook dashboard.
-- Ensure the webhook endpoint (`https://api.yourdomain.com/v1/workos_webhook/`) is publicly reachable from WorkOS servers.
-- Verify your SMTP configuration is correct (the magic-link email is sent directly via SMTP in self-hosted mode).
+  <Accordion title="Why aren't magic-link login emails being delivered?">
+    - Enable the `magic_auth.created` event on the WorkOS webhook endpoint.
+    - Ensure `WORKOS_WEBHOOK_SECRET` in your Kubernetes secret matches the signing secret shown in the WorkOS webhook settings.
+    - Confirm `https://api.yourdomain.com/v1/workos_webhook/` is reachable from the public internet (WorkOS must be able to POST to it).
+    - Verify SMTP is configured correctly — in self-hosted mode, SuprSend sends the login code email directly via your SMTP.
+  </Accordion>
+</AccordionGroup>
