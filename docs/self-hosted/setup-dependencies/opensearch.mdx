@@ -262,28 +262,37 @@ Once your OpenSearch cluster is operational, configure SuprSend to use it.
 This section shows only the **OpenSearch-specific** configuration. You must also configure other required secrets and values for SuprSend to work properly. See the complete configuration guide: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
 </Note>
 
-### Kubernetes Secret Configuration
+### Kubernetes secret and Helm values (single reference)
 
-First, add the OpenSearch-specific secret to your [`suprsend-secrets.yaml`](/docs/self-hosted/suprsend-installation-guide#step-5-create-suprsend-secrets):
+Wire OpenSearch in **one place** for the secret payload and **one place** in values for the key name the chart expects.
 
-```yaml
-# ============================================
-# OpenSearch Configuration (this guide)
-# ============================================
-# connection url for opensearch (full URL with credentials)
-opensearchConnUrlKey: "https://admin:SuperStrong#Passw0rd@suprsend-opensearch-cluster.opensearch.svc.cluster.local:9200"
+**1. `suprsend-secrets.yaml` (excerpt)** — set the real connection URL under `stringData`:
+
+```yaml title="suprsend-secrets.yaml (OpenSearch excerpt)"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: suprsend-secrets
+  namespace: suprsend
+type: Opaque
+stringData:
+  # ... other keys from the installation guide ...
+  # Full OpenSearch URL (scheme, user, password, host, port, path as needed)
+  opensearchConnUrlKey: "https://admin:SuperStrong#Passw0rd@suprsend-opensearch-cluster.opensearch.svc.cluster.local:9200"
 ```
 
-### Helm Values Configuration
+**2. `suprsend-values.yaml` (excerpt)** — point the inbox API at that secret and the key name inside it:
 
-Then add the following to your [`suprsend-values.yaml`](/docs/self-hosted/suprsend-installation-guide#step-8-configuration--suprsend-valuesyaml) (along with other required configuration):
-
-```yaml
-# connection url for opensearch
-opensearchConnUrlKey: "opensearchConnUrlKey"
+```yaml title="suprsend-values.yaml (OpenSearch excerpt)"
+suprsendInboxApi:
+  secret:
+    existingKubeSecret: "suprsend-secrets"
+    # Must match the key name in the Secret above (value is the env var name, not the URL itself)
+    opensearchConnUrlKey: "opensearchConnUrlKey"
 ```
+
 <Note>
-The OpenSearch connection is configured via the full connection URL in the secret, which includes the host, port, credentials, and scheme. The above configuration goes under `suprsendInboxApi.secret` section.
+The **URL** lives only in the Kubernetes Secret (`opensearchConnUrlKey` under `stringData`). The Helm values only reference **which secret** (`existingKubeSecret`) and **which key** (`opensearchConnUrlKey`) to read.
 </Note>
 
 ---
