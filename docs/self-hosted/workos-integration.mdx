@@ -47,7 +47,7 @@ In the WorkOS dashboard, create a new application (or use an existing one) and n
 
 ### 1.2 Add the redirect URI
 
-Under **Redirects**, add your frontend callback page as an allowed redirect URI:
+Under **Redirects**, add your frontend sign-in callback page as an allowed redirect URI:
 
 ```
 https://app.yourdomain.com/en/callback
@@ -105,7 +105,7 @@ suprsendapi:
     isWorkosIntegrated: "true"
     # WorkOS Client ID (from WorkOS dashboard → API Keys)
     workosClientId: "<your-workos-client-id>"
-    # AuthKit hosted base URL (e.g. https://your-app.authkit.app)
+    # WorkOS AuthKit hosted base URL (e.g. https://your-app.authkit.app)
     workosSigninBaseUrl: "<your-authkit-base-url>"
 
   secret:
@@ -136,6 +136,10 @@ suprsendApp:
 <Info>
   To switch back to the default email+code login at any time, set `viteDisableWorkosLoginFlow` to `"true"` and re-run `helm upgrade`.
 </Info>
+
+<Note>
+  Older guides sometimes used `viteEnableWorkosLoginFlow`. Current Helm charts use **`viteDisableWorkosLoginFlow`**: set it to `"false"` to enable WorkOS (this is the inverse of the old flag).
+</Note>
 
 ---
 
@@ -211,12 +215,13 @@ SuprSend registers a webhook endpoint at `/v1/workos_webhook/` to receive events
 
 <AccordionGroup>
   <Accordion title="Why does the dashboard still show email+code instead of WorkOS?">
-    Ensure `viteDisableWorkosLoginFlow` is `"false"` or unset in `suprsendApp.config`. Run `helm upgrade` with your values file so the dashboard image is rebuilt with the updated setting; the frontend reads this flag at build time.
+    Ensure `viteDisableWorkosLoginFlow` is `"false"` or unset in `suprsendApp.config` (do not use the legacy `viteEnableWorkosLoginFlow` name — it is not in current charts). Run `helm upgrade` with your values file so the dashboard image is rebuilt with the updated setting; the frontend reads this flag at build time.
   </Accordion>
 
   <Accordion title="Why do I see LINK_INVALID after returning from WorkOS?">
     - Check that the redirect URI in the WorkOS dashboard **exactly** matches your callback URL (e.g. `https://app.yourdomain.com/en/callback`).
-    - Confirm `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` match the Client ID and Secret Key from WorkOS (API Keys) and are applied to the API deployment.
+    - In `suprsendapi.config`, confirm `workosClientId` and `workosSigninBaseUrl` match the **Client ID** and **AuthKit base URL** from the WorkOS dashboard.
+    - In your Kubernetes secret, confirm `workosApiKey` matches the **Secret Key** from WorkOS (API Keys). At runtime these appear as `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, etc. on the API deployment — verify the pods picked up the updated values after `helm upgrade`.
   </Accordion>
 
   <Accordion title="Why aren't magic-link login emails being delivered?">
