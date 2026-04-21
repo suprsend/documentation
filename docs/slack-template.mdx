@@ -1,37 +1,66 @@
 ---
 title: "Slack"
-description: "Design Slack notification templates using the Text editor for simple messages or the JSONNET editor for rich Block Kit layouts."
+description: "Write Slack notifications as plain text or rich Block Kit layouts with buttons, images, and structured sections."
 ---
 
-The Slack editor supports two modes: a **Text** editor for simple messages, and a **JSONNET** editor for rich [Block Kit](https://api.slack.com/block-kit) layouts with buttons, images, and structured sections.
+Write Slack notifications as plain text or rich [Block Kit](https://api.slack.com/block-kit) layouts with buttons, images, and structured sections.
+
+<Note>
+  You need Slack connected as a vendor in SuprSend before notifications can be sent. [Set up Slack →](/docs/slack)
+</Note>
+
+The Slack editor supports two modes: **Text** for simple messages and **JSONNET** for Block Kit JSON.
 
 <Frame caption="Slack editor with JSONNET and live preview">
   <img src="/images/docs/templates-editor-slack.png" />
 </Frame>
 
-<Note>
-  To send Slack notifications, you need a Slack vendor integrated with SuprSend. See [Slack vendor integration](/docs/slack) for setup.
-</Note>
+<Tabs>
+  <Tab title="Text">
 
-## Slack fields
+### Text field
 
-**Text mode** — a single text field. Supports [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`). Use triple braces `{{{url}}}` for URLs with special characters.
+**Required in Text mode** · Supports variables
 
-**JSONNET mode** — a code editor that outputs [Slack Block Kit](https://api.slack.com/block-kit) JSON. Variables use `data.key` syntax (not Handlebars). Design visually in the [Block Kit Builder](https://app.slack.com/block-kit-builder/) first, then adapt the JSON into JSONNET. See the full [JSONNET reference](/docs/jsonnet-templates) for syntax, examples, and debugging.
+A single text field for the full message. Slack renders it as `mrkdwn`.
 
-<Tip>
-  **AI prompt — convert text to Block Kit:** *"Convert this Slack notification into Block Kit JSON: [paste message]. Variables: [list]. Return valid JSON I can adapt into JSONNET for SuprSend (replacing values with data.key)."*
-</Tip>
+**What to write here:** Use short paragraphs and `:emoji_name:` for status (`:white_check_mark:`, `:warning:`). Link with `<URL|label>` when you need rich links.
 
-<Tip>
-  **AI prompt — debug JSONNET:** *"Fix this JSONNET error from the SuprSend Slack editor. Error: [paste error]. Code: [paste JSONNET]. Variables are accessed as data.key or data['$special_key']."*
-</Tip>
+Supports [Handlebars](/docs/handlebars-helpers) (`{{variable_name}}`). Use triple braces `{{{url}}}` for URLs with `&`, `?`, `=`.
+
+**Preview:** The right panel shows a Slack message preview. It does not update automatically — **refresh the page** to see the latest changes.
+
+**Formatting:** Slack uses `mrkdwn`, not standard Markdown — bold `*text*`, italic `_text_`, strikethrough `~text~`, code with triple backticks.
+
+> Example: `*<https://example.com/track/123|Track order>*` — substitute your URL with `{{{tracking_url}}}` in the template.
+
+  </Tab>
+  <Tab title="Block Kit (JSONNET)">
+
+### JSONNET field
+
+**Required in JSONNET mode**
+
+A code editor that outputs [Slack Block Kit](https://api.slack.com/block-kit) JSON. Variables use `data.key` syntax (not Handlebars).
+
+**What to write here:** Design in [Block Kit Builder](https://app.slack.com/block-kit-builder/) first, copy the JSON, then adapt strings to `data.key` and JSONNET `if` / array logic. See the full [JSONNET reference](/docs/jsonnet-templates) for syntax, examples, and debugging.
+
+**Preview:** The editor does not render Block Kit inline — click **View on Slack Builder** to validate output in Slack's Block Kit Builder.
+
+> Example: Build Section + Actions blocks in the Builder, then replace literals with `data.order_id` style references in JSONNET.
+
+  </Tab>
+</Tabs>
 
 <Info>
   You can switch between Text and JSONNET at any time. Content is saved independently for each mode.
 </Info>
 
-## Adding dynamic content
+<Frame caption="Slack — variants and channel tabs in the template editor">
+  <img src="/images/docs/templates-editor-slack-variants.png" />
+</Frame>
+
+## Personalise with variables
 
 **In Text mode** — type `{{` for auto-suggestions. Standard Handlebars syntax:
 
@@ -46,10 +75,12 @@ The Slack editor supports two modes: a **Text** editor for simple messages, and 
 For conditionals, loops, and helpers in Text mode, see [Handlebars Helpers](/docs/handlebars-helpers).
 
 <Warning>
-  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the Slack notification for that user. Other channels in the same template group are still sent.
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
 
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 **Text mode** — the right panel shows a Slack message preview. It does not update automatically — **refresh the page** to see the latest changes.
 
@@ -57,7 +88,7 @@ For conditionals, loops, and helpers in Text mode, see [Handlebars Helpers](/doc
 
 Click **Test** in the top-right corner to send a real Slack message. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+## Publish
 
 Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning.
 
@@ -78,14 +109,94 @@ Click **Commit** in the top bar to publish the current draft as a new live versi
   </Accordion>
 </AccordionGroup>
 
-## Frequently asked questions
+## Other ways to build this template
+
+JSONNET mode is easiest when you start from **JSON Slack already understands**. Use the builder and docs first, then swap in `data.*` and [JSONNET](/docs/jsonnet-templates) conditionals.
+
+| Approach | Use it when |
+| --- | --- |
+| [Block Kit Builder](#block-kit-builder-then-jsonnet) | You want layout without hand-writing JSON. |
+| [Interactive components](#interactive-buttons-and-webhooks) | Users should approve, dismiss, or act from Slack. |
+| [Batch with JSONNET arrays](#batch-events-in-one-message) | Many similar events should become one digest. |
+| [Block Kit reference](#block-kit-reference) | You need block types beyond Section and Actions. |
+| [Slack plus In-App Inbox](#slack-and-in-app-inbox-together) | Users live in Slack and your product. |
+
+### Block Kit Builder, then JSONNET
+
+[Block Kit Builder](https://app.slack.com/block-kit-builder/) generates JSON as you drag blocks (Section, Image, Actions, etc.). Copy the JSON into SuprSend's JSONNET editor; replace static strings with `data.key`; add `if` where needed.
+
+**When to use:** You are new to Block Kit or want a visual layout pass.
+
+**Steps**
+
+1. Build the layout in the Builder until it looks right.
+2. Copy JSON → paste into JSONNET → replace literals with payload paths.
+3. Validate in the Builder again (Slack drops invalid blocks silently).
+
+### Interactive buttons and webhooks
+
+Add `action_id` on buttons, menus, or pickers. Your Slack app receives [interaction payloads](https://api.slack.com/interactivity); respond with updates or call your API (approvals, acknowledgements).
+
+**When to use:** The message is not read-only; users act from Slack.
+
+**Steps**
+
+1. Register your Slack app and request interaction URLs.
+2. Put stable `action_id` values in Block Kit JSON.
+3. Handle events in your backend and optionally send a follow-up via SuprSend.
+
+### Batch events in one message
+
+Pass an **array** in the trigger payload; iterate in JSONNET to emit one Section per item. Cap at **5–10** items and add **View all**; Slack truncates around **4000** characters.
+
+**When to use:** High-frequency events (comments, deploys) would flood the channel as separate messages.
+
+**Steps**
+
+1. Aggregate in your workflow or backend before render.
+2. Loop in JSONNET to build blocks.
+3. Truncate or summarize past the cap.
+
+### Block Kit reference
+
+[Block reference](https://api.slack.com/reference/block-kit/blocks) lists every block, limits, and fields (RichText, Context, Video, etc.).
+
+**When to use:** You outgrow basic Section text.
+
+**Steps**
+
+1. Skim allowed blocks for your use case.
+2. Prototype in Block Kit Builder.
+3. Port to JSONNET with variables.
+
+### Slack and In-App Inbox together
+
+Add [In-App Inbox](/docs/in-app-inbox-template) and Slack to the **same** workflow: Slack for real-time attention, inbox for a durable record. Reuse the same variable data where fields overlap.
+
+**When to use:** B2B or internal tools where users split time between Slack and your app.
+
+**Steps**
+
+1. Map shared copy to both channels.
+2. Tune Slack for urgency; inbox for history and deep links.
+
+## Best practices
+
+- **Right audience:** Slack is for **internal and B2B** workflows (tasks, approvals, ops, deploys) — not for end-consumer buyer notifications.
+- **Pick an editor:** Plain **Text** for one-line alerts; **JSONNET** when you need Block Kit sections, buttons, images, or lists.
+- **Validate Block Kit:** Paste through Slack's Block Kit Builder before commit — invalid blocks can be dropped silently.
+- **Emphasis:** Reserve bold for a few words — if everything is bold, nothing stands out.
+- **Mentions:** @mention when you need a response; skip mentions on FYI noise so @ stays meaningful.
+- **Length:** Cap batched lists at ~5–10 rows with a "View all" link — messages hard-stop around 4000 characters.
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Text or JSONNET — which should I use?">
     Start with Text for simple alerts and status updates. Switch to JSONNET when you need buttons, images, structured layouts, or batched event lists.
   </Accordion>
 
-  <Accordion title="How do I validate my Block Kit JSON?">
+  <Accordion title="How do I validate Block Kit JSON?">
     Click **View on Slack Builder** in the JSONNET editor. Slack silently drops invalid blocks instead of showing errors — always validate before committing.
   </Accordion>
 
@@ -97,7 +208,15 @@ Click **Commit** in the top bar to publish the current draft as a new live versi
     Slack uses `mrkdwn`, not standard Markdown. Bold: `*text*`, italic: `_text_`, strikethrough: `~text~`, code: triple backticks.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the Slack notification for that user. Other channels in the same template group are still sent.
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes — add Slack with email, push, and other channels in the same template group.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Send properties in your trigger payload so Text mode Handlebars paths and JSONNET `data.*` keys resolve. See [JSONNET templates](/docs/jsonnet-templates) and [Adding dynamic content](/docs/templates#the-variables-panel).
   </Accordion>
 </AccordionGroup>

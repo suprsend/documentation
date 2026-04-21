@@ -1,46 +1,134 @@
 ---
 title: "WhatsApp"
-description: "Design WhatsApp notification templates with header, body, footer, and buttons — with Meta approval and a live conversation preview."
+description: "Compose structured WhatsApp messages with headers, media, and buttons — submitted to Meta for approval automatically."
 ---
 
-The WhatsApp editor is a structured form (header, body, footer, buttons) with a live WhatsApp conversation preview on the right. Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+WhatsApp in SuprSend lets you send structured, personalised messages to your users — with headers, media, buttons, and dynamic variables. Every template must be approved by Meta before it can be sent. SuprSend handles the submission automatically.
+
+This guide covers how the editor works, how each field behaves, how to add variables, and how to navigate Meta's approval process.
+
+<Note>
+  You need a WhatsApp vendor connected, and every template must be approved by Meta before it can be sent. [Set up a WhatsApp vendor →](/docs/karix-whatsapp)
+</Note>
+
+---
+
+## How the WhatsApp editor works
+
+The WhatsApp editor is a structured form — not a free-text box. You fill in discrete fields (header, body, footer, buttons) and SuprSend assembles them into a WhatsApp-compliant template.
+
+On the right, a live WhatsApp conversation preview updates as you fill in each field, using sample data from the Variables panel.
 
 <Frame caption="WhatsApp editor with live device preview">
   <img src="/images/docs/templates-editor-whatsapp.png" />
 </Frame>
 
-<Note>
-  To send WhatsApp messages, you need a WhatsApp vendor integrated with SuprSend. See [WhatsApp vendor integrations](/docs/karix-whatsapp) for the vendor list and setup.
-</Note>
+<Frame caption="WhatsApp template fields — category, header, body, footer, and buttons">
+  <img src="/images/docs/templates-editor-whatsapp-panel.png" />
+</Frame>
+
+**One important thing to know upfront:** WhatsApp templates must match a category (Utility, Marketing, or Authentication). Pick the right category before you write a single word of copy — category mismatch is the most common rejection reason.
 
 ---
 
-## WhatsApp fields
+## Fields
 
-**Template Category** — every WhatsApp template must be categorised. See [Choosing the right category](#choosing-the-right-category) below.
+### Template Category
 
-**Type** — `Text` or `Media`. Determines the header format.
+**Required**
 
-**Header (Text type)** — bold text shown above the body. Max 60 characters. Emojis are not supported. Supports Handlebars variables.
+Every WhatsApp template must be categorised. WhatsApp enforces different rules and pricing per category, and will reject — or silently reclassify — templates where the content doesn't match.
 
-**Header (Media type)** — choose a media format: Image (.jpg, .png — recommended 800x418 px, max 5 MB), Video (.mp4 — max 16 MB, under 30s), or Document (.pdf — max 100 MB, set a descriptive filename). Provide a public URL — supports dynamic URLs with variables like `{{media_url}}`. Fully dynamic media URLs are treated as one variable.
+**Pick your category first, then write copy to match it.**
 
-**Body** — main message content. Max 1024 characters. Multi-line, supports Handlebars variables and [WhatsApp formatting](#formatting-whatsapp-messages) (`*bold*`, `_italic_`, `~strikethrough~`). HTML and Markdown do not work.
+| Category | Use when | Examples |
+|---|---|---|
+| **Utility** | Responding to a user action — transactional or service updates | Order confirmation, shipping update, payment receipt, appointment reminder |
+| **Marketing** | Proactively reaching out with promotions or re-engagement. Requires opt-in. | Flash sale, product recommendation, abandoned cart nudge |
+| **Authentication** | Sending OTPs or verification codes. Uses a specialised template structure. | Login OTP, two-factor auth, phone verification |
 
-**Footer** — short text below the body in lighter font. Max 60 characters. Variables are not supported. For Marketing templates, include opt-out language (e.g., "Reply STOP to opt out") — improves approval rates.
+<Warning>
+  WhatsApp may **reclassify** your template if the content doesn't match the selected category. A "Utility" template with promotional language may be reclassified as "Marketing" — with different pricing and opt-in requirements.
+</Warning>
 
-**Buttons** — choose Call to Action, Quick Reply, or None.
+### Type
 
-- **Call to Action** — up to 2 buttons. **Visit Website** redirects to a URL (Static or Dynamic — one variable at the **end** only, e.g. `https://yourapp.com/product/{{id}}`). **Call Phone Number** initiates a call.
-- **Quick Reply** — up to 3 tap-to-reply buttons. Variables and emojis are not allowed in button text.
+**Required**
+
+Choose `Text` or `Media`. This determines the format of your header.
+
+- **Text** — a simple bold headline above the body
+- **Media** — a header image, video, or document that carries the message visually
+
+### Header
+
+**Required**
+
+The header appears above the body and is the first thing a recipient sees.
+
+**When Type is Text:** Bold text, max 60 characters. No emojis. Keep it short and scannable — order status, campaign name, or reminder title. Supports Handlebars variables.
+
+> Example: `Order Shipped` for a utility order update.
+
+**When Type is Media:** Provide a public HTTPS URL for your media file. Dynamic URLs with variables like `{{media_url}}` are supported — a fully dynamic media URL counts as one variable.
+
+| Format | Specs |
+|---|---|
+| **Image** | `.jpg` or `.png` · Recommended 800×418 px · Max 5 MB |
+| **Video** | `.mp4` · Max 16 MB · Under 30 seconds |
+| **Document** | `.pdf` · Max 100 MB · Set a descriptive filename |
+
+> Use a CDN-hosted URL (Cloudflare, Fastly, CloudFront) rather than a slow origin — WhatsApp fetches the URL at delivery time. Confirm the URL returns a `200` status, correct `Content-Type`, and no auth gates before submitting.
+
+### Body
+
+**Required**
+
+The main message content. Max 1024 characters. Multi-line. Supports Handlebars variables and WhatsApp's own text formatting (see [Formatting WhatsApp messages](#formatting-whatsapp-messages)).
+
+**HTML and Markdown do not work in WhatsApp.**
+
+**What to write here:** Write like a chat message — short paragraphs, one main idea per message. Meta reviews the example values you provide in the Variables panel during approval, so use realistic values, not placeholder text like `aaa`.
+
+> Example: `Hi {{customer_name}}, your order #{{order_id}} has been shipped! Expected delivery: {{delivery_date}}.`
+
+> Example: `Hi {{$recipient.name}}, our biggest sale starts now! Up to 50% off on all products.`
+
+> Example (Authentication): `Your verification code is {{otp_code}}. It expires in 10 minutes.`
+
+> Example: `Reminder: Your appointment with {{provider_name}} is on {{appointment_date}} at {{appointment_time}}.` — pair with Quick Reply buttons `Confirm` / `Reschedule` for responses.
+
+### Footer
+
+**Optional**
+
+Short text below the body in a lighter font. Max 60 characters. Variables are not supported.
+
+**What to write here:** Brand name, legal line, or opt-out language. On Marketing templates, `Reply STOP to opt out` in the footer improves approval rates and sets clear expectations for recipients.
+
+> Example: `SuprSend Logistics` on a shipping update. `Reply STOP to opt out` on Marketing.
+
+### Buttons
+
+**Optional** — choose Call to Action, Quick Reply, or None.
 
 <Frame caption="WhatsApp Call to Action button configuration">
   <img src="/images/docs/templates-editor-whatsapp-buttons.png" />
 </Frame>
 
-## Adding dynamic content
+**Call to Action** — up to 2 buttons.
+- **Visit Website** — opens a URL. Can be Static or Dynamic. For dynamic URLs, only one variable is allowed and it must appear at the very end: `https://yourapp.com/product/{{id}}`.
+- **Call Phone Number** — initiates a phone call.
 
-You can add variables in the template to personalise it for each recipient. Variables are replaced with actual data at send time.
+**Quick Reply** — up to 3 tap-to-reply buttons. Variables and emojis are not allowed in button text.
+
+**What to write here:** Use action verbs on buttons (`Track order`, `Shop now`, `Confirm`). Keep labels short — they're tapped, not read.
+
+---
+
+## Personalise with variables
+
+You can add variables in the template to personalise it per recipient. SuprSend replaces variables with actual data at send time.
 
 <Steps>
   <Step title="Add variables in the Variables panel">
@@ -82,18 +170,18 @@ You can add variables in the template to personalise it for each recipient. Vari
 </Info>
 
 <Warning>
-  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the WhatsApp notification for that user. Other channels in the same template group are still sent.
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
 
+---
+
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 The right panel shows a live WhatsApp conversation preview, updated in real time as you fill in fields. Variables render using data from the **Variables panel**.
 
 Click **Test** in the top-right corner to send a real WhatsApp message. This uses the **live version** — commit and get approval before testing. See [Testing a Template](/docs/templates#test) for the full guide.
-
-## Commit
-
-Click **Commit** in the top bar to publish the current draft. The template enters **Approval Pending** state — SuprSend submits it to Meta automatically. You'll be notified when approved or rejected. Once approved, the version goes **Live** and is used for all subsequent workflow triggers.
 
 <Warning>
   WhatsApp templates **cannot be tested until approved**. The Test button uses the live (approved) version. If the template is still pending approval, testing is not available.
@@ -101,133 +189,130 @@ Click **Commit** in the top bar to publish the current draft. The template enter
 
 ---
 
-## Approval flow
+## Publish and approval
 
-Every WhatsApp template must be approved by Meta before it can be sent. This applies globally, not just in specific regions.
+Unlike SMS (outside India) or email, every WhatsApp template must be approved by Meta before it can be sent — no exceptions, no regions.
+
+Click **Commit** in the top bar to publish your draft and trigger submission to Meta. Here's what happens next:
 
 <Steps>
   <Step title="Design and commit">
-    Author the template content and click **Commit**. The version enters **Approval Pending** state.
+    Author the template content and click **Commit**. The version enters **Approval Pending** state — it does not go live yet.
   </Step>
   <Step title="Meta reviews the template">
     SuprSend submits the template to Meta automatically. Most templates are approved within minutes to hours (up to 24 hours in some cases).
   </Step>
   <Step title="Live or revise">
-    On approval, the version goes **Live**. On rejection, it returns to **Draft** for revision.
+    On approval, the version goes **Live** and is used for all subsequent workflow triggers. On rejection, it returns to **Draft** for revision.
   </Step>
 </Steps>
 
-Templates pending approval are visible in the **Approvals** tab on the [template listing page](/docs/templates#managing-templates). For content guidelines to avoid rejection, see [WhatsApp Template Guidelines](/docs/whatsapp-template-guidelines).
-
-<Tip>
-  **AI prompt — check approval likelihood:** *"Review this WhatsApp template for Meta approval. Category: [UTILITY/MARKETING/AUTHENTICATION]. Header: [text]. Body: [paste]. Footer: [text]. Buttons: [describe]. Check category match, prohibited content, variable placement, character limits, and formatting. Suggest fixes."*
-</Tip>
-
-## Choosing the right category
-
-WhatsApp enforces different rules and pricing for each category. Choosing the wrong category is the most common reason for rejection.
-
-| Category | Use when | Examples |
-|---|---|---|
-| **Utility** | Responding to a user action. Transactional or service updates. | Order confirmation, shipping update, payment receipt, appointment reminder |
-| **Marketing** | Proactively reaching out with promotions or re-engagement. Requires opt-in. | Flash sale, product recommendation, abandoned cart nudge |
-| **Authentication** | Sending OTPs or verification codes. Specialised template structure. | Login OTP, two-factor auth, phone verification |
-
-<Warning>
-  WhatsApp may **reclassify** your template if the content doesn't match the selected category. A "Utility" template with promotional language may be reclassified as "Marketing" — with different pricing and opt-in requirements.
-</Warning>
-
-## Formatting WhatsApp messages
-
-WhatsApp has its own text formatting syntax. **HTML and Markdown do not work.**
-
-| Format | Syntax |
-|---|---|
-| **Bold** | `*text*` |
-| *Italic* | `_text_` |
-| ~~Strikethrough~~ | `~text~` |
-| `Monospace` | `` ```text``` `` |
+Templates pending approval are visible in the **Approvals** tab on the [template listing page](/docs/templates#managing-templates). For the full checklist, see [WhatsApp approval guidelines](#whatsapp-approval-guidelines).
 
 ---
 
-## Common scenarios
+## Formatting WhatsApp messages
+
+WhatsApp has its own text formatting syntax — not HTML, not Markdown.
+
+| Format | Syntax | Result |
+|---|---|---|
+| Bold | `*text*` | **text** |
+| Italic | `_text_` | *text* |
+| Strikethrough | `~text~` | ~~text~~ |
+| Monospace | ` ```text``` ` | `text` |
+
+---
+
+## WhatsApp approval guidelines
 
 <AccordionGroup>
-  <Accordion title="Utility — order shipped">
-    | Field | Value |
-    |---|---|
-    | Category | Utility |
-    | Header | `Order Shipped` |
-    | Body | `Hi {{customer_name}}, your order #{{order_id}} has been shipped! Expected delivery: {{delivery_date}}.` |
-    | Footer | `SuprSend Logistics` |
-    | Button | Track Order → `https://yourapp.com/track/{{order_id}}` |
+  <Accordion title="Approval checklist before you submit">
+    - Use a clear template name (`order_status_update` is better than `template_014`).
+    - Match copy to the selected category (Utility, Marketing, Authentication).
+    - Keep wording natural and clear for a reviewer outside your team.
+    - Use realistic sample values in the Variables panel.
+    - Validate spelling, grammar, and placeholder format before commit.
+    - Avoid variable-only lines (no floating placeholders without surrounding text).
   </Accordion>
 
-  <Accordion title="Marketing — flash sale">
-    | Field | Value |
-    |---|---|
-    | Category | Marketing |
-    | Header | `Flash Sale` |
-    | Body | `Hi {{$recipient.name}}, our biggest sale starts now! Up to 50% off on all products.` |
-    | Footer | `Reply STOP to opt out` |
-    | Button | Shop Now → `https://yourapp.com/sale` |
+  <Accordion title="What content is commonly rejected?">
+    Marketing-like utility templates are the top issue. Common rejection triggers include:
+    - Coupons, gift offers, discounts, upsell, cross-sell
+    - Newsletter-style recurring promotional content
+    - Re-engagement nudges framed as marketing
+    - Cold-call copy ("Is now a good time to talk?")
+    - Surveys/polls that are not tied to a clear transactional flow
+    - Frequent "price drop / points expiring" alerts that function as promotions
   </Accordion>
 
-  <Accordion title="Authentication — OTP">
-    | Field | Value |
-    |---|---|
-    | Category | Authentication |
-    | Body | `Your verification code is {{otp_code}}. It expires in 10 minutes.` |
+  <Accordion title="Formatting and placeholder rules">
+    - Use the correct placeholder format Meta expects after conversion.
+    - Do not repeat placeholders unnecessarily.
+    - Avoid lines that are only placeholders (floating parameters).
+    - Keep button labels and URLs compliant (dynamic URL variable only at the end).
+    - Keep header/body/footer limits in mind while drafting.
   </Accordion>
 
-  <Accordion title="Utility — appointment reminder with buttons">
-    | Field | Value |
-    |---|---|
-    | Category | Utility |
-    | Body | `Reminder: Your appointment with {{provider_name}} is on {{appointment_date}} at {{appointment_time}}.` |
-    | Button 1 (Quick Reply) | `Confirm` |
-    | Button 2 (Quick Reply) | `Reschedule` |
+  <Accordion title="Safety and policy boundaries">
+    Templates with abusive, threatening, or coercive language are rejected. Avoid legal-threat language, shaming language, or aggressive recovery wording.
   </Accordion>
 </AccordionGroup>
 
+---
+
 ## Best practices
 
-- **Avoid rejection** — don't mix categories, avoid placeholder-heavy text with no clear purpose, and don't use URL shorteners in the body.
-- **Variable placement** — ensure each variable has a clear example value in the Variables panel. WhatsApp uses these during approval review.
-- **Template pausing** — WhatsApp may pause templates with low quality scores (high block/report rates). Monitor quality in the vendor portal.
+- **Structure beats paragraphs:** Use line breaks and bold for key values (order ID, amount, dates) — avoid a wall of text.
+- **Pick the right header:** Text headers for transactional alerts and reminders; image or video headers for product, cart, or promo where it helps — Authentication templates follow Meta rules (no header image; body + OTP flow only).
+- **Footer is static:** Keep brand name or disclaimer in the footer — variables are not supported there.
+- **Approval hygiene:** Include realistic sample values; never submit a body that is only variables. Avoid spam triggers ("free", "guaranteed", "act now") when marketing copy is under review.
+- **URLs:** Use full branded URLs in the body — generic shorteners are a common rejection trigger.
+- **Frequency:** Treat marketing as high-risk for blocks — cap roughly once per week and respect opt-in; sync marketing consent from your CRM before the WhatsApp step.
+- **Category first:** Utility, Marketing, and Authentication follow different rules and pricing — choose the category before you write copy.
 
-## Frequently asked questions
+---
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Why was my WhatsApp template rejected?">
-    Common reasons: content doesn't match the selected category, too many variables without clear context, URL shorteners in the body, or example values that don't make sense. Review the [WhatsApp Template Guidelines](/docs/whatsapp-template-guidelines) and resubmit.
+    Common reasons: content doesn't match the selected category, too many variables without clear context, URL shorteners in the body, or example values that don't make sense. Review [WhatsApp approval guidelines](#whatsapp-approval-guidelines), then resubmit.
   </Accordion>
 
   <Accordion title="How long does approval take?">
     Most templates are approved within minutes to hours. In some cases, up to 24 hours. SuprSend handles submission automatically — you'll be notified when the status changes.
   </Accordion>
 
-  <Accordion title="Can I edit a template after it's approved?">
+  <Accordion title="Can I edit a template after Meta has approved it?">
     No. To make changes, edit in draft mode and commit again. The new version goes through approval separately.
   </Accordion>
 
-  <Accordion title="What happens if WhatsApp pauses my template?">
-    The template stops being sent until the quality score recovers. Fix the content and monitor in your vendor portal (e.g., WhatsApp Business Manager).
+  <Accordion title="What does it mean when a template is &quot;paused&quot;?">
+    WhatsApp may pause templates with low quality scores (high block or report rates). The template stops being sent until the quality score recovers. Monitor your block and report rates in your vendor portal (e.g., WhatsApp Business Manager) to catch this early.
   </Accordion>
 
-  <Accordion title="How do dynamic URLs work in buttons?">
+  <Accordion title="How do dynamic button URLs work?">
     One variable allowed at the **end** only — e.g., `https://yourapp.com/product/{{id}}`. The static prefix must be a valid URL on its own.
   </Accordion>
 
   <Accordion title="Can I send WhatsApp in multiple languages?">
-    Yes — use [template variants](/docs/template-variants). Each language variant goes through approval separately. The default variant acts as the fallback.
+    Yes — use [template variants](/docs/template-variants). Each language variant goes through Meta approval separately. The default variant acts as the fallback.
   </Accordion>
 
   <Accordion title="Can I test a template before approval?">
     No. WhatsApp templates can only be tested after they are committed and approved by Meta. The Test button uses the live (approved) version.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the WhatsApp notification for that user. Other channels in the same template group are still sent.
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes. Add WhatsApp with email, SMS, push, and other channels in the same template group. Each channel renders independently.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include properties in your workflow trigger payload or event so they match the Handlebars paths in your template. Use the **Variables panel** for sample data. See [Adding dynamic content](/docs/templates#the-variables-panel) and your SDK documentation.
   </Accordion>
 </AccordionGroup>

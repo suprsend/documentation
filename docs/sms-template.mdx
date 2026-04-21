@@ -1,29 +1,75 @@
 ---
 title: "SMS"
-description: "Design SMS notification content — a single body field with Handlebars variables and a live phone preview."
+description: "Send personalised SMS notifications using the SuprSend SMS editor — with live previews, Handlebars variables, and carrier approval for India."
 ---
 
-The SMS editor is a text editor with a live phone preview on the right. Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+SMS in SuprSend lets you author and send text notifications to your users — personalised with dynamic variables, previewed in real time, and (when sending in India) submitted for carrier approval automatically.
+
+This guide walks you through everything: how the editor works, how to write effective messages, how to add variables, and how to handle India's carrier approval requirements.
+
+<Note>
+  You need an SMS vendor connected before sending. If you're sending in India, templates also need carrier approval — see [Sending SMS in India](#sending-sms-in-india). [Set up an SMS vendor →](/docs/acl-sinch)
+</Note>
+
+---
+
+## How the SMS editor works
+
+When you open an SMS template, you see two panels side by side:
+
+- **Left panel** — where you write and configure your message
+- **Right panel** — a live phone preview that updates as you type, using sample data from the Variables panel
 
 <Frame caption="SMS editor with live device preview">
   <img src="/images/docs/templates-editor-sms.png" />
 </Frame>
 
-<Note>
-  To send SMS, you need an SMS vendor integrated with SuprSend. See [SMS vendor integrations](/docs/acl-sinch) for the vendor list and setup.
-</Note>
+<Frame caption="SMS body, message type, and India carrier approval fields when applicable">
+  <img src="/images/docs/templates-editor-sms-panel.png" />
+</Frame>
+
+This means you always see exactly what your recipient will see, before you send anything.
 
 ---
 
-## SMS editor
+## Fields
 
-The SMS editor has a single field:
+### Body
 
-**Body** — the full text of the SMS message. This is everything the recipient sees. Aim for one segment (160 GSM-7 characters) — each extra segment doubles cost. Front-load the key info, include one clear CTA, and avoid shortened URLs (some carriers flag them as spam; use a branded domain if needed). Supports Handlebars variables and emoji.
+**Required** · Supports variables
 
-## Adding dynamic content
+The full text of the SMS — everything the recipient sees.
 
-You can add variables in the template to personalise it for each recipient. Variables are replaced with actual data at send time. Pass values via your workflow trigger payload or use recipient/tenant properties.
+**What to write here:** Put the most important detail first (order number, OTP, deadline). Aim for one GSM-7 segment (160 characters) — each extra segment is billed separately. Include one clear call to action when needed. Avoid generic URL shorteners; use a branded domain if you include a link. Supports Handlebars variables and emoji.
+
+### Understanding character limits and encoding
+
+SMS has two character encodings. Which one applies changes how many characters fit per message segment:
+
+| Encoding | Chars per segment | When it applies |
+|---|---|---|
+| GSM-7 | 160 (single), 153 (multi-part) | Standard Latin characters, digits, basic punctuation |
+| UCS-2 | 70 (single), 67 (multi-part) | Emojis, non-Latin scripts (Hindi, Arabic, Chinese, etc.) |
+
+**The critical thing to know:** A single emoji or a single non-Latin character shifts your *entire* message from GSM-7 to UCS-2. What was a 140-character, one-segment message becomes a two-segment message. For transactional SMS, skip emojis to keep costs predictable.
+
+**Watch out for invisible UCS-2 triggers.** Smart quotes (`"` `"`), em-dashes (`—`), and non-breaking spaces pasted from word processors look normal but silently force UCS-2. If your editor shows a 90-character message as 2 segments, a hidden UCS-2 character is the likely culprit — paste your body into a [GSM-7 checker](https://twilio.com/en-us/blog/sms-character-limit) to find it.
+
+Supports Handlebars: `{{variable_name}}`. For URLs with `&`, `?`, or `=`, use triple braces `{{{tracking_url}}}` so values are not HTML-escaped.
+
+> Example: `Your verification code is {{otp_code}}. It expires in {{expiry_minutes}} minutes. Do not share this code with anyone.` (keep OTP copy under one segment — no URL required.)
+
+> Example: `Hi {{$recipient.name}}, your order #{{order_id}} has been shipped! Track it here: {{{tracking_url}}}`
+
+> Example: `Reminder: Your appointment with {{provider_name}} is on {{appointment_date}} at {{appointment_time}}. Reply CONFIRM to confirm or CANCEL to cancel.` — pair with a [delay node](/docs/delay) or [time window](/docs/time-window) in your workflow to send at the right time.
+
+> Example: `Flash sale! Get {{discount}}% off on all items. Shop now: {{{shop_url}}}. Valid till {{expiry_date}}. Reply STOP to opt out.` — include opt-out language on promotional messages.
+
+---
+
+## Personalise with variables
+
+You can add variables in the template to personalise it per recipient. SuprSend replaces variables with actual data at send time. Pass values via your workflow trigger payload or use recipient/tenant properties.
 
 <Steps>
   <Step title="Add variables in the Variables panel">
@@ -64,33 +110,42 @@ You can add variables in the template to personalise it for each recipient. Vari
 For conditionals and helpers, see [Handlebars Helpers](/docs/handlebars-helpers).
 
 <Warning>
-  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the SMS for that user. Other channels in the same template group (email, push, etc.) are still sent.
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
 
+---
+
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 The right panel shows a live phone preview, updated in real time as you type. Variables render using data from the **Variables panel**.
 
 Click **Test** in the top-right corner to send a real SMS to a real phone number. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+---
 
-Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning. The template goes live immediately and is used for all subsequent workflow triggers.
+## Publish
+
+Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning.
+
+- **Without carrier approval:** The template goes live immediately and is used for all subsequent workflow triggers.
+- **With carrier approval (India):** The template enters **Approval Pending** state and does not go live until your carrier approves it — see below.
 
 ---
 
-## SMS in India (DLT)
+## Sending SMS in India
 
-India requires all SMS templates to be registered and approved through a DLT (Distributed Ledger Technology) portal before they can be sent. The SMS editor shows additional fields when DLT approval is enabled.
+India's telecom regulator (TRAI) requires all SMS templates to be registered and approved through your carrier before sending. This applies to all three message types: Transactional, Promotional, and Engagement. Once you enable approval in Settings, the editor shows additional fields. SuprSend handles submission to your carrier automatically — you design the template, commit it, and the approval request goes out on your behalf.
 
-### Enable DLT approval
+### Enable template approval
 
 <Steps>
   <Step title="Go to Settings">
     Navigate to **Settings** on the SuprSend dashboard.
   </Step>
   <Step title="Enable SMS template approval">
-    Toggle on **SMS Template Approval Required**. This enables the DLT workflow — the SMS editor will now show three fields instead of one.
+    Toggle on **SMS Template Approval Required**. The SMS editor now shows three fields instead of one: Message Type, Header, and Body.
 
     <Frame caption="Enable SMS Template Approval Required in Workspace Settings">
       <img src="/images/docs/templates-sms-dlt-settings-toggle.png" />
@@ -98,104 +153,136 @@ India requires all SMS templates to be registered and approved through a DLT (Di
   </Step>
 </Steps>
 
-### DLT fields
+### Message Type
 
-With DLT enabled, the SMS editor shows:
+**Required when carrier approval is enabled**
 
-**Message Type** — select the type: **Transactional** (triggered by a user action — delivery updates, OTPs), **Promotional** (marketing messages without explicit consent), or **Engagement** (re-engagement messages to existing users — feature promotions, discount offers).
+Select the type that matches how you're using this template. Choosing the wrong type is a common cause of carrier rejection.
 
-**Header** — the sender ID (6 alphanumeric characters) registered with DLT. Separate headers exist for each message type.
+| Type | Use when |
+|---|---|
+| **Transactional** | Triggered by a user action — OTPs, delivery updates, order confirmations |
+| **Promotional** | Marketing messages sent without explicit consent |
+| **Engagement** | Re-engagement messages to existing users — feature announcements, discount offers |
 
-**Body** — the SMS content. Must exactly match the template registered on the DLT portal. Variables must align with the DLT placeholder format.
+### Header
 
-### DLT approval flow
+**Required when carrier approval is enabled**
+
+The sender ID (6 alphanumeric characters) registered with your carrier. Separate headers exist for each message type.
+
+### Body (carrier-matched)
+
+**Required when carrier approval is enabled**
+
+The SMS content must **exactly** match the template registered in your carrier's registration portal, including punctuation. Variables must align with the approval placeholder format your carrier expects.
+
+### Carrier approval flow
 
 <Steps>
   <Step title="Design and commit">
     Author the template content and click **Commit**. The version enters **Approval Pending** state (it does not go live).
   </Step>
   <Step title="Approval at vendor portal">
-    SuprSend submits the template to your SMS vendor for DLT approval. You'll be notified when approved or rejected.
+    SuprSend submits the template to your SMS vendor for carrier approval. You'll be notified when approved or rejected.
   </Step>
   <Step title="Live or revise">
     On approval, the version goes **Live**. On rejection, it returns to **Draft** for revision.
   </Step>
 </Steps>
 
-Templates pending approval are visible in the **Approvals** tab on the [template listing page](/docs/templates#managing-templates). For DLT content guidelines, see [DLT Guidelines](/docs/dlt-guidelines).
+Templates pending approval are visible in the **Approvals** tab on the [template listing page](/docs/templates#managing-templates). For the full rules checklist, see [India SMS carrier approval guidelines](#india-sms-carrier-approval-guidelines).
 
 <Warning>
-  DLT templates **cannot be tested in draft**. You can only test a DLT SMS after it has been committed and approved. The Test button sends using the live (approved) version.
+  For SMS to **India (carrier approval)**, you **cannot test in draft** — you can only test after the template is **committed and carrier-approved**. The **Test** button sends the live (approved) version.
 </Warning>
-
-<Tip>
-  **AI prompt — DLT compliance check:** *"Convert this SMS body to DLT format. Header: [6-char sender ID]. Category: [transactional/promotional]. Body: [paste text]. Convert Handlebars variables to DLT placeholder format, verify category match, and flag rejection risks."*
-</Tip>
 
 ---
 
-## Common scenarios
+## India SMS carrier approval guidelines
 
 <AccordionGroup>
-  <Accordion title="OTP / verification code">
-    | Field | Value |
-    |---|---|
-    | Body | `Your verification code is {{otp_code}}. It expires in {{expiry_minutes}} minutes. Do not share this code with anyone.` |
-
-    Keep OTP messages under one segment (160 characters). No URLs needed — just the code and expiry.
+  <Accordion title="What is carrier approval in India?">
+    India's telecom regulator (TRAI) requires commercial SMS templates to be pre-registered before sending. In many portals this is still labelled "DLT", but in practice you should treat it as **carrier template approval** for SMS in India.
   </Accordion>
 
-  <Accordion title="Order / delivery update">
-    | Field | Value |
-    |---|---|
-    | Body | `Hi {{$recipient.name}}, your order #{{order_id}} has been shipped! Track it here: {{{tracking_url}}}` |
+  <Accordion title="Which message category should I choose?">
+    Use the category that matches your real use case:
 
-    Use triple curly braces `{{{tracking_url}}}` for URLs to avoid HTML-escaping special characters like `&` and `?`.
+    | Category | Use when |
+    |---|---|
+    | **Transactional** | Banking OTP for bank-initiated transactions (restricted category) |
+    | **Service Implicit** | Service updates triggered by user actions (order, delivery, appointment, account updates) |
+    | **Service Explicit** | Service messages that require verified user consent |
+    | **Promotional** | Marketing and campaign messages for opted-in users |
   </Accordion>
 
-  <Accordion title="Appointment reminder">
-    | Field | Value |
-    |---|---|
-    | Body | `Reminder: Your appointment with {{provider_name}} is on {{appointment_date}} at {{appointment_time}}. Reply CONFIRM to confirm or CANCEL to cancel.` |
+  <Accordion title="Template validation checklist before submission">
+    - Include your organisation or brand name in the template body.
+    - Match **header**, **message type**, and **body text** exactly with what you register.
+    - Avoid double spaces; keep spacing and punctuation consistent.
+    - Keep variable placeholders where values change (amount, date, OTP, names, URLs, etc.).
+    - Variable max length is typically 30 characters per placeholder.
+    - Do not submit templates where the entire body is just variables.
+    - Remember Unicode (emoji / non-Latin characters) reduces per-segment capacity.
 
-    Pair with a [delay node](/docs/delay) or [time window](/docs/time-window) in your workflow to send at the right time.
+    | SMS count | GSM-7 chars | Unicode chars |
+    |---|---|---|
+    | 1 | 160 | 70 |
+    | 2 | 306 | 134 |
+    | 3 | 459 | 201 |
+    | 4 | 612 | 268 |
+    | 5 | 765 | 335 |
   </Accordion>
 
-  <Accordion title="Promotional offer">
-    | Field | Value |
-    |---|---|
-    | Body | `Flash sale! Get {{discount}}% off on all items. Shop now: {{{shop_url}}}. Valid till {{expiry_date}}. Reply STOP to opt out.` |
-
-    Always include opt-out language for promotional messages.
+  <Accordion title="Common rejection reasons and how to avoid them">
+    - Wrong category selected for the actual content.
+    - Body text mismatch vs registered template (including punctuation differences).
+    - Header not registered for the selected category.
+    - Placeholder format mismatch vs carrier expectations.
+    - Missing required consent mapping for service-explicit / promotional flows.
+    - Transactional category used by non-eligible entity types.
   </Accordion>
 </AccordionGroup>
 
+---
+
 ## Best practices
 
-- **Identify yourself** — start with your brand name or use a registered sender ID so recipients know who the message is from.
-- **Time-sensitive messages** — pair SMS with a [delay node](/docs/delay) or [time window](/docs/time-window) to avoid sending at inconvenient hours.
-- **DLT (India)** — ensure your template body exactly matches the DLT-registered content, including punctuation and variable placeholders.
+- **Segments = cost:** GSM-7 is ~160 chars per segment; any Unicode (emoji, ₹) forces UCS-2 at ~70 chars — model variable values, not just static text.
+- **Front-load the fact:** Put order ID, amount, code, or action first — avoid greetings that burn characters.
+- **One short link at the end:** Budget ~20–25 chars for a shortened URL; use `{{{url}}}` so query strings stay intact.
+- **Promotional SMS:** Add opt-out (e.g. "Reply STOP to opt out") and respect India TRAI promo hours (9 AM–9 PM) where they apply.
+- **OTP and verification:** Lead with the code; include expiry and "Never share this code" — same rule across channels.
+- **India carrier approval:** Body, placeholders, header, and message type must match what you registered — align in the carrier portal before chasing product-side rejections.
+- **Locales:** Use [template variants](/docs/template-variants) and `$locale` instead of duplicating templates per market.
 
-## Frequently asked questions
+---
+
+## FAQ
 
 <AccordionGroup>
-  <Accordion title="What is DLT and when do I need it?">
-    DLT (Distributed Ledger Technology) is a regulatory requirement in India. All SMS templates sent in India must be registered with a DLT portal, have an approved header (sender ID), and go through an approval process before going live. If you're sending SMS outside India, you don't need DLT — templates go live immediately on commit.
+  <Accordion title="What is carrier approval and when do I need it?">
+    In India, all SMS templates must be registered and approved through your carrier before sending. You need an approved header (sender ID) and carrier approval for each template. If you're sending SMS outside India, carrier approval in SuprSend does not apply — templates go live on commit as usual (unless your organisation enables approval for other reasons).
   </Accordion>
 
-  <Accordion title="Why was my DLT template rejected?">
-    Common reasons: the template body doesn't exactly match the content registered on the DLT portal (even minor punctuation differences count), the header is not registered for the selected message type, or the variable placeholders don't match the DLT registration.
+  <Accordion title="Why was my template rejected during approval?">
+    Common reasons: the template body doesn't exactly match the content registered with your carrier (even minor punctuation differences count), the header is not registered for the selected message type, or the variable placeholders don't match the registration format your carrier expects.
+  </Accordion>
+
+  <Accordion title="What's the difference between Transactional, Promotional, and Engagement?">
+    **Transactional** — triggered by a user action (delivery updates, OTPs). **Promotional** — marketing messages without explicit consent. **Engagement** — re-engagement to existing users (feature promotions, discount offers). Pick the type that matches how you use the template; mismatches can cause rejection.
   </Accordion>
 
   <Accordion title="Why is my SMS being sent as multiple segments?">
-    SMS has a per-segment character limit. Each extra segment is billed separately by your vendor.
+    Either your message exceeds the per-segment character limit, or a hidden UCS-2 character (like a smart quote or em-dash pasted from a word processor) is forcing the whole message into UCS-2 encoding.
 
     | Encoding | Chars per segment | When it applies |
     |---|---|---|
     | GSM-7 | 160 (single), 153 (multi-part) | Standard Latin characters, digits, basic punctuation |
     | UCS-2 | 70 (single), 67 (multi-part) | Emojis, non-Latin scripts (Hindi, Arabic, Chinese, etc.) |
 
-    A single emoji or non-Latin character forces the **entire** message into UCS-2, cutting capacity from 160 to 70. Avoid emojis in transactional SMS to keep costs down.
+    Paste your message into a GSM-7 checker tool to identify hidden UCS-2 characters before committing.
   </Accordion>
 
   <Accordion title="How do I add URLs in SMS without them breaking?">
@@ -206,11 +293,19 @@ Templates pending approval are visible in the **Approvals** tab on the [template
     Yes — use [template variants](/docs/template-variants). Create a variant for each language with a locale condition. Set the user's preferred language via `$locale` on their profile — SuprSend auto-selects the matching variant. The default variant acts as the English fallback.
   </Accordion>
 
-  <Accordion title="Can I test a DLT template before approval?">
-    No. DLT templates can only be tested after they are committed and approved by the vendor. The Test button uses the live (approved) version. Non-DLT templates can be tested immediately after committing.
+  <Accordion title="Can I test a template before carrier approval?">
+    For **SMS to India**, no — you cannot test in draft. You can only test after the template is committed and carrier-approved; the **Test** button uses the live (approved) version. For SMS where carrier approval does not apply, you can test after commit without waiting on approval.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the SMS notification for that user. Other channels in the same template group (email, push, etc.) are still sent if they render successfully.
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips that notification for the affected user. Other channels in the same template group (email, push, etc.) are still sent if they render successfully.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes. Add SMS as one channel in a template group with email, push, WhatsApp, and others. Each channel renders independently; if SMS fails variable rendering, only SMS is skipped for that user.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include properties in your workflow trigger payload or event properties so they match the Handlebars paths in your template. Use the **Variables panel** in the editor for sample data and auto-complete. See [Adding dynamic content](/docs/templates#the-variables-panel) and your SDK docs for the exact payload shape.
   </Accordion>
 </AccordionGroup>

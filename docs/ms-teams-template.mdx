@@ -1,21 +1,30 @@
 ---
 title: "MS Teams"
-description: "Design MS Teams notification templates using the Markdown editor for simple messages or the JSONNET editor for rich Adaptive Card layouts."
+description: "Send formatted messages to Microsoft Teams using Markdown or rich Adaptive Card layouts."
 ---
 
-The MS Teams editor supports two modes: a **Markdown** editor for simple text messages, and a **JSONNET** editor for rich [Adaptive Card](https://adaptivecards.io/) layouts with buttons, images, and structured data. Each mode uses a different variable syntax.
+Send formatted messages to Microsoft Teams using Markdown or rich [Adaptive Card](https://adaptivecards.io/) layouts. Each mode uses a different variable syntax.
+
+<Note>
+  You need MS Teams connected as a vendor in SuprSend before notifications can be sent. [Set up MS Teams →](/docs/microsoft-teams)
+</Note>
+
+The MS Teams editor supports **Markdown** for simple messages and **JSONNET** for Adaptive Card JSON.
 
 <Frame caption="MS Teams editor with Markdown and JSONNET tabs">
   <img src="/images/docs/templates-editor-msteams.png" />
 </Frame>
 
-<Note>
-  To send MS Teams notifications, you need an MS Teams vendor integrated with SuprSend. See [MS Teams vendor integration](/docs/microsoft-teams) for setup.
-</Note>
+<Tabs>
+  <Tab title="Markdown">
 
-## MS Teams fields
+### Markdown field
 
-**Markdown mode** — a text editor with Markdown formatting support. Variables use [Handlebars](/docs/handlebars-helpers) syntax (`{{variable_name}}`). Supported formatting:
+**Required in Markdown mode** · Supports variables
+
+A text editor with Markdown-style formatting. Variables use [Handlebars](/docs/handlebars-helpers) (`{{variable_name}}`). The right panel previews your message in real time.
+
+**Supported formatting:**
 
 | Format | Syntax |
 |---|---|
@@ -25,15 +34,36 @@ The MS Teams editor supports two modes: a **Markdown** editor for simple text me
 | Link | `[label](url)` |
 | Blockquote | `> text` |
 
-**JSONNET mode** — a code editor that outputs [Adaptive Card](https://adaptivecards.io/) JSON. Variables use `data.key` syntax (not Handlebars). Design visually in the [Adaptive Cards Designer](https://adaptivecards.io/designer/) first, then adapt the JSON into JSONNET. Use `FactSet` for key-value data and `Action.OpenUrl` for link buttons. See the full [JSONNET reference](/docs/jsonnet-templates) for syntax, examples, and debugging.
+**What to write here:** Use bold for titles, bullet-style lines with links for one-click access. Ideal for DevOps alerts and short operational updates.
 
-<Tip>
-  **AI prompt — convert to Adaptive Card:** *"Convert this notification into a Teams Adaptive Card JSON: [paste message]. Variables: [list]. Actions: [describe buttons]. Return valid Adaptive Card JSON (v1.4+) I can adapt into JSONNET for SuprSend."*
-</Tip>
+> Example deployment alert:
 
-<Tip>
-  **AI prompt — debug JSONNET:** *"Fix this JSONNET error from the SuprSend Teams editor. Error: [paste error]. Code: [paste JSONNET]. Variables are accessed as data.key or data['$special_key']."*
-</Tip>
+```text
+**Deployment Completed**
+
+Service: {{service_name}}
+Environment: {{environment}}
+Version: {{version}}
+Duration: {{duration}}
+
+[View Logs]({{log_url}})
+```
+
+Simple and effective when the notification is informational with a single link.
+
+  </Tab>
+  <Tab title="Adaptive Card (JSONNET)">
+
+### JSONNET field
+
+**Required in JSONNET mode**
+
+A code editor that outputs [Adaptive Card](https://adaptivecards.io/) JSON. Variables use `data.key` syntax (not Handlebars). Design visually in the [Adaptive Cards Designer](https://adaptivecards.io/designer/) first, then adapt the JSON into JSONNET. Use `FactSet` for key-value data and `Action.OpenUrl` for link buttons. See the full [JSONNET reference](/docs/jsonnet-templates) for syntax, examples, and debugging.
+
+**What to write here:** Start from the Designer with "Microsoft Teams" as host, copy JSON, replace literals with `data.service_name` style keys, and use **Load Preview** in SuprSend to catch syntax errors (shown in red).
+
+> Example: For approval-style alerts, use `FactSet` for structured data and `Action.OpenUrl` for CTA buttons. See the full [Adaptive Card example](/docs/jsonnet-templates#ms-teams-adaptive-card-examples) in the JSONNET reference.
+
 <Frame>
   <img src="/images/docs/a647239-image.png" />
 </Frame>
@@ -44,11 +74,20 @@ Enter the variables in `JSON` format as shown in the screenshot below. This JSON
   <img src="/images/docs/d055e38-image.png" />
 </Frame>
 
+**Preview:** Click **Load Preview** to render the Adaptive Card. Syntax errors are displayed in red in the preview panel.
+
+  </Tab>
+</Tabs>
+
 <Info>
   You can switch between Markdown and JSONNET at any time. Content is saved independently for each mode.
 </Info>
 
-## Adding dynamic content
+<Frame caption="MS Teams — variants per channel and editor layout">
+  <img src="/images/docs/templates-editor-msteams-variants.png" />
+</Frame>
+
+## Personalise with variables
 
 **In Markdown mode** — type `{{` for auto-suggestions. Standard Handlebars syntax:
 
@@ -62,10 +101,12 @@ Enter the variables in `JSON` format as shown in the screenshot below. This JSON
 For conditionals and helpers in Markdown mode, see [Handlebars Helpers](/docs/handlebars-helpers).
 
 <Warning>
-  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the Teams notification for that user. Other channels in the same template group are still sent.
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
 
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 **Markdown mode** — the right panel updates in real time as you type.
 
@@ -73,35 +114,92 @@ For conditionals and helpers in Markdown mode, see [Handlebars Helpers](/docs/ha
 
 Click **Test** in the top-right corner to send a real Teams message. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+## Publish
 
 Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning.
 
-## Common scenarios
+## Other ways to build this template
 
-<AccordionGroup>
-  <Accordion title="Deployment status alert (Markdown)">
+Teams messages use **Adaptive Cards** in JSONNET mode. Start from Microsoft's designers, then bind `data.*` fields. Pick **OpenUrl** for links, **Execute** only when you have a bot.
 
-```text
-**Deployment Completed**
+| Approach | Use it when |
+| --- | --- |
+| [Adaptive Cards Designer](#adaptive-cards-designer) | You want visual layout before JSONNET. |
+| [FactSet for key-value rows](#factset-for-key-value-data) | The alert is mostly labelled fields (deploy, incident, order). |
+| [Teams Developer Portal preview](#teams-developer-portal-preview) | You need Teams-accurate rendering (including mobile). |
+| [Webhooks vs SuprSend](#incoming-webhooks-vs-workflows) | You choose between a simple channel webhook and full workflows. |
+| [Action.Execute](#actionexecute-for-in-card-updates) | You need in-place card updates after a click. |
 
-Service: {{service_name}}
-Environment: {{environment}}
-Version: {{version}}
-Duration: {{duration}}
+### Adaptive Cards Designer
 
-[View Logs]({{log_url}})
-```
+[Adaptive Cards Designer](https://adaptivecards.io/designer/): drag **TextBlock**, **Image**, **FactSet**, **ActionSet**. Set host app to **Microsoft Teams** for Teams constraints. Copy JSON → SuprSend JSONNET → replace literals with `data.key`.
 
-  Simple and effective for DevOps alerts. Markdown is sufficient when the notification is informational with a single link.
-  </Accordion>
+**When to use:** You prefer visual design over writing card JSON cold.
 
-  <Accordion title="Approval request (Adaptive Card)">
-    Use `FactSet` for structured data and `Action.OpenUrl` for CTA buttons. See the full [Adaptive Card example](/docs/jsonnet-templates#ms-teams-adaptive-card-examples) in the JSONNET reference.
-  </Accordion>
-</AccordionGroup>
+**Steps**
 
-## Frequently asked questions
+1. Build the card with Teams as host.
+2. Paste into JSONNET and wire variables.
+3. Confirm schema version (see FAQ) and size under **28 KB**.
+
+### FactSet for key-value data
+
+Use **`FactSet`** for service, environment, version, duration, and similar pairs. Avoid long paragraphs when two columns scan faster on desktop and mobile.
+
+**When to use:** DevOps, incidents, or structured status updates.
+
+**Steps**
+
+1. List fields as name/value pairs.
+2. Map each value to payload data.
+3. Keep total text within Teams limits.
+
+### Teams Developer Portal preview
+
+[Developer Portal](https://dev.teams.microsoft.com/) Card Previewer applies **Teams** styling, closer to production than the generic designer.
+
+**When to use:** Before you **Commit**, especially for mobile layout.
+
+**Steps**
+
+1. Export final JSON from JSONNET.
+2. Paste into the Card Previewer.
+3. Adjust until Teams and designer match.
+
+### Incoming Webhooks vs workflows
+
+**Incoming Webhooks** post JSON to one channel URL: fine for static internal alerts. Use **SuprSend** when you need per-user personalization, multi-channel fan-out, retries, preferences, or audit history.
+
+**When to use:** You are deciding architecture for CI/CD or monitoring alerts.
+
+**Steps**
+
+1. List requirements (personalization, routing, compliance).
+2. If only a shared channel and static card: webhook may suffice.
+3. Otherwise use SuprSend workflows and JSONNET templates.
+
+### Action.Execute for in-card updates
+
+`Action.Execute` (Universal Actions, v1.4+) sends a payload to your **bot** and can **refresh** the card (for example show "Approved by…"). Requires bot registration; `Action.OpenUrl` is simpler for plain links.
+
+**When to use:** Approvals and state changes should stay inside Teams without a new tab.
+
+**Steps**
+
+1. Implement a Teams bot and secure endpoint.
+2. Add `Action.Execute` with typed inputs.
+3. Return an updated Adaptive Card body on success.
+
+## Best practices
+
+- **Right audience:** Teams is for **internal and operator** notifications — not shopper-facing consumer journeys.
+- **Scan over prose:** Prefer **FactSet** (and similar structured blocks) for label/value data instead of long paragraphs.
+- **Payload size:** Keep Adaptive Cards under **~28 KB** — larger payloads truncate silently in Teams.
+- **Schema:** Use Adaptive Cards **v1.6** for the best coverage across desktop and mobile clients.
+- **Actions:** Use **`Action.OpenUrl`** for simple links; use **`Action.Execute`** only when a bot processes the response.
+- **Test in Teams:** Validate in a real chat — the Adaptive Cards Designer is an approximation of Teams rendering.
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Markdown or JSONNET — which should I use?">
@@ -120,7 +218,15 @@ Duration: {{duration}}
     Teams has its own rendering engine. The [Adaptive Cards Designer](https://adaptivecards.io/designer/) is an approximation. Always test in an actual Teams chat before committing.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the Teams notification for that user. Other channels in the same template group are still sent.
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes — combine Teams with email, Slack, push, and other channels in the same template group.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include `data` (workflow) or `properties` (event) so JSONNET `data.*` and Markdown Handlebars paths match your payload. See [JSONNET templates](/docs/jsonnet-templates) and [Adding dynamic content](/docs/templates#the-variables-panel).
   </Accordion>
 </AccordionGroup>
