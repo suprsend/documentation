@@ -1730,144 +1730,224 @@ components:
           type: string
           description: Additional error details
 
-    Message:
+    MessageResponse:
       type: object
       description: A single notification delivery attempt produced by a workflow trigger or broadcast.
       properties:
         message_id:
           type: string
-          description: Unique identifier of the message.
+          description: Unique identifier of the message (ULID).
         created_at:
           type: string
           format: date-time
-          description: Timestamp when the message record was created.
+          description: Derived from the ULID's embedded timestamp — sub-second precision.
         updated_at:
           type: string
           format: date-time
-          description: Timestamp when the message was last updated.
         triggered_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp when the message was handed off to the delivery channel.
         delivered_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp when the message was delivered to the recipient.
         seen_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp when the message was marked as seen.
         clicked_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp when the message was clicked.
+        dismissed_at:
+          type: string
+          format: date-time
+          nullable: true
         read_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp when the message was marked as read.
+        unread_at:
+          type: string
+          format: date-time
+          nullable: true
         archived_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp when the message was archived.
+        unarchived_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_read:
+          type: boolean
+        is_archived:
+          type: boolean
         status:
           type: string
-          description: Current status of the message.
+          description: Always derived from timestamp columns, never from the raw DB status.
           enum:
             - triggered
+            - trigger_failed
+            - trigger_blocked
+            - not_to_be_triggered
+            - to_be_triggered
+            - sent_by_vendor
             - delivered
             - delivery_failure
             - seen
             - clicked
+            - dismissed
             - read
             - unread
             - archived
+            - unknown
         channel:
           type: string
-          description: Channel the message was sent on (for example, `email`, `whatsapp`, `inbox`).
         idempotency_key:
           type: string
-          nullable: true
-          description: Idempotency key supplied when the workflow was triggered.
         failure_reason:
           type: string
-          nullable: true
-          description: Reason the message failed, when `status` is `delivery_failure`.
         recipient:
-          type: object
-          description: Recipient of the message. Can be either a user or an object.
-          properties:
-            type:
-              type: string
-              description: Type of recipient.
-              enum:
-                - user
-                - object
-            distinct_id:
-              type: string
-              nullable: true
-              description: User `distinct_id`, when the recipient is a user.
-            object_type:
-              type: string
-              nullable: true
-              description: Object type, when the recipient is an object.
-            object_id:
-              type: string
-              nullable: true
-              description: Object identifier, when the recipient is an object.
+          $ref: '#/components/schemas/Recipient'
         parent_entity_id:
           type: string
-          nullable: true
-          description: Identifier of the parent entity (for example, the campaign) this message belongs to.
         parent_entity_type:
           type: string
-          nullable: true
-          description: Type of the parent entity this message belongs to.
         vendor:
-          type: object
-          description: Delivery vendor that handled this message.
-          properties:
-            slug:
-              type: string
-              description: Vendor slug.
-            nickname:
-              type: string
-              description: Human-friendly name of the vendor integration.
-        workflow_slug:
-          type: string
-          nullable: true
-          description: Slug of the workflow that triggered the message.
-        workflow_version_id:
-          type: string
-          nullable: true
-          description: Version identifier of the workflow used.
+          $ref: '#/components/schemas/Vendor'
         execution_id:
           type: string
-          nullable: true
-          description: Identifier of the workflow execution that produced the message.
         parent_execution_id:
           type: string
-          nullable: true
-          description: Identifier of the parent workflow execution, when this message was produced by a sub-workflow.
         is_campaign:
           type: boolean
-          description: Whether the message was sent as part of a broadcast/campaign.
-        workflow_node:
-          type: object
-          description: Workflow node that produced the message.
-          properties:
-            ref:
-              type: string
-              description: Reference of the node within the workflow.
         tenant_id:
           type: string
+        workflow:
+          $ref: '#/components/schemas/MessageWorkflow'
+        template:
+          $ref: '#/components/schemas/MessageTemplate'
+        channel_identity:
+          type: object
+          additionalProperties: true
+          description: Channel-specific recipient identity that the message was delivered to (for example, the phone number for SMS, email address for email). Credential keys (`access_token`, `keys`, `incoming_webhook`) are stripped from the response.
+          example:
+            sms: "+15555550100"
+        category:
+          type: string
+
+    Recipient:
+      type: object
+      properties:
+        $type:
+          type: string
+          enum:
+            - user
+            - object
+        distinct_id:
+          type: string
+        object_type:
+          type: string
+        id:
+          type: string
+
+    Vendor:
+      type: object
+      properties:
+        name:
+          type: string
+        nickname:
+          type: string
+
+    MessageWorkflow:
+      type: object
+      properties:
+        slug:
+          type: string
+        version_id:
+          type: string
+        name:
+          type: string
+        node_ref:
+          type: string
+
+    MessageTemplate:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        version_no:
+          type: integer
+
+    CursorPagination:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Total matching records (ignores cursor position).
+        limit:
+          type: integer
+        has_prev:
+          type: boolean
+          description: True when a newer page exists.
+        before:
+          type: string
           nullable: true
-          description: Tenant this message belongs to.
+          description: Cursor to pass as `before=` to retrieve the previous (newer) page. Null on the first page or when `has_prev` is false.
+        has_next:
+          type: boolean
+          description: True when an older page exists.
+        after:
+          type: string
+          nullable: true
+          description: Cursor to pass as `after=` to retrieve the next (older) page. Null when `has_next` is false.
+
+    BulkPatchError:
+      type: object
+      required:
+        - type
+        - message
+      properties:
+        type:
+          type: string
+          description: |
+            Machine-readable key for why the item failed:
+            - `not_found` — message_id not found in this workspace
+            - `status_blocked` — message is in a terminal state (`trigger_failed`, `trigger_blocked`, `failure_by_vendor`, `not_to_be_triggered`) that cannot be overridden
+            - `action_not_supported` — action is invalid for the message's channel (for example, `dismissed` on inbox, `read` on sms)
+            - `internal_error` — DB write failed, inbox API error, or transaction rolled back
+          enum:
+            - not_found
+            - status_blocked
+            - action_not_supported
+            - internal_error
+        message:
+          type: string
+          description: Human-readable detail. Do not parse programmatically.
+
+    BulkPatchItemResult:
+      type: object
+      description: Per-message outcome from the bulk patch endpoint. Success is implied by a null `error` field.
+      properties:
+        message_id:
+          type: string
+        status_code:
+          type: integer
+          description: |
+            Per-item status code:
+            - `202` — success
+            - `404` — `not_found`
+            - `422` — `status_blocked` or `action_not_supported`
+            - `500` — `internal_error`
+        error:
+          allOf:
+            - $ref: '#/components/schemas/BulkPatchError'
+          nullable: true
+          description: Null on success, populated on failure.
 
     WorkspaceCreate:
       type: object
@@ -10642,279 +10722,299 @@ paths:
                     description: "Error message indicating object_id and type combination is not found"
       deprecated: false
 
-  /v1/{ws}/message/:
+  /v1/{ws}/message:
     get:
       summary: List Messages
-      description: Retrieve a paginated list of messages in a workspace. Supports filtering by recipient, workflow, channel, status, tenant, time range, and more.
+      description: |
+        Retrieve a paginated list of messages in a workspace.
+
+        This endpoint is designed for **cursor-based pagination** — use `before` / `after` cursors to walk through messages in chronological order. Filters (recipient, workflow, channel, status, tenant, time range, etc.) narrow the result set, but the primary intent of the API is paging through messages, not ad-hoc filtering.
+
+        **Pagination notes**
+        - **Default limit:** `10`. **Maximum:** `1000`.
+        - If both `before` and `after` are supplied, **`after` takes precedence** — `before` is silently ignored.
+        - `created_at_gte` and `created_at_lte` use **second-level precision** — sub-second components are truncated. For example, `2026-04-26T21:34:32.500Z` and `2026-04-26T21:34:32.700Z` resolve to the same boundary.
       operationId: list-messages
       security:
         - BearerAuth: []
       parameters:
-        - in: path
-          name: ws
+        - name: ws
+          in: path
           required: true
           schema:
             type: string
-          description: Workspace slug (for example, `staging` or `production`).
-        - in: query
-          name: message_id
+          description: Workspace UID.
+
+        # Pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 1000
+          description: Maximum number of messages to return per page. Defaults to `10`, maximum is `1000`.
+        - name: after
+          in: query
           schema:
             type: string
-          description: Filter by a specific message identifier.
-        - in: query
-          name: idempotency_key
+          description: |
+            Cursor (message_id ULID) for forward pagination — returns the page of older messages after this ID. **Takes precedence over `before` when both are set** (`before` is silently ignored).
+        - name: before
+          in: query
           schema:
             type: string
-          description: Filter by the idempotency key associated with the message at trigger time.
-        - in: query
-          name: tenant_id
-          schema:
-            type: string
-          description: Filter messages belonging to a specific tenant.
-        - in: query
-          name: recipient_id
-          description: Filter by recipient `distinct_id`. Pass the parameter multiple times to filter by more than one recipient.
-          explode: true
+          description: |
+            Cursor (message_id ULID) for backward pagination — returns the page of newer messages before this ID. Ignored when `after` is also set.
+
+        # Filters
+        - name: status
+          in: query
           schema:
             type: array
             items:
               type: string
-        - in: query
-          name: workflow_slug
-          schema:
-            type: string
-          description: Filter messages triggered from a specific workflow.
-        - in: query
-          name: execution_id
-          schema:
-            type: string
-          description: Filter by the workflow execution that produced the message.
-        - in: query
-          name: channel
+              enum:
+                - triggered
+                - delivery_failed
+                - delivered
+                - seen
+                - clicked
+                - dismissed
+                - read
+                - unread
+                - archived
+          style: form
+          explode: true
+          description: |
+            Filter by one or more derived statuses. Multiple values are OR-ed.
+
+            Note: `delivery_failed` is the **filter** name; the corresponding response field uses `delivery_failure`.
+        - name: channel
+          in: query
           schema:
             type: string
             enum:
-              - email
               - sms
-              - whatsapp
+              - email
               - androidpush
               - iospush
-              - inbox
               - webpush
+              - inbox
+              - whatsapp
               - slack
               - ms_teams
           description: Filter by delivery channel.
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum:
-              - triggered
-              - delivered
-              - delivery_failure
-              - seen
-              - clicked
-              - read
-              - unread
-              - archived
-          description: Filter by message status.
-        - in: query
-          name: is_campaign
-          schema:
-            type: boolean
-          description: Set `true` to return only messages sent as part of a broadcast/campaign, `false` to exclude them.
-        - in: query
-          name: object_id
-          schema:
-            type: string
-          description: Filter messages where the recipient is an object with this `object_id`.
-        - in: query
-          name: object_type
-          schema:
-            type: string
-          description: Filter messages where the recipient is an object of this `object_type`.
-        - in: query
-          name: category
-          description: Filter by preference category slug. Pass the parameter multiple times to filter by more than one category.
-          explode: true
+        - name: recipient_id
+          in: query
           schema:
             type: array
             items:
               type: string
-        - in: query
-          name: created_at_gte
+          style: form
+          explode: true
+          description: Filter by one or more recipient `distinct_id`s (OR-ed).
+        - name: category
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by one or more notification categories (OR-ed).
+        - name: created_at_gte
+          in: query
           schema:
             type: string
             format: date-time
-          description: Return messages created on or after this timestamp (ISO-8601).
-        - in: query
-          name: created_at_lte
+          description: |
+            RFC3339 timestamp lower bound (inclusive). Compared against the `created_at` column which has **second precision** — sub-second components in the filter value are effectively truncated. Example: `2026-04-26T21:34:33Z`.
+        - name: created_at_lte
+          in: query
           schema:
             type: string
             format: date-time
-          description: Return messages created on or before this timestamp (ISO-8601).
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 100
-            maximum: 1000
-          description: Maximum number of messages to return per page.
-        - in: query
-          name: before
+          description: |
+            RFC3339 timestamp upper bound (inclusive). Same second-precision caveat as `created_at_gte`. Must be `>= created_at_gte` when both are set.
+        - name: workflow_slug
+          in: query
           schema:
             type: string
-          description: Cursor for fetching the previous page of results. Use the `meta.before` value from a previous response.
-        - in: query
-          name: after
+          description: Filter messages triggered from a specific workflow.
+        - name: execution_id
+          in: query
           schema:
             type: string
-          description: Cursor for fetching the next page of results. Use the `meta.after` value from a previous response.
+          description: Matches `wf_exec_id` or `broadcast_id`.
+        - name: idempotency_key
+          in: query
+          schema:
+            type: string
+          description: Filter by the idempotency key associated with the message at trigger time.
+        - name: message_id
+          in: query
+          schema:
+            type: string
+          description: Exact match on message ULID.
+        - name: tenant_id
+          in: query
+          schema:
+            type: string
+          description: Filter messages belonging to a specific tenant.
+        - name: is_campaign
+          in: query
+          schema:
+            type: boolean
+          description: Set `true` to return only messages sent as part of a broadcast/campaign.
+        - name: object_id
+          in: query
+          schema:
+            type: string
+          description: Must be provided together with `object_type`.
+        - name: object_type
+          in: query
+          schema:
+            type: string
+          description: Must be provided together with `object_id`.
       responses:
         '200':
-          description: Successfully retrieved the list of messages.
+          description: OK
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  meta:
+                    $ref: '#/components/schemas/CursorPagination'
                   results:
                     type: array
-                    description: List of messages matching the filters.
                     items:
-                      $ref: '#/components/schemas/Message'
-                  meta:
-                    type: object
-                    description: Pagination metadata for the response.
-                    properties:
-                      count:
-                        type: integer
-                        description: Total number of messages matching the filters.
-                        example: 3506
-                      limit:
-                        type: integer
-                        description: Page size used for this response.
-                        example: 100
-                      has_prev:
-                        type: boolean
-                        description: Whether a previous page is available.
-                        example: false
-                      before:
-                        type: string
-                        description: Cursor to pass as `before` to fetch the previous page.
-                      has_next:
-                        type: boolean
-                        description: Whether a next page is available.
-                        example: true
-                      after:
-                        type: string
-                        description: Cursor to pass as `after` to fetch the next page.
+                      $ref: '#/components/schemas/MessageResponse'
               example:
+                meta:
+                  count: 3506
+                  limit: 10
+                  has_prev: false
+                  before: null
+                  has_next: true
+                  after: "01HVXXXXXXXXXXXXXXXXXXXX10"
                 results:
                   - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
-                    created_at: "2025-10-01T17:18:06.704Z"
-                    updated_at: "2025-10-01T17:20:11.178Z"
-                    triggered_at: "2025-10-01T17:18:06.704Z"
-                    delivered_at: "2025-10-01T17:18:08.493Z"
-                    seen_at: "2025-10-01T17:19:25.387Z"
+                    created_at: "2026-04-01T17:18:06.000Z"
+                    updated_at: "2026-04-01T17:20:11.000Z"
+                    triggered_at: "2026-04-01T17:18:06.000Z"
+                    delivered_at: "2026-04-01T17:18:08.000Z"
+                    seen_at: "2026-04-01T17:19:25.000Z"
                     clicked_at: null
+                    dismissed_at: null
                     read_at: null
+                    unread_at: null
                     archived_at: null
+                    unarchived_at: null
+                    is_read: false
+                    is_archived: false
                     status: "seen"
                     channel: "inbox"
                     idempotency_key: "order-5678"
                     failure_reason: null
                     recipient:
-                      type: "user"
+                      $type: "user"
                       distinct_id: "user_123"
                       object_type: null
-                      object_id: null
+                      id: null
                     parent_entity_id: null
                     parent_entity_type: null
                     vendor:
-                      slug: "suprsend_inbox"
+                      name: "suprsend_inbox"
                       nickname: "Inbox"
-                    workflow_slug: "order-confirmation"
-                    workflow_version_id: "wf_ver_01HV..."
                     execution_id: "exec_01HV..."
                     parent_execution_id: null
                     is_campaign: false
-                    workflow_node:
-                      ref: "send_inbox_1"
                     tenant_id: "acme"
+                    workflow:
+                      slug: "order-confirmation"
+                      version_id: "wf_ver_01HV..."
+                      name: "Order Confirmation"
+                      node_ref: "send_inbox_1"
+                    template:
+                      name: "Order Confirmation"
+                      slug: "order-confirmation"
+                      version_no: 4
+                    channel_identity:
+                      inbox: "user_123"
+                    category: "transactional"
                   - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
-                    created_at: "2025-10-01T17:30:01.759Z"
-                    updated_at: "2025-10-01T17:30:15.029Z"
-                    triggered_at: "2025-10-01T17:30:01.759Z"
+                    created_at: "2026-04-01T17:30:01.000Z"
+                    updated_at: "2026-04-01T17:30:15.000Z"
+                    triggered_at: "2026-04-01T17:30:01.000Z"
                     delivered_at: null
                     seen_at: null
                     clicked_at: null
+                    dismissed_at: null
                     read_at: null
+                    unread_at: null
                     archived_at: null
+                    unarchived_at: null
+                    is_read: false
+                    is_archived: false
                     status: "delivery_failure"
-                    channel: "whatsapp"
+                    channel: "sms"
                     idempotency_key: null
                     failure_reason: "invalid_recipient_number"
                     recipient:
-                      type: "user"
+                      $type: "user"
                       distinct_id: "user_456"
                       object_type: null
-                      object_id: null
+                      id: null
                     parent_entity_id: null
                     parent_entity_type: null
                     vendor:
-                      slug: "gupshup"
+                      name: "gupshup"
                       nickname: "Gupshup WhatsApp"
-                    workflow_slug: "password-reset"
-                    workflow_version_id: "wf_ver_01HV..."
                     execution_id: "exec_01HV..."
                     parent_execution_id: null
                     is_campaign: false
-                    workflow_node:
-                      ref: "send_whatsapp_1"
                     tenant_id: "acme"
-                meta:
-                  count: 3506
-                  limit: 100
-                  has_prev: false
-                  before: null
-                  has_next: true
-                  after: "eyJpZCI6IjAxSFZYWC4uLiJ9"
-        '401':
-          description: '401'
-          content:
-            application/json:
-              examples:
-                Result:
-                  value: {
-                    "code": 401,
-                    "message": "authentication failed"
-                  }
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 401
-                  message:
-                    type: string
-                    example: "authentication failed"
+                    workflow:
+                      slug: "password-reset"
+                      version_id: "wf_ver_01HV..."
+                      name: "Password Reset"
+                      node_ref: "multichannel_1"
+                    template:
+                      name: "Password Reset"
+                      slug: "password-reset"
+                      version_no: 2
+                    channel_identity:
+                      sms: "+15555550100"
+                    category: "transactional"
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       deprecated: false
 
-  /v1/{ws}/message/bulk/:
+  /v1/{ws}/bulk/message:
     patch:
       summary: Bulk Update Messages
-      description: Update the status of multiple messages in a single request. Use this to mark messages as `read`, `unread`, `seen`, `archived`, etc. Each message is processed independently and returns its own status in the response.
+      description: |
+        Apply a status action to each message in a single request.
+
+        **The endpoint always returns HTTP 200** when the request itself is valid — inspect each item's `status_code` and `error` for individual outcomes. A non-2xx HTTP status is only returned for **request-level** errors (auth, malformed JSON, validation failures).
+
+        **Channel applicability for `action`:**
+        - `seen`, `clicked` — all channels
+        - `dismissed` — push only (`androidpush`, `iospush`, `webpush`, `whatsapp`, `slack`, `ms_teams`)
+        - `read`, `unread`, `archived`, `unarchived` — `inbox` only
       operationId: bulk-update-messages
       security:
         - BearerAuth: []
       parameters:
-        - in: path
-          name: ws
+        - name: ws
+          in: path
           required: true
           schema:
             type: string
-          description: Workspace slug (for example, `staging` or `production`).
+          description: Workspace UID.
       requestBody:
         required: true
         content:
@@ -10927,116 +11027,74 @@ paths:
                 messages:
                   type: array
                   minItems: 1
-                  description: List of messages to update. Each item must include the `message_id` and the new `status`.
+                  maxItems: 1000
+                  description: List of messages to update. No duplicate `message_id`s allowed.
                   items:
                     type: object
                     required:
                       - message_id
-                      - status
+                      - action
                     properties:
                       message_id:
                         type: string
-                        description: Unique identifier of the message to update.
-                      status:
+                        description: ULID of the message to update.
+                      action:
                         type: string
-                        description: New status to apply to the message.
                         enum:
+                          - seen
+                          - clicked
+                          - dismissed
                           - read
                           - unread
-                          - seen
-                          - unseen
                           - archived
                           - unarchived
+                        description: |
+                          Action to apply. See endpoint description for channel applicability.
             examples:
               mark-as-seen:
                 summary: Mark messages as seen
                 value:
                   messages:
                     - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
-                      status: "seen"
+                      action: "seen"
                     - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
-                      status: "seen"
-              mixed-updates:
-                summary: Apply different statuses in one call
+                      action: "seen"
+              mixed-actions:
+                summary: Apply different actions in one call
                 value:
                   messages:
                     - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
-                      status: "read"
+                      action: "read"
                     - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
-                      status: "archived"
+                      action: "archived"
       responses:
-        '202':
-          description: Bulk update accepted. Each item in `results` reports whether the corresponding message was updated successfully.
+        '200':
+          description: |
+            Always returned when the request itself is valid. Inspect each item's `error` field for individual outcomes — a `null` `error` means success.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  results:
+                  records:
                     type: array
-                    description: Per-message result, in the same order as the request.
+                    description: Per-message results, in the same order as the request.
                     items:
-                      type: object
-                      properties:
-                        message_id:
-                          type: string
-                          description: Identifier of the message this result corresponds to.
-                        outcome:
-                          type: string
-                          enum:
-                            - success
-                            - error
-                          description: Outcome of the update for this message.
-                        error:
-                          type: string
-                          nullable: true
-                          description: Error details when `outcome` is `error`. Empty or absent on success.
+                      $ref: '#/components/schemas/BulkPatchItemResult'
               example:
-                results:
+                records:
                   - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
-                    outcome: "success"
+                    status_code: 202
                     error: null
                   - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
-                    outcome: "error"
-                    error: "message not found"
+                    status_code: 404
+                    error:
+                      type: "not_found"
+                      message: "message_id not found in this workspace"
         '400':
-          description: '400'
-          content:
-            application/json:
-              examples:
-                Result:
-                  value: {
-                    "code": 400,
-                    "message": "invalid_request_error"
-                  }
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 400
-                  message:
-                    type: string
-                    example: "invalid_request_error"
-        '401':
-          description: '401'
-          content:
-            application/json:
-              examples:
-                Result:
-                  value: {
-                    "code": 401,
-                    "message": "authentication failed"
-                  }
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 401
-                  message:
-                    type: string
-                    example: "authentication failed"
+          $ref: '#/components/responses/BadRequestError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       deprecated: false
 
   /v1/workspace:
