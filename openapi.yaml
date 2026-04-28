@@ -1810,13 +1810,32 @@ components:
         failure_reason:
           type: string
         recipient:
-          $ref: '#/components/schemas/Recipient'
+          type: object
+          description: "Recipient of the message. Either a user (`$type: user`) or an object (`$type: object`)."
+          properties:
+            $type:
+              type: string
+              enum:
+                - user
+                - object
+            distinct_id:
+              type: string
+            object_type:
+              type: string
+            id:
+              type: string
         parent_entity_id:
           type: string
         parent_entity_type:
           type: string
         vendor:
-          $ref: '#/components/schemas/Vendor'
+          type: object
+          description: Delivery vendor that handled this message.
+          properties:
+            name:
+              type: string
+            nickname:
+              type: string
         execution_id:
           type: string
         parent_execution_id:
@@ -1826,9 +1845,27 @@ components:
         tenant_id:
           type: string
         workflow:
-          $ref: '#/components/schemas/MessageWorkflow'
+          type: object
+          description: Workflow that produced the message.
+          properties:
+            slug:
+              type: string
+            version_id:
+              type: string
+            name:
+              type: string
+            node_ref:
+              type: string
         template:
-          $ref: '#/components/schemas/MessageTemplate'
+          type: object
+          description: Template used to render the message.
+          properties:
+            name:
+              type: string
+            slug:
+              type: string
+            version_no:
+              type: integer
         channel_identity:
           type: object
           additionalProperties: true
@@ -1837,51 +1874,6 @@ components:
             sms: "+15555550100"
         category:
           type: string
-
-    Recipient:
-      type: object
-      properties:
-        $type:
-          type: string
-          enum:
-            - user
-            - object
-        distinct_id:
-          type: string
-        object_type:
-          type: string
-        id:
-          type: string
-
-    Vendor:
-      type: object
-      properties:
-        name:
-          type: string
-        nickname:
-          type: string
-
-    MessageWorkflow:
-      type: object
-      properties:
-        slug:
-          type: string
-        version_id:
-          type: string
-        name:
-          type: string
-        node_ref:
-          type: string
-
-    MessageTemplate:
-      type: object
-      properties:
-        name:
-          type: string
-        slug:
-          type: string
-        version_no:
-          type: integer
 
     CursorPagination:
       type: object
@@ -1906,29 +1898,6 @@ components:
           nullable: true
           description: Cursor to pass as `after=` to retrieve the next (older) page. Null when `has_next` is false.
 
-    BulkPatchError:
-      type: object
-      required:
-        - type
-        - message
-      properties:
-        type:
-          type: string
-          description: |
-            Machine-readable key for why the item failed:
-            - `not_found` — message_id not found in this workspace
-            - `status_blocked` — message is in a terminal state (`trigger_failed`, `trigger_blocked`, `failure_by_vendor`, `not_to_be_triggered`) that cannot be overridden
-            - `action_not_supported` — action is invalid for the message's channel (for example, `dismissed` on inbox, `read` on sms)
-            - `internal_error` — DB write failed, inbox API error, or transaction rolled back
-          enum:
-            - not_found
-            - status_blocked
-            - action_not_supported
-            - internal_error
-        message:
-          type: string
-          description: Human-readable detail. Do not parse programmatically.
-
     BulkPatchItemResult:
       type: object
       description: Per-message outcome from the bulk patch endpoint. Success is implied by a null `error` field.
@@ -1944,10 +1913,29 @@ components:
             - `422` — `status_blocked` or `action_not_supported`
             - `500` — `internal_error`
         error:
-          allOf:
-            - $ref: '#/components/schemas/BulkPatchError'
+          type: object
           nullable: true
           description: Null on success, populated on failure.
+          required:
+            - type
+            - message
+          properties:
+            type:
+              type: string
+              description: |
+                Machine-readable key for why the item failed:
+                - `not_found` — message_id not found in this workspace
+                - `status_blocked` — message is in a terminal state (`trigger_failed`, `trigger_blocked`, `failure_by_vendor`, `not_to_be_triggered`) that cannot be overridden
+                - `action_not_supported` — action is invalid for the message's channel (for example, `dismissed` on inbox, `read` on sms)
+                - `internal_error` — DB write failed, inbox API error, or transaction rolled back
+              enum:
+                - not_found
+                - status_blocked
+                - action_not_supported
+                - internal_error
+            message:
+              type: string
+              description: Human-readable detail. Do not parse programmatically.
 
     WorkspaceCreate:
       type: object
@@ -3388,7 +3376,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: tags
           in: query
           description: >
@@ -4386,7 +4374,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: locale
           in: query
           description: >
@@ -6752,7 +6740,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: tags
           in: query
           description: >
@@ -8872,7 +8860,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: id
           in: path
           description: Unique identifier of the object in your system
@@ -9223,7 +9211,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: id
           in: path
           description: Unique identifier of the object in your system
@@ -9400,7 +9388,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: id
           in: path
           description: Unique identifier of the object in your system
@@ -10722,29 +10710,17 @@ paths:
                     description: "Error message indicating object_id and type combination is not found"
       deprecated: false
 
-  /v1/{ws}/message:
+  /v1/message:
     get:
       summary: List Messages
       description: |
         Retrieve a paginated list of messages in a workspace.
 
         This endpoint is designed for **cursor-based pagination** — use `before` / `after` cursors to walk through messages in chronological order. Filters (recipient, workflow, channel, status, tenant, time range, etc.) narrow the result set, but the primary intent of the API is paging through messages, not ad-hoc filtering.
-
-        **Pagination notes**
-        - **Default limit:** `10`. **Maximum:** `1000`.
-        - If both `before` and `after` are supplied, **`after` takes precedence** — `before` is silently ignored.
-        - `created_at_gte` and `created_at_lte` use **second-level precision** — sub-second components are truncated. For example, `2026-04-26T21:34:32.500Z` and `2026-04-26T21:34:32.700Z` resolve to the same boundary.
       operationId: list-messages
       security:
         - BearerAuth: []
       parameters:
-        - name: ws
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Workspace UID.
-
         # Pagination
         - name: limit
           in: query
@@ -10987,34 +10963,15 @@ paths:
                     channel_identity:
                       sms: "+15555550100"
                     category: "transactional"
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
       deprecated: false
 
-  /v1/{ws}/bulk/message:
+  /v1/bulk/message:
     patch:
       summary: Bulk Update Messages
-      description: |
-        Apply a status action to each message in a single request.
-
-        **The endpoint always returns HTTP 200** when the request itself is valid — inspect each item's `status_code` and `error` for individual outcomes. A non-2xx HTTP status is only returned for **request-level** errors (auth, malformed JSON, validation failures).
-
-        **Channel applicability for `action`:**
-        - `seen`, `clicked` — all channels
-        - `dismissed` — push only (`androidpush`, `iospush`, `webpush`, `whatsapp`, `slack`, `ms_teams`)
-        - `read`, `unread`, `archived`, `unarchived` — `inbox` only
+      description: Apply a status action to each message in a single request.
       operationId: bulk-update-messages
       security:
         - BearerAuth: []
-      parameters:
-        - name: ws
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Workspace UID.
       requestBody:
         required: true
         content:
@@ -11048,8 +11005,7 @@ paths:
                           - unread
                           - archived
                           - unarchived
-                        description: |
-                          Action to apply. See endpoint description for channel applicability.
+                        description: Action to apply to the message.
             examples:
               mark-as-seen:
                 summary: Mark messages as seen
@@ -11068,9 +11024,8 @@ paths:
                     - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
                       action: "archived"
       responses:
-        '200':
-          description: |
-            Always returned when the request itself is valid. Inspect each item's `error` field for individual outcomes — a `null` `error` means success.
+        '202':
+          description: Bulk update accepted. Inspect each record's `status_code` and `error` for individual outcomes — a `null` `error` means success.
           content:
             application/json:
               schema:
@@ -11090,11 +11045,7 @@ paths:
                     status_code: 404
                     error:
                       type: "not_found"
-                      message: "message_id not found in this workspace"
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+                      message: "not found"
       deprecated: false
 
   /v1/workspace:
