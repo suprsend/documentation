@@ -1740,53 +1740,79 @@ components:
         created_at:
           type: string
           format: date-time
-          description: Derived from the ULID's embedded timestamp — sub-second precision.
+          description: Time when the message entry was created.
         updated_at:
           type: string
           format: date-time
+          description: Time when the message entry was last updated (for example, on a status or timestamp change).
         triggered_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the message was handovered to vendor by SuprSend.
         delivered_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the vendor confirmed successful delivery. Null if the message has not been delivered yet. If you're not getting delivery events for email, SMS and Whatsapp, make sure to configure SuprSend webhook URL in vendor portal.
         seen_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the recipient first saw or opened the message. Seen tracking is available for all channels accept Slack, MS Teams and SMS.
         clicked_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the recipient clicked or interacted with the message. Tracked for Email, Push and Inbox.
         dismissed_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the recipient dismissed or cleared the message. Only application for mobile push notifications.
         read_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the message was marked as read. Only applicable for Inbox channel.
         unread_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when a previously read message was marked unread. Only applicable for Inbox channel.
         archived_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when the message was archived. Only applicable for Inbox channel.
         unarchived_at:
           type: string
           format: date-time
           nullable: true
+          description: Time when a previously archived message was unarchived. Only applicable for Inbox channel.
         is_read:
           type: boolean
+          description: Whether the message is currently in the read state. Only applicable for Inbox channel.
         is_archived:
           type: boolean
+          description: Whether the message is currently archived. Only applicable for Inbox channel.
         status:
           type: string
-          description: Always derived from timestamp columns, never from the raw DB status.
+          description: |
+            Current message status. Other than `archived`, all actions translate to a status. Archived is just a flag on the message.
+
+            - `triggered` — Message has been triggered by SuprSend and queued for delivery to the vendor.
+            - `trigger_failed` — Vendor reported failure in response to delivery API call itself.
+            - `trigger_blocked` — Test mode is enabled and this channel was not part of allowed channel list.
+            - `not_to_be_triggered` — Message was intentionally skipped (generally happens in smart delivery when success metric is achieved)
+            - `to_be_triggered` — Message is queued and waiting to be triggered (generally happens when there is a wait added in smart delivery)
+            - `sent_by_vendor` — Vendor accepted the message for delivery; final delivery confirmation is pending.
+            - `delivered` — Vendor confirmed successful delivery to the recipient.
+            - `delivery_failure` — Vendor reported a delivery failure (for example, bounce or invalid recipient).
+            - `seen` — Recipient saw or opened the message.
+            - `clicked` — Recipient clicked or interacted with the message.
+            - `dismissed` — Recipient dismissed the message without acting on it.
+            - `read` — Inbox message was marked as read by the recipient.
           enum:
             - triggered
             - trigger_failed
@@ -1800,72 +1826,101 @@ components:
             - clicked
             - dismissed
             - read
-            - unread
-            - archived
-            - unknown
         channel:
           type: string
+          description: Channel through which the message was sent.
+          enum: 
+            - sms
+            - email
+            - whatsapp
+            - inbox
+            - androidpush
+            - iospush
+            - webpush
+            - slack
+            - ms_teams
         idempotency_key:
           type: string
+          description: Idempotency key supplied at trigger time to prevent duplicate sends for the same logical event.
         failure_reason:
           type: string
+          description: Human-readable reason describing why delivery failed. Empty when the message did not fail.
         recipient:
           type: object
           description: "Recipient of the message. Either a user (`$type: user`) or an object (`$type: object`)."
           properties:
             $type:
               type: string
+              description: Recipient type — `user` for a user recipient or `object` for an object recipient.
               enum:
                 - user
                 - object
             distinct_id:
               type: string
+              description: Distinct ID of the user recipient. Present when `$type` is `user`.
             object_type:
               type: string
+              description: Object type slug. Present when `$type` is `object`.
             id:
               type: string
+              description: Object ID. Present when `$type` is `object`.
         parent_entity_id:
           type: string
+          description: ID of the parent entity (object)
         parent_entity_type:
           type: string
+          description: Type of the parent entity that originated this message (object)
         vendor:
           type: object
           description: Delivery vendor that handled this message.
           properties:
             name:
               type: string
+              description: Internal name of the vendor integration (for example, `sendgrid`, `twilio`).
             nickname:
               type: string
+              description: User-defined nickname for the vendor integration in the SuprSend dashboard.
         execution_id:
           type: string
+          description: ID of the workflow execution this message belongs to.
         parent_execution_id:
           type: string
+          description: ID of the parent execution, when this message was produced as fanout on object trigger.
         is_campaign:
           type: boolean
+          description: true when message was sent as part of a broadcast.
         tenant_id:
           type: string
+          description: ID of the tenant the message was sent under.
         workflow:
           type: object
           description: Workflow that produced the message.
           properties:
             slug:
               type: string
+              description: Unique slug of the workflow.
             version_id:
               type: string
+              description: ID of the specific workflow version that ran.
             name:
               type: string
+              description: Human-readable name of the workflow.
             node_ref:
               type: string
+              description: Slug to the specific node within the workflow that emitted this message.
         template:
           type: object
           description: Template used to render the message.
           properties:
             name:
               type: string
+              description: Human-readable name of the template.
             slug:
               type: string
+              description: Unique slug of the template.
             version_no:
               type: integer
+              description: Version number of the template that was used to render the message.
         channel_identity:
           type: object
           additionalProperties: true
@@ -1874,6 +1929,7 @@ components:
             sms: "+15555550100"
         category:
           type: string
+          description: Notification category slug associated with this message.
 
     CursorPagination:
       type: object
@@ -1885,18 +1941,18 @@ components:
           type: integer
         has_prev:
           type: boolean
-          description: True when a newer page exists.
+          description: True when the previous page (newer logs) exists.
         before:
           type: string
           nullable: true
-          description: Cursor to pass as `before=` to retrieve the previous (newer) page. Null on the first page or when `has_prev` is false.
+          description: Cursor to pass as `before=` to retrieve the previous page (newer logs). Null on the first page or when `has_prev` is false.
         has_next:
           type: boolean
-          description: True when an older page exists.
+          description: True when an next page (older logs) exist.
         after:
           type: string
           nullable: true
-          description: Cursor to pass as `after=` to retrieve the next (older) page. Null when `has_next` is false.
+          description: Cursor to pass as `after=` to retrieve the next page (older logs). Null when `has_next` is false.
 
     BulkPatchItemResult:
       type: object
@@ -1904,6 +1960,7 @@ components:
       properties:
         message_id:
           type: string
+          description: ULID of the message.
         status_code:
           type: integer
           description: |
@@ -1927,7 +1984,7 @@ components:
                 - `not_found` — message_id not found in this workspace
                 - `status_blocked` — message is in a terminal state (`trigger_failed`, `trigger_blocked`, `failure_by_vendor`, `not_to_be_triggered`) that cannot be overridden
                 - `action_not_supported` — action is invalid for the message's channel (for example, `dismissed` on inbox, `read` on sms)
-                - `internal_error` — DB write failed, inbox API error, or transaction rolled back
+                - `internal_error` — Internal error at SuprSend end. Reach out to support if you get this error code.
               enum:
                 - not_found
                 - status_blocked
@@ -10714,9 +10771,7 @@ paths:
     get:
       summary: List Messages
       description: |
-        Retrieve a paginated list of messages in a workspace.
-
-        This endpoint is designed for **cursor-based pagination** — use `before` / `after` cursors to walk through messages in chronological order. Filters (recipient, workflow, channel, status, tenant, time range, etc.) narrow the result set, but the primary intent of the API is paging through messages, not ad-hoc filtering.
+        Retrieve a paginated list of messages in a workspace order by created_at desc. Can be used to fetch and show message logs on the platform.
       operationId: list-messages
       security:
         - BearerAuth: []
@@ -10750,21 +10805,19 @@ paths:
             items:
               type: string
               enum:
-                - triggered
-                - delivery_failed
+                - triggered (status AnyOf('triggered','trigger_blocked','sent_by_vendor','to_be_triggered','not_to_be_triggered'))
+                - delivery_failed (status AnyOf('trigger_failed','failure_by_vendor')
                 - delivered
                 - seen
                 - clicked
                 - dismissed
-                - read
-                - unread
-                - archived
+                - read (is_read = true)
+                - unread (is_read = false)
+                - archived (is_archived = true)
           style: form
           explode: true
           description: |
             Filter by one or more derived statuses. Multiple values are OR-ed.
-
-            Note: `delivery_failed` is the **filter** name; the corresponding response field uses `delivery_failure`.
         - name: channel
           in: query
           schema:
@@ -10846,15 +10899,15 @@ paths:
           in: query
           schema:
             type: string
-          description: Must be provided together with `object_type`.
+          description: Must be provided together with `object_type` to filter messages sent to an object. Will filter all message logs which were sent to recipients after object fanout.
         - name: object_type
           in: query
           schema:
             type: string
-          description: Must be provided together with `object_id`.
+          description: Must be provided together with `object_id` to filter messages sent to an object. Will filter all message logs which were sent to recipients after object fanout.
       responses:
         '200':
-          description: OK
+          description: Returns the paginated list of messages order by created_at desc.
           content:
             application/json:
               schema:
@@ -10967,8 +11020,8 @@ paths:
 
   /v1/bulk/message:
     patch:
-      summary: Bulk Update Messages
-      description: Apply a status action to each message in a single request.
+      summary: Bulk Update Message Status
+      description: Change the status of messages by passing their id and notification action.
       operationId: bulk-update-messages
       security:
         - BearerAuth: []
@@ -11005,7 +11058,20 @@ paths:
                           - unread
                           - archived
                           - unarchived
-                        description: Action to apply to the message.
+                        description: |
+                          Action to apply to the message. Each action sets the corresponding status or flag.
+
+                          - `seen` — Mark the message as seen by the recipient. 
+                          - `clicked` — Mark the message as clicked or interacted with. 
+                          - `dismissed` — Mark the message as dismissed (cleared without taking action).
+                          - `read` — Mark the inbox message as read. Applicable for Inbox channel only. Also sets flag is_read = true.
+                          - `unread` — Revert a previously read inbox message back to unread. Applicable for Inbox channel only. Sets flag is_read = false.
+                          - `archived` — Archive the inbox message (sets the `is_archived` flag to true; status is preserved). Applicable for Inbox channel only.
+                          - `unarchived` — Unarchive a previously archived inbox message. (sets the `is_archived` flag to false; status is preserved). Applicable for Inbox channel only.
+
+                          **Status progression (one-way):** `triggered` → `sent_by_vendor` → `delivered` → `seen` → `read` -> `clicked` / `dismissed`. Once a message reaches a later status, it cannot be moved back to an earlier one — for example, marking a `clicked` message as `seen` will not change the status to `seen`.
+
+                          **Toggles (reversible):** `read` ↔ `unread` and `archived` ↔ `unarchived` flip independent flags and can be applied in either direction any number of times.
             examples:
               mark-as-seen:
                 summary: Mark messages as seen
