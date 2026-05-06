@@ -1730,6 +1730,270 @@ components:
           type: string
           description: Additional error details
 
+    MessageResponse:
+      type: object
+      description: A single notification delivery attempt produced by a workflow trigger or broadcast.
+      properties:
+        message_id:
+          type: string
+          description: Message-id to update.
+        created_at:
+          type: string
+          format: date-time
+          description: Time when the message entry was created.
+        updated_at:
+          type: string
+          format: date-time
+          description: Time when the message entry was last updated (for example, on a status or timestamp change).
+        triggered_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the message was handovered to vendor by SuprSend.
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the vendor confirmed successful delivery. Null if the message has not been delivered yet. If you're not getting delivery events for email, SMS and Whatsapp, make sure to configure SuprSend webhook URL in vendor portal.
+        seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the recipient first saw or opened the message. Seen tracking is available for all channels accept Slack, MS Teams and SMS.
+        clicked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the recipient clicked or interacted with the message. Tracked for Email, Push and Inbox.
+        dismissed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the recipient dismissed or cleared the message. Only application for mobile push notifications.
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the message was marked as read. Only applicable for Inbox channel.
+        unread_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when a previously read message was marked unread. Only applicable for Inbox channel.
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when the message was archived. Only applicable for Inbox channel.
+        unarchived_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time when a previously archived message was unarchived. Only applicable for Inbox channel.
+        is_read:
+          type: boolean
+          description: Whether the message is currently in the read state. Only applicable for Inbox channel.
+        is_archived:
+          type: boolean
+          description: Whether the message is currently archived. Only applicable for Inbox channel.
+        status:
+          type: string
+          description: |
+            Current message status. Other than `archived`, all actions translate to a status. Archived is just a flag on the message.
+
+            - `triggered` — Message has been triggered by SuprSend and queued for delivery to the vendor.
+            - `trigger_failed` — Vendor reported failure in response to delivery API call itself.
+            - `trigger_blocked` — Test mode is enabled and this channel was not part of allowed channel list.
+            - `not_to_be_triggered` — Message was intentionally skipped (generally happens in smart delivery when success metric is achieved)
+            - `to_be_triggered` — Message is queued and waiting to be triggered (generally happens when there is a wait added in smart delivery)
+            - `sent_by_vendor` — Vendor accepted the message for delivery; final delivery confirmation is pending.
+            - `delivered` — Vendor confirmed successful delivery to the recipient.
+            - `delivery_failure` — Vendor reported a delivery failure (for example, bounce or invalid recipient).
+            - `seen` — Recipient saw or opened the message.
+            - `clicked` — Recipient clicked or interacted with the message.
+            - `dismissed` — Recipient dismissed the message without acting on it.
+            - `read` — Inbox message was marked as read by the recipient.
+          enum:
+            - triggered
+            - trigger_failed
+            - trigger_blocked
+            - not_to_be_triggered
+            - to_be_triggered
+            - sent_by_vendor
+            - delivered
+            - delivery_failure
+            - seen
+            - clicked
+            - dismissed
+            - read
+        channel:
+          type: string
+          description: Channel through which the message was sent.
+          enum: 
+            - sms
+            - email
+            - whatsapp
+            - inbox
+            - androidpush
+            - iospush
+            - webpush
+            - slack
+            - ms_teams
+        idempotency_key:
+          type: string
+          description: Idempotency key supplied at trigger time to prevent duplicate sends for the same logical event.
+        failure_reason:
+          type: string
+          description: Human-readable reason describing why delivery failed. Empty when the message did not fail.
+        recipient:
+          type: object
+          description: "Recipient of the message. Either a user (`$type: user`) or an object (`$type: object`)."
+          properties:
+            $type:
+              type: string
+              description: Recipient type — `user` for a user recipient or `object` for an object recipient.
+              enum:
+                - user
+                - object
+            distinct_id:
+              type: string
+              description: Distinct ID of the user recipient. Present when `$type` is `user`.
+            object_type:
+              type: string
+              description: Object type slug. Present when `$type` is `object`.
+            id:
+              type: string
+              description: Object ID. Present when `$type` is `object`.
+        parent_entity_id:
+          type: string
+          description: ID of the parent entity (object)
+        parent_entity_type:
+          type: string
+          description: Type of the parent entity that originated this message (object)
+        vendor:
+          type: object
+          description: Delivery vendor that handled this message.
+          properties:
+            name:
+              type: string
+              description: Internal name of the vendor integration (for example, `sendgrid`, `twilio`).
+            nickname:
+              type: string
+              description: User-defined nickname for the vendor integration in the SuprSend dashboard.
+        execution_id:
+          type: string
+          description: ID of the workflow execution this message belongs to.
+        parent_execution_id:
+          type: string
+          description: ID of the parent execution, when this message was produced as fanout on object trigger.
+        is_campaign:
+          type: boolean
+          description: true when message was sent as part of a broadcast.
+        tenant_id:
+          type: string
+          description: ID of the tenant the message was sent under.
+        workflow:
+          type: object
+          description: Workflow that produced the message.
+          properties:
+            slug:
+              type: string
+              description: Unique slug of the workflow.
+            version_id:
+              type: string
+              description: ID of the specific workflow version that ran.
+            name:
+              type: string
+              description: Human-readable name of the workflow.
+            node_ref:
+              type: string
+              description: Slug to the specific node within the workflow that emitted this message.
+        template:
+          type: object
+          description: Template used to render the message.
+          properties:
+            name:
+              type: string
+              description: Human-readable name of the template.
+            slug:
+              type: string
+              description: Unique slug of the template.
+            version_no:
+              type: integer
+              description: Version number of the template that was used to render the message.
+        channel_identity:
+          type: object
+          additionalProperties: true
+          description: Channel-specific recipient identity that the message was delivered to (for example, the phone number for SMS, email address for email). Credential keys (`access_token`, `keys`, `incoming_webhook`) are stripped from the response.
+          example:
+            sms: "+15555550100"
+        category:
+          type: string
+          description: Notification category slug associated with this message.
+
+    CursorPagination:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Total matching records (ignores cursor position).
+        limit:
+          type: integer
+        has_prev:
+          type: boolean
+          description: True when the previous page (newer logs) exists.
+        before:
+          type: string
+          nullable: true
+          description: Cursor to pass as `before=` to retrieve the previous page (newer logs). Null on the first page or when `has_prev` is false.
+        has_next:
+          type: boolean
+          description: True when an next page (older logs) exist.
+        after:
+          type: string
+          nullable: true
+          description: Cursor to pass as `after=` to retrieve the next page (older logs). Null when `has_next` is false.
+
+    BulkPatchItemResult:
+      type: object
+      description: Per-message outcome from the bulk patch endpoint. Success is implied by a null `error` field.
+      properties:
+        message_id:
+          type: string
+          description: Message-id to update.
+        status_code:
+          type: integer
+          description: |
+            Per-item status code:
+            - `202` — success
+            - `404` — `not_found`
+            - `422` — `status_blocked` or `action_not_supported`
+            - `500` — `internal_error`
+        error:
+          type: object
+          nullable: true
+          description: Null on success, populated on failure.
+          required:
+            - type
+            - message
+          properties:
+            type:
+              type: string
+              description: |
+                Machine-readable key for why the item failed:
+                - `not_found` — message_id not found in this workspace
+                - `status_blocked` — message is in a terminal state (`trigger_failed`, `trigger_blocked`, `failure_by_vendor`, `not_to_be_triggered`) that cannot be overridden
+                - `action_not_supported` — action is invalid for the message's channel (for example, `dismissed` on inbox, `read` on sms)
+                - `internal_error` — Internal error at SuprSend end. Reach out to support if you get this error code.
+              enum:
+                - not_found
+                - status_blocked
+                - action_not_supported
+                - internal_error
+            message:
+              type: string
+              description: Human-readable detail. Do not parse programmatically.
+
     WorkspaceCreate:
       type: object
       required:
@@ -1806,27 +2070,54 @@ components:
           type: integer
           nullable: true
 
-    ManagementWorkspace:
+    ManagementActor:
       type: object
-      description: Workspace record
+      description: Identity that performed an action (created, updated, rolled, deleted, rotated).
+      nullable: true
       properties:
-        id:
-          type: string
-          description: Internal workspace id
         name:
           type: string
+          description: Display name of the actor.
+          example: "System User"
+        email:
+          type: string
+          description: Email address of the actor.
+          example: "user@example.com"
+
+    ManagementWorkspace:
+      type: object
+      description: Workspace record returned by the Management API.
+      properties:
+        uid:
+          type: string
+          description: Unique workspace identifier.
+          example: "wksp_exampleUid01"
         slug:
           type: string
-          description: Workspace key used in API paths (e.g. staging, production)
+          description: Workspace slug used in API paths (e.g. `staging`, `production`).
+          example: "staging"
+        data_center:
+          type: object
+          description: Data center metadata associated with the workspace.
+          additionalProperties: true
+        is_expired:
+          type: boolean
+          description: Indicates whether the workspace has expired.
+        has_limit_reached:
+          type: boolean
+          description: Indicates whether the workspace has reached its plan limit.
+        name:
+          type: string
+          description: Human-readable workspace name.
+          example: "Staging"
         description:
           type: string
           nullable: true
-        created_at:
+          description: Optional workspace description.
+        mode:
           type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
+          description: Workspace mode. **sandbox** is pre-created by SuprSend for early testing with pre-configured vendors, **staging** will be your testing workspace and **production** will be the one you'll use to send to your actual users.
+          enum: [sandbox, production]
 
     ManagementWorkspaceListResponse:
       type: object
@@ -1838,32 +2129,63 @@ components:
           items:
             $ref: '#/components/schemas/ManagementWorkspace'
 
-    ManagementWorkspaceApiKey:
+    WorkspaceCreateRequest:
       type: object
-      description: Workspace REST API key
+      required:
+        - name
       properties:
-        id:
-          type: string
-          example: ws_apik_01J70RF7R7502G00MRCMD2NV91
         name:
           type: string
+          description: Workspace name.
+          example: "my-workspace"
         description:
           type: string
           nullable: true
-        key:
+          description: Optional workspace description.
+          example: "Testing workspace API"
+
+    ManagementWorkspaceApiKey:
+      type: object
+      description: Workspace-scoped REST API key (server-side secret).
+      properties:
+        id:
           type: string
-          description: Secret key string. Often returned only once on create; treat as sensitive.
-        masked_key:
+          example: "ws_apik_exampleId01"
+        masked_api_key:
           type: string
-          description: Redacted preview for list views (when returned)
-        is_disabled:
+          description: Masked preview of the API key used in list responses.
+          example: "SS.XXXXXXX*****"
+        is_deleted:
           type: boolean
+        name:
+          type: string
+          example: "backend-prod"
+        allowed_domains:
+          type: array
+          items:
+            type: string
+          description: Domains allowed to use this key.
         created_at:
           type: string
           format: date-time
-        updated_at:
+        created_by:
+          $ref: '#/components/schemas/ManagementActor'
+        deleted_at:
           type: string
           format: date-time
+          nullable: true
+        deleted_by:
+          $ref: '#/components/schemas/ManagementActor'
+
+    ManagementWorkspaceApiKeyCreateResponse:
+      allOf:
+        - $ref: '#/components/schemas/ManagementWorkspaceApiKey'
+        - type: object
+          properties:
+            api_key:
+              type: string
+              description: Full secret API key. Returned only once at creation — store it securely and never commit to source control.
+              example: "SS.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
     ManagementWorkspaceApiKeyListResponse:
       type: object
@@ -1875,29 +2197,61 @@ components:
           items:
             $ref: '#/components/schemas/ManagementWorkspaceApiKey'
 
-    ManagementWorkspacePublicKey:
+    WorkspaceApiKeyCreateRequest:
       type: object
-      description: Workspace public key (e.g. for client-side SDKs)
+      required:
+        - name
       properties:
-        id:
-          type: string
-          example: ws_pubk_01KP94PQX027TNQN5SBTKFX5X8
         name:
           type: string
+          description: Label for the API key.
+          example: "backend-prod"
         description:
           type: string
           nullable: true
-        public_key:
+          description: Optional notes for operators.
+
+    ManagementWorkspacePublicKey:
+      type: object
+      description: Workspace public key used by client SDKs.
+      properties:
+        id:
           type: string
-          description: Public key value or identifier exposed to clients
+          example: "ws_pubk_exampleId01"
+        api_key:
+          type: string
+          description: Public key value exposed to clients.
+          example: "SS.PUBK.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        name:
+          type: string
+          example: "web-app"
+        allowed_domains:
+          type: array
+          nullable: true
+          items:
+            type: string
         is_secure_mode_enabled:
+          type: boolean
+        is_deleted:
+          type: boolean
+        is_default:
           type: boolean
         created_at:
           type: string
           format: date-time
+        created_by:
+          $ref: '#/components/schemas/ManagementActor'
+        rotated_at:
+          type: string
+          format: date-time
+          nullable: true
+        rotated_by:
+          $ref: '#/components/schemas/ManagementActor'
         updated_at:
           type: string
           format: date-time
+        updated_by:
+          $ref: '#/components/schemas/ManagementActor'
 
     ManagementWorkspacePublicKeyListResponse:
       type: object
@@ -1909,23 +2263,84 @@ components:
           items:
             $ref: '#/components/schemas/ManagementWorkspacePublicKey'
 
+    WorkspacePublicKeyCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Label for the public key.
+          example: "web-app"
+        description:
+          type: string
+          nullable: true
+          description: Optional notes.
+
+    WorkspacePublicKeyPatchRequest:
+      type: object
+      required:
+        - is_secure_mode_enabled
+      properties:
+        is_secure_mode_enabled:
+          type: boolean
+          description: Enable or disable secure mode for this public key.
+
     ManagementWorkspaceSigningKey:
       type: object
-      description: Signing key for verifying signed payloads
+      description: Signing key used to verify signed payloads.
       properties:
         id:
           type: string
-          example: ws_signk_01KP951JGP7TJ7BNBG8RYP7MZQ
-        created_at:
+          example: "ws_signk_exampleId01"
+        uid:
           type: string
-          format: date-time
-        updated_at:
+          description: Signing key uid used in path parameters for roll/delete.
+          example: "signing_key_exampleUid01"
+        status:
           type: string
-          format: date-time
-        expires_at:
+          description: Status of the signing key.
+          enum: [active, rolled]
+        allowed_domains:
+          type: array
+          nullable: true
+          items:
+            type: string
+        expiry_at:
           type: string
           format: date-time
           nullable: true
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          $ref: '#/components/schemas/ManagementActor'
+        rolled_at:
+          type: string
+          format: date-time
+          nullable: true
+        rolled_by:
+          $ref: '#/components/schemas/ManagementActor'
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          $ref: '#/components/schemas/ManagementActor'
+
+    ManagementWorkspaceSigningKeyCreateResponse:
+      allOf:
+        - $ref: '#/components/schemas/ManagementWorkspaceSigningKey'
+        - type: object
+          properties:
+            private_key_pem:
+              type: string
+              description: PEM-encoded private key. Returned only at creation and on roll — store it securely and never commit to source control.
+              example: "-----BEGIN PRIVATE KEY-----\n...redacted...\n-----END PRIVATE KEY-----\n"
+            private_key_base64:
+              type: string
+              description: Base64-encoded private key. Returned only at creation and on roll.
+              example: "LS0tLS1CRUdJTi...redacted..."
 
     ManagementWorkspaceSigningKeyListResponse:
       type: object
@@ -3169,7 +3584,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: tags
           in: query
           description: >
@@ -4167,7 +4582,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: locale
           in: query
           description: >
@@ -6533,7 +6948,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: tags
           in: query
           description: >
@@ -8653,7 +9068,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: id
           in: path
           description: Unique identifier of the object in your system
@@ -9004,7 +9419,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: id
           in: path
           description: Unique identifier of the object in your system
@@ -9181,7 +9596,7 @@ paths:
           description: set this flag to `true` if you want to fetch channel list for opt-out categories.
           schema:
             type: boolean
-            default: true
+            default: false
         - name: id
           in: path
           description: Unique identifier of the object in your system
@@ -10503,10 +10918,357 @@ paths:
                     description: "Error message indicating object_id and type combination is not found"
       deprecated: false
 
+  /v1/message:
+    get:
+      summary: List Messages
+      description: |
+        Retrieve a paginated list of messages in a workspace order by created_at desc. Can be used to fetch and show message logs on the platform.
+      operationId: list-messages
+      security:
+        - BearerAuth: []
+      parameters:
+        # Pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 1000
+          description: Maximum number of messages to return per page. Defaults to `10`, maximum is `1000`.
+        - name: after
+          in: query
+          schema:
+            type: string
+          description: |
+            Cursor for forward pagination — pass the `meta.after` value from a previous response to fetch the next page of older messages. Treat this value as an opaque cursor — do not parse, validate, or assume any format for it. **Takes precedence over `before` when both are set** (`before` is silently ignored).
+        - name: before
+          in: query
+          schema:
+            type: string
+          description: |
+            Cursor for backward pagination — pass the `meta.before` value from a previous response to fetch the previous page of newer messages. Treat this value as an opaque cursor — do not parse, validate, or assume any format for it. Ignored when `after` is also set.
+
+        # Filters
+        - name: status[]
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - triggered (status AnyOf('triggered','trigger_blocked','sent_by_vendor','to_be_triggered','not_to_be_triggered'))
+                - delivery_failed (status AnyOf('trigger_failed','failure_by_vendor')
+                - delivered
+                - seen
+                - clicked
+                - dismissed
+                - read (is_read = true)
+                - unread (is_read = false)
+                - archived (is_archived = true)
+          style: form
+          explode: true
+          description: |
+            Filter by one or more derived statuses. Multiple values are OR-ed. Repeat the param for each value, e.g. `?status[]=delivered&status[]=seen`.
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum:
+              - sms
+              - email
+              - androidpush
+              - iospush
+              - webpush
+              - inbox
+              - whatsapp
+              - slack
+              - ms_teams
+          description: Filter by delivery channel.
+        - name: recipient_id[]
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by one or more recipient `distinct_id`s (OR-ed). Repeat the param for each value, e.g. `?recipient_id[]=user_123&recipient_id[]=user_456`.
+        - name: category[]
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by one or more notification categories (OR-ed). Repeat the param for each value, e.g. `?category[]=transactional&category[]=promotional`.
+        - name: created_at_gte
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: |
+            RFC3339 timestamp lower bound (inclusive). Compared against the `created_at` column which has **second precision** — sub-second components in the filter value are effectively truncated. Example: `2026-04-26T21:34:33Z`.
+        - name: created_at_lte
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: |
+            RFC3339 timestamp upper bound (inclusive). Same second-precision caveat as `created_at_gte`. Must be `>= created_at_gte` when both are set.
+        - name: workflow_slug
+          in: query
+          schema:
+            type: string
+          description: Filter messages triggered from a specific workflow.
+        - name: execution_id
+          in: query
+          schema:
+            type: string
+          description: Matches `wf_exec_id` or `broadcast_id`.
+        - name: idempotency_key
+          in: query
+          schema:
+            type: string
+          description: Filter by the idempotency key associated with the message at trigger time.
+        - name: message_id
+          in: query
+          schema:
+            type: string
+          description: Exact match on message ID.
+        - name: tenant_id
+          in: query
+          schema:
+            type: string
+          description: Filter messages belonging to a specific tenant.
+        - name: is_campaign
+          in: query
+          schema:
+            type: boolean
+          description: Set `true` to return only messages sent as part of a broadcast/campaign.
+        - name: object_id
+          in: query
+          schema:
+            type: string
+          description: Must be provided together with `object_type` to filter messages sent to an object. Will filter all message logs which were sent to recipients after object fanout.
+        - name: object_type
+          in: query
+          schema:
+            type: string
+          description: Must be provided together with `object_id` to filter messages sent to an object. Will filter all message logs which were sent to recipients after object fanout.
+      responses:
+        '200':
+          description: Returns the paginated list of messages order by created_at desc.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    $ref: '#/components/schemas/CursorPagination'
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageResponse'
+              example:
+                meta:
+                  count: 3506
+                  limit: 10
+                  has_prev: false
+                  before: null
+                  has_next: true
+                  after: "01HVXXXXXXXXXXXXXXXXXXXX10"
+                results:
+                  - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
+                    created_at: "2026-04-01T17:18:06.000Z"
+                    updated_at: "2026-04-01T17:20:11.000Z"
+                    triggered_at: "2026-04-01T17:18:06.000Z"
+                    delivered_at: "2026-04-01T17:18:08.000Z"
+                    seen_at: "2026-04-01T17:19:25.000Z"
+                    clicked_at: null
+                    dismissed_at: null
+                    read_at: null
+                    unread_at: null
+                    archived_at: null
+                    unarchived_at: null
+                    is_read: false
+                    is_archived: false
+                    status: "seen"
+                    channel: "inbox"
+                    idempotency_key: "order-5678"
+                    failure_reason: null
+                    recipient:
+                      $type: "user"
+                      distinct_id: "user_123"
+                      object_type: null
+                      id: null
+                    parent_entity_id: null
+                    parent_entity_type: null
+                    vendor:
+                      name: "suprsend_inbox"
+                      nickname: "Inbox"
+                    execution_id: "exec_01HV..."
+                    parent_execution_id: null
+                    is_campaign: false
+                    tenant_id: "acme"
+                    workflow:
+                      slug: "order-confirmation"
+                      version_id: "wf_ver_01HV..."
+                      name: "Order Confirmation"
+                      node_ref: "send_inbox_1"
+                    template:
+                      name: "Order Confirmation"
+                      slug: "order-confirmation"
+                      version_no: 4
+                    channel_identity:
+                      inbox: "user_123"
+                    category: "transactional"
+                  - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
+                    created_at: "2026-04-01T17:30:01.000Z"
+                    updated_at: "2026-04-01T17:30:15.000Z"
+                    triggered_at: "2026-04-01T17:30:01.000Z"
+                    delivered_at: null
+                    seen_at: null
+                    clicked_at: null
+                    dismissed_at: null
+                    read_at: null
+                    unread_at: null
+                    archived_at: null
+                    unarchived_at: null
+                    is_read: false
+                    is_archived: false
+                    status: "delivery_failure"
+                    channel: "sms"
+                    idempotency_key: null
+                    failure_reason: "invalid_recipient_number"
+                    recipient:
+                      $type: "user"
+                      distinct_id: "user_456"
+                      object_type: null
+                      id: null
+                    parent_entity_id: null
+                    parent_entity_type: null
+                    vendor:
+                      name: "gupshup"
+                      nickname: "Gupshup WhatsApp"
+                    execution_id: "exec_01HV..."
+                    parent_execution_id: null
+                    is_campaign: false
+                    tenant_id: "acme"
+                    workflow:
+                      slug: "password-reset"
+                      version_id: "wf_ver_01HV..."
+                      name: "Password Reset"
+                      node_ref: "multichannel_1"
+                    template:
+                      name: "Password Reset"
+                      slug: "password-reset"
+                      version_no: 2
+                    channel_identity:
+                      sms: "+15555550100"
+                    category: "transactional"
+      deprecated: false
+
+  /v1/bulk/message:
+    patch:
+      summary: Bulk Update Message Status
+      description: Change the status of messages by passing their id and notification action.
+      operationId: bulk-update-messages
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - messages
+              properties:
+                messages:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  description: List of messages to update. No duplicate `message_id`s allowed.
+                  items:
+                    type: object
+                    required:
+                      - message_id
+                      - action
+                    properties:
+                      message_id:
+                        type: string
+                        description: Message-id to update.
+                      action:
+                        type: string
+                        enum:
+                          - seen
+                          - clicked
+                          - dismissed
+                          - read
+                          - unread
+                          - archived
+                          - unarchived
+                        description: |
+                          Action to apply to the message. Each action sets the corresponding status or flag.
+
+                          - `seen` — Mark the message as seen by the recipient. 
+                          - `clicked` — Mark the message as clicked or interacted with. 
+                          - `dismissed` — Mark the message as dismissed (cleared without taking action).
+                          - `read` — Mark the inbox message as read. Applicable for Inbox channel only. Also sets flag is_read = true.
+                          - `unread` — Revert a previously read inbox message back to unread. Applicable for Inbox channel only. Sets flag is_read = false.
+                          - `archived` — Archive the inbox message (sets the `is_archived` flag to true; status is preserved). Applicable for Inbox channel only.
+                          - `unarchived` — Unarchive a previously archived inbox message. (sets the `is_archived` flag to false; status is preserved). Applicable for Inbox channel only.
+
+                          **Status progression (one-way):** `triggered` → `sent_by_vendor` → `delivered` → `seen` → `read` -> `clicked` / `dismissed`. Once a message reaches a later status, it cannot be moved back to an earlier one — for example, marking a `clicked` message as `seen` will not change the status to `seen`.
+
+                          **Toggles (reversible):** `read` ↔ `unread` and `archived` ↔ `unarchived` flip independent flags and can be applied in either direction any number of times.
+            examples:
+              mark-as-seen:
+                summary: Mark messages as seen
+                value:
+                  messages:
+                    - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
+                      action: "seen"
+                    - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
+                      action: "seen"
+              mixed-actions:
+                summary: Apply different actions in one call
+                value:
+                  messages:
+                    - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
+                      action: "read"
+                    - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
+                      action: "archived"
+      responses:
+        '202':
+          description: Bulk update accepted. Inspect each record's `status_code` and `error` for individual outcomes — a `null` `error` means success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  records:
+                    type: array
+                    description: Per-message results, in the same order as the request.
+                    items:
+                      $ref: '#/components/schemas/BulkPatchItemResult'
+              example:
+                records:
+                  - message_id: "01HVXXXXXXXXXXXXXXXXXXXX01"
+                    status_code: 202
+                    error: null
+                  - message_id: "01HVXXXXXXXXXXXXXXXXXXXX02"
+                    status_code: 404
+                    error:
+                      type: "not_found"
+                      message: "not found"
+      deprecated: false
+
   /v1/workspace:
     get:
       summary: List Workspaces
-      description: List all workspaces available to your account.
+      description: List all workspaces available in your account.
       operationId: list-workspaces
       servers:
         - url: https://management-api.suprsend.com
@@ -10517,11 +11279,11 @@ paths:
           label: List Workspaces
           source: |
             curl -X GET "https://management-api.suprsend.com/v1/workspace" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json'
       responses:
         '200':
-          description: Successfully retrieved workspaces
+          description: Successfully retrieved workspaces.
           content:
             application/json:
               schema:
@@ -10529,26 +11291,30 @@ paths:
               example:
                 meta:
                   count: 2
-                  limit: 50
+                  limit: 10
                   offset: 0
                 results:
-                  - id: ws_01HQXYZ
-                    name: Staging
-                    slug: staging
-                    description: Staging environment
-                    created_at: "2025-01-15T10:00:00.000Z"
-                    updated_at: "2025-06-01T12:30:00.000Z"
-                  - id: ws_01HQABC
-                    name: Production
-                    slug: production
-                    description: null
-                    created_at: "2025-01-15T10:05:00.000Z"
-                    updated_at: "2025-01-15T10:05:00.000Z"
+                  - uid: "wksp_exampleUid01"
+                    slug: "staging"
+                    data_center: {}
+                    is_expired: false
+                    has_limit_reached: false
+                    name: "Staging"
+                    description: "Development environment to test iterations internally"
+                    mode: "sandbox"
+                  - uid: "wksp_exampleUid02"
+                    slug: "production"
+                    data_center: {}
+                    is_expired: false
+                    has_limit_reached: false
+                    name: "Production"
+                    description: "Final environment to send notifications to live users"
+                    mode: "production"
         '401':
           $ref: '#/components/responses/AuthenticationError'
     post:
       summary: Create Workspace
-      description: Create a new workspace.
+      description: Create a new workspace in your account.
       operationId: create-workspace
       servers:
         - url: https://management-api.suprsend.com
@@ -10559,29 +11325,55 @@ paths:
           label: Create Workspace
           source: |
             curl -X POST "https://management-api.suprsend.com/v1/workspace" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json' \
-              --data '{"name":"my-workspace","description":"Optional description"}'
+              --data '{"name":"my-workspace","description":"Testing workspace API"}'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/WorkspaceCreate'
+              $ref: '#/components/schemas/WorkspaceCreateRequest'
+            example:
+              name: "my-workspace"
+              description: "Testing workspace API"
       responses:
-        '201':
-          description: Workspace created
+        '200':
+          description: Workspace created. Response returns the updated paginated list of workspaces in the account.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ManagementWorkspace'
+                $ref: '#/components/schemas/ManagementWorkspaceListResponse'
               example:
-                id: ws_01HQNEW
-                name: my-workspace
-                slug: my-workspace
-                description: Optional description
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
+                meta:
+                  count: 3
+                  limit: 10
+                  offset: 0
+                results:
+                  - uid: "wksp_exampleUid01"
+                    slug: "staging"
+                    data_center: {}
+                    is_expired: false
+                    has_limit_reached: false
+                    name: "Staging"
+                    description: "Development environment to test iterations internally"
+                    mode: "sandbox"
+                  - uid: "wksp_exampleUid02"
+                    slug: "production"
+                    data_center: {}
+                    is_expired: false
+                    has_limit_reached: false
+                    name: "Production"
+                    description: "Final environment to send notifications to live users"
+                    mode: "production"
+                  - uid: "wksp_exampleUid03"
+                    slug: "my-workspace"
+                    data_center: {}
+                    is_expired: false
+                    has_limit_reached: false
+                    name: "my-workspace"
+                    description: "Testing workspace API"
+                    mode: "sandbox"
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -10590,7 +11382,7 @@ paths:
   /v1/{workspace}/ws_api_key/:
     get:
       summary: List Workspace API Keys
-      description: List API keys for REST API authentication scoped to this workspace.
+      description: List API keys scoped to a workspace. Secret values are never returned on list; only a masked preview is shown.
       operationId: list-workspace-api-keys
       servers:
         - url: https://management-api.suprsend.com
@@ -10601,7 +11393,7 @@ paths:
           label: List Workspace API Keys
           source: |
             curl -X GET "https://management-api.suprsend.com/v1/{workspace}/ws_api_key/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json'
       parameters:
         - in: path
@@ -10609,10 +11401,10 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
       responses:
         '200':
-          description: Successfully retrieved API keys
+          description: Successfully retrieved API keys.
           content:
             application/json:
               schema:
@@ -10620,23 +11412,30 @@ paths:
               example:
                 meta:
                   count: 1
-                  limit: 50
+                  limit: 10
                   offset: 0
                 results:
-                  - id: ws_apik_01J70RF7R7502G00MRCMD2NV91
-                    name: backend-prod
-                    description: Primary backend key
-                    masked_key: "sk_••••••••••••last4"
-                    is_disabled: false
-                    created_at: "2025-06-10T09:00:00.000Z"
-                    updated_at: "2025-06-10T09:00:00.000Z"
+                  - id: "ws_apik_exampleId01"
+                    masked_api_key: "SS.XXXXXXX*****"
+                    is_deleted: false
+                    name: "backend-prod"
+                    allowed_domains: []
+                    created_at: "2026-04-21T12:19:00.148846Z"
+                    created_by:
+                      name: "System User"
+                      email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                    deleted_at: null
+                    deleted_by: null
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Create Workspace API Key
-      description: Create a new API key for this workspace.
+      description: |
+        Create a new API key scoped to this workspace.
+
+        The full `api_key` secret is returned **only once** in the create response. Store it securely — it cannot be retrieved later.
       operationId: create-workspace-api-key
       servers:
         - url: https://management-api.suprsend.com
@@ -10644,10 +11443,10 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
-          label: Create Workspace API Key
+          label: Create API Key
           source: |
             curl -X POST "https://management-api.suprsend.com/v1/{workspace}/ws_api_key/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json' \
               --data '{"name":"backend-prod","description":"Primary backend key"}'
       parameters:
@@ -10656,42 +11455,36 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/WorkspaceApiKeyCreate'
+              $ref: '#/components/schemas/WorkspaceApiKeyCreateRequest'
+            example:
+              name: "backend-prod"
+              description: "Primary backend key"
       responses:
-        '200':
-          description: API key created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ManagementWorkspaceApiKey'
-              example:
-                id: ws_apik_01J70RF7R7502G00MRCMD2NV91
-                name: backend-prod
-                description: Primary backend key
-                key: sk_live_example_secret_value_store_safely
-                is_disabled: false
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
         '201':
-          description: API key created
+          description: API key created. `api_key` is returned only once — store it securely.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ManagementWorkspaceApiKey'
+                $ref: '#/components/schemas/ManagementWorkspaceApiKeyCreateResponse'
               example:
-                id: ws_apik_01J70RF7R7502G00MRCMD2NV91
-                name: backend-prod
-                description: Primary backend key
-                key: sk_live_example_secret_value_store_safely
-                is_disabled: false
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
+                id: "ws_apik_exampleId01"
+                masked_api_key: "SS.XXXXXXX*****"
+                is_deleted: false
+                name: "backend-prod"
+                allowed_domains: []
+                created_at: "2026-04-21T12:19:00.148846Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                deleted_at: null
+                deleted_by: null
+                api_key: "SS.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -10701,8 +11494,8 @@ paths:
 
   /v1/{workspace}/ws_api_key/{api_key_id}/:
     delete:
-      summary: Disable Workspace API Key
-      description: Disable an API key by id (e.g. `ws_apik_...`).
+      summary: Delete API Key
+      description: Delete an API key by its `id` (e.g. `ws_apik_...`). Once disabled, the key can no longer authenticate requests.
       operationId: disable-workspace-api-key
       servers:
         - url: https://management-api.suprsend.com
@@ -10710,34 +11503,26 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
-          label: Disable Workspace API Key
+          label: Delete API Key
           source: |
             curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/ws_api_key/{api_key_id}/" \
-              --header 'Authorization: ServiceToken <token>' \
-              --header 'Content-Type: application/json' \
-              --data '{"is_disabled":true}'
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
       parameters:
         - in: path
           name: workspace
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
         - in: path
           name: api_key_id
           required: true
           schema:
             type: string
-          description: API key identifier
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DisableWorkspaceApiKeyRequest'
+          description: API key identifier (e.g. `ws_apik_...`).
       responses:
         '204':
-          description: API key disabled — no response body
+          description: API key disabled — no response body.
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
@@ -10746,7 +11531,7 @@ paths:
   /v1/{workspace}/ws_public_key/:
     get:
       summary: List Workspace Public Keys
-      description: List public keys for this workspace.
+      description: List public keys for this workspace. Public keys are used by client-side SDKs.
       operationId: list-workspace-public-keys
       servers:
         - url: https://management-api.suprsend.com
@@ -10757,7 +11542,7 @@ paths:
           label: List Workspace Public Keys
           source: |
             curl -X GET "https://management-api.suprsend.com/v1/{workspace}/ws_public_key/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json'
       parameters:
         - in: path
@@ -10765,34 +11550,59 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
       responses:
         '200':
-          description: Successfully retrieved public keys
+          description: Successfully retrieved public keys.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ManagementWorkspacePublicKeyListResponse'
               example:
                 meta:
-                  count: 1
-                  limit: 50
+                  count: 2
+                  limit: 10
                   offset: 0
                 results:
-                  - id: ws_pubk_01KP94PQX027TNQN5SBTKFX5X8
-                    name: web-app
-                    description: Browser integration
-                    public_key: pk_live_example_public_identifier
-                    is_secure_mode_enabled: true
-                    created_at: "2025-06-10T09:00:00.000Z"
-                    updated_at: "2025-06-10T09:00:00.000Z"
+                  - id: "ws_pubk_exampleId01"
+                    api_key: "SS.PUBK.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    name: "web-app"
+                    allowed_domains: null
+                    is_secure_mode_enabled: false
+                    is_deleted: false
+                    is_default: false
+                    created_at: "2026-04-21T11:12:23.557360Z"
+                    created_by:
+                      name: "System User"
+                      email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                    rotated_at: null
+                    rotated_by: null
+                    updated_at: "2026-04-21T11:12:23.557406Z"
+                    updated_by: null
+                  - id: "ws_pubk_exampleId02"
+                    api_key: "SS.PUBK.yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+                    name: "default"
+                    allowed_domains: null
+                    is_secure_mode_enabled: false
+                    is_deleted: false
+                    is_default: true
+                    created_at: "2024-08-27T10:54:03.512045Z"
+                    created_by: null
+                    rotated_at: "2026-04-15T17:59:45.634355Z"
+                    rotated_by:
+                      name: "System User"
+                      email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                    updated_at: "2026-04-15T17:59:45.634452Z"
+                    updated_by:
+                      name: "System User"
+                      email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Create Workspace Public Key
-      description: Create a new public key for this workspace.
+      description: Create a new public key for this workspace. Public keys can be safely distributed to client SDKs.
       operationId: create-workspace-public-key
       servers:
         - url: https://management-api.suprsend.com
@@ -10803,7 +11613,7 @@ paths:
           label: Create Workspace Public Key
           source: |
             curl -X POST "https://management-api.suprsend.com/v1/{workspace}/ws_public_key/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json' \
               --data '{"name":"web-app","description":"Browser integration"}'
       parameters:
@@ -10812,42 +11622,39 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/WorkspacePublicKeyCreate'
+              $ref: '#/components/schemas/WorkspacePublicKeyCreateRequest'
+            example:
+              name: "web-app"
+              description: "Browser integration"
       responses:
-        '200':
-          description: Public key created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ManagementWorkspacePublicKey'
-              example:
-                id: ws_pubk_01KP94PQX027TNQN5SBTKFX5X8
-                name: web-app
-                description: Browser integration
-                public_key: pk_live_example_public_identifier
-                is_secure_mode_enabled: false
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
         '201':
-          description: Public key created
+          description: Public key created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ManagementWorkspacePublicKey'
               example:
-                id: ws_pubk_01KP94PQX027TNQN5SBTKFX5X8
-                name: web-app
-                description: Browser integration
-                public_key: pk_live_example_public_identifier
+                id: "ws_pubk_exampleId01"
+                api_key: "SS.PUBK.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                name: "web-app"
+                allowed_domains: null
                 is_secure_mode_enabled: false
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
+                is_deleted: false
+                is_default: false
+                created_at: "2026-04-21T12:31:18.943398Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                rotated_at: null
+                rotated_by: null
+                updated_at: "2026-04-21T12:31:18.943443Z"
+                updated_by: null
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -10857,8 +11664,8 @@ paths:
 
   /v1/{workspace}/ws_public_key/{public_key_id}/:
     patch:
-      summary: Update Workspace Public Key (secure mode)
-      description: Enable or disable secure mode for a public key (e.g. `ws_pubk_...`).
+      summary: Enable/Disable Secure Mode on Public Key
+      description: Enable or disable secure mode on an existing public key (e.g. `ws_pubk_...`).
       operationId: patch-workspace-public-key
       servers:
         - url: https://management-api.suprsend.com
@@ -10869,7 +11676,7 @@ paths:
           label: Patch Workspace Public Key
           source: |
             curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/ws_public_key/{public_key_id}/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json' \
               --data '{"is_secure_mode_enabled":true}'
       parameters:
@@ -10878,34 +11685,48 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
         - in: path
           name: public_key_id
           required: true
           schema:
             type: string
-          description: Public key identifier
+          description: Public key identifier (e.g. `ws_pubk_...`).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchWorkspacePublicKeyRequest'
+              $ref: '#/components/schemas/WorkspacePublicKeyPatchRequest'
+            example:
+              is_secure_mode_enabled: true
       responses:
-        '200':
-          description: Public key updated
+        '202':
+          description: Secure mode update accepted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ManagementWorkspacePublicKey'
               example:
-                id: ws_pubk_01KP94PQX027TNQN5SBTKFX5X8
-                name: web-app
-                description: Browser integration
-                public_key: pk_live_example_public_identifier
+                id: "ws_pubk_exampleId01"
+                api_key: "SS.PUBK.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                name: "web-app"
+                allowed_domains: null
                 is_secure_mode_enabled: true
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T10:15:00.000Z"
+                is_deleted: false
+                is_default: false
+                created_at: "2026-04-21T13:08:29.144658Z"
+                created_by:
+                  name: "Example User"
+                  email: "user@example.com"
+                rotated_at: "2026-04-21T13:08:59.983999Z"
+                rotated_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                updated_at: "2026-04-21T13:08:59.984183Z"
+                updated_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -10914,7 +11735,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     delete:
       summary: Delete Workspace Public Key
-      description: Delete a public key by id.
+      description: Delete a public key by its `id`.
       operationId: delete-workspace-public-key
       servers:
         - url: https://management-api.suprsend.com
@@ -10925,23 +11746,23 @@ paths:
           label: Delete Workspace Public Key
           source: |
             curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/ws_public_key/{public_key_id}/" \
-              --header 'Authorization: ServiceToken <token>'
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
       parameters:
         - in: path
           name: workspace
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
         - in: path
           name: public_key_id
           required: true
           schema:
             type: string
-          description: Public key identifier
+          description: Public key identifier (e.g. `ws_pubk_...`).
       responses:
         '204':
-          description: Public key deleted — no response body
+          description: Public key deleted — no response body.
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
@@ -10950,7 +11771,7 @@ paths:
   /v1/{workspace}/ws_public_key/{public_key_id}/rotate/:
     patch:
       summary: Rotate Workspace Public Key
-      description: Rotate public key material while keeping the same logical key record. Request body matches the secure-mode payload shape used elsewhere on public keys (see Postman collection).
+      description: Rotate public key material while keeping the same logical key record. Clients using the old material must switch to the new value.
       operationId: rotate-workspace-public-key
       servers:
         - url: https://management-api.suprsend.com
@@ -10961,46 +11782,47 @@ paths:
           label: Rotate Workspace Public Key
           source: |
             curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/ws_public_key/{public_key_id}/rotate/" \
-              --header 'Authorization: ServiceToken <token>' \
-              --header 'Content-Type: application/json' \
-              --data '{"is_secure_mode_enabled":true}'
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
       parameters:
         - in: path
           name: workspace
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
         - in: path
           name: public_key_id
           required: true
           schema:
             type: string
-          description: Public key identifier
-      requestBody:
-        required: false
-        description: Optional; Postman sends `is_secure_mode_enabled` when rotating.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchWorkspacePublicKeyRequest'
-            example:
-              is_secure_mode_enabled: true
+          description: Public key identifier (e.g. `ws_pubk_...`).
       responses:
-        '200':
-          description: Public key rotated
+        '202':
+          description: Public key rotation accepted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ManagementWorkspacePublicKey'
               example:
-                id: ws_pubk_01J69QH9QQSXQ9CXN5KYXSTX18
-                name: web-app
-                description: Browser integration
-                public_key: pk_live_rotated_public_identifier
-                is_secure_mode_enabled: true
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T12:00:00.000Z"
+                id: "ws_pubk_exampleId01"
+                api_key: "SS.PUBK.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+                name: "web-app"
+                allowed_domains: null
+                is_secure_mode_enabled: false
+                is_deleted: false
+                is_default: false
+                created_at: "2026-04-21T13:08:29.144658Z"
+                created_by:
+                  name: "Example User"
+                  email: "user@example.com"
+                rotated_at: "2026-04-21T13:08:59.983999Z"
+                rotated_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                updated_at: "2026-04-21T13:08:59.984183Z"
+                updated_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
@@ -11009,7 +11831,7 @@ paths:
   /v1/{workspace}/ws_signing_key/:
     get:
       summary: List Workspace Signing Keys
-      description: List signing keys for this workspace.
+      description: List signing keys for this workspace. Signing keys are used to verify signed payloads.
       operationId: list-workspace-signing-keys
       servers:
         - url: https://management-api.suprsend.com
@@ -11020,7 +11842,7 @@ paths:
           label: List Workspace Signing Keys
           source: |
             curl -X GET "https://management-api.suprsend.com/v1/{workspace}/ws_signing_key/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json'
       parameters:
         - in: path
@@ -11028,31 +11850,60 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
       responses:
         '200':
-          description: Successfully retrieved signing keys
+          description: Successfully retrieved signing keys.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ManagementWorkspaceSigningKeyListResponse'
               example:
                 meta:
-                  count: 1
-                  limit: 50
+                  count: 2
+                  limit: 10
                   offset: 0
                 results:
-                  - id: ws_signk_01KP951JGP7TJ7BNBG8RYP7MZQ
-                    created_at: "2025-06-10T09:00:00.000Z"
-                    updated_at: "2025-06-10T09:00:00.000Z"
-                    expires_at: null
+                  - id: "ws_signk_exampleId01"
+                    uid: "signing_key_exampleUid01"
+                    status: "active"
+                    allowed_domains: null
+                    expiry_at: null
+                    created_at: "2026-04-02T19:35:06.513406Z"
+                    created_by:
+                      name: "Example User"
+                      email: "user@example.com"
+                    rolled_at: null
+                    rolled_by: null
+                    deleted_at: null
+                    deleted_by: null
+                  - id: "ws_signk_exampleId02"
+                    uid: "signing_key_exampleUid02"
+                    status: "rolled"
+                    allowed_domains: null
+                    expiry_at: null
+                    created_at: "2024-09-08T16:27:46.700367Z"
+                    created_by:
+                      name: "Example User"
+                      email: "user@example.com"
+                    rolled_at: "2026-04-02T19:35:06.503029Z"
+                    rolled_by:
+                      name: "Example User"
+                      email: "user@example.com"
+                    deleted_at: null
+                    deleted_by: null
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Create Workspace Signing Key
-      description: Create a signing key for this workspace.
+      description: |
+        Create a signing key for this workspace.
+
+        The `private_key_pem` and `private_key_base64` fields are returned **only once** at creation. Store them securely — they cannot be retrieved later.
+
+        Only **one active** signing key is allowed per workspace. To replace an existing active key, use the [Roll Workspace Signing Key](#operation/roll-workspace-signing-key) endpoint instead.
       operationId: create-workspace-signing-key
       servers:
         - url: https://management-api.suprsend.com
@@ -11063,7 +11914,7 @@ paths:
           label: Create Workspace Signing Key
           source: |
             curl -X POST "https://management-api.suprsend.com/v1/{workspace}/ws_signing_key/" \
-              --header 'Authorization: ServiceToken <token>' \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
               --header 'Content-Type: application/json'
       parameters:
         - in: path
@@ -11071,41 +11922,52 @@ paths:
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
       responses:
-        '200':
-          description: Signing key created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ManagementWorkspaceSigningKey'
-              example:
-                id: ws_signk_01KP951JGP7TJ7BNBG8RYP7MZQ
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
-                expires_at: null
         '201':
-          description: Signing key created
+          description: Signing key created. Private key material is returned once in this response.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ManagementWorkspaceSigningKey'
+                $ref: '#/components/schemas/ManagementWorkspaceSigningKeyCreateResponse'
               example:
-                id: ws_signk_01KP951JGP7TJ7BNBG8RYP7MZQ
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T09:00:00.000Z"
-                expires_at: null
+                id: "ws_signk_exampleId01"
+                uid: "signing_key_exampleUid01"
+                status: "active"
+                allowed_domains: null
+                expiry_at: null
+                private_key_pem: "-----BEGIN PRIVATE KEY-----\n...redacted...\n-----END PRIVATE KEY-----\n"
+                private_key_base64: "LS0tLS1CRUdJTi...redacted..."
+                created_at: "2026-04-21T12:35:24.117631Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                rolled_at: null
+                rolled_by: null
+                deleted_at: null
+                deleted_by: null
         '400':
-          $ref: '#/components/responses/ValidationError'
+          description: Validation error — for example, an active signing key already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "[\"only 1 active signing key is allowed\"]"
+                detail:
+                  - "only 1 active signing key is allowed"
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
-  /v1/{workspace}/ws_signing_key/{signing_key_id}/:
+  /v1/{workspace}/ws_signing_key/{signing_key_uid}/:
     delete:
       summary: Delete Workspace Signing Key
-      description: Delete a signing key by id (e.g. `ws_signk_...`).
+      description: Delete a signing key by its `uid` (e.g. `signing_key_20260421T123746`).
       operationId: delete-workspace-signing-key
       servers:
         - url: https://management-api.suprsend.com
@@ -11115,33 +11977,36 @@ paths:
         - lang: cURL
           label: Delete Workspace Signing Key
           source: |
-            curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/ws_signing_key/{signing_key_id}/" \
-              --header 'Authorization: ServiceToken <token>'
+            curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/ws_signing_key/{signing_key_uid}/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
       parameters:
         - in: path
           name: workspace
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
         - in: path
-          name: signing_key_id
+          name: signing_key_uid
           required: true
           schema:
             type: string
-          description: Signing key identifier
+          description: Signing key `uid` (e.g. `signing_key_...`).
       responses:
         '204':
-          description: Signing key deleted — no response body
+          description: Signing key deleted — no response body.
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
-  /v1/{workspace}/ws_signing_key/{signing_key_id}/roll/:
+  /v1/{workspace}/ws_signing_key/{signing_key_uid}/roll/:
     post:
       summary: Roll Workspace Signing Key
-      description: Roll signing key material; optionally set when the previous key expires.
+      description: |
+        Roll a signing key. Generates a new signing key that replaces the existing active key. The previous key is marked `rolled`.
+
+        The new `private_key_pem` and `private_key_base64` are returned **only once** in this response — store them securely.
       operationId: roll-workspace-signing-key
       servers:
         - url: https://management-api.suprsend.com
@@ -11151,40 +12016,45 @@ paths:
         - lang: cURL
           label: Roll Workspace Signing Key
           source: |
-            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/ws_signing_key/{signing_key_id}/roll/" \
-              --header 'Authorization: ServiceToken <token>' \
-              --header 'Content-Type: application/json' \
-              --data '{"expiry_at":"2026-05-07T06:06:04.178Z"}'
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/ws_signing_key/{signing_key_uid}/roll/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
+              --header 'Content-Type: application/json'
       parameters:
         - in: path
           name: workspace
           required: true
           schema:
             type: string
-          description: Workspace slug (staging, production, etc.)
+          description: Workspace slug (e.g. `staging`, `production`).
         - in: path
-          name: signing_key_id
+          name: signing_key_uid
           required: true
           schema:
             type: string
-          description: Signing key identifier
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RollWorkspaceSigningKeyRequest'
+          description: Signing key `uid` to roll (e.g. `signing_key_...`).
       responses:
-        '200':
-          description: Signing key rolled
+        '201':
+          description: Signing key rolled. A new signing key is created and its private key material is returned once.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ManagementWorkspaceSigningKey'
+                $ref: '#/components/schemas/ManagementWorkspaceSigningKeyCreateResponse'
               example:
-                id: ws_signk_01KP951JGP7TJ7BNBG8RYP7MZQ
-                created_at: "2025-06-10T09:00:00.000Z"
-                updated_at: "2025-06-10T12:30:00.000Z"
-                expires_at: "2026-05-07T06:06:04.178Z"
+                id: "ws_signk_exampleId02"
+                uid: "signing_key_exampleUid02"
+                status: "active"
+                allowed_domains: null
+                expiry_at: null
+                private_key_pem: "-----BEGIN PRIVATE KEY-----\n...redacted...\n-----END PRIVATE KEY-----\n"
+                private_key_base64: "LS0tLS1CRUdJTi...redacted..."
+                created_at: "2026-04-21T12:37:46.216734Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                rolled_at: null
+                rolled_by: null
+                deleted_at: null
+                deleted_by: null
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
