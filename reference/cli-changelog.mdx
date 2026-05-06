@@ -10,7 +10,205 @@ The SuprSend CLI Changelog provides a comprehensive record of all CLI releases, 
 
 <AccordionGroup>
 
-  <Accordion title="v0.2.21 - Latest" icon="rocket" iconType="solid">
+  <Accordion title="v1.0.0-beta.1 - Latest" icon="rocket" iconType="solid">
+    <div className="mb-4">
+      <p><strong>Repository:</strong> <a href="https://github.com/suprsend/cli">suprsend/cli</a></p>
+      <p><strong>Release Date:</strong> April 29, 2026</p>
+      <p><strong>Release:</strong> <a href="https://github.com/suprsend/cli/releases/tag/1.0.0-beta.1">v1.0.0-beta.1</a> (Pre-release)</p>
+      <p><strong>Install:</strong> <code>npm i -g suprsend@beta</code> · <code>npx suprsend@beta</code>. Plain <code>npm i -g suprsend</code> still resolves to <code>0.2.24</code>.</p>
+    </div>
+
+    <div className="space-y-6">
+      <div className="flex">
+        <div className="w-1 bg-green-500 mr-3 flex-shrink-0"></div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-lg font-semibold">
+              <a href="https://github.com/suprsend/cli/releases/tag/1.0.0-beta.1" className="text-blue-600 hover:underline">v1.0.0-beta.1</a>
+            </h4>
+            <span className="text-sm text-gray-500">Apr 29, 2026</span>
+          </div>
+          <p className="text-sm italic mb-2">First beta of the 1.0 line. Breaking release — every artifact-pulling resource changes its on-disk shape, and several CLI short flags change identity. Try it on a non-production workspace first.</p>
+          <div className="text-sm space-y-2">
+            <div>
+              <p><strong>Features:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li>New <code>suprsend template</code> command group — full CRUD (<code>list</code>, <code>get</code>, <code>pull</code>, <code>push</code>, <code>commit</code>) with per-channel variant extraction, mock data, and variant ordering. See the <a href="/reference/cli-template-overview">template CLI overview</a>.</li>
+                <li>Positional slug AND <code>--slug</code> flag both accepted everywhere — e.g. <code>suprsend template push welcome-email --commit</code> or <code>suprsend template push --slug welcome-email --commit</code>.</li>
+                <li><code>--dry-run</code> on every destructive command (<code>push</code>, <code>commit</code>, <code>sync</code>, <code>enable</code>, <code>disable</code>) — preview changes without writing.</li>
+                <li><code>suprsend workspace list</code>, <code>suprsend env</code>, and <code>suprsend completion bash|zsh|fish|powershell</code>.</li>
+                <li><strong>MCP server:</strong> dynamic workflow-trigger tools register concurrently (cold-start fix for large workspaces); <code>--workflows</code> accepts <code>tag:{`{tag}`}</code> selectors; <code>list-tools</code> shows rich descriptions.</li>
+                <li>MCP Registry support — server published to <code>registry.modelcontextprotocol.io</code> on each stable release (skipped for this beta).</li>
+                <li>Glama listing.</li>
+                <li>Streaming <code>template pull</code> — large workspaces (~635 templates) went from 120s+ feeling frozen to ~45s with live <code>Pulled N/Total</code> progress.</li>
+                <li>Per-item progress + summary blocks across push commands; <code>Wrote ... to ...</code> log lines on pulls.</li>
+                <li>Push API errors prefixed with the on-disk path (e.g. <code>schemas/order_confirmation: failed to push: {`{reason}`}</code>).</li>
+                <li>TTY-gated prompts (no more silent CI hangs); confirmations on destructive ops.</li>
+                <li>JSON errors when stderr is piped, with stable error codes (<code>auth-missing-token</code>, <code>api-not-found</code>, etc.) and exit codes <code>0/1/2/3/4/5/64</code>.</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>Breaking Changes — on-disk artifact layout:</strong></p>
+              <p className="ml-4 text-xs italic mb-1">Every non-template resource moves to a plural top-level directory + per-item subdirectory. Pulled metadata files now embed an upstream <code>$schema</code> reference.</p>
+              <ul className="ml-4 space-y-1">
+                <li><strong>Workflow:</strong> <code>workflow/{`{slug}`}.json</code> → <code>workflows/{`{slug}`}/workflow.json</code></li>
+                <li><strong>Schema:</strong> <code>schema/{`{slug}`}.json</code> (json_schema inline) → <code>schemas/{`{slug}`}/schema.json</code> + <code>schemas/{`{slug}`}/payload_schema.json</code></li>
+                <li><strong>Event:</strong> <code>event/event_schema_mapping.json</code> (bundled) → <code>events/{`{slugified-name}`}/event.json</code></li>
+                <li><strong>Preference categories:</strong> <code>category/categories_preferences.json</code> + <code>category/translation/{`{locale}`}.json</code> → <code>preference_categories/categories.json</code> + <code>preference_categories/translations/{`{locale}`}.json</code></li>
+                <li><strong>Template translations:</strong> <code>translation/{`{filename}`}.json</code> → <code>translations/{`{filename}`}.json</code></li>
+                <li>Events use <strong>dual identity</strong>. Backend allows <code>/</code>, spaces, etc.; pull slugifies the name to a directory handle and preserves the original verbatim in <code>event.json#name</code>. <code>mv events/old/ events/new/</code> does NOT rename the event — edit <code>event.json#name</code> instead.</li>
+                <li>Schema validation runs client-side. Schema push (real and <code>--dry-run</code>) compiles <code>payload_schema.json</code> against JSON Schema draft 2020-12 and rejects schemas whose root type is not <code>object</code>.</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>Breaking Changes — CLI short flags:</strong></p>
+              <p className="ml-4 text-xs italic mb-1">Hard breaks; scripts using the dropped forms fail with <code>unknown flag</code>.</p>
+              <ul className="ml-4 space-y-1">
+                <li><code>-m</code>: was <code>--commit-message</code> → now <code>--mode</code> only</li>
+                <li><code>-f</code>: was <code>--offset</code> / <code>--force</code> → dropped</li>
+                <li><code>-l</code>: was <code>--limit</code> / <code>--locale</code> → now <code>--limit</code> only</li>
+                <li><code>-n</code>: was <code>--no-color</code> → now <code>--dry-run</code></li>
+                <li><code>-F</code>: now <code>--force</code> (uniform)</li>
+                <li><code>-S</code>: now <code>--from</code> (sync source)</li>
+                <li><code>-q</code>: now <code>--quiet</code> (root-persistent)</li>
+                <li><code>-j</code>: now <code>--json</code> (inline payload on push)</li>
+                <li><code>--commit</code> is now a clean boolean everywhere (was a string on some commands).</li>
+                <li><code>--mode</code> added to <code>template list</code>, <code>get</code>, and <code>pull</code>.</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>Bug Fixes:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li><code>translation list --include-content=true</code> now actually returns content (typed-decode bug).</li>
+                <li><code>translation get {`{filename}`}</code> and <code>event get {`{name}`}</code> fetch a single item (were returning the whole workspace).</li>
+                <li><code>schema list</code> shows <code>name</code> instead of the always-empty <code>title</code>.</li>
+                <li><code>category push</code> pushes translations alongside categories regardless of <code>--commit</code> (matches docstring).</li>
+                <li><code>category translation push</code> no longer silent-no-ops when only <code>en.json</code> is present.</li>
+                <li>Cobra's noisy <code>Usage:</code> dump on every error is silenced.</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>Migration:</strong></p>
+              <p className="ml-4 text-sm">Two paths are available — clean re-pull (recommended; loses uncommitted local edits) or convert in place (preserves uncommitted edits, requires <code>jq</code> for schemas and events). Full step-by-step instructions are in the <a href="https://github.com/suprsend/cli/releases/tag/1.0.0-beta.1">v1.0.0-beta.1 release notes</a>. For CLI flag breakages, scripts will fail loudly with <code>unknown flag</code> — fix as you encounter them.</p>
+            </div>
+            <div>
+              <p><strong>Documentation:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li>Refreshed every <code>suprsend template</code> reference page to match the latest <code>--help</code> output, including positional slug syntax, updated flag tables, and new examples.</li>
+                <li>Streamlined the <a href="/reference/cli-template-folder-layout">Folder Layout</a> reference for clarity and removed sections that documented internal CLI behaviour rather than user-facing structure.</li>
+                <li>Linked the <a href="/docs/template-variants">Template Variants</a> concept doc from the <a href="/reference/cli-template-overview">template CLI overview</a> for easier discovery.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Accordion>
+
+  <Accordion title="v0.2.24" icon="code" iconType="solid">
+    <div className="mb-4">
+      <p><strong>Repository:</strong> <a href="https://github.com/suprsend/cli">suprsend/cli</a></p>
+      <p><strong>Release Date:</strong> April 29, 2026</p>
+      <p><strong>Release:</strong> <a href="https://github.com/suprsend/cli/releases/tag/0.2.24">v0.2.24</a></p>
+    </div>
+
+    <div className="space-y-6">
+      <div className="flex">
+        <div className="w-1 bg-green-500 mr-3 flex-shrink-0"></div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-lg font-semibold">
+              <a href="https://github.com/suprsend/cli/releases/tag/0.2.24" className="text-blue-600 hover:underline">v0.2.24</a>
+            </h4>
+            <span className="text-sm text-gray-500">Apr 29, 2026</span>
+          </div>
+          <div className="text-sm space-y-2">
+            <div>
+              <p><strong>Features:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li>Publish CLI MCP server to MCP Registry on release.</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>Improvements:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li>Bumped GitHub Actions group dependencies (5 updates).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Accordion>
+
+  <Accordion title="v0.2.23" icon="code" iconType="solid">
+    <div className="mb-4">
+      <p><strong>Repository:</strong> <a href="https://github.com/suprsend/cli">suprsend/cli</a></p>
+      <p><strong>Release Date:</strong> April 22, 2026</p>
+      <p><strong>Release:</strong> <a href="https://github.com/suprsend/cli/releases/tag/0.2.23">v0.2.23</a></p>
+    </div>
+
+    <div className="space-y-6">
+      <div className="flex">
+        <div className="w-1 bg-green-500 mr-3 flex-shrink-0"></div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-lg font-semibold">
+              <a href="https://github.com/suprsend/cli/releases/tag/0.2.23" className="text-blue-600 hover:underline">v0.2.23</a>
+            </h4>
+            <span className="text-sm text-gray-500">Apr 22, 2026</span>
+          </div>
+          <div className="text-sm space-y-2">
+            <div>
+              <p><strong>Improvements:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li>npm publishing pipeline upgraded to Node 24 with <code>setup-node@v6</code> for trusted publishing.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Accordion>
+
+  <Accordion title="v0.2.22" icon="code" iconType="solid">
+    <div className="mb-4">
+      <p><strong>Repository:</strong> <a href="https://github.com/suprsend/cli">suprsend/cli</a></p>
+      <p><strong>Release Date:</strong> April 22, 2026</p>
+      <p><strong>Release:</strong> <a href="https://github.com/suprsend/cli/releases/tag/0.2.22">v0.2.22</a></p>
+    </div>
+
+    <div className="space-y-6">
+      <div className="flex">
+        <div className="w-1 bg-green-500 mr-3 flex-shrink-0"></div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-lg font-semibold">
+              <a href="https://github.com/suprsend/cli/releases/tag/0.2.22" className="text-blue-600 hover:underline">v0.2.22</a>
+            </h4>
+            <span className="text-sm text-gray-500">Apr 22, 2026</span>
+          </div>
+          <div className="text-sm space-y-2">
+            <div>
+              <p><strong>Features:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li><code>npx suprsend</code> support — run any CLI command (including the MCP server) without a separate install step.</li>
+                <li>Added <code>glama.json</code> for MCP server registry listing.</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>Improvements:</strong></p>
+              <ul className="ml-4 space-y-1">
+                <li>Bumped direct Go dependencies.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Accordion>
+
+  <Accordion title="v0.2.21" icon="code" iconType="solid">
     <div className="mb-4">
       <p><strong>Repository:</strong> <a href="https://github.com/suprsend/cli">suprsend/cli</a></p>
       <p><strong>Release Date:</strong> March 17, 2026</p>

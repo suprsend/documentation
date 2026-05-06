@@ -9,9 +9,9 @@ keywords:
   - suprsend variant.json
 ---
 
-When you run [`suprsend template pull`](/reference/cli-template-pull), the CLI writes each template to disk in a predictable directory structure. [`suprsend template push`](/reference/cli-template-push) reads that same structure back when uploading changes. This page is the full spec — directory shape, file naming, content extraction rules, and push-time behaviour.
+When you run [`suprsend template pull`](/reference/cli-template-pull), the CLI writes each template to disk using a predictable directory structure. [`suprsend template push`](/reference/cli-template-push) reads that same structure back when uploading changes. This page documents the directory shape, file naming conventions, and the behaviour you can expect during a push.
 
-Valid channels: `email`, `sms`, `whatsapp`, `inbox`, `slack`, `ms_teams`, `androidpush`, `iospush`, `webpush`.
+The supported channels are: `email`, `sms`, `whatsapp`, `inbox`, `slack`, `ms_teams`, `androidpush`, `iospush`, and `webpush`.
 
 ---
 
@@ -20,13 +20,13 @@ Valid channels: `email`, `sms`, `whatsapp`, `inbox`, `slack`, `ms_teams`, `andro
 ```
 suprsend/templates/
 └── <template-slug>/
-    ├── template.json                # required — template metadata + variant order
-    ├── mock_data.json               # optional — mock payload used for previews / tests
-    └── <channel>/                   # email | sms | whatsapp | inbox | slack | ms_teams | androidpush | iospush | webpush
-        ├── <variantID>/             # one directory per variant — always, even for the single "default" case
-        │   ├── variant.json         # variant fields (content stays inline except for email + slack-block, see below)
+    ├── template.json                # template metadata + variant order
+    ├── mock_data.json               # optional mock payload for previews and tests
+    └── <channel>/
+        ├── <variantID>/             # one directory per variant
+        │   ├── variant.json
         │   │
-        │   │   # email only (only the files matching content.body.type are read):
+        │   │   # email only (read based on content.body.type):
         │   ├── body.raw.html
         │   ├── body.raw.txt
         │   ├── body.designer.html
@@ -34,7 +34,7 @@ suprsend/templates/
         │   ├── body.plain_text.txt
         │   ├── design.json
         │   │
-        │   │   # slack only (only when content.body_type == "block"):
+        │   │   # slack only (when content.body_type is "block"):
         │   └── body.block.json
         └── _tenants/                # tenant overrides — same shape inside
             └── <tenantID>/
@@ -43,18 +43,18 @@ suprsend/templates/
                     └── ...extracted files if any...
 ```
 
-Two rules that keep the layout predictable:
+A couple of conventions are worth highlighting:
 
-- **One shape per channel.** Every variant — including a lone default — lives under `<channel>/<variantID>/`. A single-default template still has `<channel>/default/`.
-- **Extraction is channel-specific.** Only email body content and Slack Block Kit bodies get extracted to sidecar files. SMS, inbox, push (Android / iOS / Web), MS Teams, and WhatsApp keep their entire `content` inline in `variant.json` — their bodies are short strings that don't benefit from extraction.
+- **One shape per channel.** Every variant lives under `<channel>/<variantID>/`, including templates that have only a single default variant. In that case, the directory is simply `<channel>/default/`.
+- **Body extraction is channel-specific.** Only **email** body content and **Slack Block Kit** bodies are extracted into separate sidecar files. SMS, inbox, push (Android, iOS, and Web), MS Teams, and WhatsApp keep their full `content` inline within `variant.json`.
 
-`_tenants/` is a reserved directory name — a variant cannot be named `_tenants`.
+Please note that `_tenants/` is a reserved directory name, so it cannot also be used as a variant name.
 
 ---
 
 ## `template.json`
 
-One file per template at the template root. Carries metadata and the per-channel variant order.
+Each template has a single `template.json` at its root. This file holds the template's metadata along with the per-channel variant order.
 
 ```json
 {
@@ -70,52 +70,45 @@ One file per template at the template root. Carries metadata and the per-channel
 }
 ```
 
-### `variant_order`
+The `variant_order` field lists every channel and every channel + tenant pair that has overrides:
 
-Lists **every** channel and every channel + tenant pair that has overrides. No absence-means-default rule — single-variant channels show `["default"]` explicitly.
-
-- Bare channel keys (e.g. `"email"`) point at `<channel>/`.
-- Keys with a slash (e.g. `"email/tenant-acme"`) point at `<channel>/_tenants/<tenantID>/`. The slash is unambiguous because channel names are a fixed enum and tenant IDs can't contain `/` (upstream pattern `^[a-zA-Z0-9_\-]+$`).
-
-An empty `variant_order` (`{}`) is valid — a freshly-created template with no variants shows up that way.
+- Bare channel keys (for example, `"email"`) refer to the `<channel>/` directory.
+- Slash-separated keys (for example, `"email/tenant-acme"`) refer to a tenant override at `<channel>/_tenants/<tenantID>/`.
+- An empty `variant_order` (`{}`) is valid and is what you'll see for a freshly-created template that doesn't yet have any variants.
 
 ---
 
 ## `mock_data.json` (optional)
 
-Sits at the template root alongside `template.json`. Free-form JSON fixture used for template previews and tests. Kept separate from `template.json` because payloads can be 10–50 KB and you'll open it more often than the main config.
+`mock_data.json` sits alongside `template.json` at the template root. It's a free-form JSON fixture used for template previews and tests.
 
 ```json
 { "user": { "name": "Alice" }, "order": { "id": "A-123", "total": "$42.00" } }
 ```
 
-If absent, the template has no mock fixture. `mock_data.json` is optional on disk and optional on push.
+This file is optional both on disk and during push. If it isn't present, the template simply runs without a mock fixture.
 
 ---
 
-## Variant layout rules
+## Variant rules
 
-### Directory & identity
+### Identity is path-based
 
-**Path is authoritative for identity fields.** A variant's `id`, `channel`, and `tenant_id` are encoded both in the directory path AND as required fields in `variant.json`. On pull, they agree. On push, **the directory path wins**:
+A variant's `id`, `channel`, and `tenant_id` appear in two places: the directory path and the corresponding fields inside `variant.json`. When you push, the directory path is treated as the source of truth — the CLI updates the matching fields in `variant.json` from the path before sending the payload upstream.
 
-| Identity field | Source of truth on push          |
-|----------------|----------------------------------|
-| `channel`      | Immediate parent channel directory |
-| `id`           | Variant directory name           |
-| `tenant_id`    | `<tenantID>` if under `_tenants/`, else `null` |
+| Identity field | Source on push                                  |
+|----------------|-------------------------------------------------|
+| `channel`      | The immediate parent channel directory          |
+| `id`           | The variant directory name                      |
+| `tenant_id`    | `<tenantID>` if under `_tenants/`, otherwise `null` |
 
-The CLI overwrites the matching fields in `variant.json` from the path before sending. If they don't already match, push logs a warning naming both values. **Renaming a directory is the supported way to rename a variant** — editing the JSON field alone has no effect.
+To rename a variant, rename its directory. Editing only the JSON field will not take effect, since the path takes precedence.
 
 ### `variant.json` content
 
-Contains the variant object with body fields extracted to sidecar files (email and Slack-block only — see extraction tables below). All other channels keep `content` intact inline.
+`variant.json` contains the variant object itself. For email and Slack-block variants, body content is extracted into sidecar files (described in the next section). All other channels keep their `content` inline.
 
-<Note>
-  `variant.json` is a CLI-internal partial, not a complete API payload. It deliberately has no `$schema` field — pointing an IDE at the upstream `variant_schema.json` would light up false validation errors on email variants whose body fields have been extracted out. Validation happens inside the CLI on push, after reassembly, against the upstream schemas.
-</Note>
-
-Example for an email variant in `designer` mode:
+Here's an example of an email variant in `designer` mode:
 
 ```json
 {
@@ -135,20 +128,15 @@ Example for an email variant in `designer` mode:
 }
 ```
 
-Two details worth noting:
-
-- `content.body.type` stays in `variant.json` even when the body is extracted — it's the discriminator that tells push which body files to expect.
-- `content.body.designer` itself is absent from disk. The CLI re-inflates it on push by reading `body.designer.html`, `body.designer.txt`, and `design.json`, then populates `content.body.designer.{html,text,design_json}` in the full payload before validation.
+`content.body.type` remains in `variant.json` because it acts as a discriminator that tells push which body files to expect. The actual `content.body.designer` payload is not stored on disk — instead, the CLI reassembles it on push by reading `body.designer.html`, `body.designer.txt`, and `design.json`.
 
 ---
 
-## Content extraction rules
-
-Only two channels extract body content to sidecar files; every other channel keeps `content` inline in `variant.json`.
+## Content extraction
 
 ### Email
 
-Driven by `content.body.type` ∈ `raw`, `designer`, `plain_text` (required by upstream `email_body_def`). Only files matching the active `type` are read on push; the others are ignored.
+Email body extraction is driven by `content.body.type`. Only the files matching the active body type are read on push; any others are quietly ignored.
 
 | Source field (JSON path)              | File                  | Active when `content.body.type` is |
 |---------------------------------------|-----------------------|------------------------------------|
@@ -159,7 +147,7 @@ Driven by `content.body.type` ∈ `raw`, `designer`, `plain_text` (required by u
 | `content.body.designer.design_json`   | `design.json`         | `designer`                         |
 | `content.body.plain_text.text`        | `body.plain_text.txt` | `plain_text`                       |
 
-Short scalar fields — `subject`, `preheader`, `from_name`, `from_address`, `extra_to`, `cc`, `bcc`, `reply_to`, `email_markup`, `templating_language` — stay inline under `content` in `variant.json`.
+Short scalar fields — `subject`, `preheader`, `from_name`, `from_address`, `extra_to`, `cc`, `bcc`, `reply_to`, `email_markup`, and `templating_language` — stay inline under `content` within `variant.json`.
 
 ### Slack
 
@@ -167,120 +155,49 @@ Short scalar fields — `subject`, `preheader`, `from_name`, `from_address`, `ex
 |--------------------------|-------------------|------------------------------------|
 | `content.body_block`     | `body.block.json` | `block`                            |
 
-When `content.body_type == "text"`, `content.body_text` stays inline in `variant.json`.
+When `content.body_type` is `"text"`, the `content.body_text` field stays inline in `variant.json`.
 
-**`body.block.json` wire format.** On pull, the CLI parses the API's `body_block` string (a JSON-encoded blob) and writes it as indented JSON (2-space) for readability. On push, it re-serialises **compact (minified, no whitespace)** before injecting it back into `content.body_block`. This matters because `body_block` is capped at 4000 characters upstream — pretty-printing would eat that budget needlessly.
-
----
-
-## Body-type discriminator is authoritative
-
-Channels that extract body content use a type field inside `variant.json` to choose which sidecar files matter.
-
-| Channel | Discriminator path     | Values                             |
-|---------|------------------------|------------------------------------|
-| email   | `content.body.type`    | `raw` · `designer` · `plain_text`  |
-| slack   | `content.body_type`    | `text` · `block`                   |
-
-Rules (same for both):
-
-- The discriminator in `variant.json` chooses which sidecar files are expected. Only matching files are read on push.
-- Extra body files that don't match the active type (e.g. `body.raw.html` on disk while `type: "designer"`) are ignored on push with a warning.
-- Switching types means editing the discriminator in `variant.json` and providing the new matching file(s). **The CLI does not auto-delete stale body files** — you'll need to `rm` them manually.
+To switch a variant from one body type to another, update the discriminator in `variant.json` and add the matching files for the new type. The CLI does not automatically clean up sidecar files from the previous body type, so you may want to delete the stale files yourself to keep the directory tidy.
 
 ---
 
-## File encoding and whitespace
+## What happens on push
 
-Body files (`body.*.html`, `body.*.txt`, `design.json`, `body.block.json`) follow a hybrid whitespace rule so round-trips stay idempotent across editors:
+### Reconciling `variant_order`
 
-- **Pull** normalises line endings to `\n` (CRLF → LF) and ensures exactly one trailing `\n`. POSIX-friendly; keeps editors with auto-newline features from producing diff churn.
-- **Push** reads the file as-is, then strips at most one trailing `\n` before sending to the API.
+When you push, the CLI compares the `variant_order` declared in `template.json` against what's actually present on disk:
 
-Net effect: `pull → no edits → push` is a bit-perfect no-op on the wire, even though the disk file ends with a newline the API payload doesn't.
+- A variant directory that's new on disk but missing from `variant_order` will be appended automatically, and the CLI logs a warning so you know it happened.
+- A variant listed in `variant_order` but missing from disk causes the push to fail, with the missing path called out in the error.
+- Order changes between disk and `variant_order` are not auto-detected — `variant_order` remains the authoritative source for ordering, so update it explicitly when you want to rearrange variants.
 
----
+### Missing body files
 
-## Push-time rules
+If `variant.json` declares a body (for example, `content.body.type: "designer"`) but the corresponding file (`body.designer.html`) isn't present on disk, the push will fail immediately and the rest of the operation is cancelled. The error message names the file the CLI was looking for so you can resolve it quickly.
 
-### `variant_order` reconciliation
+### `enabled_channels` and the disk contract
 
-`variant_order` in `template.json` can drift from what's on disk as you rename, add, or remove variant directories. Push reconciles with this policy:
+The CLI also reconciles `enabled_channels` against the channel directories on disk:
 
-- **New on disk, missing from `variant_order`** → auto-appended to the end of the relevant channel's (or channel + tenant's) list. Warning logged.
-- **Listed in `variant_order` but missing from disk** → push errors and aborts, naming the missing `<channel>/<variantID>` path.
-- **Order changes** between disk and `variant_order` are not auto-detected. `variant_order` remains the authority for ordering — rearrange it explicitly.
-
-This keeps `mv` a first-class operation for adding a variant while protecting against silent deletion.
-
-### Missing body files abort push
-
-If `variant.json` declares a body (e.g. `content.body.type: "designer"`) but the matching body file (`body.designer.html`) is absent on disk, push errors immediately and aborts the whole operation. The error message names the expected file path. Better to fail loudly than accidentally publish an empty template.
-
-### `enabled_channels` ↔ disk contract
-
-Push reconciles `enabled_channels` declared in `template.json` against the channel directories on disk:
-
-- **Orphan directory** — `<channel>/` exists but `<channel>` is not in `enabled_channels` → push errors and aborts. You can't push to a channel the template doesn't claim.
-- **Missing directory** — `<channel>` is in `enabled_channels` but `<channel>/` doesn't exist → push logs a warning and skips that channel. Supports workflows where the template claims the channel but its variants aren't authored yet.
+- If a channel directory exists but the channel isn't listed in `enabled_channels`, the push fails. This prevents accidentally publishing to a channel the template doesn't claim to support.
+- If a channel is listed in `enabled_channels` but its directory is missing, the CLI logs a warning and skips that channel — useful when you've enabled a channel but haven't authored its variants yet.
 
 ### Error messages
 
-All push-time errors are prefixed with the variant path so the offender is unambiguous:
+Push-time error messages are prefixed with the variant path so the affected variant is easy to identify. For example:
 
-- Missing file: `email/en: missing body.designer.html (required by content.body.type: "designer")`
-- Identity mismatch: `email/en: variant.json#id is "fr" but directory is "en" — using directory value`
-- Validation failure: `email/en: variant_schema violation at content.body.designer.html: <upstream message>`
-
-Errors abort the whole push unless the rule explicitly says "warn and skip/append" (see `enabled_channels` contract and `variant_order` reconciliation).
+```
+email/en: missing body.designer.html (required by content.body.type: "designer")
+```
 
 ---
 
-## Schema integration
+## Schema validation
 
-The SuprSend API payloads are formally specified at [`suprsend/schema`](https://github.com/suprsend/schema/tree/main/template/v2). The CLI reuses those schemas directly.
+The SuprSend template payloads are formally specified in the [`suprsend/schema`](https://github.com/suprsend/schema/tree/main/template/v2) repository — `schema.json`, `variant_schema.json`, and the per-channel `<channel>_schema.json` files. The CLI uses these directly.
 
-### Upstream schemas (reused as-is)
+`template.json` carries a CLI-specific wrapper schema published at `https://schema.suprsend.com/cli/template/v2/schema.json`, which is referenced via the `$schema` field to enable editor IntelliSense. `variant.json`, on the other hand, deliberately does not reference a schema — because body fields are extracted into sidecar files, the on-disk file is a partial payload, and attaching the upstream schema directly would surface validation errors that aren't actually problems. The CLI runs full validation on push, once the variant has been reassembled with its body content.
 
-| Schema                                                                                                                   | Validates                                      |
-|--------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
-| [`template/v2/schema.json`](https://github.com/suprsend/schema/blob/main/template/v2/schema.json)                        | Template body — `name`, `description`, `tags`, `enabled_channels` |
-| [`template/v2/variant_schema.json`](https://github.com/suprsend/schema/blob/main/template/v2/variant_schema.json)        | Variant body — `channel`, `id`, `tenant_id`, `locale`, `conditions`, `content`, … |
-| [`template/v2/channel/<channel>_schema.json`](https://github.com/suprsend/schema/tree/main/template/v2/channel)          | Per-channel `content` shape (conditionally referenced from `variant_schema.json`) |
-
-### CLI-specific schema (`template.json` only)
-
-`template.json` carries CLI-only fields (`slug`, `variant_order`) not present in the upstream template body. A thin wrapper composes the upstream schema and adds these:
-
-- Published at `https://schema.suprsend.com/cli/template/v2/schema.json`
-- Referenced via `$schema` at the top of every pulled `template.json`
-- `required`: `slug`, `name`, `enabled_channels`, `variant_order`
-
-`mock_data.json` is not part of `template.json` — it lives as a separate file at the template root. No CLI schema is required for it; any JSON is accepted.
-
-### `variant.json` is deliberately unreferenced
-
-`variant.json` does not carry a `$schema` field and is not validated by upstream `variant_schema.json` in place. The on-disk file is a **partial payload** — for email variants, body fields have been extracted to sidecar files, so `content.body.{raw,designer,plain_text}` fails the `required` constraints in the upstream channel schemas. Attaching a `$schema` reference would produce spurious red squiggles in editors.
-
-Validation of the complete variant happens inside the CLI on push, against upstream `variant_schema.json`, after the CLI reassembles `content` by reading the sidecar files. You get validation where it matters (at the API boundary) without fighting the editor during routine HTML edits.
-
-### Offline validation
-
-Both the CLI wrapper schema and a snapshot of the upstream schemas are embedded into the CLI binary, so pull/push validation works offline. The embedded snapshot is refreshed on every CLI release.
+Both the CLI wrapper schema and a snapshot of the upstream schemas are embedded in the CLI binary, so push-time validation works offline.
 
 ---
-
-## Versioning
-
-The CLI wrapper version tracks the upstream template schema version it wraps — today that's `v2` (matching `schema.suprsend.com/template/v2/schema.json`). When upstream bumps to `v3`, the CLI ships `cli/template/v3/schema.json` at the same time. Breaking changes to the disk layout that are NOT tied to an upstream bump reuse the current version with a minor-version suffix (e.g. `v2.1`) — same path, new `$id`.
-
-The `$schema` URL at the top of `template.json` is the single source of truth; there is no separate `layout_version` field.
-
----
-
-## Related
-
-- [`suprsend template pull`](/reference/cli-template-pull) — writes this structure to disk
-- [`suprsend template push`](/reference/cli-template-push) — reads this structure and uploads
-- [`suprsend template commit`](/reference/cli-template-commit) — publishes a pushed draft to live
-- [Templates overview](/docs/templates) — concepts and dashboard guide
