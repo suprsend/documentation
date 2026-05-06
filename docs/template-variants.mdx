@@ -1,202 +1,353 @@
 ---
 title: "Template Variants"
-description: "Serve different content to different audiences — by tenant, language, or any condition — from a single template."
+description: "Send different content to different recipients — by tenant, language, or any condition — all from a single template."
 ---
 
-Variants let you send different content to different recipients from the same template. Instead of creating separate templates for each tenant, language, or audience segment, you create variants with conditions — SuprSend picks the right one at send time.
+Imagine you send a "Payment received" notification. Enterprise customers want it formal, with their own logo. Free-tier users get a simpler version with an upgrade nudge. French users get it in French. All from the same event trigger.
 
-Every template starts with a **default** variant. Add more only when you need them.
+That's what variants are for.
 
-You can embed the template editor directly in your application using the [Embeddable Templates SDK](/docs/embeddable-template-react-sdk). This lets your customers edit notification templates within your product, or your internal team manage templates and run campaigns — all without switching to the SuprSend dashboard.
+A **variant** is an alternate version of a template that gets sent when specific conditions are true. You write the conditions, SuprSend evaluates them at send time and picks the right one. If nothing matches, it falls back to the **default** variant — which every template always has and can never be deleted.
 
 ---
 
 ## When to use variants
 
+Use variants when the **message** differs — not just filled-in fields. For names and IDs only, use [variables](/docs/templates#variables).
+
 <CardGroup cols={2}>
-  <Card title="Multi-tenant" icon="buildings" iconType="solid">
-    Each tenant's users see their own branding — logos, colours, copy. One template serves all [tenants](/docs/tenants).
+  <Card title="White-label tenants" icon="buildings" iconType="solid">
+    Each [tenant](/docs/tenants) gets its own branding, tone, and links — one template, one variant per customer (`$tenant.id`). Default catches everyone else.
   </Card>
-  <Card title="Multi-lingual" icon="language" iconType="solid">
-    One variant per language. SuprSend auto-selects based on the recipient's preferred language. See [Multi-lingual Templates](/docs/multi-lingual-template).
+  <Card title="Language & locale" icon="language" iconType="solid">
+    One variant per locale when copy or layout differs per market. SuprSend picks by locale with fallback. Text-only differences → [Localisation](/docs/templates#localisation).
   </Card>
-  <Card title="Payload-based" icon="code-branch" iconType="solid">
-    Different content based on trigger data — e.g., `plan == "pro"` gets a premium message.
+  <Card title="Same event, different story" icon="code-branch" iconType="solid">
+    Same trigger (e.g. `order.shipped`), different bodies — express vs standard, critical vs info — from payload or profile conditions.
   </Card>
-  <Card title="A/B testing" icon="flask" iconType="solid">
-    Different copy to different segments. Compare in [Analytics](/docs/analytics). Needs manual maintenance — use for specific hypotheses, not as a default.
+  <Card title="A/B copy" icon="flask" iconType="solid">
+    Challenger variant for a cohort tag; everyone else gets the default. Compare in [Analytics](/docs/analytics), then keep the winner or delete the test.
   </Card>
 </CardGroup>
 
 ---
 
-## Create a variant
+## How selection works
 
-Click the **+** button next to "All Variants" in the left panel. You'll see two options:
+This is the most important thing to understand before building variants. Everything else — how you write conditions, how you order variants — flows from this.
 
-<Frame caption="Add New Channel or New Variant">
-  <img src="/images/docs/templates-variants-add-menu.png" />
+When a notification is triggered, SuprSend runs through all non-default variants **in order**, top to bottom. It sends the **first one whose conditions all pass**. If nothing matches, it sends the default.
+
+<div style={{ maxWidth: "480px", margin: "0 auto" }}>
+
+```mermaid
+flowchart TD
+    A([Notification triggered]) --> B[Collect recipient, tenant\nand payload data]
+    B --> C{Variant 1\nAll conditions match?}
+    C -- Yes --> D([Send Variant 1])
+    C -- No --> E{Variant 2\nAll conditions match?}
+    E -- Yes --> F([Send Variant 2])
+    E -- No --> G{More variants?}
+    G -- Yes --> H[Evaluate next variant...]
+    H --> G
+    G -- No variants left --> I([Send Default])
+
+    style D fill:#16a34a,color:#fff,stroke:none
+    style F fill:#16a34a,color:#fff,stroke:none
+    style I fill:#6b7280,color:#fff,stroke:none
+    style A fill:#2563eb,color:#fff,stroke:none
+```
+
+</div>
+
+Three rules that govern everything:
+
+**All conditions must pass.** There's no partial matching. If a variant has three conditions and one fails, the whole variant is skipped.
+
+**Order is priority.** If two variants both match, the higher one wins. This is why ordering matters — place specific variants above general ones.
+
+**The default always catches the rest.** It cannot be deleted, disabled, or moved. It is always at the top of the panel and always the last resort.
+
+### Soft vs. hard matching
+
+Not all conditions behave the same when they don't match:
+
+| Condition type | On no match | Called |
+|---|---|---|
+| **Tenant**, **Locale** | Falls back through a hierarchy: `tenant+locale` → `tenant+default locale` → `default tenant+locale` → `default` | Soft |
+| **Everything else** — payload fields, recipient properties, actor properties | Variant is skipped, no fallback | Hard |
+
+A practical consequence: if you build a variant with `$recipient.plan == "pro"` and the recipient's plan is `"free"`, SuprSend skips that variant and keeps evaluating the next one. Make sure every scenario has either a matching variant, or will fall through to a sensible default.
+
+---
+
+## Creating a variant
+
+Open any template, then click the **variants** icon in the top-right toolbar (next to **Exit** and **Commit**).
+
+<Frame caption="Variants button in the top-right toolbar of the template editor">
+  <img src="/images/docs/templates-variants-toolbar-button.png" width="360" />
 </Frame>
 
-### Add a new channel
+The **Create Variant** modal opens. Fill in the fields below and click **Create**. Once created, the variant appears in the **All Variants** panel on the left side of the editor, where you can select, reorder, duplicate, or delete it.
 
-Select **New Channel** to add a channel to the template (e.g., add SMS to a template that only had Email). Pick the channels and click **Add Channels**.
-
-<Frame caption="Select channels to add">
-  <img src="/images/docs/templates-variants-new-channel.png" />
-</Frame>
-
-### Add a new variant
-
-Select **New Variant** to create a variant with conditions for an existing channel.
-
-<Frame caption="Create Variant modal">
+<Frame caption="Create Variant modal — channels, ID, locale, tenant, and conditions">
   <img src="/images/docs/templates-variants-create-modal.png" />
 </Frame>
 
-Fill in:
+**Channels** *(required)*
+Which channels this variant applies to. A single variant can span multiple channels at once.
 
-**Channels** — which channels this variant applies to. *(Required)*
+**Variant ID** *(required)*
+A unique identifier that appears in Logs. Make it descriptive — you'll thank yourself when debugging:
 
-**ID** — a unique identifier. Use descriptive names: `uber-en`, `acme-es`, `pro-users`. *(Required)*
+```
+# Good — tells you tenant, language, or purpose at a glance
+acme-en
+acme-fr
+pro-users
+express-shipping
 
-**Locale** — the language for this variant. *(Required)*
+# Bad — useless in logs
+variant1
+test
+copy-of-default
+```
 
-**Tenant** — scope to a specific tenant. Leave blank for non-tenant variants.
+**Locale** *(required)*
+The language for this variant. Used in the soft fallback hierarchy — if an exact `tenant + locale` combination isn't found, SuprSend walks up automatically.
 
-**Conditions** — rules that determine when this variant is sent. Each condition has a **Data Type** (Recipient, Actor, Tenant, or Input Payload), **Property**, **Operator**, and **Value**. Add multiple conditions with **+ OR**.
+**Tenant** *(optional)*
+Scope this variant to one tenant. Leave blank for variants that aren't tenant-specific.
 
-| Common operators | |
+**Conditions** *(required)*
+Conditions define **when this variant should be picked** at send time. If a variant has no conditions, SuprSend can't tell it apart from the default and will never send it — so every non-default variant needs at least one.
+
+Combine conditions using **AND** and **OR**:
+
+- **AND** — stack rows inside the same group. Every row must match for the group to pass (e.g. `plan == "pro"` **AND** `country == "US"`).
+- **OR** — click **+ OR** to add a new group. The variant is picked if **any** group passes (e.g. `plan == "pro"` **OR** `cohort intersects ["beta"]`).
+
+<Note>
+  **Locale** and **Tenant** count as conditions too. If you've set either, the variant already has at least one matching rule — you only need to add explicit **Conditions** rows when also targeting payload data, recipient properties, or actor properties.
+</Note>
+
+---
+
+## Writing conditions
+
+Each condition follows this pattern:
+
+```
+[Data Type]  [Property]  [Operator]  [Value]
+
+Recipient    plan         ==          "pro"
+Tenant       id           ==          "acme"
+Payload      order_type   ==          "express"
+```
+
+### Data types
+
+| Data type | What it looks at | Example |
+|---|---|---|
+| **Recipient** | The recipient's stored profile properties | `$recipient.plan == "pro"` |
+| **Actor** | Properties of the user who triggered the event | `$actor.role == "admin"` |
+| **Tenant** | Properties on the tenant | `$tenant.id == "acme"` |
+| **Input Payload** | Data passed in the trigger API call | `order_type == "express"` |
+
+### Operators
+
+| Category | Operators |
 |---|---|
-| `==`, `!=` | Equals / not equals |
-| `>`, `>=`, `<`, `<=` | Comparisons |
-| `contains`, `not contains` | Substring match |
-| `is empty`, `is not empty` | Null checks |
-| `datetime is`, `datetime is before`, `datetime is after` | Date comparisons |
-| `intersects (array)`, `not intersects (array)` | Array overlap checks |
+| Equality | `==` &nbsp;&nbsp; `!=` |
+| Numeric | `>` &nbsp;&nbsp; `>=` &nbsp;&nbsp; `<` &nbsp;&nbsp; `<=` |
+| String | `contains` &nbsp;&nbsp; `not contains` &nbsp;&nbsp; `is empty` &nbsp;&nbsp; `is not empty` |
+| Date | `datetime is` &nbsp;&nbsp; `datetime is before` &nbsp;&nbsp; `datetime is after` |
+| Array | `intersects` &nbsp;&nbsp; `not intersects` |
+
+### Examples
+
+```
+# Show premium content to pro plan users
+$recipient.plan  ==  "pro"
+
+# Acme Corp, French language variant
+$tenant.id          ==  "acme"
+$recipient.language ==  "fr"
+
+# Express shipping message based on trigger payload
+order_type  ==  "express"
+
+# Target users in any of these cohorts (array overlap)
+$recipient.cohort  intersects  ["beta", "early_access"]
+```
 
 <Tip>
-  **AI prompt — design variant conditions:** *"Design SuprSend template variants for [describe scenario]. Data available: [payload keys, tenant props, recipient props]. For each variant suggest: ID, conditions, ordering (first match wins), and which should be the default fallback."*
+  **Design conditions with AI:** *"Design SuprSend template variants for [your scenario]. Available data: [list your payload keys, tenant props, recipient props]. For each variant, suggest an ID, conditions, correct ordering, and which should be the default fallback."*
 </Tip>
 
 ---
 
-## Edit a variant
+## Ordering variants
 
-Click any variant in the left panel to open it. You're always editing the **draft** — the live version is untouched until you commit.
+Drag and drop variants in the left panel to set their priority. The rules:
 
-- **Edit content** — write directly in the channel editor. Content auto-saves.
-- **Edit conditions** — click the **settings icon** on the variant to change its ID, locale, tenant, or conditions after creation.
-- **Import content** — use the Import button to copy content from another variant or template instead of starting from scratch. See [Import content](/docs/templates#import-content).
+- **The default is always first** and cannot be moved or placed below any other variant.
+- **More specific variants go higher.** A variant for `acme + french` should sit above one for `french only` — otherwise the general one matches Acme users first and the specific one never fires.
+- **Variants are independent per channel.** Email can have 4 variants, SMS can have 1. Each channel evaluates its own list at send time.
 
----
-
-## Commit
-
-Click **Commit** to publish. The modal shows all changes — you can deselect specific variants you're not ready to publish.
-
-<Frame caption="Commit modal — review changes before publishing">
-  <img src="/images/docs/templates-commit-modal.png" />
-</Frame>
-
-For **WhatsApp** and **SMS (DLT)** variants, committing puts the variant into **Approval Pending** — it goes live only after vendor approval. For multi-lingual templates, each language is approved separately. If a [fallback vendor](/docs/vendor-fallback) is configured, you'll need to confirm approval for each vendor.
+**If a variant isn't being picked when you expect it to,** the problem is almost always ordering. A broader variant above it is matching first. Either move the specific variant higher, or tighten the conditions on the broader one.
 
 ---
 
-## How selection works at send time
+## Editing a variant
 
-When a notification is triggered, SuprSend evaluates all non-default variants in the order they appear in the panel. The first one whose conditions all match is sent. If no variant matches, the **default** (always at the top) is sent as the fallback.
+Click any variant in the left panel to open it. You're always editing the **draft** — the live version is unchanged until you commit.
 
-- All conditions on a variant must be true — partial matches are skipped.
-- **Tenant** and **locale** are soft checks with fallback: tenant+locale → tenant+default locale → default tenant+locale → default.
-- All other conditions (like `$recipient.plan == "pro"`) are hard checks — no fallback, the variant is just skipped.
-
-<Frame caption="Variants panel — all variants grouped by channel">
-  <img src="/images/docs/templates-variants-panel-full.png" />
+<Frame caption="Editing a French locale variant for the In-App Inbox channel — variants panel on the left, editor in the middle, live preview on the right">
+  <img src="/images/docs/templates-variant-inapp-inbox-multilingual.png" />
 </Frame>
 
-### Ordering variants
+**Edit content**
+Write directly in the channel editor. Content auto-saves.
 
-Order determines priority. If two variants both match a recipient's data, the one **higher in the list** wins. You can drag and drop variants to change their position.
+**Edit conditions, ID, locale, or tenant**
+Click the **⚙ settings icon** on the variant. All fields from creation are editable here.
 
-- The **default** variant always stays at the top — it's the fallback and cannot be moved. No other variant can be placed above it.
-- All other variants can be freely reordered by dragging.
-- Place more specific variants (e.g., `uber-es`) above general ones (e.g., `default-es`) to ensure they match first.
-
-If a variant isn't being picked when you expect it to, check its position — a broader variant above it may be matching first.
-
-### Testing variant selection
-
-To verify the right variant is being picked for a specific condition, **test the full template group** — not a single variant. Testing a single variant sends that variant's content directly (bypassing conditions). Testing the template group runs the actual selection logic:
-
-1. Click **Test** → select the **Template Group** tab.
-2. Enter a **Recipient** whose profile matches the condition you want to test.
-3. Select a **Tenant** if your variant has a tenant condition.
-4. Click **Send Test** — SuprSend evaluates all variant conditions and sends the matching one.
-5. Check [Logs](/docs/logging) to confirm which variant was selected.
-
-This is the only way to verify that ordering and conditions work as expected end-to-end.
+**Import content from another variant or template**
+Use the **Import** button to copy content from any variant in any template. Useful when a new variant is structurally similar to an existing one.
 
 ---
 
-## Duplicate, delete, and disable
+## Managing variants
 
-### Duplicate a variant
+**Duplicate** — Click **···** on a variant → **Duplicate**. Content is copied into a new variant. Update the ID and conditions before committing.
 
-Click the three-dot menu (**...**) on any variant to duplicate it. The content is copied into a new variant — adjust the ID and conditions.
+**Delete** — Click **···** → **Delete**. Permanently removes the variant and its content. The default cannot be deleted.
 
-<Frame caption="Duplicate a variant">
-  <img src="/images/docs/templates-variants-duplicate-menu.png" />
-</Frame>
+**Disable a channel** — Click **···** on the **channel name** (not a specific variant) → **Disable**. Stops notifications on that channel immediately, but preserves all content. Re-enable anytime. Use this during vendor migrations when you need to pause a channel without losing your content.
 
-### Delete a variant
+---
 
-Click the three-dot menu on a variant and select **Delete**. This permanently removes the variant and its content. The **default** variant cannot be deleted.
+## Testing variants
 
-### Disable a channel
+<Warning>
+  Don't test individual variants to check whether conditions are working. Testing a single variant sends that variant directly, **bypassing all selection logic**. You'll get a send, but you won't know if conditions are correct.
+</Warning>
 
-Click the three-dot menu on a **channel name** (not a variant) to disable it. Notifications stop on that channel immediately, but the content is preserved. Re-enable anytime without losing work.
+To test the full selection logic — the only way to verify ordering and conditions work end-to-end:
 
-<Frame caption="Disable a channel — content is preserved">
-  <img src="/images/docs/templates-variants-disable-channel.png" />
-</Frame>
+1. Click **Test** in the editor toolbar.
+2. Select the **Template Group** tab.
+3. Enter a **Recipient** whose profile matches the condition you want to verify.
+4. Select a **Tenant** if your variant has a tenant condition.
+5. Click **Send Test**.
+6. Open [Logs](/docs/logging) — the send record shows which variant was selected and which conditions matched.
 
-This is useful when you want to temporarily pause a channel (e.g., stop sending SMS during a vendor migration) without deleting the content and having to recreate it later.
+Run this for each variant you care about. Test edge cases too — make sure the default fires when you expect it to.
+
+---
+
+## Publishing changes
+
+Click **Commit** when you're ready to go live. A modal lists all pending changes across all variants — you can deselect any variant you're not ready to publish yet and commit the rest independently.
+
+### Approval-gated channels
+
+For **WhatsApp** and **SMS in India**, committing doesn't immediately publish the variant. It enters **Approval Pending** and goes live only after carrier or vendor approval.
+
+- Multi-language templates: each language variant is approved separately.
+- Fallback vendors: approval is required from each vendor independently.
+- All other channels (Email, Push) are unaffected — they go live on commit as normal.
 
 ---
 
 ## Common patterns
 
-**One template, many tenants** — create a variant per tenant using a `$tenant.id` condition. Default is the fallback for tenants without a custom variant. Onboarding a new tenant = a template edit, no code change.
+### One template, many tenants
 
-**Tenant + language** — combine conditions: `$tenant.id = acme` + `$recipient.language = fr`. Place these above language-only variants so they match first.
+```
+Variant: acme-default         →  $tenant.id == "acme"
+Variant: globex-default       →  $tenant.id == "globex"
+Default                       →  (fallback for all other tenants)
+```
 
-**A/B testing** — create a variant targeting a subset (e.g., `$recipient.cohort = beta`). Compare metrics. To promote: widen the conditions or update the default. To end: delete the challenger.
+Onboarding a new tenant with custom branding → add one variant. No deployment.
 
-After setting up any pattern, [test with a specific tenant and recipient](/docs/templates#test) to verify the right variant is picked.
+### Tenant + language (combined)
+
+Place tenant-specific variants above language-only ones so the specific match wins first:
+
+```
+Variant: acme-fr    →  $tenant.id == "acme"  +  $recipient.language == "fr"
+Variant: acme-en    →  $tenant.id == "acme"  +  $recipient.language == "en"
+Variant: default-fr →  $recipient.language == "fr"
+Default             →  (English, all other tenants)
+```
+
+An Acme user who speaks French hits `acme-fr`. An Acme user who speaks English hits `acme-en`. A non-Acme French user hits `default-fr`. Everyone else gets the default.
+
+### Plan-based messaging
+
+```
+Variant: pro-users   →  $recipient.plan == "pro"
+Variant: free-users  →  $recipient.plan == "free"
+Default              →  (no plan set, or unrecognized value)
+```
+
+### A/B test, then promote
+
+```
+Variant: subject-line-b   →  $recipient.cohort == "beta"   (challenger)
+Default                   →  (control — everyone else)
+```
+
+To promote: update the default with the winner's content, or widen the challenger's conditions to all users. To kill: delete the challenger variant.
 
 ---
 
-## Frequently asked questions
+## FAQ
 
 <AccordionGroup>
+
   <Accordion title="What happens if no variant matches?">
-    The **default** variant is sent. It cannot be deleted and always acts as the fallback.
+    The **default** is always sent. It cannot be deleted, disabled, or moved. It's the guaranteed fallback for every template.
   </Accordion>
 
-  <Accordion title="Can I have different variants per channel?">
-    Yes. Variants are per-channel — you can have 3 for Email, 1 for SMS, and just the default for Push. Each channel is evaluated independently.
+  <Accordion title="Can different channels have different variants?">
+    Yes. Variants are per-channel. A template can have 4 Email variants, 2 SMS variants, and just the default for Push. Each channel evaluates its own list independently at send time.
   </Accordion>
 
-  <Accordion title="How do I test which variant gets picked?">
-    Click **Test** in the editor, enter a recipient, select a tenant, and send. The variant whose conditions match is used. Check [Logs](/docs/logging) to confirm.
+  <Accordion title="Can one variant cover multiple channels?">
+    Yes. When creating a variant, you select which channels it applies to. You can pick one or many — the same conditions apply across all selected channels.
   </Accordion>
 
   <Accordion title="What's the difference between soft and hard conditions?">
-    **Soft** (tenant, locale): SuprSend falls back through a hierarchy if no exact match exists. **Hard** (everything else): no fallback — the variant is skipped if the condition doesn't match.
+    **Tenant** and **locale** are soft — SuprSend falls back through a hierarchy if no exact match is found. **Everything else** (payload fields, recipient properties, actor properties) is hard — if the condition doesn't match, the variant is skipped with no fallback.
   </Accordion>
 
-  <Accordion title="Can I reorder variants?">
-    Yes. Drag them up or down in the panel. The default always stays at the top and cannot be moved.
+  <Accordion title="I'm combining a locale condition with a payload condition on one variant. Which type is it?">
+    Locale is soft (has fallback). Payload is hard (no fallback). When combined on one variant, both must pass. The soft/hard distinction only matters for what happens when each individual condition fails on its own.
   </Accordion>
+
+  <Accordion title="Why isn't my variant being picked even though conditions look correct?">
+    Almost always an ordering issue. A broader variant higher in the list is matching first. Open the panel, find what's sitting above your variant, and check if it matches your test recipient. Either drag your variant higher or tighten the conditions on the one above it.
+  </Accordion>
+
+  <Accordion title="Can I edit conditions after creating a variant?">
+    Yes. Click the **⚙ settings icon** on the variant in the left panel. All creation fields — ID, locale, tenant, and conditions — are fully editable. Commit when ready to publish.
+  </Accordion>
+
+  <Accordion title="What happens to WhatsApp variants after I commit?">
+    They enter **Approval Pending** and only go live after vendor approval. Multi-language templates require per-language approval. If you have a fallback vendor, each vendor needs to approve separately.
+  </Accordion>
+
+  <Accordion title="Can I pause a channel without losing content?">
+    Yes. Click **···** on the channel name → **Disable**. The channel stops sending immediately, but all variant content is preserved. Re-enable anytime.
+  </Accordion>
+
+  <Accordion title="Can I start a new variant from an existing one?">
+    Yes — use **Duplicate** from the **···** menu to copy a variant within the same template, or use **Import** inside the variant editor to pull content from any variant in any template.
+  </Accordion>
+
 </AccordionGroup>

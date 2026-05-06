@@ -1,32 +1,91 @@
 ---
 title: "In-App Inbox"
-description: "Design rich inbox notification cards with action buttons, avatars, pinning, expiry, tags, and dynamic content."
+description: "Build notification cards that live inside your product — with action buttons, pinning, tags, and auto-expiry."
 ---
 
-The Inbox editor lets you build notification cards that appear inside your product's [notification center](/docs/inbox-overview). Each card supports a header, body (with Markdown), avatar, action buttons, click URL, and advanced options like pinning, expiry, and tags for tab filtering. Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+In-App Inbox lets you build notification cards that appear inside your product's [notification center](/docs/inbox-overview). Each card supports a header, body (with Markdown), avatar, action buttons, click URL, tags for tab filtering, pinning, and auto-expiry. Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+
+This guide covers every field in the editor, advanced configuration options, how variables work, and how to design for common notification types — social activity, transactional updates, approvals, and product announcements.
+
+<Note>
+  You need the SuprSend Inbox SDK installed in your product before in-app notifications are visible to users. [Set up the Inbox SDK →](/docs/inbox-quick-start)
+</Note>
+
+---
+
+## How the In-App Inbox editor works
+
+The editor is a structured form — header, body, avatar, subtext, action URL, and buttons — with a live notification card preview on the right that updates as you type.
 
 <Frame caption="In-App Inbox editor with live notification card preview">
   <img src="/images/docs/templates-editor-inbox.png" />
 </Frame>
 
-## Inbox fields
+Unlike push or SMS, in-app notifications persist in your product until the user reads or archives them. This makes advanced options like pinning, expiry, and tags especially important — they control how long a card stays relevant and where it appears in the inbox.
 
-**Header** — heading shown in bold at the top of the card. Use it for the summary: `New comment received`, `Your story has got 30 views`.
+---
 
-**Text** — body of the message. Supports [Markdown syntax](https://www.markdownguide.org/basic-syntax/) — headings, **bold**, *italic*, blockquotes, [links](https://www.markdownguide.org/basic-syntax/#links), and `code`.
+## Fields
 
-**Avatar** — public image URL (`.jpeg`, `.png`). Use it to show the actor's profile picture or a static icon based on notification type.
+### Header
 
-**Subtext** — clickable footer line. Use for secondary info like comment count, task ID, or timestamps.
+**Required** · Supports variables
 
-**Action URL** — URL the user is redirected to on card click. Toggle **Open in new tab** if needed.
+Heading shown in bold at the top of the card. Write one scannable sentence — the action and the object.
 
-**Action Buttons** — up to 2 buttons with text + URL. Use for CTAs like "View", "Approve", or inline actions. See [custom click handlers](https://github.com/suprsend/suprsend-react-inbox/blob/main/docs/customization.md#action-button-custom-click-handlers) for advanced button behaviour.
+Supports Handlebars: `{{variable_name}}`
 
+> Example: `{{actor_name}} commented on your post` · `Order #{{order_id}} shipped` · `New feature: {{feature_name}}`
 
-## Adding dynamic content in the template
+### Body
 
-There will always be the case where you need to add dynamic content to personalise notifications for your users. You can add variables in the template, which are replaced with actual data at the time of sending. Pass these values while triggering the communication from one of the frontend or backend SDKs.
+**Required** · Supports variables
+
+Body of the message. Supports [Markdown syntax](https://www.markdownguide.org/basic-syntax/) — headings, **bold**, *italic*, blockquotes, [links](https://www.markdownguide.org/basic-syntax/#links), and `code`.
+
+Use bold for key facts on transactional cards; blockquotes for excerpts on social notifications.
+
+> Example: `"{{comment_excerpt}}"` for social
+> Example: `Your package is on the way! Expected delivery: **{{delivery_date}}**` for shipping
+> Example: `{{requester_name}} submitted a {{amount}} expense report for {{category}}.` for approvals
+
+### Avatar
+
+**Optional** · Supports variables
+
+Public image URL (`.jpeg`, `.png`). Use the actor's profile photo for social notifications (`{{actor_avatar_url}}`), or a static product logo URL for announcements.
+
+### Subtext
+
+**Optional** · Supports variables
+
+Clickable footer line for secondary info — relative timestamps, comment counts, or task IDs users might reference.
+
+> Example: `{{time_ago}}` · `{{comment_count}} replies`
+
+### Action URL
+
+**Optional** · Supports variables
+
+URL opened when the user clicks the card body (not a button). Toggle **Open in new tab** if needed. Deep link into the relevant screen — include comment anchors when useful.
+
+> Example: `https://yourapp.com/posts/{{post_id}}#comment-{{comment_id}}`
+> Example: `https://yourapp.com/orders/{{order_id}}`
+
+### Action Buttons
+
+**Optional**
+
+Up to 2 buttons with a text label and URL. Use for primary CTAs (`View`, `Approve`) or paired actions (`Approve` / `Reject`). Label with verbs — `View Report`, `Track Order` — not bare nouns. See [custom click handlers](https://github.com/suprsend/suprsend-react-inbox/blob/main/docs/customization.md#action-button-custom-click-handlers) for inline actions without page navigation.
+
+> Example: `Track Order` → `https://yourapp.com/track/{{order_id}}`
+> Example: `Approve` / `Reject` paired for expense flows
+
+---
+
+## Personalise with variables
+
+You can add variables in the template to personalise it per recipient. SuprSend replaces variables with actual data at send time. Pass these values while triggering the communication from one of the frontend or backend SDKs.
 
 We use [Handlebars](https://handlebarsjs.com/guide/#what-is-handlebars) as the templating language. You can add variables as `{{variable_name}}`. We also support [Handlebars helpers](/docs/handlebars-helpers) for complex use cases like if-else conditions, default values, and array iteration.
 
@@ -77,153 +136,191 @@ We use [Handlebars](https://handlebarsjs.com/guide/#what-is-handlebars) as the t
 </Steps>
 
 <Warning>
-  If a variable in the template cannot be rendered at send time (due to mismatch or missing data), SuprSend discards the Inbox notification for that user. Other channels in the same template group are still sent.
+  If a variable in the template cannot be rendered at send time (due to mismatch or missing data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
 
+---
+
 ## Advanced configurations
+
+These options control how long a notification stays in the inbox, where it appears, and what extra data it carries. They're especially important for In-App Inbox — unlike push, cards persist until the user acts on them.
 
 <Frame caption="Advanced Configuration — Tags, Pinned Notification, Expiry, Extra Data">
   <img src="/images/docs/templates-editor-inbox-advanced-config.png" />
 </Frame>
 
-**Tags**
+### Tags
 
-Tags filter and organise notifications inside [multiple tabs](/docs/multi-tabs). You can filter tabs by tag, [notification category](/docs/notification-category), or read status — e.g., show all `unread` notifications with the `mentions` tag in a "Mentions" tab. Use them to separate updates from mentions, product releases from events.
+**Optional** · Supports variables (where applicable)
+
+Tags filter and organise notifications inside [multiple inbox tabs](/docs/multi-tabs). You can filter tabs by tag, [notification category](/docs/notification-category), or read status — for example, show all `unread` notifications tagged `mentions` in a dedicated "Mentions" tab.
 
 <Note>
   **Tags in Inbox template vs Tags in Workflow:** Template tags filter notifications in inbox tabs. Workflow tags only group workflows on the listing page and do not affect inbox filtering. To filter inbox tabs, add tags in the template and reference them in your [inbox tab configuration](/docs/multi-tabs).
 </Note>
 
-<Frame caption="Inbox with tabs - All, mentions and replies">
+<Frame caption="Inbox with tabs — All, Mentions, and Replies">
   <img src="/images/docs/1c56c00-image.png" />
 </Frame>
 
-**Pin notification**
+Define a small, consistent taxonomy — `mentions`, `product-updates`, `transactional` — and apply it across templates so tabs stay meaningful.
 
-Pinned notifications display with a `pinned` badge and stay at the top of the notification list until the user reads or archives them. Reserve for notifications requiring immediate action — compliance tasks, plan renewals, or limited-time offers. Always combine with an expiry so stale pins don't persist indefinitely.
+### Pin notification
+
+**Optional**
+
+Pinned notifications display with a `pinned` badge and stay at the top of the notification list until the user reads or archives them. Reserve for notifications that require immediate action — compliance tasks, plan renewals, time-bound approvals.
+
+**Always pair Pin with an Expiry.** A pinned notification without expiry stays at the top of the inbox indefinitely.
 
 <Frame>
   <img src="/images/docs/7ee3c01-image.png" />
 </Frame>
 
-**Expiry**
+### Expiry
 
-Expiry auto-archives the notification when the period elapses. Add a 15-day (or longer) expiry to most notifications to keep inboxes clean. Use shorter durations for time-sensitive content like flash sales or event reminders. Avoid expiry on long-lived notifications users might reference later (product updates, blog posts).
+**Optional**
 
-**Relative expiry**
+Expiry controls when a notification is automatically archived. In-App Inbox supports three expiry modes:
 
-Set a duration relative to when the notification is sent — e.g., `2 days 6 hours`.
+**Relative** — a duration from the moment the notification is sent, e.g., `2 days 6 hours`. Use for transactional updates (7 days keeps the inbox tidy) and short windows for flash sales.
 
 <Frame caption="Relative expiry with days, hours, minutes, seconds">
   <img src="/images/docs/templates-editor-inbox-expiry-relative.png" />
 </Frame>
 
-**Absolute expiry**
-
-Set a fixed date and time. The timestamp uses your local timezone.
+**Absolute** — a fixed date and time in your local timezone. Use when the notification stops being relevant at a specific calendar moment.
 
 <Frame caption="Absolute expiry with date and time picker">
   <img src="/images/docs/templates-editor-inbox-expiry-absolute.png" />
 </Frame>
 
-**Dynamic expiry**
+**Dynamic** — a Handlebars variable like `{{expiry_time}}` computed from your event or user data. The value can be an ISO-8601 timestamp (e.g., `2024-03-02T20:34:07Z`, must be in the future) or a relative duration string like `2d 6h 30m 0s`. Use this when the exact expiry moment comes from your backend — event start time, offer end time, SLA deadline.
 
-For expiry computed from your event or user data, use a Handlebars variable — e.g., `{{expiry_time}}`. The value can be:
+### Show expiry timer
 
-- An ISO-8601 timestamp (e.g., `2024-03-02T20:34:07Z`) — must be in the future.
-- A relative duration: an integer (seconds) or an interval string like `2d 6h 30m 0s`.
+**Optional**
 
-**Show expiry timer**
+Displays a countdown timer on the notification card. The timer shows in grey when more than 1 hour remains and turns red below 1 hour to drive urgency. Use for time-bound offers and event reminders where countdown visibility helps conversion.
 
-Enable this to display a countdown timer on the notification card. The timer shows in grey when more than 1 hour remains and turns red below 1 hour to drive urgency.
-
-<Frame caption="Expiry timer with different time remaining">
+<Frame caption="Expiry timer showing different time remaining states">
   <img src="/images/docs/2c44f10-image.png" />
 </Frame>
 
-**Extra Data**
+### Extra Data
 
-A JSON field for passing custom key-value pairs alongside the notification. Use this for app-level metadata that your frontend can process — e.g., deep link parameters, feature flags, or tracking IDs.
+**Optional**
+
+A JSON field for passing custom key-value pairs alongside the notification. Use for app-level metadata your frontend can process — deep link parameters, feature flags, tracking IDs.
+
+---
 
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 The right panel shows a live preview of the inbox notification card, updated in real time as you edit. Variables render using data from the **Variables panel** — select a recipient or tenant to preview with real data.
 
 Click **Test** in the top-right corner to send a real notification to a real user's inbox. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+---
+
+## Publish
 
 Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning. Once committed, all notifications triggered after this point use the new content.
 
 Committing snapshots everything: field content, advanced configurations (tags, pinning, expiry), and variable references.
 
-## Frequently asked questions
+---
+
+## Best practices
+
+- **Header = one scannable line:** Actor + action + object — the card is a pointer to detail, not the full story.
+- **Always set Action URL:** Every card needs a destination (deep link preferred). Label buttons with verbs (`View report`, `Approve`) — not generic labels.
+- **Expiry by type:** Roughly **30 days** for transactional reference (orders, payments), **7 days** for promos and time-bound offers, **14 days** for assignments and approvals — stale rows erode trust.
+- **Pin needs expiry:** Pin only what must stay on top, and always pair Pin with an expiry so nothing sticks forever.
+- **Metadata:** Use `|` in subtext for scans (e.g. `DEV-1 | Due tomorrow`) — avoid em dashes or middle dots for list-style metadata.
+- **Thumbnails:** Use ~64×64 images for product or avatar context — skip hero banners; inbox is a list view.
+- **Tags:** Use a small, consistent taxonomy for [tabs](/docs/multi-tabs) — template tags are not the same as workflow listing tags.
+
+---
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="How do I design a social activity notification (comment, like, mention)?">
-    Use **Avatar** for the actor's profile photo, **Header** for the action summary (e.g., `{{actor_name}} commented on your post`), **Text** for the excerpt, and **Subtext** for relative timestamps. Tag with `mentions` to route into a dedicated Mentions tab.
+    Use **Avatar** for the actor's profile photo, **Header** for the action summary, **Body** for the excerpt, and **Subtext** for relative timestamps. Tag with `mentions` to route into a dedicated Mentions tab.
 
-  | Field | Value |
-  |---|---|
-  | Header | `{{actor_name}} commented on your post` |
-  | Text | `"{{comment_excerpt}}"` |
-  | Avatar | `{{actor_avatar_url}}` |
-  | Subtext | `{{time_ago}}` |
-  | Action URL | `https://yourapp.com/posts/{{post_id}}#comment-{{comment_id}}` |
-  | Tags | `mentions` |
+    | Field | Value |
+    |---|---|
+    | Header | `{{actor_name}} commented on your post` |
+    | Body | `"{{comment_excerpt}}"` |
+    | Avatar | `{{actor_avatar_url}}` |
+    | Subtext | `{{time_ago}}` |
+    | Action URL | `https://yourapp.com/posts/{{post_id}}#comment-{{comment_id}}` |
+    | Tags | `mentions` |
   </Accordion>
 
   <Accordion title="How do I design a transactional notification (order, payment, delivery)?">
-    Use **bold markdown** in the text to highlight key details. Set a 7-day expiry so delivered-order notifications don't clutter the inbox. Add a tracking button via Action Buttons.
+    Use **bold Markdown** in the body to highlight key details. Set a 7-day relative expiry so delivered-order notifications don't clutter the inbox. Add a tracking button via Action Buttons.
 
-  | Field | Value |
-  |---|---|
-  | Header | `Order #{{order_id}} shipped` |
-  | Text | `Your package is on the way! Expected delivery: **{{delivery_date}}**` |
-  | Action URL | `https://yourapp.com/orders/{{order_id}}` |
-  | Button 1 | `Track Order` → `https://yourapp.com/track/{{order_id}}` |
-  | Expiry | Relative: 7 days |
+    | Field | Value |
+    |---|---|
+    | Header | `Order #{{order_id}} shipped` |
+    | Body | `Your package is on the way! Expected delivery: **{{delivery_date}}**` |
+    | Action URL | `https://yourapp.com/orders/{{order_id}}` |
+    | Button 1 | `Track Order` → `https://yourapp.com/track/{{order_id}}` |
+    | Expiry | Relative: 7 days |
   </Accordion>
 
   <Accordion title="How do I design an approval / action-required notification?">
-    Use **Pin** so the notification stays at the top. Set a short expiry (e.g., 3 days) so stale approvals auto-archive. Use [custom click handlers](https://github.com/suprsend/suprsend-react-inbox/blob/main/docs/customization.md#action-button-custom-click-handlers) for in-line Approve/Reject without leaving the page.
+    Use **Pin** so the notification stays at the top. Set a short expiry (e.g., 3 days) so stale approvals auto-archive. Use [custom click handlers](https://github.com/suprsend/suprsend-react-inbox/blob/main/docs/customization.md#action-button-custom-click-handlers) for inline Approve/Reject without leaving the page.
 
-  | Field | Value |
-  |---|---|
-  | Header | `Expense report needs approval` |
-  | Text | `{{requester_name}} submitted a {{amount}} expense report for {{category}}.` |
-  | Button 1 | `Approve` → `https://yourapp.com/expenses/{{expense_id}}/approve` |
-  | Button 2 | `Reject` → `https://yourapp.com/expenses/{{expense_id}}/reject` |
-  | Pin | Enabled |
-  | Pin | Enabled |
-  | Expiry | Relative: 3 days |
+    | Field | Value |
+    |---|---|
+    | Header | `Expense report needs approval` |
+    | Body | `{{requester_name}} submitted a {{amount}} expense report for {{category}}.` |
+    | Button 1 | `Approve` → `https://yourapp.com/expenses/{{expense_id}}/approve` |
+    | Button 2 | `Reject` → `https://yourapp.com/expenses/{{expense_id}}/reject` |
+    | Pin | Enabled |
+    | Expiry | Relative: 3 days |
   </Accordion>
 
   <Accordion title="How do I design a product announcement notification?">
     Use a static product logo as the **Avatar** and a `product-updates` tag to route into a dedicated tab. Avoid setting expiry — users may want to reference announcements later.
 
-  | Field | Value |
-  |---|---|
-  | Header | `New feature: {{feature_name}}` |
-  | Text | `{{feature_description}}` |
-  | Avatar | (static product logo URL) |
-  | Action URL | `https://yourapp.com/changelog/{{release_id}}` |
-  | Tags | `product-updates` |
+    | Field | Value |
+    |---|---|
+    | Header | `New feature: {{feature_name}}` |
+    | Body | `{{feature_description}}` |
+    | Avatar | (static product logo URL) |
+    | Action URL | `https://yourapp.com/changelog/{{release_id}}` |
+    | Tags | `product-updates` |
   </Accordion>
 
   <Accordion title="When should I use Pin vs Expiry?">
-    - **Pin** — for notifications that must stay at the top until the user acts (compliance, critical alerts). Always combine with an expiry so they don't stay pinned forever.
-    - **Expiry** — for time-sensitive content (flash sales, event reminders). Use relative expiry for consistent durations, absolute for fixed deadlines, and dynamic for computed values from your payload.
+    **Pin** — for notifications that must stay at the top until the user acts (compliance, critical alerts, approvals). Always combine with an expiry so they don't stay pinned forever.
+
+    **Expiry** — for time-sensitive content (flash sales, event reminders, transactional updates). Use relative expiry for consistent durations, absolute for fixed deadlines, and dynamic for computed values from your payload.
   </Accordion>
 
   <Accordion title="How do Tags work for Inbox tabs?">
-    Tags added in the template filter notifications into [Inbox tabs](/docs/multi-tabs). For example, tag with `mentions` to show in a "Mentions" tab, or `product-updates` for a "Product" tab. Tags in the template are different from workflow tags — workflow tags only group workflows on the listing page.
+    Tags added in the template filter notifications into [Inbox tabs](/docs/multi-tabs). For example, tag with `mentions` to show in a "Mentions" tab, or `product-updates` for a "Product" tab. Tags in the template are different from workflow tags — workflow tags only group workflows on the listing page and have no effect on what users see in the inbox.
   </Accordion>
 
   <Accordion title="How do I add dynamic expiry from my payload?">
-    Use a Handlebars variable like `{{expiry_time}}` in the Dynamic Expiry field. The value can be an ISO-8601 timestamp (e.g., `2024-03-02T20:34:07Z`) or a relative duration (integer for seconds, or `2d 6h 30m 0s` format).
+    Use a Handlebars variable like `{{expiry_time}}` in the Dynamic Expiry field. The value can be an ISO-8601 timestamp (e.g., `2024-03-02T20:34:07Z`) or a relative duration string like `2d 6h 30m 0s`.
+  </Accordion>
+
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips the In-App notification for that user. Other channels in the same template group are still sent.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes — add In-App Inbox with email, push, Slack, and others in the same template group.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include properties in your trigger payload or event so Handlebars paths match. Use the **Variables panel** for sample data. See [Adding dynamic content](/docs/templates#the-variables-panel).
   </Accordion>
 </AccordionGroup>
-
----
-

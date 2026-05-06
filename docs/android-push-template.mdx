@@ -1,35 +1,159 @@
 ---
 title: "Android Push"
-description: "How to design Android Push templates with customisation options for images, buttons, sound, silent, and sticky notifications."
+description: "Design Android push notifications with rich images, action buttons, silent delivery, and custom sounds."
 ---
 
-The Android Push editor is a form with title, message, image, action URL, and buttons — with a live device preview on the right. Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+Android Push in SuprSend lets you design and send rich push notifications to your Android users — with titles, images, action buttons, deep links, and dynamic variables. A live device preview updates as you build, so you see exactly what recipients will see before you send.
+
+This guide covers every field in the editor, how variables work, advanced delivery options, and how to handle Android-specific quirks like icon alpha, notification channels, and silent delivery.
+
+<Note>
+  You need an Android Push vendor connected and the SuprSend SDK integrated in your app before notifications can be sent. [Set up Android Push →](/docs/firebase-fcm-androidpush)
+</Note>
+
+---
+
+## How the Android Push editor works
+
+The editor is a structured form — title, message, images, action URL, and buttons — with a live Android device preview on the right that updates as you type.
 
 <Frame caption="Android Push editor with live device preview">
   <img src="/images/docs/templates-editor-android-push.png" />
 </Frame>
 
-## Android Push fields
+Keep in mind that Android notification rendering varies by OS version and OEM (Samsung, Pixel, OnePlus all differ). The editor preview is a good baseline, but for critical templates, test on a real device or emulator — see [Best practices](#best-practices).
 
-**Title** — single-line heading. Keep under 40 characters — Android truncates to one line. Supports Handlebars variables.
+---
 
-**Small Icon** — icon in the status bar and notification header. Defaults to the SuprSend bell icon. See [custom icon setup](#how-to-change-the-small-icon-for-a-notification) to use your app icon.
+## Fields
 
-**Large Icon** — appears left of the text on Android 4.0–6.0, right on Android 7.0+. Defaults to your organisation logo (set in Organisation Settings).
+### Title
 
-**Message** — multi-line body text. Front-load key info in the first 2 lines (expanded view shows ~6 lines). Supports Handlebars variables.
+**Required** · Supports variables
 
-**Subtext** — *optional.* Appears next to your brand name at the top of the notification.
+Single-line heading shown in the notification shade. Android truncates to one line, so lead with the reason for the alert. Stay under ~40 characters where possible.
 
-**Banner Image** — *optional.* Supported formats: PNG, JPG, JPEG. Recommended: 2:1 aspect ratio, under 700 KB. Static uploads are auto-scaled and optimised by SuprSend.
+Supports Handlebars: `{{variable_name}}`
 
-**Action URL** — URL opened on notification tap. Supports [deep links](#deep-linking) and Handlebars variables.
+> Example: `Order #{{order_id}} shipped` · `Flash sale ends tonight`
 
-**Action Buttons** — *optional.* Up to 3 buttons with label + URL. Use 1-2 buttons with concise labels (2-3 words): "Track Order", "View Details". Supports Handlebars in both fields. Button colour is set in Organisation Settings.
+### Message
 
-## Adding dynamic content in Android Push
+**Required** · Supports variables
 
-There will always be the case where you would be required to add dynamic content to a template, so as to personalise it for your users. To achieve this, you can add variables in the template, which will be replaced with the dynamic content at the time of sending push. To send actual values to replace variables at the time of communication trigger, use one of our frontend or backend SDKs. Here is a step-by-step guide:
+Multi-line body text. The expanded notification view shows roughly six lines — put the key fact in the first two lines.
+
+> Example: `Your package is on the way! Expected delivery: {{delivery_date}}`
+
+### Subtext
+
+**Optional**
+
+Appears next to your brand name at the top of the notification. Use for secondary context — app section, category, or short metadata.
+
+### Small Icon
+
+**Optional** (defaults apply)
+
+Icon shown in the status bar and notification header. Defaults to the SuprSend bell icon.
+
+**Important:** Android uses only the alpha channel for small icons — they render as monochrome in the status bar. A solid square means your asset is missing alpha transparency. See [How do I add a custom app icon?](#how-do-i-add-a-custom-app-icon) in the FAQ.
+
+### Large Icon
+
+**Optional**
+
+Appears left of the text on Android 4.0–6.0, and right on Android 7.0+. Defaults to your organisation logo (set in Organisation Settings). Override per template when your use case needs a different avatar — for example, a sender photo in a messaging notification.
+
+### Banner Image
+
+**Optional**
+
+A rich image shown in the expanded notification. Recommended: 2:1 aspect ratio, PNG or JPG, under 700 KB. SuprSend auto-scales and optimises static uploads by screen width and network class (WiFi, 4G, 3G, 2G).
+
+> Example: `{{product_image_url}}` for a product shot on a shipping update.
+
+### Action URL
+
+**Required for a tap target** · Supports variables
+
+URL opened when the user taps the notification body. Supports deep links and Handlebars variables.
+
+Prefer `https://` App Links when your app supports them — they work as both a web fallback and a direct deep link. See [How do deep links work in push notifications?](#how-do-deep-links-work-in-push-notifications) in the FAQ.
+
+> Example: `https://yourapp.com/track/{{order_id}}`
+
+### Action Buttons
+
+**Optional**
+
+Up to 3 buttons, each with a label and a URL. Use 1–2 buttons with concise action labels (2–3 words). Supports Handlebars in both label and URL fields. Button colour is set in Organisation Settings.
+
+> Example: `Track Order` → `https://yourapp.com/orders/{{order_id}}` · `View Details` → `yourapp://orders/{{order_id}}`
+
+---
+
+## Advanced options
+
+These fields control delivery behaviour and are optional for most templates.
+
+### Silent
+
+**Boolean**
+
+When enabled, the notification is not shown to the user — the payload is delivered to your app silently for background work. Use for background sync, content prefetch, or silent data refresh. Combine with **Custom Key-Value Pairs** to pass structured data to your app.
+
+> Example: Silent ON with key-value pairs `sync_type` = `catalog_update`, `version` = `{{catalog_version}}`.
+
+### Timeout
+
+**Numeric (seconds)**
+
+Auto-dismisses the notification after N seconds if the user has not interacted. Use for time-sensitive prompts like 2FA codes — often paired with Sticky Notifications for urgent alerts.
+
+### Sticky Notifications
+
+**Boolean**
+
+Prevents swipe-dismiss. The notification only clears when tapped. Use sparingly — users who cannot dismiss a notification may block your app's notification channel entirely.
+
+### Notification Group
+
+**Text**
+
+Groups related notifications so they stack as one expandable row in the shade, instead of spamming separate entries. Use a stable pattern per thread.
+
+> Example: `order_{{order_id}}` · `comments_{{post_id}}`
+
+### App Icon (name)
+
+**Text**
+
+Icon name without file extension, referencing a drawable in your app. See [How do I add a custom app icon?](#how-do-i-add-a-custom-app-icon) in the FAQ for drawable paths and density requirements.
+
+### Sound
+
+**Text**
+
+Sound file name referencing a file in `res/raw`. See [How do I add a custom notification sound?](#how-do-i-add-a-custom-notification-sound) in the FAQ — on Android 8+, sound is tied to the notification channel, not the template.
+
+### Custom Key-Value Pairs
+
+**Key-value pairs (strings)**
+
+Send custom data to your app alongside the notification. Both key and value are strings. Combine with silent notifications for background updates, or use to pass deep-link metadata, feature flags, or IDs your client code reads when the notification opens.
+
+<Note>
+  **SDK version requirements:**
+  - App icon (custom): Android native and React Native SDK version 0.1.8+
+  - Custom sound: Android native and React Native SDK version 2.2.0+
+</Note>
+
+---
+
+## Personalise with variables
+
+You'll often want to add dynamic content to personalise notifications per recipient. Add variables in the template — SuprSend replaces them at send time. Pass values from your frontend or backend SDKs when you trigger the workflow.
 
 <Steps>
   <Step title="Add variables in the Variables panel">
@@ -39,7 +163,7 @@ There will always be the case where you would be required to add dynamic content
   <Step title="Use variables in the template">
     We support `handlebars` to add variables in the template. As a general rule, all the variables have to be entered within double curly brackets: `{{variable_name}}`
 
-    Note that you will be able to enter a variable name even when you have not declared it in the Variables panel. To manually enter the variable name, follow the [handlebars guide here](https://handlebarsjs.com/guide/#what-is-handlebars).
+    You can enter a variable name even when you have not declared it in the Variables panel. To manually enter the variable name, follow the [handlebars guide here](https://handlebarsjs.com/guide/#what-is-handlebars).
 
     Below are some examples:
 
@@ -84,72 +208,42 @@ There will always be the case where you would be required to add dynamic content
 </Steps>
 
 <Warning>
-  At the time of sending communication, if there is a variable present in the template whose value is not rendered due to mismatch or missing, SuprSend will simply discard the template and not send that particular notification to your user.
+  At send time, if a variable in the template cannot be rendered due to mismatch or missing data, SuprSend skips that notification for the affected user.
 
-  Please note that the rest of the templates will be sent. E.g. if there is an error in rendering Android Push template, but email template is successfully rendered, Android Push notification will not be triggered, but email notification will be triggered by SuprSend.
+  Other channels in the same template group are still sent. For example, if Android Push fails to render but email succeeds, only Android Push is skipped for that user.
 </Warning>
 
-## Advanced configurations
-
-| Field | Type | Description |
-|---|---|---|
-| Silent | Boolean | Users won't see this message. Triggers background activities using the notification payload. Useful for data sync, content pre-fetching, or breaking news alerts. |
-| Timeout | Numeric | Auto-dismiss after N seconds if the user hasn't interacted. Combine with Sticky for urgent time-limited alerts (e.g., 2FA prompts). |
-| Sticky Notifications | Boolean | Prevents swipe-dismiss. Removed only when the user taps the notification. |
-| Notification Group | Text | Group name to stack related notifications (e.g., chat messages from the same conversation) to avoid flooding the tray. |
-| App Icon (Small Icon) | Text | Icon name without extension. See custom icon setup in the [FAQ below](#frequently-asked-questions). |
-| Sound | Text | Sound file name. See custom sound setup in the [FAQ below](#frequently-asked-questions). |
-| Custom Key-Value Pairs | Key-value | Send custom data to the app. Both key and value are strings. Combine with silent notifications for background data updates. |
-
-<Note>
-  **SDK version requirements:**
-  - App icon: Android native and React Native SDK version 0.1.8+
-  - Custom sound: Android native and React Native SDK version 2.2.0+
-</Note>
+---
 
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 The right panel shows a live Android device preview, updated in real time as you edit. Variables render using data from the **Variables panel**.
 
 Click **Test** in the top-right corner to send a real push notification to a real device. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+---
+
+## Publish
 
 Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning. Once committed, all notifications triggered after this point use the new content.
 
-## Common scenarios
+---
 
-<AccordionGroup>
-  <Accordion title="Order update with tracking">
-    | Field | Value |
-    |---|---|
-    | Title | `Order #{{order_id}} shipped` |
-    | Message | `Your package is on the way! Expected delivery: {{delivery_date}}` |
-    | Banner Image | `{{product_image_url}}` |
-    | Action URL | `https://yourapp.com/track/{{order_id}}` |
-  </Accordion>
+## Best practices
 
-  <Accordion title="Promotional with action buttons">
-    | Field | Value |
-    |---|---|
-    | Title | `Flash sale ends tonight` |
-    | Message | `Up to 50% off on your favourites. Don't miss out!` |
-    | Banner Image | (static promotional banner) |
-    | Button 1 | `Shop Now` → `https://yourapp.com/sale` |
-    | Button 2 | `View Wishlist` → `yourapp://wishlist` |
-  </Accordion>
+- **Cross-platform copy:** Keep title under ~40 characters and body under ~80 so collapsed views work on Android and iOS.
+- **Action URL on every push:** Default tap should open a deep link — a push with nowhere to go is broken.
+- **OTP and verification:** Never put the actual code in title or body (lock screen risk). Use neutral copy like "Your code is ready" and open the app for the code.
+- **Images:** Use banner (2:1) for promo, events, or cart — not for transactional receipts or OTP. Large icon = product or avatar, not your logo (the app icon already represents the brand).
+- **Buttons:** Add 1–2 action buttons only when there are two real choices (`Track` / `Cancel`); use 2–3 word labels. Skip duplicate actions that match the default tap.
+- **Emoji:** At most one, at the start of the title — skip on failure and security alerts.
+- **Promo timing:** Avoid promotional push outside quiet hours (e.g. ~8:00 AM–8:30 PM) unless the send is tied to a specific appointment time.
 
-  <Accordion title="Silent data sync">
-    | Field | Value |
-    |---|---|
-    | Silent | `ON` |
-    | Custom Key-Value Pairs | `sync_type` = `catalog_update`, `version` = `{{catalog_version}}` |
+---
 
-    Use silent notifications to trigger background data fetches — e.g., pre-loading content so it's ready when the user opens the app.
-  </Accordion>
-</AccordionGroup>
-
-## Frequently asked questions
+## FAQ
 
 <AccordionGroup>
   <Accordion title="How do deep links work in push notifications?">
@@ -201,8 +295,27 @@ Click **Commit** in the top bar to publish the current draft as a new live versi
     Silent notifications deliver a payload to the app without displaying anything to the user. Use them for background data sync, content pre-fetching, or triggering app-level logic. Combine with **Custom Key-Value Pairs** to pass structured data.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the Android Push notification for that user. Other channels in the same template group (email, SMS, etc.) are still sent if they render successfully.
+  <Accordion title="Why does my small icon show as a solid square?">
+    Small icons must use transparency — Android draws only the alpha channel. A square usually means the asset is opaque or missing alpha. Regenerate with [Android Asset Studio](https://romannurik.github.io/AndroidAssetStudio/icons-notification.html) or fix your source image.
+  </Accordion>
+
+  <Accordion title="Why doesn't the new sound play for existing users?">
+    On Android 8.0+, notification sound is tied to the channel created when the category was first registered. Existing users keep the original channel settings until they reinstall, you create a new category, or they clear app data. See **How do I add a custom notification sound?** above.
+  </Accordion>
+
+  <Accordion title="What's the difference between Silent and regular push?">
+    **Silent** — no visible notification; your app receives the payload for background logic. **Regular** — shows in the system tray with title, message, and optional image/buttons. Use silent for sync; use regular when the user should see the alert.
+  </Accordion>
+
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips the Android Push notification for that user. Other channels in the same template group (email, SMS, etc.) are still sent if they render successfully.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes — Android Push is one channel in a template group; email, SMS, and others still send if their templates render.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include properties in your trigger payload or event so Handlebars paths match. Use the **Variables panel** for sample data. See [Adding dynamic content](/docs/templates#the-variables-panel) and your SDK documentation.
   </Accordion>
 </AccordionGroup>
-

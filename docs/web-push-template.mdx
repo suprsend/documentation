@@ -1,31 +1,89 @@
 ---
 title: "Web Push"
-description: "Design Web Push notification templates with title, body, image, action URL, and buttons — with a live Windows/macOS preview."
+description: "Send browser push notifications with a title, image, and click action — with a live Windows/macOS preview."
 ---
 
-The Web Push editor is a form with title, body, image, action URL, and buttons — with a live preview on the right (toggle between Windows and macOS). Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+Web Push in SuprSend lets you send browser push notifications to your users — with titles, body text, banner images, action buttons, and dynamic variables. A live preview lets you toggle between Windows and macOS rendering before you send.
+
+This guide covers every field in the editor, how variables work, and the browser-specific behaviour you need to design around.
+
+<Note>
+  You need a Web Push vendor connected and the SuprSend SDK integrated on your site before notifications can be sent. [Set up Web Push →](/docs/web-push-quick-start)
+</Note>
+
+---
+
+## How the Web Push editor works
+
+The editor is a structured form — title, body, icons, banner image, action URL, and buttons — with a live notification preview on the right. Toggle between Windows and macOS to see how your notification will render on each platform.
 
 <Frame caption="Web Push editor with Windows/macOS preview toggle">
   <img src="/images/docs/templates-editor-web-push.png" />
 </Frame>
 
-## Web Push fields
+**The single most important thing to know upfront:** Web push rendering varies significantly across browsers. Banner images and action buttons only render on Chromium-based browsers (Chrome, Edge, Brave). Firefox and Safari show title and body only. **Write your title and body so they carry the full message on their own** — treat everything else as an enhancement.
 
-**Title** — single-line heading. Keep under 40 characters (Windows truncates aggressively; macOS is more generous). Supports Handlebars variables.
+---
 
-**Large Icon** — shown to the right of the notification text. Defaults to your organisation logo (set in Organisation Settings). Cannot be changed per template.
+## Fields
 
-**Body** — 2-3 lines max. One sentence with a clear CTA is ideal. Supports Handlebars variables.
+### Title
 
-**Banner Image URL** — *optional.* 2:1 aspect ratio (recommended 720x480), under 200 KB for instant rendering. Formats: PNG, JPG, JPEG.
+**Required** · Supports variables
 
-**Action URL** — URL opened on notification click. Always include one — without it, clicking does nothing. Supports Handlebars variables.
+Single-line heading in the browser notification. Windows truncates aggressively; macOS is more generous. Stay under ~40 characters for predictable display on Windows.
 
-**Chrome Action Buttons** — *optional.* Up to 2 buttons with action-oriented labels (2-3 words: "View Order", "Shop Now"). Supports Handlebars. Only visible on Chromium browsers (Chrome, Edge, Brave) — on Firefox and Safari, only the title, body, and click action are shown.
+Supports Handlebars: `{{variable_name}}`
 
-## Adding dynamic content
+> Example: `Back in stock: {{product_name}}` · `New article: {{article_title}}` · `Price dropped on {{product_name}}`
 
-You can add variables in the template to personalise it for each recipient. Variables are replaced with actual data at send time.
+### Body
+
+**Required** · Supports variables
+
+Main message copy. Aim for 2–3 lines. Write as if the banner image and action buttons might not appear — on Firefox and Safari they often don't. The title and body must carry the full message.
+
+> Example: `The item you were watching is available again.` · `{{article_excerpt}}` · `Now {{new_price}} (was {{old_price}})`
+
+### Large Icon
+
+**Optional** (organisation default)
+
+Shown to the right of the notification text. Defaults to your organisation logo set in Organisation Settings. This cannot be changed per template — update Organisation Settings if the logo is wrong. See [How do I change the large icon?](#how-do-i-change-the-large-icon) in the FAQ.
+
+### Banner Image URL
+
+**Optional** · Supports variables
+
+Recommended: 2:1 aspect ratio (720×480 px), under 200 KB. Formats: PNG, JPG, JPEG.
+
+Host on a CDN — browsers fetch the banner at display time, and large or slow URLs may render blank. Chromium browsers show the banner reliably; Firefox and Safari often do not.
+
+> Example: `{{product_image_url}}` · `{{cover_image_url}}`
+
+### Action URL
+
+**Required for click behaviour** · Supports variables
+
+URL opened when the user clicks the notification body. Always set one — without it, clicking may do nothing. Add UTM parameters to track conversions.
+
+> Example: `https://yourapp.com/product/{{product_id}}?utm_source=web_push&utm_campaign={{campaign_name}}`
+
+### Chrome Action Buttons
+
+**Optional** · Supports variables
+
+Up to 2 buttons with action-oriented labels. Supports Handlebars. Only visible on Chromium browsers (Chrome, Edge, Brave) — on Firefox and Safari, only title, body, and the click action are shown.
+
+Treat buttons as an enhancement — duplicate the critical action in the body or title when possible.
+
+> Example: `Buy Now` → `https://yourapp.com/cart/add/{{product_id}}` · `View Deal` / `Add to Cart` pairs for promotions
+
+---
+
+## Personalise with variables
+
+You can add variables in the template to personalise it per recipient. SuprSend replaces variables with actual data at send time.
 
 <Steps>
   <Step title="Add variables in the Variables panel">
@@ -60,53 +118,39 @@ You can add variables in the template to personalise it for each recipient. Vari
 </Steps>
 
 <Warning>
-  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the Web Push notification for that user. Other channels in the same template group are still sent.
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
+
+---
 
 ## Preview and test
 
-The right panel shows a live notification preview (toggle Windows / macOS). Variables render using data from the **Variables panel**.
+Preview and test before you rely on this template in production.
+
+The right panel shows a live notification preview — toggle between Windows and macOS. Variables render using data from the **Variables panel**.
 
 Click **Test** in the top-right corner to send a real web push to a real browser. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+---
 
-Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning.
+## Publish
 
-## Common scenarios
+Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning. Once committed, all notifications triggered after this point use the new content.
 
-<AccordionGroup>
-  <Accordion title="Back-in-stock alert">
-    | Field | Value |
-    |---|---|
-    | Title | `Back in stock: {{product_name}}` |
-    | Body | `The item you were watching is available again.` |
-    | Banner Image URL | `{{product_image_url}}` |
-    | Action URL | `https://yourapp.com/product/{{product_id}}` |
-    | Button 1 | `Buy Now` → `https://yourapp.com/cart/add/{{product_id}}` |
-  </Accordion>
+---
 
-  <Accordion title="New content published">
-    | Field | Value |
-    |---|---|
-    | Title | `New article: {{article_title}}` |
-    | Body | `{{article_excerpt}}` |
-    | Banner Image URL | `{{cover_image_url}}` |
-    | Action URL | `https://yourblog.com/{{article_slug}}` |
-  </Accordion>
+## Best practices
 
-  <Accordion title="Price drop">
-    | Field | Value |
-    |---|---|
-    | Title | `Price dropped on {{product_name}}` |
-    | Body | `Now {{new_price}} (was {{old_price}})` |
-    | Action URL | `https://yourapp.com/product/{{product_id}}` |
-    | Button 1 | `View Deal` → `https://yourapp.com/product/{{product_id}}` |
-    | Button 2 | `Add to Cart` → `https://yourapp.com/cart/add/{{product_id}}` |
-  </Accordion>
-</AccordionGroup>
+- **Action URL on every web push:** Default tap must open a real URL — users should never land nowhere.
+- **Write for the worst browser:** Assume Firefox and Safari — title and body must work without images or extra Chrome-only buttons.
+- **Promo vs transactional:** Use banner images for promotional campaigns; skip images for transactional alerts so loads stay fast.
+- **Large icon:** Comes from your organisation logo — use a transparent PNG so it works on light and dark themes (per-template override is not available).
+- **Measure:** Add UTM (or your analytics params) to action URLs so you can attribute visits from notifications.
+- **Frequency:** Web push unsubscribes fast — send sparingly and earn permission with context before calling `requestPermission()`.
 
-## Frequently asked questions
+---
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Which browsers support which features?">
@@ -117,18 +161,26 @@ Click **Commit** in the top bar to publish the current draft as a new live versi
     | Action Buttons | Yes (up to 2) | No | No | Yes (up to 2) |
     | Large Icon | Yes | Yes | No | Yes |
 
-    Action buttons are labelled "Chrome Action Buttons" in the editor because they only render on Chromium browsers. Design your notification so the core message is in the title + body, with buttons as an enhancement.
+    Action buttons are labelled "Chrome Action Buttons" in the editor because they only render on Chromium browsers. Design your notification so the core message is in the title and body, with buttons as an enhancement.
   </Accordion>
 
   <Accordion title="How do I change the large icon?">
-    The large icon defaults to your organisation logo set in **Organisation Settings** on the SuprSend dashboard. It cannot be changed per template — update it in your org settings if you need a different icon.
+    The large icon defaults to your organisation logo set in **Organisation Settings** on the SuprSend dashboard. It cannot be changed per template — update it in Organisation Settings if you need a different icon.
   </Accordion>
 
   <Accordion title="How often should I send web push notifications?">
     Web push has higher opt-out rates than other channels. Send only high-value, time-sensitive notifications to maintain subscriber trust. Over-sending is the fastest way to lose subscribers.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the Web Push notification for that user. Other channels in the same template group are still sent if they render successfully.
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips the Web Push notification for that user. Other channels in the same template group are still sent if they render successfully.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes — Web Push is one channel in a template group; other channels send independently.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include properties in your trigger payload so Handlebars paths match. Use the **Variables panel** for sample data. See [Adding dynamic content](/docs/templates#the-variables-panel).
   </Accordion>
 </AccordionGroup>

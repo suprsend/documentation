@@ -8,13 +8,14 @@ keywords:
   - suprsend cli template reference
 ---
 
-Manage [templates](/docs/templates). Subcommands let you list templates, get details of a specific template, pull template content to local files, push local changes back to a workspace, and commit a draft to live.
+Manage [notification templates](/docs/templates). Templates define the content and structure of notifications across channels (email, SMS, push, in-app, etc.). Subcommands let you list, get details, pull to local files, push from local files, and commit templates.
 
-Variants are not managed separately — they are included in every `pull` and `push` operation as part of the template file.
+[Variants](/docs/template-variants) are not managed separately — they are included in every `pull` and `push` operation as part of the template file. The same applies to per-tenant overrides and per-locale content.
 
 ## Syntax
 
 ```bash
+suprsend template [flags]
 suprsend template [command]
 ```
 
@@ -27,6 +28,40 @@ suprsend template [command]
 | [`template pull`](/reference/cli-template-pull)     | Pull templates and their variants from SuprSend workspace to local |
 | [`template push`](/reference/cli-template-push)     | Push templates and their variants from local to SuprSend workspace |
 | [`template commit`](/reference/cli-template-commit) | Commit a template from draft to live |
+
+## Examples
+
+```bash
+suprsend template list
+suprsend template get welcome-email
+suprsend template pull --dir ./suprsend/templates
+suprsend template push welcome-email --commit
+```
+
+---
+
+## Folder layout
+
+`template pull` writes each template to a predictable on-disk structure that `template push` reads back. At the top level:
+
+```
+suprsend/templates/
+└── <template-slug>/
+    ├── template.json        # metadata + per-channel variant order
+    ├── mock_data.json       # optional mock payload for previews
+    └── <channel>/<variantID>/
+        ├── variant.json     # variant fields (content inline for most channels)
+        └── ...              # body files for email / slack-block only
+```
+
+A few things to know before you start editing files by hand:
+
+- **One shape per channel.** Every variant lives under `<channel>/<variantID>/` — even the single "default" case.
+- **Tenant overrides** go under `<channel>/_tenants/<tenantID>/<variantID>/`.
+- **Extraction is channel-specific.** Only **email** (HTML, plain text, design JSON) and **Slack** Block Kit bodies get extracted to sidecar files like `body.designer.html` or `body.block.json`. Every other channel — SMS, WhatsApp, Inbox, Push, MS Teams — keeps its entire `content` inline in `variant.json`.
+- **Path is authoritative for identity.** On push, the directory path wins over the `id`, `channel`, and `tenant_id` fields in `variant.json`. Renaming a variant is `mv`.
+
+See the full spec — directory rules, `template.json` shape, content extraction tables, file encoding, push-time behaviour, and schema integration — in **[Folder layout](/reference/cli-template-folder-layout)**.
 
 ---
 

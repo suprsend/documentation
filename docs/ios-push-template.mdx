@@ -1,27 +1,81 @@
 ---
 title: "iOS Push"
-description: "Design iOS Push notification templates with title, body, image, and action URL — with a live lock screen preview."
+description: "Create iOS push notifications with deep links, rich images, and a live lock screen preview."
 ---
 
-The iOS Push editor is a form with title, body, image, and action URL — with a live lock screen preview on the right. Content is personalised with [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`).
+iOS Push in SuprSend lets you send rich push notifications to your iOS users — with titles, body text, images, deep links, and dynamic variables. A live lock screen preview updates as you build, so you see what recipients will see before you send.
+
+This guide covers every field in the editor, how variables work, and how to handle iOS-specific behaviour around images, Universal Links, and badge counts.
+
+<Note>
+  You need an iOS Push vendor connected and the SuprSend SDK integrated in your app before notifications can be sent. [Set up iOS Push →](/docs/ios-push-vendor-integration)
+</Note>
+
+---
+
+## How the iOS Push editor works
+
+The editor is a structured form — title, body, image URL, and action URL — with a live iOS lock screen preview on the right that updates as you type.
 
 <Frame caption="iOS Push editor with live lock screen preview">
   <img src="/images/docs/templates-editor-ios-push.png" />
 </Frame>
 
-## iOS Push fields
+<Frame caption="iOS Push — title, body, rich image, action URL, and advanced options">
+  <img src="/images/docs/templates-editor-ios-push-panel.png" />
+</Frame>
 
-**Title** — single-line heading. Keep under 30 characters — iOS truncates on the lock screen. Supports Handlebars variables.
+Keep in mind that the editor preview is approximate. Final rendering depends on the device, iOS version, and whether your app has a Notification Service Extension installed. For critical templates, test on a real device — see [Best practices](#best-practices).
 
-**Body** — multi-line message text. Front-load key info in the first line (4 lines visible in expanded view). Supports Handlebars variables.
+---
 
-**Image URL** — *optional.* Public URL for a rich notification image (PNG, JPG, JPEG, min 1024x1024 for best rendering). GIFs play in the expanded view. Requires a Notification Service Extension in your app — the SuprSend iOS SDK includes this by default. See [iOS SDK integration](/docs/ios-integration).
+## Fields
 
-**Action URL** — *optional.* URL opened on tap. Always set one — without it, tapping opens the app's default screen. Supports deep links and Handlebars variables.
+### Title
 
-## Adding dynamic content
+**Required** · Supports variables
 
-You can add variables in the template to personalise it for each recipient. Variables are replaced with actual data at send time.
+Single-line heading shown on the lock screen and in Notification Center. iOS truncates to one line, so front-load the key fact. Stay under ~30 characters for predictable display.
+
+Supports Handlebars: `{{variable_name}}`
+
+> Example: `Your order is out for delivery` · `{{actor_name}} liked your post`
+
+### Body
+
+**Required** · Supports variables
+
+Multi-line message text. Only the first line shows in collapsed view — put the critical detail there. Expanded view shows about four lines.
+
+> Example: `Order #{{order_id}} will arrive by {{eta}}. Tap to track.`
+> Example: `"{{post_excerpt}}"` for social notifications
+> Example: `It might be time to restock {{product_name}}.` for reminders
+
+### Image URL
+
+**Optional** · Supports variables
+
+Public HTTPS URL for a rich notification image. Supported formats: PNG, JPG, JPEG (min 1024×1024 for best rendering). GIFs play in the expanded view.
+
+Requires a **Notification Service Extension** in your app — the SuprSend iOS SDK includes this by default. Large images delay appearance in the expanded view, so keep files small and host on a fast CDN.
+
+See [iOS SDK integration](/docs/ios-integration).
+
+### Action URL
+
+**Optional** · Supports variables
+
+URL opened when the user taps the notification. Without an Action URL, tapping opens the app's default screen — set one whenever the user should land on a specific screen.
+
+Prefer [Universal Links](https://developer.apple.com/ios/universal-links/) over custom URL schemes — they work as both a web fallback and an in-app deep link. See [How do deep links work in iOS push?](#how-do-deep-links-work-in-ios-push) in the FAQ.
+
+> Example: `https://yourapp.com/track/{{order_id}}`
+
+---
+
+## Personalise with variables
+
+You can add variables in the template to personalise it per recipient. SuprSend replaces variables with actual data at send time.
 
 <Steps>
   <Step title="Add variables in the Variables panel">
@@ -59,50 +113,39 @@ You can add variables in the template to personalise it for each recipient. Vari
 </Steps>
 
 <Warning>
-  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the iOS Push notification for that user. Other channels in the same template group are still sent.
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend skips that notification for the affected user. Other channels in the same template group are still sent.
 </Warning>
 
+---
+
 ## Preview and test
+
+Preview and test before you rely on this template in production.
 
 The right panel shows a live iOS lock screen preview, updated in real time as you edit. Variables render using data from the **Variables panel**.
 
 Click **Test** in the top-right corner to send a real push notification to a real device. This uses the **live version** — commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
 
-## Commit
+---
 
-Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning.
+## Publish
 
-## Common scenarios
+Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning. Once committed, all notifications triggered after this point use the new content.
 
-<AccordionGroup>
-  <Accordion title="Delivery update">
-    | Field | Value |
-    |---|---|
-    | Title | `Your order is out for delivery` |
-    | Body | `Order #{{order_id}} will arrive by {{eta}}. Tap to track.` |
-    | Image URL | `{{product_image_url}}` |
-    | Action URL | `https://yourapp.com/track/{{order_id}}` |
-  </Accordion>
+---
 
-  <Accordion title="Social engagement">
-    | Field | Value |
-    |---|---|
-    | Title | `{{actor_name}} liked your post` |
-    | Body | `"{{post_excerpt}}"` |
-    | Action URL | `yourapp://posts/{{post_id}}` |
-  </Accordion>
+## Best practices
 
-  <Accordion title="Restock reminder">
-    | Field | Value |
-    |---|---|
-    | Title | `Running low?` |
-    | Body | `It might be time to restock {{product_name}}.` |
-    | Image URL | `{{product_image_url}}` |
-    | Action URL | `https://yourapp.com/product/{{product_id}}` |
-  </Accordion>
-</AccordionGroup>
+- **Same bar as Android:** Use ~40 characters for title and ~80 for body for cross-platform templates — iOS shows more body on the lock screen, but the short spec keeps Android and iOS aligned.
+- **Action URL required:** Every notification should open a useful screen — prefer Universal Links (`https://…`) over custom schemes so links work when the app is not installed.
+- **OTP and verification:** Do not show the code in title or body — only neutral copy like "Your code is ready"; lock screens must not expose secrets.
+- **Rich media:** Rich images need a **Notification Service Extension** (included with the SuprSend iOS SDK). Test on a real device — previews are approximate.
+- **Badge:** SuprSend increments badge by default; override from your backend if the badge should match unread count, not raw deliveries.
+- **Images:** Banner for promo-style sends; skip for transactional and auth. Use CDN URLs for dynamic images and keep files small for LTE.
 
-## Frequently asked questions
+---
+
+## FAQ
 
 <AccordionGroup>
   <Accordion title="Why aren't images showing in my push notification?">
@@ -122,10 +165,18 @@ Click **Commit** in the top bar to publish the current draft as a new live versi
   </Accordion>
 
   <Accordion title="How does badge count work?">
-    SuprSend increments the app badge by 1 for each notification. Clear the badge in your app when the user opens it or reads notifications.
+    SuprSend increments the app badge by 1 for each notification. Clear the badge in your app when the user opens it or reads notifications. For an accurate unread count, set the badge from your backend using `setBadgeCount` (iOS 16+) or `applicationIconBadgeNumber`.
   </Accordion>
 
-  <Accordion title="What happens if a variable is missing at send time?">
-    SuprSend discards the iOS Push notification for that user. Other channels in the same template group are still sent if they render successfully.
+  <Accordion title="What happens if a variable is missing or has the wrong value at send time?">
+    SuprSend skips the iOS Push notification for that user. Other channels in the same template group are still sent if they render successfully.
+  </Accordion>
+
+  <Accordion title="Can I use this channel alongside other channels in the same workflow?">
+    Yes — iOS Push is one channel in a template group; other channels send independently.
+  </Accordion>
+
+  <Accordion title="How do I pass variable values when triggering the workflow?">
+    Include properties in your trigger payload so Handlebars paths match. Use the **Variables panel** for sample data. See [Adding dynamic content](/docs/templates#the-variables-panel).
   </Accordion>
 </AccordionGroup>
