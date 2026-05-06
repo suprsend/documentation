@@ -1,284 +1,94 @@
 ---
 title: "Email"
-description: "Set up guide to send Email notifications via SuprSend."
+sidebarTitle: "Email"
+description: "Channel-specific setup for sending Email notifications via SuprSend — vendor, recipient identity, template, and gotchas."
 ---
 
-  ### Create SuprSend account
-    Simply [signup](https://auth.suprsend.com/sign-up) on SuprSend to create your account. If you already have your company account setup, ask your admin to invite you to the team.
+<Note>
+  Already done the [Quickstart](/docs/getting-started/quickstart)? This page covers only the bits that are unique to Email. Pair it with the quickstart, not as a replacement.
+</Note>
 
-  ### Start testing in Sandbox workspace
-    Your SuprSend account includes three default workspaces: Sandbox, Staging, and Production. You can switch between them from the top navigation bar, and create additional workspaces if needed.
+Adding Email to a SuprSend workspace is three steps:
 
-    1. **Sandbox** 
-        - **Demo Workspace** with pre-configured vendors for quick exploration and POC.
-        - Includes a sample workflow, a sample user with your registered email and pre-configured channels for quick testing. 
-        - Limitation: Available for a trial period and email notifications can be sent only to verified email addresses (to prevent spam).
-    2. **Staging** 
-        - **Development workspace** used to test notification flows before pushing it to production.  
-        - You can enable [Test Mode](/docs/developer/test-mode) to safely test notification flows without delivering to real users. In Test Mode, notifications is delivered only to designated internal testers. You can also set up a catch-all channel to redirect all notifications intended for non-test users.
-    3. **Production** 
-        - **Live workspace** for syncing your actual product users and running production workflows.
-        - We do not recommend making changes directly in your production workspace as it might disrupt your live notifications.<br></br>
-  
-  **When to use additional workspaces?** <br></br><br></br>
-  Workspaces also help isolate different **product lines or applications**, each with their own users and configurations.<br></br>
-  For example, a company like _Meta_ might create separate workspaces for Facebook, Instagram, and WhatsApp.
-
-  ### Create a workflow
-    Workflow houses the automation logic of your notification. Each workflow starts with a trigger, processes the defined logic, and sends one or more messages to the end user. You can create a workflow from SuprSend dashboard by clicking on  button on the [workflows tab](https://app.suprsend.com/en/sandbox/workflows).
-
-    <Frame>
-      <img src="/images/docs/d78be2d-image.png" />
-    </Frame>
-
-    To design a workflow, you need:
-
-    1. **A Trigger point**- Trigger initiates the workflow. You can initiate it
-       - [Using the direct workflow API](/docs/trigger-workflow#triggering-workflow-via-api), where you can include recipient channel information, preferences, and actor details directly in the trigger.
-       - [By emitting an event](/docs/trigger-workflow#event-based-trigger)(note: the recipient needs to be pre-created for event-based triggers).
-    2. **Delivery node**- Delivery Nodes represent the channels where users will receive notifications. You can use:
-
-       [multi-channel](/docs/delivery-multi-channel) nodes, to send messages across multiple channels,
-
-       [smart channel routing](/docs/smart-delivery), to notify users sequentially rather than bombarding them on all channels at once (though it’s generally better to use).
-
-       **Template** in delivery node contains the content of the notification. You can add both static and dynamic content sourced from user properties or trigger payloads. We use [Handlebars](/docs/handlebars-helpers) as our templating language. You can add dynamic content as `{{var}}`; this syntax HTML-escapes values by default to help prevent injection. For URLs and values which can have special characters, you can use triple curly braces `{{{var}}}` to avoid HTML-escaping.
-
-       Add trigger data in the **mock** to get variable auto-suggestions during editing.
-       Ensure to publish the template before using it in a workflow.
-
-       [Learn more about how to design email template here](/docs/email-template).
-
-    <Frame>
-      <img src="https://files.readme.io/e5b9db7-template_edit.gif" />
-    </Frame>
-
-    1. **Functional nodes (Optional)**: These are the logic nodes in the workflow. You can use it to add delay, batch multiple notifications in a summary or add conditional branches in the workflow. [Check out all workflow nodes here.](/docs/delay)
-
-  ### Trigger the workflow
-    You can trigger a test workflow directly from dashboard by clicking on '' button in your workflow editor or **"Commit"** changes to trigger it from your code. We follow Git like versioning for workflow changes, so you need to commit your changes to trigger new workflow via the API. You can check all methods of triggering workflow [here](/docs/trigger-workflow).
-
-    To trigger a workflow, you need:
-
-    1. **Recipient**: End user who would be notified in the workflow run. Recipient is uniquely identified by `distinct_id`within SuprSend and must have the relevant channel identity set in their profile. You can define recipient inline in case of API based trigger or [create user profile first](/docs/users#creating-user-profile-on-suprsend) for event based trigger.
-       In Sandbox environment, a sample user with your registered email ID is pre-created for testing. You can always add more users or edit existing user profile from subscriber page on UI.
-    2. **Data or Event Properties**: This will be used to render dynamic content in the template (added in template mock) or variables in the workflow configuration.
-
-    We'll be triggering the workflow with direct API trigger for quick testing. You can check all trigger methods [here.](/docs/trigger-workflow)
-
-    **Sample payload for API-based trigger**
-
-    You can get workspace key, secret or API Key for trigger from [Settings tab -\> API Keys](https://app.suprsend.com/en/sandbox/developers/api-keys)
-
-    <CodeGroup>
-
-    ```http curl
-    curl --request POST \
-         --url https://hub.suprsend.com/trigger/ \
-         --header 'Authorization: Bearer __api_key__' \
-         --header 'accept: application/json' \
-         --header 'content-type: application/json' \
-         --data '
-    {
-      "workflow": "_workflow_slug_",
-      "recipients": [
-          {
-            "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "$email":["[support@suprsend.com]"],
-            "name":"recipient_1"
-          }
-        ],
-      "data":{
-          "first_name": "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234"
-        }
-     }
-    '
-    ```
-
-
-    ```python Python
-    from suprsend import Event
-    from suprsend import WorkflowTriggerRequest
-
-    supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
-
-    # Prepare workflow payload
-    w1 = WorkflowTriggerRequest(
-      body={
-        "workflow": "_workflow_slug_",
-        "recipients": [
-          {
-            "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "$email":["abc@example.com"],
-            "name":"recipient_1"
-          }
-        ],
-        "data":{
-          "first_name": "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234"
-        }
-      },
-        idempotency_key = "_unique_identifier_of_the_request_"
-      )
-
-    # Trigger workflow
-    response = supr_client.workflows.trigger(w1)
-    print(response)
-    ```
-
-
-    ```javascript Node
-    const {Suprsend, WorkflowTriggerRequest} = require("@suprsend/node-sdk");
-    const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
-
-    // Prepare workflow payload
-    const body = {
-        "workflow": "_workflow_slug_",
-        "recipients": [
-          {
-            "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "$email":["abc@example.com"],
-            "name":"recipient_1"
-          }
-        ],
-        "data":{
-          "first_name": "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234"
-        }
-    }
-    const w1 = new WorkflowTriggerRequest(body, {
-        idempotency_key: "_unique_identifier_of_the_request_"})
-
-    // Trigger workflow
-    const response = supr_client.workflows.trigger(w1);
-    response.then(res => console.log("response", res));
-    ```
-
-
-    ```go Go
-    package main
-
-    import (
-      "log"
-      suprsend "github.com/suprsend/suprsend-go"
-    )
-
-    // Initialize SDK
-    func main() {
-      suprClient, err := suprsend.NewClient("_workspace_key_", "_workspace_secret_")
-      if err != nil {
-        log.Println(err)
-      }
-      _ = suprClient
-      triggerWorkflowAPI(suprClient)
-    }
-
-    func triggerWorkflowAPI(suprClient *suprsend.Client) {
-
-      // Create WorkflowRequest body
-      wfReqBody := map[string]interface{}{
-        "workflow": "_workflow_slug_",
-        "recipients": []map[string]interface{}{
-          {
-            "distinct_id":  "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "$email": []string{"abc@example.com"},
-            "name":"recipient_1",
-          },
-        },
-        // # data can be any json / serializable python-dictionary
-        "data": map[string]interface{}{
-          "first_name":    "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234",
-          "spend_amount":  "$10",
-        },
-      }
-
-      w1 := &suprsend.WorkflowTriggerRequest{
-        Body: wfReqBody,
-        IdempotencyKey: "_unique_identifier_of_the_request_",
-      }
-      // Call Workflows.Trigger to send request to Suprsend
-      resp, err := suprClient.Workflows.Trigger(w1)
-      if err != nil {
-        log.Fatalln(err)
-      }
-      log.Println(resp)
-    }
-    ```
-
-
-    ```java Java
-    package test;
-
-    import java.io.IOException;
-    import java.io.UnsupportedEncodingException;
-    import java.util.Arrays;
-
-    import org.json.JSONArray;
-    import org.json.JSONObject;
-
-    import suprsend.Suprsend;
-    import suprsend.SuprsendException;
-    import suprsend.WorkflowTriggerRequest;
-
-    public class Workflow {
-
-      public static void main(String[] args) throws Exception {
-        WorkflowTrigger();
-      }
-
-      private static void WorkflowTrigger() throws SuprsendException, UnsupportedEncodingException {
-        Suprsend suprClient = Helper.getClientInstance();
-        // payload
-        JSONObject body = getWorkflowBody();
-        String idempotencyKey = "_unique_request_identifier";
-        WorkflowTriggerRequest wf = new WorkflowTriggerRequest(body, idempotencyKey, tenantId);
-        //
-        JSONObject resp = suprClient.workflows.trigger(wf);
-        System.out.println(resp);
-      }
-
-      private static JSONObject getWorkflowBody() {
-        JSONObject body = new JSONObject()
-          .put("workflow", "__workflow_slug__")
-          .put("recipients", new JSONArray()
-               .put(new JSONObject()
-                    .put("distinct_id", "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09")
-                    .put("$email", Arrays.asList("abc@example.com"))
-                    .put("name", "recipient_1")
-                   ))
-          .put("data", new JSONObject()
-               .put("first_name", "User")
-               .put("invoice_amount", "$5000")
-               .put("invoice_id", "Invoice-1234")
-              );
-
-        return body;
-      }
-    }
-    ```
-
-    </CodeGroup>
-
-  ### Check notification logs
-  You can view the status of any sent notification under the Logs tab. Logs are organized in the following order:
-  - **Requests**: Captures all API/SDK requests sent to SuprSend from your backend or frontend. You can see the input payload and request response here.
-  - **Executions**: Workflow executions are logged here. You can click on a log entry to open the step-by-step workflow debugger
-  - **Messages**: All delivery nodes (including webhooks) are tracked here along with their message status (delivered, seen, clicked). Message preview for delivered notifications will also be available soon.
-
-  ### Test with your Email vendor
-    You have to bring your own vendor to setup email notification in staging and production workspaces. However, you can test your workflows in Sandbox where sample vendors are pre-added. You can clone workflows from one workspace to another. All you have to do is fill in the vendor form for your [respective vendor](/docs/vendors) and you are good to go.
-
-  ### Push to Production
-    In SuprSend, each environment is isolated, meaning workflows, users, and vendors are configured separately in testing and production workspaces.
-
-
-
-Follow this [go live checklist](/docs/go-live-checklist) to setup things in production once you are done testing.
+1. **Configure an Email vendor** in the dashboard.
+2. **Make sure your users have `$email`** set in their profile.
+3. **Add an Email delivery node** to your workflow with an Email template.
 
 ---
+
+## 1. Configure an Email vendor
+
+SuprSend doesn't send email itself — it routes through your provider. Sandbox ships with a pre-configured vendor so you can test immediately. For Staging and Production, bring your own:
+
+| Vendor | Setup guide |
+|---|---|
+| SendGrid | [Setup](/docs/sendgrid) |
+| Amazon SES | [Setup](/docs/amazon-ses) |
+| Mailgun | [Setup](/docs/mailgun) |
+| Resend | [Setup](/docs/resend) |
+| Postmark | [Setup](/docs/postmark) |
+| Mailjet | [Setup](/docs/mailjet) |
+
+Use [Vendor Fallback](/docs/vendor-fallback) if you want automatic failover between two providers (e.g. SendGrid → Mailgun).
+
+---
+
+## 2. Recipient identity field
+
+The Email channel identity on a user profile is `$email`. It's an array of addresses — SuprSend will deliver to all of them.
+
+```json
+{
+  "distinct_id": "user_123",
+  "$email": ["primary@example.com", "secondary@example.com"]
+}
+```
+
+You can either set this once via [user identify](/docs/users#creating-user-profile-on-suprsend), or pass it inline at trigger time:
+
+```json
+"recipients": [
+  {
+    "distinct_id": "user_123",
+    "$email": ["recipient@example.com"]
+  }
+]
+```
+
+---
+
+## 3. Email template
+
+Use the [Email template editor](/docs/email-template) — drag-and-drop blocks, raw HTML, or AMP. Variables use [Handlebars](/docs/handlebars-helpers): `{{var}}` HTML-escapes; `{{{var}}}` is raw (use for URLs and special characters). **Publish** the template before saving the workflow.
+
+For multi-language sends, see [Multi-lingual templates](/docs/multi-lingual-template).
+
+---
+
+## Email gotchas
+
+- **Sandbox limitation:** Email can only be sent to verified addresses (anti-spam) during the trial.
+- **Triple braces for URLs:** `{{{action_url}}}`, not `{{action_url}}` — otherwise special characters get HTML-escaped and the link breaks.
+- **Track engagement:** add the SuprSend webhook URL in your vendor portal so opens, clicks, and bounces show up in [Logs and Analytics](/docs/logging).
+- **Deliverability:** authenticate your sending domain (SPF, DKIM, DMARC) on your vendor before going live.
+
+---
+
+## Tip — let your AI assistant do this
+
+```text
+In my SuprSend Sandbox workspace, add an email delivery
+node to the "welcome-series" workflow. Use the existing
+welcome template and send to my distinct_id with email
+test@example.com.
+```
+
+See the [MCP Overview](/reference/mcp-overview) and [Prompt Cheatsheet](/reference/mcp-prompts).
+
+---
+
+## What's next
+
+- [Quickstart](/docs/getting-started/quickstart) — the single end-to-end integration walkthrough.
+- More channel guides: [SMS](/docs/sms-quick-start) · [WhatsApp](/docs/whatsapp-quick-start) · [Mobile Push](/docs/mobile-push-quick-start) · [Web Push](/docs/web-push-quick-start) · [Slack](/docs/slack-quick-start) · [MS Teams](/docs/ms-teams-quick-start) · [Inbox](/docs/inbox-quick-start).
+- [Go-live checklist](/docs/go-live-checklist) — promote to Production safely.

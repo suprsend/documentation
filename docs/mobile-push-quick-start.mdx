@@ -1,350 +1,122 @@
 ---
 title: "Mobile Push"
-description: "Quickly set up & send Mobile Push notifications using SuprSend SDK"
+sidebarTitle: "Mobile Push"
+description: "Channel-specific setup for Mobile Push (Android + iOS) via SuprSend — vendor, SDK install, identify call, template, and gotchas."
 ---
 
-  ### Create SuprSend account
-    Simply [signup](https://auth.suprsend.com/sign-up) on SuprSend to create your account. If you already have your company account setup, ask your admin to invite you to the team.
-  
-  ### Integrate push channel in your application
-    For `Android` applications, Integrate SuprSend SDK and FCM (service provider for sending android push notifications).
+<Note>
+  Already done the [Quickstart](/docs/getting-started/quickstart)? This page covers only the bits that are unique to Mobile Push.
+</Note>
 
-    | Language                   | Documentation                                                                                                                                                              | Example                                                          |
-    | :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
-    | **Native Android**         | [Integrate Android SDK](/docs/integrate-android-sdk) and [Integrate FCM](/docs/android-firebase-fcm-push-integration) in native application                              | -                                                                            |
-    | **React Native (Android)** | [Integrate React Native SDK](/docs/react-native-android-integration) and [Integrate FCM](/docs/react-native-androidpush-integration) in react native application | [GitHub](https://github.com/suprsend/suprsend-rn-sdk/tree/main/example)      |
-    | **Flutter (Android)**      | [Integrate Flutter SDK](/docs/flutter-android-integration) and [Integrate FCM](/docs/flutter-androidpush-integration) in flutter application                     | [GitHub](https://github.com/suprsend/suprsend-flutter-sdk/tree/main/example) |
+Mobile Push is the only backend-trigger channel that **also** requires SDK work in your mobile app — to register the device token with FCM (Android) or APNs (iOS) and attach it to the user's SuprSend profile.
 
-    For `iOS` applications, Integrate SuprSend SDK and APNS (service provider for sending iOS Push notifications)
+Setup is four steps:
 
-    | Language               | Documentation                                                                                                                                       | Example                                                          |
-    | :--------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
-    | **Native iOS**         | [Integrate iOS SDK](https://docs.suprsend.com/docs/ios-integration) and [Integrate APNS](https://docs.suprsend.com/docs/ios-apns-push) in native application                             | -                                                                            |
-    | **React Native (iOS)** | [Integrate React Native SDK](/docs/react-native-android-integration) and [Integrate APNS](/docs/react-native-ios-push-integration) in react native application | [GitHub](https://github.com/suprsend/suprsend-rn-sdk/tree/main/example)      |
-    | **Flutter (iOS)**      | [Integrate Flutter SDK](/docs/flutter-ios-integration) and [Integrate APNS](/docs/flutter-ios-push-integration) in flutter application                     | [GitHub](https://github.com/suprsend/suprsend-flutter-sdk/tree/main/example) |
-  
-  ### Start testing in Sandbox workspace
-    Your SuprSend account includes three default workspaces: Sandbox, Staging, and Production. You can switch between them from the top navigation bar, and create additional workspaces if needed.
-
-    1. **Sandbox** 
-        - **Demo Workspace** with pre-configured vendors for quick exploration and POC.
-        - Includes a sample workflow, a sample user with your registered email and pre-configured channels for quick testing. 
-        - Limitation: Available for a trial period of 30 days.
-    2. **Staging** 
-        - **Development workspace** used to test notification flows before pushing it to production.  
-        - You can enable [Test Mode](/docs/developer/test-mode) to safely test notification flows without delivering to real users. In Test Mode, notifications is delivered only to designated internal testers. You can also set up a catch-all channel to redirect all notifications intended for non-test users.
-    3. **Production** 
-        - **Live workspace** for syncing your actual product users and running production workflows.
-        - We do not recommend making changes directly in your production workspace as it might disrupt your live notifications.<br></br>
-  
-  ### Identify user to attach push token to their profile
-    Call this method as soon as you know the identity of user, that is after login authentication. Pass the id that you use as internal user identifier (UUID, email or numeric code). You'll use this same id in [recipient field](/docs/mobile-push-quick-start#5-trigger-the-workflow) to trigger the notification.
-
-    <CodeGroup>
-
-    ```kotlin Kotlin (Native Android)
-    ssApi.identify(_distinct_id_)
-
-    //Sample Values
-    ssApi.identify("291XXXXX-62XX-4dXX-b2XX");
-    ssApi.identify("johndoe@suprsend.com");
-    ```
-
-
-    ```swift Swift (Native iOS)
-    SuprSend.shared.identify(identity: _distinct_id_)
-
-    //Example
-    SuprSend.shared.identify(identity: "291XXXXX-62XX-4dXX-b2XX");
-    SuprSend.shared.identify(identity: "johndoe@suprsend.com");
-    ```
-
-
-    ```javascript Javascript
-    suprsend.identify(_distinct_id_);
-
-    //Sample Values
-    suprsend.identify("291eaa13-62f5-4d52-b2dd");
-    suprsend.identify("johndoe@gmail.com");
-    ```
-
-
-    ```dart Dart (Flutter)
-    suprsend.identify(_distinct_id_);
-
-    //Sample
-    suprsend.identify("291eaa13-62f5-4d52-b2dd");
-    suprsend.identify(10005);
-    suprsend.identify("johndoe@gmail.com");
-    ```
-
-    </CodeGroup>
-
-    #### Call reset to clear user data on log out
-
-    Don't forget to call reset on user logout. If not called, user id will not reset and multiple tokens and channels will get added to the `distinct_id` who logged in first on the device.
-
-    <CodeGroup>
-
-    ```kotlin Kotlin (Native Android)
-    ssApi.reset()
-    ```
-
-
-    ```swift Swift (Native iOS)
-    SuprSend.shared.reset(unsubscribeNotification: true)
-    ```
-
-
-    ```javascript Javascript
-    suprsend.reset();
-    ```
-
-
-    ```dart Dart (Flutter)
-    suprsend.reset();
-    ```
-
-    </CodeGroup>
-  
-  ### Create a workflow
-    Workflow houses the automation logic of your notification. Each workflow starts with a trigger, processes the defined logic, and sends one or more messages to the end user. You can create a workflow from SuprSend dashboard by clicking on  button on the [workflows tab](https://app.suprsend.com/en/sandbox/workflows).
-
-    To design a workflow, you need:
-
-    1. **A Trigger point**- Trigger initiates the workflow. You can initiate it
-       - [Using the direct workflow API](/docs/trigger-workflow#triggering-workflow-via-api), where you can include recipient channel information, preferences, and actor details directly in the trigger.
-       - [By emitting an event](/docs/trigger-workflow#event-based-trigger): You can trigger these events from your frontend application or from your backend systems, depending on the use case. (note: the recipient needs to be pre-created for event-based triggers).
-    2. **Delivery node**- Delivery Nodes represent the channels where users will receive notifications. You can use:
-
-          - [multi-channel](/docs/delivery-multi-channel) nodes to send messages across multiple channels,
-
-          - [smart channel routing](/docs/smart-delivery) to notify users sequentially rather than bombarding them on all channels at once (though it’s generally better to use).
-
-          - **Template** in delivery node contains the content of the notification. You can add both static and dynamic content sourced from user properties or trigger payloads. We use handlebars as our Push templating language. You can add dynamic content as `{{var}}`. Add trigger data in the **mock** to get variable auto-suggestions during editing. Ensure to publish the template before using it in a workflow.
-
-          Learn how to design [Android Push](/docs/android-push-template) and [iOS Push](/docs/ios-push-template) template here.
-
-    <Frame>
-      <img src="https://files.readme.io/e5b9db7-template_edit.gif" />
-    </Frame>
-    3. **Functional nodes (Optional)**- These are the logic nodes in the workflow. You can use it to add delay, batch multiple notifications in a summary or add conditional branches in the workflow. [Check out all workflow nodes here.](/docs/delay)
-  
-  ### Trigger the workflow
-    You can trigger a test workflow directly from dashboard by clicking on '`Text`' button in your workflow editor or **"Commit"** changes to trigger it from your code. We follow Git like versioning for workflow changes, so you need to commit your changes to trigger new workflow via the API. You can [check all methods of triggering workflow here](/docs/trigger-workflow).
-
-    To trigger a workflow, you need:
-
-    1. **Recipient**- End user who would be notified in the workflow run. Recipient is uniquely identified by `distinct_id` within SuprSend and must have the relevant channel identity set in their profile. You can define recipient inline in case of API based trigger or create user profile first with [user creation method](/docs/users#creating-user-profile-on-suprsend) for event based trigger.
-    2. **Data or Event Properties**- This will be used to render dynamic content in the template (added in template mock) or variables in the workflow configuration.
-
-    We'll be triggering the workflow with direct API trigger for quick testing. You can [check all trigger methods here.](/docs/trigger-workflow)
-<br></br>
-    **Sample payload for API based trigger**
-
-    You can get workspace key, secret or API Key for trigger from [Settings tab -> API Keys ](https://app.suprsend.com/en/sandbox/developers/api-keys). Push channel will be updated in user profile as soon as you identify the user in [step 4](/docs/mobile-push-quick-start#4-identify-user-to-attach-push-token-to-their-profile), so you can just pass the `distinct_id` and data in the trigger.
-
-    <CodeGroup>
-
-    ```curl curl
-    curl --request POST \
-         --url https://hub.suprsend.com/trigger/ \
-         --header 'Authorization: Bearer __api_key__' \
-         --header 'accept: application/json' \
-         --header 'content-type: application/json' \
-         --data '
-    {
-      "workflow": "_workflow_slug_",
-      "recipients": [
-          {
-            "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "name":"recipient_1"
-          }
-        ],
-      "data":{
-          "first_name": "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234"
-        }
-     }
-    '
-    ```
-
-
-    ```python Python
-    from suprsend import Event
-    from suprsend import WorkflowTriggerRequest
-
-    supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
-
-    # Prepare workflow payload
-    w1 = WorkflowTriggerRequest(
-      body={
-        "workflow": "_workflow_slug_",
-        "recipients": [
-          {
-            "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "name":"recipient_1"
-          }
-        ],
-        "data":{
-          "first_name": "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234"
-        }
-      },
-        idempotency_key = "_unique_identifier_of_the_request_"
-      )
-
-    # Trigger workflow
-    response = supr_client.workflows.trigger(w1)
-    print(response)
-    ```
-
-
-    ```javascript Node
-    const {Suprsend, WorkflowTriggerRequest} = require("@suprsend/node-sdk");
-    const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
-
-    // Prepare workflow payload
-    const body = {
-        "workflow": "_workflow_slug_",
-        "recipients": [
-          {
-            "distinct_id": "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "name":"recipient_1"
-          }
-        ],
-        "data":{
-          "first_name": "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234"
-        }
-    }
-    const w1 = new WorkflowTriggerRequest(body, {
-        idempotency_key: "_unique_identifier_of_the_request_"})
-
-    // Trigger workflow
-    const response = supr_client.workflows.trigger(w1);
-    response.then(res => console.log("response", res));
-    ```
-
-
-    ```go Go
-    package main
-
-    import (
-      "log"
-      suprsend "github.com/suprsend/suprsend-go"
-    )
-
-    // Initialize SDK
-    func main() {
-      suprClient, err := suprsend.NewClient("_workspace_key_", "_workspace_secret_")
-      if err != nil {
-        log.Println(err)
-      }
-      _ = suprClient
-      triggerWorkflowAPI(suprClient)
-    }
-
-    func triggerWorkflowAPI(suprClient *suprsend.Client) {
-
-      // Create WorkflowRequest body
-      wfReqBody := map[string]interface{}{
-        "workflow": "_workflow_slug_",
-        "recipients": []map[string]interface{}{
-          {
-            "distinct_id":  "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09",
-            "name":"recipient_1",
-          },
-        },
-        // # data can be any json / serializable python-dictionary
-        "data": map[string]interface{}{
-          "first_name":    "User",
-          "invoice_amount": "$5000",
-          "invoice_id":"Invoice-1234",
-          "spend_amount":  "$10",
-        },
-      }
-
-      w1 := &suprsend.WorkflowTriggerRequest{
-        Body: wfReqBody,
-        IdempotencyKey: "_unique_identifier_of_the_request_",
-      }
-      // Call Workflows.Trigger to send request to Suprsend
-      resp, err := suprClient.Workflows.Trigger(w1)
-      if err != nil {
-        log.Fatalln(err)
-      }
-      log.Println(resp)
-    }
-    ```
-
-
-    ```java Java
-    package test;
-
-    import java.io.IOException;
-    import java.io.UnsupportedEncodingException;
-    import java.util.Arrays;
-
-    import org.json.JSONArray;
-    import org.json.JSONObject;
-
-    import suprsend.Suprsend;
-    import suprsend.SuprsendException;
-    import suprsend.WorkflowTriggerRequest;
-
-    public class Workflow {
-
-      public static void main(String[] args) throws Exception {
-        WorkflowTrigger();
-      }
-
-      private static void WorkflowTrigger() throws SuprsendException, UnsupportedEncodingException {
-        Suprsend suprClient = Helper.getClientInstance();
-        // payload
-        JSONObject body = getWorkflowBody();
-        String idempotencyKey = "_unique_request_identifier";
-        WorkflowTriggerRequest wf = new WorkflowTriggerRequest(body, idempotencyKey, tenantId);
-        //
-        JSONObject resp = suprClient.workflows.trigger(wf);
-        System.out.println(resp);
-      }
-
-      private static JSONObject getWorkflowBody() {
-        JSONObject body = new JSONObject()
-          .put("workflow", "__workflow_slug__")
-          .put("recipients", new JSONArray()
-               .put(new JSONObject()
-                    .put("distinct_id", "0gxxx9f14-xxxx-23c5-1902-xxxcb6912ab09")
-                    .put("name", "recipient_1")
-                   ))
-          .put("data", new JSONObject()
-               .put("first_name", "User")
-               .put("invoice_amount", "$5000")
-               .put("invoice_id", "Invoice-1234")
-              );
-
-        return body;
-      }
-    }
-    ```
-
-    </CodeGroup>
-  
-  ### Check notification logs
-  You can view the status of any sent notification under the Logs tab. Logs are organized in the following order:
-  - **Requests**: Captures all API/SDK requests sent to SuprSend from your backend or frontend. You can see the input payload and request response here.
-  - **Executions**: Workflow executions are logged here. You can click on a log entry to open the step-by-step workflow debugger
-  - **Messages**: All delivery nodes (including webhooks) are tracked here along with their message status (delivered, seen, clicked). Message preview for delivered notifications will also be available soon.
-
-  ### Push to Production
-    In SuprSend, each environment is isolated, meaning workflows, users, and vendors are configured separately in testing and production workspaces.
-
-
-    Follow this [go live checklist](/docs/go-live-checklist) to setup things in production once you are done testing.
-
+1. **Configure the push vendor** (FCM for Android, APNs for iOS).
+2. **Install the SuprSend mobile SDK** in your app.
+3. **Call `identify()`** on login so the device token is attached to the user.
+4. **Add a Push delivery node** to your workflow with a Push template.
 
 ---
+
+## 1. Configure the push vendor
+
+| Platform | Vendor | Setup guide |
+|---|---|---|
+| Android | Firebase Cloud Messaging | [FCM setup](/docs/firebase-fcm-androidpush) |
+| iOS | Apple Push Notification service | [APNs setup](/docs/ios-push-vendor-integration) |
+
+---
+
+## 2. Install the SuprSend mobile SDK
+
+| Stack | Android setup | iOS setup |
+|---|---|---|
+| **Native** | [Android SDK](/docs/integrate-android-sdk) + [FCM integration](/docs/android-firebase-fcm-push-integration) | [iOS SDK](/docs/ios-integration) + [APNs integration](/docs/ios-apns-push) |
+| **React Native** | [RN SDK](/docs/react-native-android-integration) + [RN FCM](/docs/react-native-androidpush-integration) | [RN SDK](/docs/react-native-ios-integration) + [RN APNs](/docs/react-native-ios-push-integration) |
+| **Flutter** | [Flutter SDK](/docs/flutter-android-integration) + [Flutter FCM](/docs/flutter-androidpush-integration) | [Flutter SDK](/docs/flutter-ios-integration) + [Flutter APNs](/docs/flutter-ios-push-integration) |
+
+Example apps: [React Native](https://github.com/suprsend/suprsend-rn-sdk/tree/main/example) · [Flutter](https://github.com/suprsend/suprsend-flutter-sdk/tree/main/example).
+
+---
+
+## 3. Identify the user (and reset on logout)
+
+Call `identify()` after the user logs in. The SDK automatically registers the device push token and attaches it to the user's `distinct_id`. **Always call `reset()` on logout** — otherwise multiple users will accumulate on the same device.
+
+<CodeGroup>
+
+```kotlin Kotlin (Android)
+ssApi.identify("user_123")
+// on logout:
+ssApi.reset()
+```
+
+```swift Swift (iOS)
+SuprSend.shared.identify(identity: "user_123")
+// on logout:
+SuprSend.shared.reset(unsubscribeNotification: true)
+```
+
+```javascript React Native
+suprsend.identify("user_123")
+// on logout:
+suprsend.reset()
+```
+
+```dart Flutter
+suprsend.identify("user_123");
+// on logout:
+suprsend.reset();
+```
+
+</CodeGroup>
+
+---
+
+## 4. Push template
+
+Use the [Android Push template editor](/docs/android-push-template) and [iOS Push template editor](/docs/ios-push-template). Each platform has its own payload structure — title, body, image, action buttons, deeplinks. **Publish** before saving the workflow.
+
+---
+
+## Recipient identity at trigger time
+
+You don't need to pass any channel identity in the trigger — the device token was attached during `identify()`. Just pass `distinct_id`:
+
+```json
+"recipients": [
+  { "distinct_id": "user_123" }
+]
+```
+
+---
+
+## Mobile Push gotchas
+
+- **Forgetting `reset()`** is the #1 source of "wrong user got the push" bugs.
+- **Background vs foreground:** iOS requires extra entitlements for background notifications — see [iOS APNs setup](/docs/ios-apns-push).
+- **Token rotation:** push tokens can change. The SuprSend SDK handles re-registration automatically as long as `identify()` is called on every app launch after login.
+- **Common Android errors:** [Android push errors guide](/docs/androidpush-errors).
+- **Permissions:** request notification permissions explicitly on iOS 14+ and Android 13+.
+
+---
+
+## Tip — let your AI assistant do this
+
+```text
+Add a Push delivery node to my "order-shipped" workflow.
+Title should be "Your order is on its way", body should
+include the order_id variable, and the deeplink should
+open /orders/{order_id} in my app.
+```
+
+See the [MCP Overview](/reference/mcp-overview) and [Prompt Cheatsheet](/reference/mcp-prompts).
+
+---
+
+## What's next
+
+- [Quickstart](/docs/getting-started/quickstart) — the single end-to-end integration walkthrough.
+- More channel guides: [Email](/docs/email-quick-start) · [SMS](/docs/sms-quick-start) · [WhatsApp](/docs/whatsapp-quick-start) · [Web Push](/docs/web-push-quick-start) · [Slack](/docs/slack-quick-start) · [MS Teams](/docs/ms-teams-quick-start) · [Inbox](/docs/inbox-quick-start).
+- [Go-live checklist](/docs/go-live-checklist)
