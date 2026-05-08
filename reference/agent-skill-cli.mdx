@@ -1,12 +1,14 @@
 ---
 title: "suprsend-cli"
 sidebarTitle: "CLI"
-description: "Equip your AI agent to run SuprSend CLI commands — push workflows, sync workspaces, manage schemas, and more."
+description: "Let your AI agent run SuprSend CLI commands correctly the first time — push workflows, sync workspaces, generate types, and more."
 ---
 
-The `suprsend-cli` skill gives your agent the complete SuprSend CLI reference so it can run commands correctly on the first try — no guessing at flags or subcommand names.
+**Use this skill when** you want your AI agent to push, sync, or manage SuprSend assets from the terminal — without you having to remember `--slug` vs `--dir`, or whether `--commit=true` is needed.
 
-## Installation
+The skill loads the full SuprSend CLI reference into your agent's context: every command, every flag, and the gotchas that catch people most.
+
+## Install
 
 ```bash
 npx skills add https://github.com/suprsend/skills --skill suprsend-cli
@@ -14,40 +16,77 @@ npx skills add https://github.com/suprsend/skills --skill suprsend-cli
 
 ---
 
-## What it enables
+## Try it
 
-<CardGroup cols={2}>
-  <Card title="Full workflow lifecycle" icon="diagram-project">
-    Pull workflows from your workspace, edit locally, and push back — with `--commit=true` and `--commit-message` for version tracking.
-  </Card>
-  <Card title="Multi-asset management" icon="layer-group">
-    Manage not just workflows but also [schemas](https://docs.suprsend.com/reference/cli-schema-overview.md), [events](https://docs.suprsend.com/reference/cli-event-overview.md), [preference categories](https://docs.suprsend.com/reference/cli-category-overview.md), and [translations](https://docs.suprsend.com/reference/cli-translation-overview.md) — all from the terminal.
-  </Card>
-  <Card title="Cross-workspace sync" icon="arrows-rotate">
-    [Sync](https://docs.suprsend.com/reference/cli-sync.md) notification assets between staging and production workspaces in a single command.
-  </Card>
-  <Card title="Type generation" icon="code">
-    [Generate](https://docs.suprsend.com/docs/type-generation.md) TypeScript, Python, Go, Java, Ruby, Swift, or Kotlin type definitions from your event schemas for type-safe integrations.
-  </Card>
-  <Card title="CI/CD pipelines" icon="gears">
-    Configure GitHub Actions, GitLab CI, or other pipelines to pull, validate, and push notification changes automatically on merge.
-  </Card>
-  <Card title="Start MCP server" icon="server">
-    Start and configure the [SuprSend MCP server](https://docs.suprsend.com/reference/mcp-overview.md) directly from the terminal with `suprsend start-mcp-server`.
-  </Card>
-</CardGroup>
+Once installed, you can ask your agent things like:
+
+```text
+Push the cart-abandonment workflow to staging and commit it
+with the message "initial version".
+```
+
+Your agent runs:
+
+```bash
+suprsend workflow push --slug cart-abandonment --commit=true \
+  --commit-message "initial version"
+```
+
+No guessing at flags. No silent `Successfully pushed: 0`.
 
 ---
 
-## Before using the CLI
+## Things you can ask your AI to do
 
-All commands require a [service token](https://docs.suprsend.com/docs/developer/service-tokens.md). Set it as an environment variable:
+<AccordionGroup>
+  <Accordion title="Push and version a workflow" icon="upload">
+    *"Push the onboarding workflow as a draft, then commit it once I confirm."*
+
+    Your agent will push without `--commit=true` first, wait for your sign-off, then run a follow-up commit.
+  </Accordion>
+  <Accordion title="Pull, edit, push" icon="arrows-rotate">
+    *"Pull the password-reset workflow from production, change the SMS delay from 5 minutes to 2, and push the change to staging."*
+
+    Full lifecycle — pull, modify locally, push back — handled by the agent.
+  </Accordion>
+  <Accordion title="Sync between workspaces" icon="arrows-left-right">
+    *"Sync all workflows and schemas from staging to production."*
+
+    The agent runs [`suprsend sync`](https://docs.suprsend.com/reference/cli-sync.md) with the right `--source-workspace`, `--target-workspace`, and `--assets` flags.
+  </Accordion>
+  <Accordion title="Generate type-safe SDK code" icon="code">
+    *"Generate TypeScript types for all my event schemas into ./types."*
+
+    The agent runs [`suprsend generate types`](https://docs.suprsend.com/docs/type-generation.md) for TypeScript, Python, Go, Java, Ruby, Swift, or Kotlin.
+  </Accordion>
+  <Accordion title="Set up CI/CD" icon="gears">
+    *"Add a GitHub Actions step that pushes any changed workflows on merge to main."*
+
+    The agent generates the workflow YAML using the right CLI commands and environment variables.
+  </Accordion>
+  <Accordion title="Manage schemas, events, categories, translations" icon="layer-group">
+    *"Push every event schema in ./schemas to staging."*
+
+    Works for [schemas](https://docs.suprsend.com/reference/cli-schema-overview.md), [events](https://docs.suprsend.com/reference/cli-event-overview.md), [preference categories](https://docs.suprsend.com/reference/cli-category-overview.md), and [translations](https://docs.suprsend.com/reference/cli-translation-overview.md) — same patterns as workflows.
+  </Accordion>
+  <Accordion title="Start the MCP server" icon="server">
+    *"Start the SuprSend MCP server."*
+
+    The agent runs `suprsend start-mcp-server` with the right scopes. See [MCP Server](https://docs.suprsend.com/reference/mcp-overview.md).
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Before your first command
+
+The CLI needs a [service token](https://docs.suprsend.com/docs/developer/service-tokens.md). Set it once:
 
 ```bash
 export SUPRSEND_SERVICE_TOKEN="your_service_token_here"
 ```
 
-Always verify your active workspace before pushing:
+Then verify which workspace you're pointed at:
 
 ```bash
 suprsend profile list
@@ -55,29 +94,20 @@ suprsend profile use --name <profile-name>
 ```
 
 <Note>
-  `--workspace` switches between workspaces within an account. The `profile` command is for self-hosted or BYOC deployments. See [Setting Up CLI Access](https://docs.suprsend.com/docs/self-hosted/cli-profiles.md).
+  `--workspace` switches between workspaces *within* an account. The `profile` command is for self-hosted or BYOC deployments. See [Setting Up CLI Access](https://docs.suprsend.com/docs/self-hosted/cli-profiles.md).
 </Note>
-
----
-
-## Example commands
-
-```bash
-suprsend workflow push --slug cart-abandonment --commit=true
-suprsend schema push --dir ./schemas/ --commit=true
-suprsend sync --source-workspace staging --target-workspace production --assets workflows,schemas
-suprsend generate types --output ./types/ --language typescript
-```
 
 ---
 
 ## Common gotchas
 
+These are the mistakes the skill is built to prevent — but worth knowing if something looks off.
+
 | What goes wrong | Why | Fix |
 |---|---|---|
 | `workflow push myfile.json` silently pushes 0 | Command expects `--slug` or `--dir`, not a file path | Use `--slug` or `--dir suprsend/workflow/` |
-| Workflow pushed but nothing fires | Pushed workflows are **drafts by default** | Add `--commit=true` |
-| "Successfully pushed: 0" | Wrong active profile or workspace | Run `suprsend profile list` and switch |
+| Workflow pushed but nothing fires | Pushed workflows are drafts by default | Add `--commit=true` |
+| `Successfully pushed: 0` | Wrong active profile or workspace | Run `suprsend profile list` and switch |
 | Validation error on push | Referenced schema or category doesn't exist | Push dependencies first |
 
 ---
@@ -90,7 +120,13 @@ Run `suprsend --help` or `suprsend <command> --help` for full flag details.
   <Card title="Full CLI Reference" icon="terminal" href="/reference/cli-intro">
     Every command, subcommand, flag, and output format.
   </Card>
-  <Card title="suprsend-workflow-schema" icon="diagram-project" href="/reference/agent-skill-workflow-schema">
-    Generate valid workflow JSON to push.
+  <Card title="Workflow Schema skill" icon="diagram-project" href="/reference/agent-skill-workflow-schema">
+    Generate the workflow JSON your agent will push.
+  </Card>
+  <Card title="Docs & Support skill" icon="book-open" href="/reference/agent-skill-docs-support">
+    Let your agent fetch live SuprSend docs while debugging.
+  </Card>
+  <Card title="Agent Skills Overview" icon="graduation-cap" href="/reference/agent-skills">
+    All available skills.
   </Card>
 </CardGroup>

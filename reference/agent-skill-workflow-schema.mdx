@@ -1,35 +1,83 @@
 ---
 title: "suprsend-workflow-schema"
 sidebarTitle: "Workflow Schema"
-description: "Add SuprSend workflow schema skill to your AI agent to generate valid workflow JSON from plain English."
+description: "Generate valid SuprSend workflow JSON from plain English. This skill teaches your AI agent every workflow node, field, and validation rule."
 ---
 
-The `suprsend-workflow-schema` skill gives your agent the full SuprSend workflow JSON schema. It generates complete, valid workflow JSON from a plain-English description.
+**Use this skill when** you want your AI agent to generate, edit, or refactor SuprSend workflow JSON — without making up `node_type` values or missing required fields.
 
-Workflows conform to `https://schema.suprsend.com/workflow/v1/schema.json`. See [Design Workflow](https://docs.suprsend.com/docs/design-workflow.md) for the full overview.
+The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` spec into your agent's context whenever it detects a workflow task. Every generated file lands in `suprsend/workflow/` and is ready to push with the [`suprsend-cli`](/reference/agent-skill-cli) skill.
 
-## Installation
+## Install
 
 ```bash
 npx skills add https://github.com/suprsend/skills --skill suprsend-workflow-schema
 ```
-<Note>
-Generated workflow is saved in `suprsend/workflow/` directory and can be pushed to SuprSend using `suprsend workflow push --commit=true` command.
-</Note>
 
 ---
 
-## Workflow file structure
+## Try it
+
+Paste this into your agent:
+
+```text
+Create a SuprSend workflow JSON with slug "payment-failed".
+Send an email immediately, wait 24 hours, then send an SMS
+only if the user hasn't retried payment yet.
+```
+
+Your agent loads the skill and produces a file like this in `suprsend/workflow/payment-failed.json`:
+
+```json
+{
+  "$schema": "https://schema.suprsend.com/workflow/v1/schema.json",
+  "slug": "payment-failed",
+  "name": "Payment Failed",
+  "nodes": [
+    { "node_type": "send_email", "...": "..." },
+    { "node_type": "branch_waituntil", "duration": "24h", "...": "..." },
+    { "node_type": "send_sms", "...": "..." }
+  ]
+}
+```
+
+Push it live:
+
+```bash
+suprsend workflow push --slug payment-failed --commit=true
+```
+
+<Tip>
+  Want more example prompts? See the [Prompt Cheatsheet](/reference/mcp-prompts).
+</Tip>
+
+---
+
+## What you can build
+
+A few real workflows people generate with this skill:
+
+- **Cart abandonment** — wait 1 hour, then email and in-app notification.
+- **Password reset** — immediate email with retry SMS after 5 minutes.
+- **Onboarding drip** — email today, in-app tomorrow, SMS in 3 days unless the user activates.
+- **Payment reminder** — branch on invoice status, escalate channels over a week.
+- **Re-engagement** — triggered when a user enters a "dormant" list.
+
+---
+
+## File layout
+
+Every workflow JSON file lives under `suprsend/workflow/`. The filename doesn't matter — but the `slug` field inside does, since that's what the CLI uses to target the workflow.
 
 ```
 suprsend/
 └── workflow/
     ├── cart-abandonment.json
-    ├── payment-reminder.json
+    ├── payment-failed.json
     └── onboarding.json
 ```
 
-Each file must include a `slug` — the unique identifier used by the CLI to target a specific workflow:
+Every file must include a `slug`:
 
 ```json
 {
@@ -40,80 +88,84 @@ Each file must include a `slug` — the unique identifier used by the CLI to tar
 ```
 
 <Warning>
-  Workflows without a `slug` cannot be targeted with `suprsend workflow push --slug`. Always include it in generated JSON.
+  Without `slug`, you can't target the workflow with `suprsend workflow push --slug`. The skill always includes it — but double-check after edits.
 </Warning>
-
-## Node reference
-
-### Delivery
-
-| Node | `node_type` | Docs |
-|---|---|---|
-| Email | `send_email` | [Email](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| SMS | `send_sms` | [SMS](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| WhatsApp | `send_whatsapp` | [WhatsApp](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| In-App Inbox | `send_inbox` | [In-App Inbox](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| Mobile Push | `send_mobile_push` | [Mobile Push](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| Web Push | `send_webpush` | [Web Push](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| Slack | `send_slack` | [Slack](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| MS Teams | `send_ms_teams` | [MS Teams](https://docs.suprsend.com/docs/delivery-single-channel.md) |
-| Multi-Channel | `send_multi_channel` | [Multi-Channel](https://docs.suprsend.com/docs/delivery-multi-channel.md) |
-| Smart Channel Routing | `send_smart_channel_routing` | [Smart Channel Routing](https://docs.suprsend.com/docs/smart-delivery.md) |
-| Webhook | `httpapi_webhook` | [HTTP API](https://docs.suprsend.com/docs/webhook.md) |
-
-### Function
-
-| Node | `node_type` | Docs |
-|---|---|---|
-| Delay | `delay` | [Delay](https://docs.suprsend.com/docs/delay.md) |
-| Batch | `batch` | [Batch](https://docs.suprsend.com/docs/batch.md) |
-| Digest | `digest` | [Digest](https://docs.suprsend.com/docs/digest.md) |
-| Time Window | `timewindow` | [Time Window](https://docs.suprsend.com/docs/time-window.md) |
-
-### Branch
-
-| Node | `node_type` | Docs |
-|---|---|---|
-| Branch | `branch` | [Branch](https://docs.suprsend.com/docs/branch.md) |
-| Wait Until | `branch_waituntil` | [Wait Until](https://docs.suprsend.com/docs/wait-until.md) |
-
-### Data
-
-| Node | `node_type` | Docs |
-|---|---|---|
-| Fetch | `httpapi_fetch` | [Fetch](https://docs.suprsend.com/docs/fetch.md) |
-| Transform | `transform` | [Data Transform](https://docs.suprsend.com/docs/data-transform.md) |
-| Invoke Workflow | `invokeworkflow` | [Invoke Workflow](https://docs.suprsend.com/docs/invoke-workflow.md) |
-| Update User Profile | `userupdate` | [Update User Profile](https://docs.suprsend.com/docs/update-user-profile.md) |
-
-### List and Object
-
-| Node | `node_type` | Docs |
-|---|---|---|
-| Add User to List | `subscriberlistoperation_adduser` | [Add User to List](https://docs.suprsend.com/docs/add-user-to-list.md) |
-| Remove User from List | `subscriberlistoperation_removeuser` | [Remove User from List](https://docs.suprsend.com/docs/remove-user-from-list.md) |
-| Subscribe to Object | `objectoperation_addsubscription` | [Subscribe to Object](https://docs.suprsend.com/docs/subscribe-to-object.md) |
-| Unsubscribe from Object | `objectoperation_removesubscription` | [Unsubscribe from Object](https://docs.suprsend.com/docs/unsubscribe-from-object.md) |
 
 ---
 
-### Known limitation
+## Node reference
+
+The skill knows every node below. You'll rarely need to look these up by hand, but they're useful for verifying generated output.
+
+<AccordionGroup>
+  <Accordion title="Delivery nodes" icon="paper-plane">
+    | Node | `node_type` | Docs |
+    |---|---|---|
+    | Email | `send_email` | [Email](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | SMS | `send_sms` | [SMS](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | WhatsApp | `send_whatsapp` | [WhatsApp](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | In-App Inbox | `send_inbox` | [In-App Inbox](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | Mobile Push | `send_mobile_push` | [Mobile Push](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | Web Push | `send_webpush` | [Web Push](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | Slack | `send_slack` | [Slack](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | MS Teams | `send_ms_teams` | [MS Teams](https://docs.suprsend.com/docs/delivery-single-channel.md) |
+    | Multi-Channel | `send_multi_channel` | [Multi-Channel](https://docs.suprsend.com/docs/delivery-multi-channel.md) |
+    | Smart Channel Routing | `send_smart_channel_routing` | [Smart Channel Routing](https://docs.suprsend.com/docs/smart-delivery.md) |
+    | Webhook | `httpapi_webhook` | [HTTP API](https://docs.suprsend.com/docs/webhook.md) |
+  </Accordion>
+  <Accordion title="Function nodes" icon="hourglass">
+    | Node | `node_type` | Docs |
+    |---|---|---|
+    | Delay | `delay` | [Delay](https://docs.suprsend.com/docs/delay.md) |
+    | Batch | `batch` | [Batch](https://docs.suprsend.com/docs/batch.md) |
+    | Digest | `digest` | [Digest](https://docs.suprsend.com/docs/digest.md) |
+    | Time Window | `timewindow` | [Time Window](https://docs.suprsend.com/docs/time-window.md) |
+  </Accordion>
+  <Accordion title="Branch nodes" icon="code-branch">
+    | Node | `node_type` | Docs |
+    |---|---|---|
+    | Branch | `branch` | [Branch](https://docs.suprsend.com/docs/branch.md) |
+    | Wait Until | `branch_waituntil` | [Wait Until](https://docs.suprsend.com/docs/wait-until.md) |
+  </Accordion>
+  <Accordion title="Data nodes" icon="database">
+    | Node | `node_type` | Docs |
+    |---|---|---|
+    | Fetch | `httpapi_fetch` | [Fetch](https://docs.suprsend.com/docs/fetch.md) |
+    | Transform | `transform` | [Data Transform](https://docs.suprsend.com/docs/data-transform.md) |
+    | Invoke Workflow | `invokeworkflow` | [Invoke Workflow](https://docs.suprsend.com/docs/invoke-workflow.md) |
+    | Update User Profile | `userupdate` | [Update User Profile](https://docs.suprsend.com/docs/update-user-profile.md) |
+  </Accordion>
+  <Accordion title="List and Object nodes" icon="layer-group">
+    | Node | `node_type` | Docs |
+    |---|---|---|
+    | Add User to List | `subscriberlistoperation_adduser` | [Add User to List](https://docs.suprsend.com/docs/add-user-to-list.md) |
+    | Remove User from List | `subscriberlistoperation_removeuser` | [Remove User from List](https://docs.suprsend.com/docs/remove-user-from-list.md) |
+    | Subscribe to Object | `objectoperation_addsubscription` | [Subscribe to Object](https://docs.suprsend.com/docs/subscribe-to-object.md) |
+    | Unsubscribe from Object | `objectoperation_removesubscription` | [Unsubscribe from Object](https://docs.suprsend.com/docs/unsubscribe-from-object.md) |
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Known limitation
 
 <Warning>
-  Agents may produce incorrect `expression_v1` conditions inside `branch_waituntil` nodes. Always review branch logic before pushing to production. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md) for correct syntax.
+  Agents sometimes produce incorrect `expression_v1` conditions inside `branch_waituntil` nodes. Always review branch logic before pushing to production. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md) for correct syntax.
 </Warning>
+
+---
 
 ## Learn more
 
 <CardGroup cols={2}>
   <Card title="Schema Guide" icon="book" href="https://github.com/suprsend/skills/blob/HEAD/skills/suprsend-workflow-schema/references/workflow-schema-guide.md">
-    Detailed field definitions on GitHub.
+    Detailed field-by-field schema reference on GitHub.
   </Card>
   <Card title="Design Workflow" icon="diagram-project" href="https://docs.suprsend.com/docs/design-workflow.md">
-    How to design and publish workflows.
+    How workflows work end-to-end in SuprSend.
   </Card>
   <Card title="suprsend-cli skill" icon="terminal" href="/reference/agent-skill-cli">
-    Push generated workflows to SuprSend.
+    Push generated workflows to your workspace.
   </Card>
   <Card title="Agent Skills Overview" icon="graduation-cap" href="/reference/agent-skills">
     All available skills.
