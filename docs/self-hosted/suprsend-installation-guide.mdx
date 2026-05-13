@@ -37,7 +37,7 @@ You’ll use this token to authenticate to the private Helm repository.
 
 ```bash
 helm repo add suprsend \
-  https://byoc.suprsend.com/charts/suprsend \
+  https://helm.suprsend.com/charts/suprsend \
   --username license \
   --password <REPLACE_WITH_YOUR_LICENSE_TOKEN>
 ```
@@ -107,6 +107,10 @@ stringData:
   blobS3AccessKeyIdKey: ""
   # connection url for opensearch
   opensearchConnUrlKey: ""
+  # WorkOS secret key (from WorkOS dashboard → API Keys). Required only if WorkOS integration is enabled.
+  workosApiKey: ""
+  # WorkOS webhook signing secret (from WorkOS dashboard → Webhooks). Required only if WorkOS integration is enabled.
+  workosWebhookSecretKey: ""
 ```
 and create it by 
 
@@ -147,9 +151,13 @@ Wait for all pods to be `Running` or `Completed`. Investigate any `CrashLoopBack
 
 Below is a **starter** `suprsend-values.yaml` you can copy and edit. Replace placeholders (hosts, TLS secrets, replicas, etc.) per your environment. The `license.token` should be set **before** install/upgrade.
 
+<Warning>
+**Not a full chart default:** this starter does not list every key from the current Helm chart. For example, the **Unlayer** email editor in the dashboard requires `suprsendApp.config.viteEmailEditorToken` (request the token from SuprSend). Download or inspect the latest **`values.yaml`** bundled with the chart (`helm show values suprsend/suprsend` after adding the repo) and merge any missing features into your file.
+</Warning>
+
 ```yaml title="suprsend-values.yaml"
 license:
-  endpoint: "https://byoc.suprsend.com/licenses/charts/auth" # keep this as is
+  endpoint: "https://helm.suprsend.com/licenses/charts/auth" # keep this as is
   token: "" # Your license token
 
 serviceAccount: ""
@@ -207,6 +215,8 @@ global:
     suprsendJsonnetRendererApiBaseUrl: 
     # base url of outbound-webhook service (e.g: https://webhooks.yourdomain.com)
     suprsendWebhooksApiBaseUrl: 
+    # base url of designer-editor service (e.g: https://designer-editor.yourdomain.com)
+    suprsendDesignerEditorBaseUrl: 
   secret:
     existingKubeSecret: "suprsend-secrets"
     # connection URL for Redis without database-number(e.g., `redis://user:password@host:port`)
@@ -288,8 +298,14 @@ suprsendapi:
     blobS3Endpoint: 
     # if blobstore='s3', AWS region of the S3 bucket
     blobS3Region: 
-    # object store for files (e.g: s3/azblob)
+    # object store for files (e.g: s3/azblob/gcs)
     blobStore: 
+    # enable WorkOS integration for SSO login (e.g: true/false). Refer to WorkOS integration guide.
+    isWorkosIntegrated: 
+    # WorkOS Client ID (from WorkOS dashboard → API Keys)
+    workosClientId: 
+    # WorkOS AuthKit hosted base URL (e.g: https://your-app.authkit.app)
+    workosSigninBaseUrl: 
   secret:
     existingKubeSecret: "suprsend-secrets"
     # username of SMTP mail server
@@ -302,6 +318,10 @@ suprsendapi:
     blobS3SecretAccessKeyKey: "blobS3SecretAccessKeyKey"
     # if blobstore='s3', AWS S3 access key ID
     blobS3AccessKeyIdKey: "blobS3AccessKeyIdKey"
+    # WorkOS API secret key reference
+    workosApiKeyKey: "workosApiKey"
+    # WorkOS webhook secret reference
+    workosWebhookSecretKey: "workosWebhookSecretKey"
   
   nodeSelector: {}
   tolerations: []
@@ -359,6 +379,8 @@ suprsendApp:
   config:
     # email editor token, contact suprsend to get one
     viteEmailEditorToken: 
+    # set to "false" to enable WorkOS login flow, "true" to use default email+code login
+    viteDisableWorkosLoginFlow: 
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -380,6 +402,19 @@ prontoNatsListener:
   affinity: {}
 
 jsonnetrenderer:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: "" 
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+designerEditor:
   podLabels: {}
   podAnnotations: {}
   replicaCount: 1
@@ -517,6 +552,13 @@ managementService:
     ingressClassName: "" 
     host: ""
     tlsSecretKey: ""
+  config:
+    # pipe-separated list of exact origins allowed for CORS (e.g: https://app.yourdomain.com|https://admin.yourdomain.com)
+    allowedOrigins: 
+    # pipe-separated list of domains allowed for CORS (matches all subdomains). Use "*" to allow any origin (e.g: yourdomain.com)
+    corsDomainWhitelist: 
+    # port on which the management-proxy listens (defaults to 8888)
+    port: "8888"
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -745,10 +787,13 @@ nats:
   - `ingressClassName`: Ingress controller class (e.g., `nginx`, `alb`)
   - `host`: Public hostname
   - `tlsSecretKey`: Name of existing TLS secret
+- `managementService.config`: CORS and proxy port for the management API (`allowedOrigins`, `corsDomainWhitelist`, `port`).
+- `designerEditor`: Ingress and scaling for the designer editor; set `global.config.suprsendDesignerEditorBaseUrl` to match the public URL.
 - `nats`: Enable the included subchart if you don't manage NATS externally. Configure:
   - `nkey`: The public part of your NATS NKey authentication (starts with 'U'). This must match the `natsNkeyPubKey` in your secrets.
   - JetStream storage size (default: 20Gi)
   - Retention settings via `natsman.config`
+- **WorkOS (optional)**: For dashboard SSO via AuthKit, set `suprsendapi.config.isWorkosIntegrated`, `workosClientId`, and `workosSigninBaseUrl`; map `workosApiKey` and `workosWebhookSecretKey` in secrets; set `suprsendApp.config.viteDisableWorkosLoginFlow` as needed. See [WorkOS Integration (SSO)](/docs/self-hosted/workos-integration).
 
 ### Advanced Pod Scheduling and Metadata Configuration
 

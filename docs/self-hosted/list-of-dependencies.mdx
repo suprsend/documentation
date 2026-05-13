@@ -3,43 +3,30 @@ title: "List of Dependencies"
 description: "All infrastructure dependencies required to deploy and run SuprSend in self-hosted mode."
 ---
 
+# Dependencies
+
 This document outlines all the infrastructure dependencies required to deploy and run SuprSend in self-hosted mode.
 
-## At a Glance
-
-| Component | Version | Purpose | Recommended Deployment |
-|-----------|---------|---------|------------------------|
-| Kubernetes | v1.29+ | Container orchestration | Managed (GKE, EKS, AKS) |
-| PostgreSQL | v17+ | Primary data store | Outside Kubernetes |
-| ClickHouse | v24.9+ | Analytics and logs | Outside Kubernetes |
-| Redis (×2) | v7.0+ | Cache and state management | Dedicated deployment |
-| OpenSearch | v1.3+ | Full-text search | External service |
-| Temporal | v1.25+ | Workflow orchestration | In-cluster or external |
-| NATS | v2.10+ | Message broker | In-cluster or external |
-| Object Storage | — | Files, attachments, media | AWS S3 / Azure Blob / GCS |
-
----
-
-## Core Infrastructure
+## Core Infrastructure Requirements
 
 ### Kubernetes Cluster
 
 - **Version**: Kubernetes v1.29+
 - **Purpose**: Container orchestration for SuprSend services
 - **Deployment**: Can be deployed on any Kubernetes distribution (GKE, EKS, AKS, DigitalOcean, etc.)
-
-<Tip>
-Use managed Kubernetes services for production deployments.
-</Tip>
+- **Recommendation**: Use managed Kubernetes services for production deployments
 
 ### Storage Requirements
 
-| Requirement | Details |
-|-------------|---------|
-| **Persistent Volumes** | Required for stateful services |
-| **Storage Classes** | Must support ReadWriteOnce access mode |
-| **Recommended** | SSD storage for optimal performance |
-| **Size** | Minimum 100–200 GB per database instance |
+- **Persistent Volumes**: Required for stateful services
+- **Storage Classes**: Must support ReadWriteOnce access mode
+- **Recommended**: SSD storage for optimal performance
+- **Size**: Minimum 100–200 GB per database instance
+- **Object Storage**: Blob store for files, attachments, and media assets
+  - **Options**: AWS S3, Azure Blob Storage, or Google Cloud Storage
+  - **Buckets**: Two buckets required (private and public)
+  - **Requirements**: Encryption at rest, access controls, versioning
+  - **Use Cases**: Template assets, user uploads
 
 ### Temporal
 
@@ -47,8 +34,7 @@ Use managed Kubernetes services for production deployments.
 - **Purpose**: Workflow orchestration and state management
 - **Deployment**: Can be deployed in-cluster or as external service
 - **Use Case**: Reliable workflow execution and state management
-
----
+- **Installation Guide**: [Temporal Setup Guide](/docs/self-hosted/setup-dependencies/temporal)
 
 ## Database Dependencies
 
@@ -56,6 +42,7 @@ Use managed Kubernetes services for production deployments.
 
 - **Version**: PostgreSQL v17+ (required)
 - **Purpose**: Primary data store for users, templates, workflows, and notifications
+- **Installation Guide**: [PostgreSQL Setup Guide](/docs/self-hosted/setup-dependencies/postgres)
 
 **Configuration Requirements:**
 
@@ -71,24 +58,20 @@ wal_level = logical
 
 **Required Extensions:**
 
-| Extension | Purpose |
-|-----------|---------|
-| `pg_cron` | Scheduled jobs |
-| `pgcrypto` | Cryptographic functions |
-| `pg_stat_statements` | Query performance monitoring |
-| `btree_gin` | GIN indexes |
-| `btree_gist` | GiST indexes |
+- `pg_cron` — For scheduled jobs
+- `pgcrypto` — For cryptographic functions
+- `pg_stat_statements` — For query performance monitoring
+- `btree_gin` — For GIN indexes
+- `btree_gist` — For GiST indexes
 
 **Databases** — 6 databases required:
 
-| Database | Purpose |
-|----------|---------|
-| `suprsend` | Main application database |
-| `defaultdb` | Default database for cron jobs |
-| `pronto` | Pronto service database |
-| `svix` | Svix webhook service database |
-| `temporal` | Temporal workflow database |
-| `temporal_visibility` | Temporal visibility database |
+- `suprsend` — Main application database
+- `defaultdb` — Default database for cron jobs
+- `pronto` — Pronto service database
+- `svix` — Svix webhook service database
+- `temporal` — Temporal workflow database
+- `temporal_visibility` — Temporal visibility database
 
 ### ClickHouse
 
@@ -97,6 +80,7 @@ wal_level = logical
 - **Deployment**: Recommended outside Kubernetes for better performance
 - **Storage**: High-performance storage recommended (SSD)
 - **Configuration**: Single-node or clustered setup based on scale requirements
+- **Installation Guide**: [ClickHouse Setup Guide](/docs/self-hosted/setup-dependencies/clickhouse)
 
 ### OpenSearch
 
@@ -104,8 +88,7 @@ wal_level = logical
 - **Purpose**: Full-text search and advanced query capabilities
 - **Deployment**: External service recommended
 - **Use Case**: Advanced search and log analysis features
-
----
+- **Installation Guide**: [OpenSearch Setup Guide](/docs/self-hosted/setup-dependencies/opensearch)
 
 ## Data Stores and Messaging
 
@@ -114,14 +97,11 @@ wal_level = logical
 - **Version**: Redis v7.0+
 - **Purpose**: Cache and short-term state management
 - **Deployment**: Dedicated deployment preferred (outside Kubernetes)
+- **Instances**: 2 Redis stores required:
+  - **Redis 1**: Short-term load management
+  - **Redis 2**: Workflow states and data processing
 - **Configuration**: High availability setup recommended
-
-**Instances** — 2 Redis stores required:
-
-| Instance | Purpose |
-|----------|---------|
-| **Redis 1** | Short-term load management |
-| **Redis 2** | Workflow states and data processing |
+- **Installation Guide**: [Redis Setup Guide](/docs/self-hosted/setup-dependencies/redis)
 
 ### NATS
 
@@ -130,53 +110,37 @@ wal_level = logical
 - **Deployment**: Can be deployed in-cluster or as external service
 - **Use Case**: High-volume event processing scenarios
 
----
-
 ## Object Storage
 
 - **Purpose**: Object storage for files, attachments, and media assets
 - **Supported Providers**:
-  - **AWS S3** — Amazon Simple Storage Service
-  - **Azure Blob Storage** — Microsoft Azure object storage
-  - **Google Cloud Storage** — Google Cloud object storage
+  - **AWS S3**: Amazon Simple Storage Service
+  - **Azure Blob Storage**: Microsoft Azure object storage
+  - **Google Cloud Storage**: Google Cloud object storage
+- **Bucket Configuration**: Two buckets required:
+  - **Private Bucket**: For sensitive files, user uploads, and internal assets
+  - **Public Bucket**: For publicly accessible content and media files
+- **Use Cases**:
+  - Template assets and media files
+  - User-uploaded attachments
+  - Backup storage for database dumps
+- **Requirements**:
+  - **Access Control**: IAM policies for secure access to private bucket
+  - **Public Access**: Public read access for public bucket
+- **Configuration Guide**: [Blob Store Configuration Guide](/docs/self-hosted/setup-dependencies/blob-store)
 
-**Bucket Configuration** — Two buckets required:
+## Optional Services
 
-| Bucket | Purpose |
-|--------|---------|
-| **Private Bucket** | Sensitive files, user uploads, and internal assets |
-| **Public Bucket** | Publicly accessible content and media files |
+### WorkOS
 
-**Use Cases:**
-- Template assets and media files
-- User-uploaded attachments
-- Backup storage for database dumps
+- **Purpose**: Enterprise Single Sign-On (SSO), SAML, and social login authentication for the SuprSend dashboard
+- **Deployment**: SaaS service managed by WorkOS (no self-hosting required)
+- **Default Behavior**: Without WorkOS, the dashboard uses passwordless email+code login
+- **Installation Guide**: [WorkOS Integration Guide](/docs/self-hosted/workos-integration)
 
-**Requirements:**
-- **Access Control**: IAM policies for secure access to private bucket
-- **Public Access**: Public read access for public bucket
+## Quick Start
 
----
+For a complete step-by-step deployment guide, see:
 
-## Setup Guides
-
-<CardGroup cols="3">
-  <Card title="PostgreSQL" icon="database" iconType="solid" href="/docs/self-hosted/setup-dependencies/postgres">
-    Primary data store setup and configuration.
-  </Card>
-  <Card title="Redis" icon="bolt" iconType="solid" href="/docs/self-hosted/setup-dependencies/redis">
-    Cache and worker state store setup.
-  </Card>
-  <Card title="ClickHouse" icon="chart-bar" iconType="solid" href="/docs/self-hosted/setup-dependencies/clickhouse">
-    Analytics and logs storage setup.
-  </Card>
-  <Card title="OpenSearch" icon="magnifying-glass" iconType="solid" href="/docs/self-hosted/setup-dependencies/opensearch">
-    Full-text search and indexing setup.
-  </Card>
-  <Card title="Temporal" icon="clock" iconType="solid" href="/docs/self-hosted/setup-dependencies/temporal">
-    Workflow orchestration engine setup.
-  </Card>
-  <Card title="Blob Store" icon="cloud" iconType="solid" href="/docs/self-hosted/setup-dependencies/blob-store">
-    Object storage configuration.
-  </Card>
-</CardGroup>
+- **Main deployment (Helm install)**: [SuprSend Installation Guide](/docs/self-hosted/suprsend-installation-guide)
+- **Getting started**: [Quick Start](/docs/self-hosted/getting-started)
