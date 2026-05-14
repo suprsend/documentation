@@ -1,0 +1,205 @@
+---
+title: "Messages"
+description: "List and bulk update message statuses from the SuprSend Python SDK."
+---
+
+The Messages API lets you fetch a paginated list of messages in your workspace and bulk update message statuses (e.g. mark as seen, read, archived) without calling the REST API directly. These Python helpers are thin wrappers over the underlying [List Messages](/reference/list-messages) and [Bulk Update Message Status](/reference/bulk-update-messages) endpoints.
+
+## List Messages
+
+Fetch a paginated list of messages for your workspace. All filter parameters are optional.
+
+<CodeGroup>
+
+```python Basic
+from suprsend import Suprsend
+
+supr_client = Suprsend("workspace_key", "workspace_secret")
+
+# Returns first page with default limit
+response = supr_client.messages.list()
+print(response)
+```
+
+
+```python With filters
+from suprsend import Suprsend
+
+supr_client = Suprsend("workspace_key", "workspace_secret")
+
+response = supr_client.messages.list({
+    # Pagination
+    "limit": 20,                            # records per page (default: 1000, max: 1000)
+    "after": "__cursor__",                  # cursor for next page (from meta.after)
+    "before": "__cursor__",                 # cursor for previous page (from meta.before)
+
+    # Message filters
+    "message_id": "__message_id__",         # filter by a specific message id
+    "idempotency_key": "__idempotency_key__",
+
+    # Recipient filters
+    "recipient_id": ["user1", "user2"],     # recipient_id[] - filter by one or more recipient ids
+    "tenant_id": "default",
+
+    # Object recipient filters (both required together)
+    "object_type": "__object_type__",
+    "object_id": "__object_id__",
+
+    # Workflow / execution filters
+    "workflow_slug": "purchase-made",
+    "execution_id": "__execution_id__",
+
+    # Channel filter
+    # valid: email, sms, whatsapp, androidpush, iospush, webpush, slack, ms_teams
+    "channel": "email",
+
+    # status[] - valid: triggered, delivered, delivery_failed, seen, clicked, dismissed, read, archived, unread
+    "status": ["delivered", "seen"],
+
+    # category[] filter
+    "category": ["transactional"],
+
+    # Campaign filter
+    "is_campaign": False,
+
+    # Date range filters (RFC3339 format)
+    "created_at_gte": "2026-01-01T00:00:00Z",
+    "created_at_lte": "2026-12-31T23:59:59Z",
+})
+print(response)
+```
+
+
+```python Response
+{
+    "meta": {
+        "count": 150,       # total matching messages
+        "limit": 20,        # limit used for this request
+        "has_prev": True,   # whether a previous page exists
+        "has_next": True,   # whether a next page exists
+        "before": None,     # cursor for previous page, null if none
+        "after": None,      # cursor for next page, null if none
+    },
+    "results": [
+        {
+            "message_id": "01KQVGPW9ZJKH6T5TSxxxxxxx",
+            "created_at": "2025-08-27T15:24:38.14Z",
+            "updated_at": "2025-08-27T15:24:41.00Z",
+            "triggered_at": "2025-08-27T15:24:38.29Z",
+            "delivered_at": "2025-08-27T15:24:41.037Z",
+            "seen_at": "2025-08-27T15:24:45.65Z",
+            "clicked_at": None,
+            "dismissed_at": None,
+            "read_at": None,
+            "unread_at": None,
+            "archived_at": None,
+            "unarchived_at": None,
+            "is_read": False,
+            "is_archived": False,
+            "status": "seen",
+            "channel": "email",
+            "category": "transactional",
+            "idempotency_key": "8087c3e7-6612-4d16-9660-xxxxxxxx",
+            "failure_reason": "",
+            "recipient": {
+                "$type": "user",
+                "distinct_id": "user_123"
+            },
+            "parent_entity_id": "__object:TEAMS:teams_1",
+            "parent_entity_type": "object",
+            "vendor": {
+                "name": "amazon_ses",
+                "nickname": "AWS SES"
+            },
+            "execution_id": "dsl_w1_id3741_xxxxxxxx_0_1",
+            "parent_execution_id": "dsl_w1_id3741_xxxxxxxx_0",
+            "is_campaign": False,
+            "tenant_id": "default",
+            "workflow": {
+                "slug": "purchase-made",
+                "version_id": "wf_v_01KQVGxxxxxxx_chkp",
+                "name": "Purchase Workflow",
+                "node_ref": ""
+            },
+            "template": {
+                "name": "Purchase Template",
+                "slug": "amazon_ses",
+                "version_no": 1
+            },
+            "channel_identity": {
+                "email": "user@example.com"
+            }
+        }
+    ]
+}
+```
+
+</CodeGroup>
+
+### Filter parameters
+
+| Parameter         | Type                  | Description                                                                                                                                                                                                       |
+| ----------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `limit`           | `integer`             | Records per page. Default `1000`, max `1000`.                                                                                                                                                                     |
+| `after`           | `string`              | Opaque cursor for the next page. Pass the `meta.after` value from a previous response.                                                                                                                            |
+| `before`          | `string`              | Opaque cursor for the previous page. Pass the `meta.before` value from a previous response.                                                                                                                       |
+| `message_id`      | `string`              | Filter by a specific message id.                                                                                                                                                                                  |
+| `idempotency_key` | `string`              | Filter by the idempotency key associated with the message at trigger time.                                                                                                                                        |
+| `recipient_id`    | `array of string`     | Filter by one or more recipient `distinct_id`s. Multiple values are OR-ed.                                                                                                                                        |
+| `tenant_id`       | `string`              | Filter messages belonging to a specific tenant.                                                                                                                                                                   |
+| `object_type`     | `string`              | Filter messages sent to an object. Must be provided together with `object_id`.                                                                                                                                    |
+| `object_id`       | `string`              | Filter messages sent to an object. Must be provided together with `object_type`.                                                                                                                                  |
+| `workflow_slug`   | `string`              | Filter messages triggered from a specific workflow.                                                                                                                                                               |
+| `execution_id`    | `string`              | Filter by workflow execution id (matches `wf_exec_id` or `broadcast_id`).                                                                                                                                         |
+| `channel`         | `string`              | Filter by delivery channel. Valid values: `email`, `sms`, `whatsapp`, `androidpush`, `iospush`, `webpush`, `slack`, `ms_teams`.                                                                                   |
+| `status`          | `array of string`     | Filter by one or more derived statuses. Multiple values are OR-ed. Valid values: `triggered`, `delivered`, `delivery_failed`, `seen`, `clicked`, `dismissed`, `read`, `unread`, `archived`.                       |
+| `category`        | `array of string`     | Filter by one or more notification categories. Multiple values are OR-ed.                                                                                                                                         |
+| `is_campaign`     | `boolean`             | Set `True` to return only messages sent as part of a broadcast/campaign.                                                                                                                                          |
+| `created_at_gte`  | `string` (RFC3339)    | Inclusive lower bound on `created_at`. Example: `"2026-01-01T00:00:00Z"`.                                                                                                                                         |
+| `created_at_lte`  | `string` (RFC3339)    | Inclusive upper bound on `created_at`. Must be `>= created_at_gte` when both are set.                                                                                                                             |
+
+## Bulk Update Message Status
+
+Update the status of one or more messages in a single call.
+
+<Note>
+  **Supported `action` values and channel applicability:**
+
+  - `seen`, `clicked` — all channels
+  - `dismissed` — mobile push only (`androidpush`, `iospush`)
+  - `read`, `unread`, `archived`, `unarchived` — `inbox` only
+</Note>
+
+<CodeGroup>
+
+```python Request
+from suprsend import Suprsend
+
+supr_client = Suprsend("workspace_key", "workspace_secret")
+
+messages = [
+    {"message_id": "__message_id_1__", "action": "read"},
+    {"message_id": "__message_id_2__", "action": "archived"},
+]
+response = supr_client.messages.bulk_update(messages)
+print(response)
+```
+
+
+```python Response
+# 202 Accepted - per-record result; check status_code per message_id
+{
+    "records": [
+        {
+            "message_id": "__message_id_1__",
+            "status_code": 202,     # 202 success, 404 not found, 422 action not supported, 500 error
+            "error": {              # present only on failure
+                "type": "not_found",
+                "message": "message not found"
+            }
+        }
+    ]
+}
+```
+
+</CodeGroup>
