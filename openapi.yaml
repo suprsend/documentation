@@ -230,7 +230,7 @@ components:
           description: Validation status of the workflow
     WorkflowTriggerSingleBody:
       type: object
-      description: A single workflow trigger payload. Send this object as-is for a single workflow trigger, or wrap multiple instances in a JSON array (max 100, max 800 KB) for a bulk trigger.
+      description: A single workflow trigger payload. Send this object as-is for a single workflow trigger, or wrap multiple instances in a JSON array for a bulk trigger.
       required:
         - workflow
         - recipients
@@ -446,7 +446,7 @@ components:
           properties:
             $attachments:
               type: array
-              description: Use this key to pass email attachment in the trigger. You can either pass attachment as a public URL or as a base64-encoded file (limit < 50KB). Attachments are also supported when this object is sent as part of a bulk trigger array.
+              description: Use this key to pass email attachment in the trigger. You can either pass attachment as a public URL or as a base64-encoded file (limit < 50KB).
               items:
                 oneOf:
                   - type: object
@@ -6663,18 +6663,7 @@ paths:
       summary: Trigger Workflow
       security:
         - BearerAuth: []
-      description: |
-        API to trigger multi-step workflow to one or more users/ objects by passing workflow slug.
-
-        ### Bulk trigger
-        This same endpoint also supports triggering multiple workflows in a single request. To trigger workflows in bulk, send a JSON **array** of workflow trigger objects (instead of a single object) as the request body.
-
-        **Bulk limits:**
-        - Maximum **100 workflow records** per request.
-        - Maximum **800 KB** total request body size.
-        - Email attachments (`data.$attachments`) are supported in bulk requests.
-
-        See [Bulk Trigger Workflow](/reference/bulk-trigger-workflow-api) for the full bulk request and per-record response shape.
+      description: API to trigger multi-step workflow to one or more users/ objects by passing workflow slug.
       operationId: trigger-workflow-api
       x-codeSamples:
         - lang: cURL
@@ -6710,7 +6699,7 @@ paths:
                   "recipients": [
                     {
                       "distinct_id": "user123",
-                      "$email": ["user1@example.com"]
+                      "$email": ["user@example.com"]
                     }
                   ],
                   "data": {
@@ -6719,16 +6708,16 @@ paths:
                   }
                 },
                 {
-                  "workflow": "invoice_reminder",
+                  "workflow": "demo_notification_workflow",
                   "recipients": [
                     {
-                      "distinct_id": "user456",
-                      "$email": ["user2@example.com"]
+                      "distinct_id": "user123",
+                      "$email": ["user@example.com"]
                     }
                   ],
                   "data": {
-                    "invoice_id": "INV-2025-001",
-                    "invoice_amount": "$5000"
+                    "user_name": "John Doe",
+                    "welcome_message": "Welcome to our platform!"
                   }
                 }
               ]'
@@ -6742,68 +6731,84 @@ paths:
                   $ref: '#/components/schemas/WorkflowTriggerSingleBody'
                 - title: "Bulk workflow trigger"
                   type: array
-                  description: "Send a JSON array of workflow trigger objects to trigger multiple workflows in one call. Maximum 100 records per request and 800 KB total request body size."
-                  minItems: 1
-                  maxItems: 100
+                  description: "Send an array of workflow trigger objects (instead of a single object) to trigger multiple workflows in one call. Each record is processed independently — including its own `$idempotency_key` (24-hour dedup window). See the `207` response below for per-record outcomes."
                   items:
                     $ref: '#/components/schemas/WorkflowTriggerSingleBody'
       responses:
         '202':
-          description: '202 - Accepted. Single trigger requests return `{ "status": "success" }`. Bulk trigger requests return a `records` array with per-record outcomes.'
+          description: '202 - Accepted (returned for single workflow trigger requests).'
           content:
             application/json:
-              schema:
-                oneOf:
-                  - title: "Single trigger response"
-                    type: object
-                    description: All workflow requests will be accepted as long as the API request is correct. To verify if the execution was successful, check the 'Requests' tab under the 'Logs' section on the SuprSend dashboard.
-                    properties:
-                      status:
-                        type: string
-                        example: "success"
-                  - title: "Bulk trigger response"
-                    type: object
-                    description: Per-record results for a bulk workflow trigger request. Each item in `records` corresponds to the workflow at the same index in the request array.
-                    properties:
-                      records:
-                        type: array
-                        description: Per-record outcomes, in the same order as the request array.
-                        items:
-                          type: object
-                          properties:
-                            status:
-                              type: string
-                              enum:
-                                - success
-                                - error
-                              description: Per-record status. `success` means the workflow was accepted; `error` means it was rejected.
-                            status_code:
-                              type: integer
-                              description: Per-record HTTP-style status code.
-                            error:
-                              type: object
-                              nullable: true
-                              description: Present only when `status` is `error`.
-                              properties:
-                                message:
-                                  type: string
-                                  description: Human-readable error message for the failed record.
               examples:
-                Single:
-                  summary: Single trigger response
+                Result:
                   value: {
+                    "message_id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
                     "status": "success"
                   }
-                Bulk:
-                  summary: Bulk trigger response
+              schema:
+                type: object
+                description: All workflow requests will be accepted as long as the API request is correct. To verify if the execution was successful, check the 'Requests' tab under the 'Logs' section on the SuprSend dashboard.
+                properties:
+                  message_id:
+                    type: string
+                    description: Unique identifier of the message generated by SuprSend.
+                    example: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
+                  status:
+                    type: string
+                    example: "success"
+        '207':
+          description: '207 - Multi-Status (returned for bulk workflow trigger requests). Inspect each record''s `status` and `error` for individual outcomes.'
+          content:
+            application/json:
+              examples:
+                Result:
                   value:
                     records:
                       - status: "success"
+                        message_id: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
                         status_code: 202
                       - status: "error"
-                        status_code: 400
+                        status_code: 404
                         error:
-                          message: "BAD REQUEST"
+                          message: "workflow not found"
+                          type: "not_found"
+                    status: "success"
+              schema:
+                type: object
+                description: Per-record outcomes for a bulk workflow trigger request. Each item in `records` corresponds to the workflow at the same index in the request array.
+                properties:
+                  records:
+                    type: array
+                    description: Per-record outcomes, in the same order as the request array.
+                    items:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum:
+                            - success
+                            - error
+                          description: Per-record status. `success` means the workflow was accepted; `error` means it was rejected.
+                        status_code:
+                          type: integer
+                          description: Per-record HTTP-style status code (for example, `202` for accepted, `404` for workflow not found).
+                        message_id:
+                          type: string
+                          description: Unique identifier of the message generated by SuprSend. Present only when `status` is `success`.
+                        error:
+                          type: object
+                          description: Present only when `status` is `error`.
+                          properties:
+                            message:
+                              type: string
+                              description: Human-readable error message for the failed record.
+                            type:
+                              type: string
+                              description: Machine-readable error type (for example, `not_found`).
+                  status:
+                    type: string
+                    description: Top-level status returned by the API. Inspect each record's `status` and `error` to determine per-record outcomes.
+                    example: "success"
         '400':
           description: '400 - Bad Request'
           content:
