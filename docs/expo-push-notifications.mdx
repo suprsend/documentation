@@ -1,0 +1,118 @@
+---
+title: "Push Notifications"
+description: "Native FCM + APNs push delivery in Expo and React Native via expo-notifications."
+---
+
+`SuprSendPushProvider` waits for the user to be identified, then requests permission, obtains the native FCM/APNs token, and registers it with SuprSend.
+
+<Note>
+  For platform-specific setup (APNs credentials and entitlement on iOS, `google-services.json` and FCM credentials on Android), see the [Native Push Setup](/docs/expo-push-setup) guide.
+</Note>
+
+## Basic usage
+
+Mount `SuprSendPushProvider` inside [`SuprSendExpoProvider`](/docs/expo-integration#authentication):
+
+<CodeGroup>
+  ```tsx App.tsx
+  import { SuprSendExpoProvider, SuprSendPushProvider } from "@suprsend/expo-sdk";
+
+  export default function App() {
+    return (
+      <SuprSendExpoProvider {...authProps}>
+        <SuprSendPushProvider>
+          <RootNavigator />
+        </SuprSendPushProvider>
+      </SuprSendExpoProvider>
+    );
+  }
+  ```
+</CodeGroup>
+
+## Handling taps and foreground notifications
+
+`useSuprSendPushNotifications` returns `onPushNotificationReceived` / `onPushNotificationTapped` subscribers. Each takes a handler and returns an unsubscribe function — drop them straight into `useEffect`.
+
+<CodeGroup>
+  ```tsx PushListeners.tsx
+  import { useEffect } from "react";
+  import { useSuprSendPushNotifications } from "@suprsend/expo-sdk";
+
+  function PushListeners() {
+    const { onPushNotificationReceived, onPushNotificationTapped } =
+      useSuprSendPushNotifications();
+
+    useEffect(
+      () =>
+        onPushNotificationReceived((notification) => {
+          console.log("notification delivered", notification);
+        }),
+      [onPushNotificationReceived],
+    );
+
+    useEffect(
+      () =>
+        onPushNotificationTapped((response) => {
+          console.log("notification tapped", response);
+        }),
+      [onPushNotificationTapped],
+    );
+
+    return null;
+  }
+  ```
+</CodeGroup>
+
+## Unregister push
+
+Call `unregisterPushNotification()` to remove the push token from the user in SuprSend. Usually called just before logout.
+
+## Manual registration
+
+Disable auto-registration and call `registerPushNotification()` yourself — e.g. after an onboarding screen:
+
+<CodeGroup>
+  ```tsx App.tsx
+  <SuprSendPushProvider autoRegister={false}>...</SuprSendPushProvider>
+  ```
+</CodeGroup>
+
+<CodeGroup>
+  ```tsx EnableNotificationsButton.tsx
+  import { useSuprSendPushNotifications } from "@suprsend/expo-sdk";
+
+  function EnableNotificationsButton() {
+    const { registerPushNotification } = useSuprSendPushNotifications();
+    return (
+      <Button
+        title="Enable notifications"
+        onPress={() => registerPushNotification()}
+      />
+    );
+  }
+  ```
+</CodeGroup>
+
+## Push API reference
+
+<CodeGroup>
+  ```ts TypeDef
+  interface SuprSendPushProviderProps {
+    children: ReactNode;
+    autoRegister?: boolean;                         // default: true
+    customNotificationHandler?: (notification: Notification) =>
+      | NotificationBehavior
+      | Promise<NotificationBehavior>;
+    setupAndroidNotificationChannel?: () => Promise<void>;
+  }
+
+  useSuprSendPushNotifications(): {
+    registerPushNotification: () => Promise<string | null>;
+    unregisterPushNotification: () => Promise<void>;
+    onPushNotificationReceived: (handler: (notification: Notification) => void) => () => void;
+    onPushNotificationTapped:   (handler: (response: NotificationResponse) => void) => () => void;
+  };
+  ```
+</CodeGroup>
+
+***
