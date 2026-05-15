@@ -1,0 +1,238 @@
+---
+title: "Workspaces"
+description: "Understand what workspaces are in SuprSend, how they isolate environments, and how to manage assets, credentials, and access across them."
+---
+
+## Understanding workspaces
+
+A **workspace** in SuprSend is a logically isolated environment within your account that holds its own copy of all notification assets and configuration: workflows, templates, users, preferences, vendor integrations, API keys, and logs. Workspaces are how SuprSend separates **sandbox**, **testing**, and **production** environments so that changes you make in one environment never leak into another.
+
+Every account starts with three default workspaces (**Sandbox**, **Staging**, and **Production**) and you can create additional workspaces as your team and use cases grow. You can switch between workspaces from the top-left workspace switcher on the [SuprSend dashboard](https://app.suprsend.com).
+
+<Info>
+  Workspaces are **logically isolated and share no data by default**. All your assets (workflows, templates, users, preferences) and configuration (vendors, API keys, signing keys) are independently set per workspace and are not shared across them.
+</Info>
+
+## Default workspaces
+
+Every SuprSend account is provisioned with three default workspaces, each with a different purpose in your release lifecycle.
+
+<AccordionGroup>
+  <Accordion title="Sandbox" defaultOpen={true}>
+    A **demo workspace** designed for quick exploration and POC.
+
+    - Comes with **pre-configured vendors** for Email, SMS, WhatsApp, and Inbox so you can send your first notification without setting up any vendor.
+    - Includes a **sample workflow** and a **sample user** profile created using your registered email and pre-configured channels.
+    - Available for a **trial period**, with capped usage limits to prevent spam.
+    - Best used to evaluate SuprSend, run a quick demo, or familiarize yourself with the dashboard.
+  </Accordion>
+
+  <Accordion title="Staging">
+    A **development workspace** used to design, build, and test notification flows before pushing them to production.
+
+    - Bring your own vendors and configure API keys, public keys, and signing keys for staging.
+    - Enable [Test Mode](/docs/developer/test-mode) to safely validate workflows without delivering messages to real users. In Test Mode, notifications go only to designated internal testers, with an optional catch-all channel to redirect anything else.
+    - Iterate freely. Your changes never affect production users.
+  </Accordion>
+
+  <Accordion title="Production">
+    The **live workspace** for syncing your real product users and running production workflows.
+
+    - Hosts your live vendors, API keys, and end-user data.
+    - We **strongly recommend not making changes directly in production**. Always test in staging and promote changes via cloning, the [Management API](/docs/management-api-overview), or the [SuprSend CLI](/reference/cli-intro).
+    - Non-admin users have additional restrictions in production (cannot view PII or edit user/object properties and preferences). See [roles and permissions](/docs/managing-members#roles-and-permissions).
+  </Accordion>
+</AccordionGroup>
+
+You can also create **custom workspaces** beyond the defaults, useful for region-specific deployments, separate business lines, additional QA environments, or per-developer sandboxes. New workspaces can be created from the workspace switcher on the dashboard or via the [Create Workspace](/reference/create-workspace) Management API.
+
+## What's isolated per workspace
+
+Each workspace owns a fully independent copy of the resources below. Nothing is implicitly shared across workspaces.
+
+| Scope | What it includes |
+|-------|------------------|
+| **Assets** | Workflows, templates, template variants, schemas, translations, notification categories |
+| **User data** | Users, objects, lists, preferences, channel identities |
+| **Configuration** | Vendors, vendor fallback, tenants, tenant preferences, tenant vendors |
+| **Credentials** | Workspace key & secret, API keys, public keys, signing keys, Inbox secret |
+| **Operational data** | Logs (requests, executions, messages), analytics, broadcasts |
+| **Settings** | Test Mode, webhook URLs, connector configuration |
+| **Data region** | The data centre where workspace data is hosted. Different accounts not needed in case of multi-region data hosting requirement. |
+
+Account-level settings (team members, roles, audit logs, MFA, billing, and **service tokens**) live above workspaces and apply across all of them.
+
+## Workspace credentials
+
+Authentication credentials in SuprSend are scoped per workspace, so staging credentials can never accidentally trigger production notifications and vice versa.
+
+| Credential | Used for | Scope | Where to find it |
+|-----------|----------|-------|------------------|
+| **Workspace Key & Secret** | [Backend SDK](/docs/developer/sdk-overview) authentication | Workspace | Dashboard → **Developers → API Keys** (top of the page) |
+| **API Key** | [REST API](/reference/overview) authentication (`Authorization: Bearer <API_KEY>`) | Workspace | Dashboard → **Developers → API Keys → Generate API Key** |
+| **Public Key** | [Client SDK](/docs/client-authentication) authentication (web/mobile) | Workspace | Dashboard → **Developers → API Keys → Public Keys** |
+| **Signing Key** | Generating signed user tokens (JWT) when [Enhanced Security Mode](/docs/developer/api-keys#enhanced-security-mode-with-signed-user-token) is on | Workspace | Dashboard → **Developers → API Keys → Signing Keys** |
+| **Service Token** | [Management API](/docs/management-api-overview) and [CLI](/reference/cli-authentication) authentication | Account (cross-workspace) | Dashboard → **Account Settings → Service Tokens** |
+
+For a full breakdown and rotation guidance, see [API Keys and Secrets](/docs/developer/api-keys) and [Best Practices for Key & Token Management](/docs/best-practices-for-api-keys-management).
+
+<Warning>
+  Always store workspace keys, secrets, and API keys in environment variables or a secrets manager. Never commit them to source control or expose them in client-side code.
+</Warning>
+
+## Workspace and tenants
+
+Workspaces and [tenants](/docs/tenants) are often confused but solve very different problems:
+
+- **Workspaces** isolate **environments** (sandbox vs staging vs production) and **business lines** that don't share data, with separate users, workflows, vendors, credentials, and logs.
+- **Tenants** customize **branding, templates, preferences, and vendor routing per customer** within the same workspace, with shared workflows and templates with runtime customization via `tenant_id`. Option to have isolated users per-tenant or share users across tenants. 
+
+Use a separate **workspace** when two business lines have completely different users and notifications. Use **tenants** within the same workspace when you want shared assets (workflows, templates, etc.) but require per-customer customization (branding, preferences, or routing).
+
+Every workspace also includes a `default` tenant that represents your own organization. If no `tenant_id` is passed at trigger time, the default tenant's properties are applied. See [Tenants Overview](/docs/tenants) for more.
+
+## Promoting changes across workspaces
+
+Because workspaces are isolated, you'll need to explicitly move tested changes from staging to production. SuprSend supports 3 ways to do this:
+
+<CardGroup cols="2">
+  <Card title="Clone from the dashboard" icon="copy" iconType="solid">
+    Each workflow, template, schema, translation, and category has a **Clone** option that copies it to another workspace. Best for one-off promotions and small teams. See [Clone Template](/docs/templates#clone-template) and [Clone Workflow](/docs/design-workflow#cloning-a-workflow).
+  </Card>
+  <Card title="SuprSend CLI" icon="terminal" iconType="solid" href="/reference/cli-intro">
+    Pull and push workflows, templates, schemas, events, categories, and translations between workspaces using the `-w` flag. Ideal for codifying assets in Git and running repeatable promotions from CI/CD.
+  </Card>
+  <Card title="Management API" icon="code" iconType="solid" href="/docs/management-api-overview">
+    Programmatically manage workspace assets and credentials with a Service Token. Use this to build custom deployment pipelines or internal tooling.
+  </Card>
+</CardGroup>
+
+<Tip>
+  For a step-by-step rollout plan, follow the [Go-live checklist](/docs/go-live-checklist).
+</Tip>
+
+## Working with workspaces in code
+
+<Tabs>
+  <Tab title="Backend SDKs">
+    Initialize the SDK with the **workspace key and secret** of the target workspace. Switching environments is a configuration change, not a code change.
+
+    ```javascript Node.js
+    const { Suprsend } = require("@suprsend/node-sdk");
+
+    const supr_client = new Suprsend(
+      process.env.SUPRSEND_WORKSPACE_KEY,
+      process.env.SUPRSEND_WORKSPACE_SECRET
+    );
+    ```
+
+    ```python Python
+    from suprsend import Suprsend
+
+    supr_client = Suprsend(
+        workspace_key=os.environ["SUPRSEND_WORKSPACE_KEY"],
+        workspace_secret=os.environ["SUPRSEND_WORKSPACE_SECRET"],
+    );
+    ```
+  </Tab>
+  <Tab title="REST API">
+    Pass the workspace's **API key** as a Bearer token. The host (`https://hub.suprsend.com`) is the same across workspaces. The credential determines which workspace you're acting on.
+
+    ```bash
+    curl -X POST "https://hub.suprsend.com/trigger/" \
+      -H "Authorization: Bearer <WORKSPACE_API_KEY>" \
+      -H "Content-Type: application/json" \
+      -d '{ "workflow": "welcome", "recipients": [{ "distinct_id": "u_123" }] }'
+    ```
+  </Tab>
+  <Tab title="CLI">
+    Pass the workspace **slug** with the `-w` (`--workspace`) flag. Defaults to `staging` if omitted.
+
+    ```bash
+    suprsend workflow list -w production
+    suprsend workflow push welcome -w staging
+    ```
+
+    See [CLI Global Flags](/reference/cli-global-flags).
+  </Tab>
+  <Tab title="Management API">
+    Most management endpoints are scoped per workspace via the path parameter. Authentication uses an account-level **Service Token**.
+
+    ```bash
+    curl -X GET "https://management-api.suprsend.com/v1/staging/ws_api_key/" \
+      -H "Authorization: ServiceToken <SERVICE_TOKEN>"
+    ```
+
+    Use [`GET /v1/workspace`](/reference/list-workspaces) to list all workspaces in your account, and [`POST /v1/workspace`](/reference/create-workspace) to create new ones. See [Workspaces & Auth Keys](/reference/list-workspaces) for the full set of workspace-scoped endpoints (API keys, public keys, signing keys).
+  </Tab>
+</Tabs>
+
+## Members, roles, and access in workspaces
+
+Team members are invited at the **account level**. SuprSend supports two roles by default, **Admin** and **Member**. For Granular RBAC, contact us.
+
+- **Admins** have full access across all workspaces.
+- **Members** have restricted access in production: they cannot view PII data and cannot edit user or object properties or preferences in the production workspace. They retain full edit rights in staging, sandbox and custom workspaces.
+
+For the full permission matrix, see [Managing Team Members → Permissions](/docs/managing-members#permissions). Account and workspace level actions (key generation, role changes, etc.) are recorded in [Audit Logs](/docs/audit-logs).
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="How many workspaces do I get by default?">
+    Every account is provisioned with three default workspaces: **Sandbox**, **Staging**, and **Production**. You can create additional workspaces from the workspace switcher in the dashboard or via the [Create Workspace](/reference/create-workspace) Management API. Workspace limits depend on your billing plan; reach out to [support@suprsend.com](mailto:support@suprsend.com) if you need more.
+  </Accordion>
+
+  <Accordion title="Are workspaces isolated from each other?">
+    Yes. Workspaces are logically isolated and share no data by default. Workflows, templates, users, preferences, vendors, API keys, and logs are independent. Account-level resources (team members, audit logs, service tokens) apply across all workspaces.
+  </Accordion>
+
+  <Accordion title="Can I share users across workspaces?">
+    No. Each workspace has its own user database. If you need the same user in multiple workspaces, sync them independently to each. Typically your backend writes to staging during testing and to production for live traffic, using different workspace credentials.
+  </Accordion>
+
+  <Accordion title="What's the difference between workspaces and tenants?">
+    Workspaces isolate **environments and independent business lines** with fully separate users, workflows, vendors, and credentials. Tenants customize **branding, preferences, and vendor routing per customer or segment** within the same workspace, with shared workflows and users and runtime customization via `tenant_id`. See [Tenants Overview](/docs/tenants) for more.
+  </Accordion>
+
+  <Accordion title="How do I move workflows or templates from staging to production?">
+    Use one of: (1) **Clone** from the dashboard for one-off promotions, (2) the [SuprSend CLI](/reference/cli-intro) for Git-tracked, repeatable promotions, or (3) the [Management API](/docs/management-api-overview) for custom automation. Follow the [Go-live checklist](/docs/go-live-checklist) for a complete rollout plan.
+  </Accordion>
+
+  <Accordion title="Can I use the same API key in multiple workspaces?">
+    No. Workspace keys, secrets, API keys, public keys, and signing keys are all scoped to a single workspace. This isolation is intentional and prevents accidental cross-environment notifications. Service Tokens are the only credential that operates across workspaces, and they're meant for management and automation, not for sending notifications.
+  </Accordion>
+
+  <Accordion title="How do I authenticate against a specific workspace?">
+    For the **REST API** and **Backend SDKs**, use that workspace's API key (or workspace key & secret). For the **CLI**, pass `-w <workspace_slug>`. For the **Management API**, the workspace slug is part of the URL path (e.g., `/v1/staging/ws_api_key/`). Service Tokens authenticate the request; the path or credential determines the workspace.
+  </Accordion>
+
+  <Accordion title="Can members see all workspaces?">
+    Members see all workspaces in the account but have **restricted access in production**. They cannot view user PII, edit user/object properties, or edit preferences in production. They retain full access in staging and sandbox. Admins have full access across all workspaces. See [Managing Team Members](/docs/managing-members).
+  </Accordion>
+
+  <Accordion title="Is Test Mode available in every workspace?">
+    [Test Mode](/docs/developer/test-mode) is available in **Staging** and other custom workspaces. It is **not** available in Sandbox or Production by design. Sandbox already has constrained delivery for trial accounts, and Production is reserved for live traffic.
+  </Accordion>
+
+  <Accordion title="How do I delete a workspace?">
+    Workspace deletion is not currently exposed in the dashboard. Reach out to [support@suprsend.com](mailto:support@suprsend.com) if you need a workspace removed.
+  </Accordion>
+
+  <Accordion title="Can I rename a workspace?">
+    Yes, you can update a workspace's display name and description from the dashboard. Note that the workspace **slug** (used in API paths and URLs, e.g., `staging`, `production`) is permanent and cannot be changed after creation.
+  </Accordion>
+
+  <Accordion title="How should I model multi-region workspaces?">
+    You can create custom staging and production workspace for each of the data region. So, you can have US-Staging and US-Production for US data region and EU-Staging and EU-Production for EU data resgion.
+  </Accordion>
+
+  <Accordion title="How should I model multiple product lines?">
+    You can create custom workspace for each product line. Example, ProductA-Staging, ProductA-Production and so on.
+  </Accordion>
+
+  <Accordion title="How should I model multiple mobile applications?">
+    If the users and/or assets (templates, workflows) are shared, then we recommend mapping applications as tenants but if your users as well as assets are completely isolated, then go for workspace level modelling.
+  </Accordion>
+  
+</AccordionGroup>
