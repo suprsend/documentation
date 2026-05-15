@@ -6663,7 +6663,10 @@ paths:
       summary: Trigger Workflow
       security:
         - BearerAuth: []
-      description: API to trigger multi-step workflow to one or more users/ objects by passing workflow slug.
+      description: |
+        API to trigger multi-step workflow to one or more users/objects by passing workflow slug, via `POST /trigger/`.
+
+        Send a single JSON **object** to trigger one workflow, or a JSON **array** of the same workflow trigger objects to trigger multiple workflows in one call (bulk). The URL, method, and authentication are identical for both.
       operationId: trigger-workflow-api
       x-codeSamples:
         - lang: cURL
@@ -6732,15 +6735,17 @@ paths:
                 - title: "Bulk workflow trigger"
                   type: array
                   description: |
-                    Send an array of workflow trigger objects (instead of a single object) to trigger multiple workflows in one call. Each record is independent — `workflow`, `recipients`, `tenant_id`, attachments, and `$idempotency_key` (24-hour dedup window) can all differ per record.
+                    Send a JSON **array** of workflow trigger objects (instead of a single JSON **object**) to trigger multiple workflows in one request. Each array item uses the same payload structure as a single workflow trigger (see **Single workflow trigger**).
+
+                    Each record is independent — `workflow` (workflow slug), `recipients`, `tenant_id`, and `data` (including `data.$attachments` for email attachments) can all differ per record.
 
                     **Limits:**
                     - Maximum **800 KB** total request body size.
                     - Maximum **100 records** per request. Behavior beyond these limits is undefined.
 
-                    **Rate limits:** A bulk request counts as **N calls** (one per record) against your rate limit.
+                    **Rate limits:** A bulk request counts as **N calls** (one per record), not one call, against your rate limit.
 
-                    See the `207` response below for per-record outcomes.
+                    Returns **207 Multi-Status** with per-record outcomes. See the `207` response below.
                   maxItems: 100
                   items:
                     $ref: '#/components/schemas/WorkflowTriggerSingleBody'
