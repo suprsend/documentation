@@ -1,0 +1,624 @@
+---
+title: "Verify Package Signature"
+description: "Cryptographically verify the integrity and authenticity of the SuprSend Java SDK before installation."
+keywords:
+  - suprsend java sdk verify
+  - maven jar verification
+  - gpg signature java
+  - sha256 checksum java
+  - suprsend sdk integrity
+  - maven central verification
+---
+
+The SuprSend Java SDK is **signed and checksummed** starting from release [`v0.13.2`](https://github.com/suprsend/suprsend-java-sdk/releases/tag/v0.13.2). Before installing, you can cryptographically confirm that the artifact you are using was built by SuprSend and has not been modified in transit.
+
+---
+
+## Before you begin
+
+The SuprSend Java SDK ships with two independent trust signals:
+
+- **Maven Central GPG signature** — every artifact published to [Maven Central](https://central.sonatype.com/artifact/com.suprsend/suprsend-java-sdk) is signed with SuprSend's GPG key. Maven Central requires all publishers to sign their artifacts, and the `.asc` signature file is published alongside every `.jar` on the Maven Central file server at `repo1.maven.org`.
+- **SHA-256 checksum + GPG signature on `checksums.txt`** — every GitHub release also publishes a `checksums.txt` listing SHA-256 hashes of all release artifacts, signed with the same GPG key. This mirrors the flow used for the [Python SDK](/docs/python-verify-signature) and [CLI](/reference/cli-verify-signature).
+
+Verification below covers both paths. **Pick the one that matches where you are consuming the artifact from** — Maven Central or GitHub release.
+
+---
+
+## Prerequisites
+
+You need **GPG** installed.
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install gnupg
+    ```
+  </Tab>
+  <Tab title="Linux (Debian / Ubuntu)">
+    ```bash
+    sudo apt-get install -y gnupg
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Download and install [Gpg4win](https://www.gpg4win.org/download.html).
+  </Tab>
+</Tabs>
+
+Confirm it is working:
+
+```bash
+gpg --version
+```
+
+---
+
+## Path A — Verify a jar from Maven Central
+
+Use this path if your build tool (Maven/Gradle) resolved the dependency from Maven Central, or if you want to verify a `.jar` downloaded directly from `repo1.maven.org`.
+
+### Step A1 — Create a working directory
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    mkdir suprsend-verify && cd suprsend-verify
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    New-Item -ItemType Directory -Name suprsend-verify
+    Set-Location suprsend-verify
+    ```
+  </Tab>
+</Tabs>
+
+### Step A2 — Download the jar, its signature, and its checksum from Maven Central
+
+Use `curl` to download directly from the Maven Central file server. Do not download through the Sonatype UI — it does not serve `.asc` files correctly.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    VERSION="0.13.2"
+    BASE="https://repo1.maven.org/maven2/com/suprsend/suprsend-java-sdk/${VERSION}"
+
+    curl -sL -O "${BASE}/suprsend-java-sdk-${VERSION}.jar"
+    curl -sL -O "${BASE}/suprsend-java-sdk-${VERSION}.jar.asc"
+    curl -sL -O "${BASE}/suprsend-java-sdk-${VERSION}.jar.sha256"
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $VERSION = "0.13.2"
+    $BASE    = "https://repo1.maven.org/maven2/com/suprsend/suprsend-java-sdk/$VERSION"
+
+    Invoke-WebRequest "$BASE/suprsend-java-sdk-$VERSION.jar"        -OutFile "suprsend-java-sdk-$VERSION.jar"
+    Invoke-WebRequest "$BASE/suprsend-java-sdk-$VERSION.jar.asc"    -OutFile "suprsend-java-sdk-$VERSION.jar.asc"
+    Invoke-WebRequest "$BASE/suprsend-java-sdk-$VERSION.jar.sha256" -OutFile "suprsend-java-sdk-$VERSION.jar.sha256"
+    ```
+  </Tab>
+</Tabs>
+
+### Step A3 — Verify the jar checksum against Maven Central
+
+Maven Central publishes its own SHA-256 hash for every artifact independently of SuprSend. Verifying against it confirms the file you downloaded matches what Maven Central is serving — using Maven Central's infrastructure as the source of truth.
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    echo "$(cat suprsend-java-sdk-0.13.2.jar.sha256)  suprsend-java-sdk-0.13.2.jar" | shasum -a 256 --check
+    ```
+
+    **Expected output:**
+
+    ```
+    suprsend-java-sdk-0.13.2.jar: OK
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    echo "$(cat suprsend-java-sdk-0.13.2.jar.sha256)  suprsend-java-sdk-0.13.2.jar" | sha256sum --check
+    ```
+
+    **Expected output:**
+
+    ```
+    suprsend-java-sdk-0.13.2.jar: OK
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $filename = "suprsend-java-sdk-0.13.2.jar"
+    $expected = (Get-Content "suprsend-java-sdk-0.13.2.jar.sha256").Trim().ToLower()
+    $actual   = (Get-FileHash ".\$filename" -Algorithm SHA256).Hash.ToLower()
+
+    if ($expected -eq $actual) {
+      Write-Host "Checksum OK — $filename"
+    } else {
+      Write-Error "CHECKSUM MISMATCH — do not use this artifact"
+    }
+    ```
+
+    **Expected output:**
+
+    ```
+    Checksum OK — suprsend-java-sdk-0.13.2.jar
+    ```
+  </Tab>
+</Tabs>
+
+### Step A4 — Import and trust SuprSend's public key
+
+Download the public key from the SuprSend GitHub release, import it, and mark it as trusted. The second command sets trust non-interactively so the final verify output is clean with no warnings.
+
+```bash
+curl -sL -O https://github.com/suprsend/suprsend-java-sdk/releases/download/v0.13.2/public_key.asc
+gpg --import public_key.asc
+echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+```
+
+**Expected output:**
+
+```
+gpg: key 5261B38640D3A94D: public key "SuprSend (Maven Signing Key) <nikhilesh@suprsend.com>" imported
+gpg: Total number processed: 1
+gpg:               imported: 1
+gpg: inserting ownertrust of 6
+```
+
+<Note>
+  Always download `public_key.asc` directly from the official [SuprSend Java SDK releases page](https://github.com/suprsend/suprsend-java-sdk/releases). Do not copy it from mirrors or third-party sources. Before trusting the key, cross-check the fingerprint `2E736EA7E36AB94C883A490C5261B38640D3A94D` against the one published on the releases page.
+</Note>
+
+### Step A5 — Verify the GPG signature on the jar
+
+```bash
+gpg --verify suprsend-java-sdk-0.13.2.jar.asc suprsend-java-sdk-0.13.2.jar
+```
+
+**Expected output:**
+
+```
+gpg: Signature made Fri Mar 27 09:14:21 2026 UTC
+gpg:                using RSA key 2E736EA7E36AB94C883A490C5261B38640D3A94D
+gpg: Good signature from "SuprSend (Maven Signing Key) <nikhilesh@suprsend.com>" [full]
+```
+
+`Good signature [full]` confirms the `.jar` was signed by SuprSend's private key and has not been modified since signing.
+
+<Warning>
+  If you see `BAD signature`, do not use this artifact. Re-download both the `.jar` and `.jar.asc` using the `curl` commands in Step A2 and retry. If the failure persists, [contact SuprSend support](mailto:support@suprsend.com).
+</Warning>
+
+---
+
+## Path B — Verify a jar downloaded from GitHub releases
+
+Use this path if you downloaded the `.jar` from the [GitHub releases page](https://github.com/suprsend/suprsend-java-sdk/releases) and want to verify it against the signed `checksums.txt`.
+
+### Step B1 — Create a working directory
+
+All files must be in the same directory for the checksum step to work.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    mkdir suprsend-verify && cd suprsend-verify
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    New-Item -ItemType Directory -Name suprsend-verify
+    Set-Location suprsend-verify
+    ```
+  </Tab>
+</Tabs>
+
+### Step B2 — Download the jar and verification files
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    VERSION="0.13.2"
+    BASE="https://github.com/suprsend/suprsend-java-sdk/releases/download/v${VERSION}"
+
+    curl -sL -O "${BASE}/suprsend-java-sdk-${VERSION}.jar"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/checksums.txt.asc"
+    curl -sL -O "${BASE}/public_key.asc"
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $VERSION = "0.13.2"
+    $BASE    = "https://github.com/suprsend/suprsend-java-sdk/releases/download/v$VERSION"
+
+    Invoke-WebRequest "$BASE/suprsend-java-sdk-$VERSION.jar" -OutFile "suprsend-java-sdk-$VERSION.jar"
+    Invoke-WebRequest "$BASE/checksums.txt"                  -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/checksums.txt.asc"              -OutFile checksums.txt.asc
+    Invoke-WebRequest "$BASE/public_key.asc"                 -OutFile public_key.asc
+    ```
+  </Tab>
+</Tabs>
+
+At this point your `suprsend-verify` directory should contain exactly these files:
+
+```
+suprsend-verify/
+├── checksums.txt
+├── checksums.txt.asc
+├── public_key.asc
+└── suprsend-java-sdk-0.13.2.jar
+```
+
+| File | Description |
+|---|---|
+| `suprsend-java-sdk-0.13.2.jar` | The SDK artifact. |
+| `checksums.txt` | SHA-256 hashes of all release artifacts. This is what gets signed. |
+| `checksums.txt.asc` | GPG detached signature over `checksums.txt`. |
+| `public_key.asc` | SuprSend's GPG public key. Used to verify the signature. |
+
+### Step B3 — Import and trust SuprSend's public key
+
+```bash
+gpg --import public_key.asc
+echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+```
+
+**Expected output:**
+
+```
+gpg: key 5261B38640D3A94D: public key "SuprSend (Maven Signing Key) <nikhilesh@suprsend.com>" imported
+gpg: Total number processed: 1
+gpg:               imported: 1
+gpg: inserting ownertrust of 6
+```
+
+<Note>
+  Before trusting the key, cross-check the fingerprint `2E736EA7E36AB94C883A490C5261B38640D3A94D` against the one published on the [SuprSend Java SDK releases page](https://github.com/suprsend/suprsend-java-sdk/releases).
+</Note>
+
+### Step B4 — Verify the signature on checksums.txt
+
+```bash
+gpg --verify checksums.txt.asc checksums.txt
+```
+
+**Expected output:**
+
+```
+gpg: Signature made ...
+gpg:                using RSA key 2E736EA7E36AB94C883A490C5261B38640D3A94D
+gpg: Good signature from "SuprSend (Maven Signing Key) <nikhilesh@suprsend.com>" [full]
+```
+
+`Good signature [full]` confirms `checksums.txt` was produced by SuprSend's pipeline and has not been tampered with.
+
+<Warning>
+  If you see `BAD signature`, do not proceed. Re-download all files from the same release and retry. If the failure persists, [contact SuprSend support](mailto:support@suprsend.com).
+</Warning>
+
+### Step B5 — Verify the jar checksum
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    grep "suprsend-java-sdk-0.13.2.jar" checksums.txt | shasum -a 256 --check
+    ```
+
+    **Expected output:**
+
+    ```
+    suprsend-java-sdk-0.13.2.jar: OK
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    grep "suprsend-java-sdk-0.13.2.jar" checksums.txt | sha256sum --check
+    ```
+
+    **Expected output:**
+
+    ```
+    suprsend-java-sdk-0.13.2.jar: OK
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $filename = "suprsend-java-sdk-0.13.2.jar"
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match [regex]::Escape($filename) }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$filename" -Algorithm SHA256).Hash.ToLower()
+
+    if ($expected -eq $actual) {
+      Write-Host "Checksum OK — $filename"
+    } else {
+      Write-Error "CHECKSUM MISMATCH — do not use this artifact"
+    }
+    ```
+
+    **Expected output:**
+
+    ```
+    Checksum OK — suprsend-java-sdk-0.13.2.jar
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Add the dependency to your project
+
+Once verification passes, add the SDK to your build configuration:
+
+<Tabs>
+  <Tab title="Maven">
+    ```xml
+    <dependency>
+      <groupId>com.suprsend</groupId>
+      <artifactId>suprsend-java-sdk</artifactId>
+      <version>0.13.2</version>
+    </dependency>
+    ```
+  </Tab>
+  <Tab title="Gradle">
+    ```groovy
+    implementation 'com.suprsend:suprsend-java-sdk:0.13.2'
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Full scripts
+
+### Path A — Maven Central
+
+<Tabs>
+  <Tab title="macOS (Apple Silicon / Intel)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.13.2"
+    JAR="suprsend-java-sdk-${VERSION}.jar"
+    MAVEN_BASE="https://repo1.maven.org/maven2/com/suprsend/suprsend-java-sdk/${VERSION}"
+    GH_BASE="https://github.com/suprsend/suprsend-java-sdk/releases/download/v${VERSION}"
+
+    mkdir suprsend-verify && cd suprsend-verify
+
+    echo "-> Downloading jar, signature, and checksum from Maven Central..."
+    curl -sL -O "${MAVEN_BASE}/${JAR}"
+    curl -sL -O "${MAVEN_BASE}/${JAR}.asc"
+    curl -sL -O "${MAVEN_BASE}/${JAR}.sha256"
+
+    echo "-> Verifying jar checksum against Maven Central..."
+    echo "$(cat ${JAR}.sha256)  ${JAR}" | shasum -a 256 --check
+
+    echo "-> Importing and trusting public key..."
+    curl -sL -O "${GH_BASE}/public_key.asc"
+    gpg --import public_key.asc
+    echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+
+    echo "-> Verifying GPG signature on jar..."
+    gpg --verify "${JAR}.asc" "${JAR}"
+
+    echo "Done. SuprSend Java SDK ${VERSION} verified."
+    ```
+  </Tab>
+  <Tab title="Linux (x86_64 / ARM64)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.13.2"
+    JAR="suprsend-java-sdk-${VERSION}.jar"
+    MAVEN_BASE="https://repo1.maven.org/maven2/com/suprsend/suprsend-java-sdk/${VERSION}"
+    GH_BASE="https://github.com/suprsend/suprsend-java-sdk/releases/download/v${VERSION}"
+
+    mkdir suprsend-verify && cd suprsend-verify
+
+    echo "-> Downloading jar, signature, and checksum from Maven Central..."
+    curl -sL -O "${MAVEN_BASE}/${JAR}"
+    curl -sL -O "${MAVEN_BASE}/${JAR}.asc"
+    curl -sL -O "${MAVEN_BASE}/${JAR}.sha256"
+
+    echo "-> Verifying jar checksum against Maven Central..."
+    echo "$(cat ${JAR}.sha256)  ${JAR}" | sha256sum --check
+
+    echo "-> Importing and trusting public key..."
+    curl -sL -O "${GH_BASE}/public_key.asc"
+    gpg --import public_key.asc
+    echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+
+    echo "-> Verifying GPG signature on jar..."
+    gpg --verify "${JAR}.asc" "${JAR}"
+
+    echo "Done. SuprSend Java SDK ${VERSION} verified."
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    $VERSION     = "0.13.2"
+    $JAR         = "suprsend-java-sdk-$VERSION.jar"
+    $MAVEN_BASE  = "https://repo1.maven.org/maven2/com/suprsend/suprsend-java-sdk/$VERSION"
+    $GH_BASE     = "https://github.com/suprsend/suprsend-java-sdk/releases/download/v$VERSION"
+
+    New-Item -ItemType Directory -Name suprsend-verify
+    Set-Location suprsend-verify
+
+    Write-Host "-> Downloading jar, signature, and checksum from Maven Central..."
+    Invoke-WebRequest "$MAVEN_BASE/$JAR"        -OutFile $JAR
+    Invoke-WebRequest "$MAVEN_BASE/$JAR.asc"    -OutFile "$JAR.asc"
+    Invoke-WebRequest "$MAVEN_BASE/$JAR.sha256" -OutFile "$JAR.sha256"
+
+    Write-Host "-> Verifying jar checksum against Maven Central..."
+    $expected = (Get-Content "$JAR.sha256").Trim().ToLower()
+    $actual   = (Get-FileHash ".\$JAR" -Algorithm SHA256).Hash.ToLower()
+    if ($expected -eq $actual) { Write-Host "Checksum OK — $JAR" } else { Write-Error "CHECKSUM MISMATCH — do not use this artifact"; exit 1 }
+
+    Write-Host "-> Importing and trusting public key..."
+    Invoke-WebRequest "$GH_BASE/public_key.asc" -OutFile public_key.asc
+    gpg --import public_key.asc
+    echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+
+    Write-Host "-> Verifying GPG signature on jar..."
+    gpg --verify "$JAR.asc" $JAR
+
+    Write-Host "Done. SuprSend Java SDK $VERSION verified."
+    ```
+  </Tab>
+</Tabs>
+
+### Path B — GitHub release
+
+<Tabs>
+  <Tab title="macOS (Apple Silicon / Intel)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.13.2"
+    JAR="suprsend-java-sdk-${VERSION}.jar"
+    BASE="https://github.com/suprsend/suprsend-java-sdk/releases/download/v${VERSION}"
+
+    mkdir suprsend-verify && cd suprsend-verify
+
+    echo "-> Downloading jar and verification files..."
+    curl -sL -O "${BASE}/${JAR}"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/checksums.txt.asc"
+    curl -sL -O "${BASE}/public_key.asc"
+
+    echo "-> Importing and trusting public key..."
+    gpg --import public_key.asc
+    echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+
+    echo "-> Verifying signature on checksums.txt..."
+    gpg --verify checksums.txt.asc checksums.txt
+
+    echo "-> Verifying jar checksum..."
+    grep "${JAR}" checksums.txt | shasum -a 256 --check
+
+    echo "Done. SuprSend Java SDK ${VERSION} verified."
+    ```
+  </Tab>
+  <Tab title="Linux (x86_64 / ARM64)">
+    ```bash
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="0.13.2"
+    JAR="suprsend-java-sdk-${VERSION}.jar"
+    BASE="https://github.com/suprsend/suprsend-java-sdk/releases/download/v${VERSION}"
+
+    mkdir suprsend-verify && cd suprsend-verify
+
+    echo "-> Downloading jar and verification files..."
+    curl -sL -O "${BASE}/${JAR}"
+    curl -sL -O "${BASE}/checksums.txt"
+    curl -sL -O "${BASE}/checksums.txt.asc"
+    curl -sL -O "${BASE}/public_key.asc"
+
+    echo "-> Importing and trusting public key..."
+    gpg --import public_key.asc
+    echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+
+    echo "-> Verifying signature on checksums.txt..."
+    gpg --verify checksums.txt.asc checksums.txt
+
+    echo "-> Verifying jar checksum..."
+    grep "${JAR}" checksums.txt | sha256sum --check
+
+    echo "Done. SuprSend Java SDK ${VERSION} verified."
+    ```
+  </Tab>
+  <Tab title="Windows (x86_64 / ARM64)">
+    ```powershell
+    $VERSION  = "0.13.2"
+    $JAR      = "suprsend-java-sdk-$VERSION.jar"
+    $BASE     = "https://github.com/suprsend/suprsend-java-sdk/releases/download/v$VERSION"
+
+    New-Item -ItemType Directory -Name suprsend-verify
+    Set-Location suprsend-verify
+
+    Write-Host "-> Downloading jar and verification files..."
+    Invoke-WebRequest "$BASE/$JAR"              -OutFile $JAR
+    Invoke-WebRequest "$BASE/checksums.txt"     -OutFile checksums.txt
+    Invoke-WebRequest "$BASE/checksums.txt.asc" -OutFile checksums.txt.asc
+    Invoke-WebRequest "$BASE/public_key.asc"    -OutFile public_key.asc
+
+    Write-Host "-> Importing and trusting public key..."
+    gpg --import public_key.asc
+    echo "2E736EA7E36AB94C883A490C5261B38640D3A94D:6:" | gpg --import-ownertrust
+
+    Write-Host "-> Verifying signature on checksums.txt..."
+    gpg --verify checksums.txt.asc checksums.txt
+
+    Write-Host "-> Verifying jar checksum..."
+    $line     = Get-Content checksums.txt | Where-Object { $_ -match [regex]::Escape($JAR) }
+    $expected = ($line -split '\s+')[0].ToLower()
+    $actual   = (Get-FileHash ".\$JAR" -Algorithm SHA256).Hash.ToLower()
+    if ($expected -eq $actual) { Write-Host "Checksum OK — $JAR" } else { Write-Error "CHECKSUM MISMATCH — do not use this artifact" }
+
+    Write-Host "Done. SuprSend Java SDK $VERSION verified."
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Add the dependency to your project
+
+Once verification passes, add the SDK to your build configuration:
+
+<Tabs>
+  <Tab title="Maven">
+    ```xml
+    <dependency>
+      <groupId>com.suprsend</groupId>
+      <artifactId>suprsend-java-sdk</artifactId>
+      <version>0.13.2</version>
+    </dependency>
+    ```
+  </Tab>
+  <Tab title="Gradle">
+    ```groovy
+    implementation 'com.suprsend:suprsend-java-sdk:0.13.2'
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Reference
+
+<AccordionGroup>
+  <Accordion title="Available release artifacts" id="available-release-artifacts">
+
+    | Artifact | Source | Description |
+    |---|---|---|
+    | `suprsend-java-sdk-{version}.jar` | [GitHub](https://github.com/suprsend/suprsend-java-sdk/releases) / [Maven Central](https://repo1.maven.org/maven2/com/suprsend/suprsend-java-sdk/) | The SDK jar. |
+    | `suprsend-java-sdk-{version}.jar.asc` | Maven Central | GPG detached signature over the jar. |
+    | `suprsend-java-sdk-{version}.jar.sha256` | Maven Central | SHA-256 hash of the jar, published by Maven Central. |
+    | `checksums.txt` | GitHub | SHA-256 hashes of all release artifacts. |
+    | `checksums.txt.asc` | GitHub | GPG detached signature over `checksums.txt`. |
+    | `public_key.asc` | GitHub | SuprSend's GPG public key. |
+
+  </Accordion>
+
+  <Accordion title="Security model">
+    SuprSend's GPG signing private key is held exclusively by the automated release pipeline and never leaves the secure signing environment. `public_key.asc` is the public counterpart — it is published openly with every release and carries no risk of compromise.
+
+    The key fingerprint is `2E73 6EA7 E36A B94C 883A 490C 5261 B386 40D3 A94D`. You can cross-check this against the fingerprint published on the [SuprSend Java SDK releases page](https://github.com/suprsend/suprsend-java-sdk/releases) to independently confirm the key's authenticity before trusting it.
+
+    Maven Central independently requires all publishers to sign their artifacts with a GPG key registered with a public keyserver, and publishes its own SHA-256 hash for every artifact. Path A therefore gives you three independent signals: Maven Central's own checksum, SuprSend's GPG signature on the jar, and the key fingerprint you can verify out-of-band.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+<Tip>
+  If you encounter an unexpected verification failure, reach out at [support@suprsend.com](mailto:support@suprsend.com) or open an issue on the [SuprSend Java SDK GitHub repository](https://github.com/suprsend/suprsend-java-sdk/issues).
+</Tip>

@@ -1,6 +1,6 @@
 ---
 title: "Generate Types"
-description: "Generate type definitions from all enabled SuprSend schemas in a workspace."
+description: "Generate type definitions from JSON Schema"
 keywords:
   - suprsend generate types
   - generate types suprsend
@@ -8,81 +8,148 @@ keywords:
   - suprsend cli reference
   - typescript generation
   - schema types
-noindex: true
 ---
 
-The `generate-types` command creates type definition files in a given language for all enabled SuprSend schemas from a specified workspace.
+Generate typed code from trigger payload JSON schemas. Fetches schemas linked to workflows and events from a workspace and generates type definitions in the target language.
 
 ## Syntax
 
 ```bash
-suprsend generate-types <language> --output-file <output-file> [flags]
+suprsend generate-types <language> [flags]
 ```
 
 **Arguments:**
 | Argument | Description |
 |----------|-------------|
-| `<language>` | The programming language to generate types for. Supported languages - `typescript`, `go`, `python`, `java`, `kotlin`, `swift`, `dart` |
-| `--output-file` | Path to the output file where types will be generated (required) |
+| `<language>` | Target language: `typescript`, `go`, `python`, `java`, `kotlin`, `swift`, `dart` |
 
-
-## Flags
+## Common Flags
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-h, --help` | Show help for the command | – |
-| `--output-file string` | Output file for generated types | – |
-| `--build-flags string` | Flags to generate types in a certain way (e.g. `--zod` for TypeScript) | – |
-| `--mode string` | Mode of schema to fetch (draft, live) | `live` |
+| `--output-file string` | Output file path for generated types | Language-specific default |
+| `--mode string` | Version mode (`draft` or `live`) | `live` |
 | `--workspace string` | Workspace to get schemas from | `staging` |
+
+## Language-Specific Flags
+
+<Tabs>
+  <Tab title="TypeScript">
+  Generate TypeScript type definitions from trigger payload schemas. Fetches linked schemas and generates types in a single output file. Supports Zod schema generation with `--zod`.
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `suprsend-types.ts` |
+  | `--zod` | Generate Zod schemas instead of plain TypeScript types | `false` |
+  </Tab>
+  <Tab title="Python">
+  Generate Python type definitions from trigger payload schemas. Fetches linked schemas from the workspace and generates a single Python file with type classes. Supports Pydantic models (enabled by default).
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `suprsend_types.py` |
+  | `--pydantic` | Generate Pydantic BaseModel classes instead of plain dataclasses | `true` |
+  </Tab>
+  <Tab title="Go">
+  Generate Go type definitions from trigger payload schemas. Produces struct definitions in a single output file with the specified package name.
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `suprsend_types.go` |
+  | `--package string` | Go package name for generated structs | `suprsend` |
+  </Tab>
+  <Tab title="Java">
+  Generate Java type definitions from trigger payload schemas. Creates one Java file per linked schema in a package directory structure. Supports Lombok annotations with `--lombok`.
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `SuprsendTypes.java` |
+  | `--package string` | Java package name for generated classes | `suprsend.types` |
+  | `--lombok` | Add Lombok annotations to generated classes | `false` |
+  </Tab>
+  <Tab title="Kotlin">
+  Generate Kotlin type definitions from trigger payload schemas. Produces data classes in a single output file with the specified package name.
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `SuprsendTypes.kt` |
+  | `--package string` | Kotlin package name for generated data classes | `suprsend` |
+  </Tab>
+  <Tab title="Swift">
+  Generate Swift type definitions from trigger payload schemas. Produces Codable structs in a single output file.
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `SuprsendTypes.swift` |
+  </Tab>
+  <Tab title="Dart">
+  Generate Dart type definitions from trigger payload schemas. Produces null-safe classes in a single output file.
+
+  | Flag | Description | Default |
+  |------|-------------|---------|
+  | `--output-file string` | Output file path | `suprsend_types.dart` |
+  </Tab>
+</Tabs>
 
 ## Example
 
 <CodeGroup>
 
-```bash python
-# Generate TypeScript types from all enabled schemas in staging workspace
-suprsend generate-types python --output-file suprsend-types.py
+```bash typescript
+# Generate TypeScript types
+suprsend generate-types typescript
 
-# Generate Python types with Pydantic in production workspace
-suprsend generate-types python --pydantic --workspace production
+# Generate TypeScript types with Zod schemas
+suprsend generate-types typescript --zod --workspace production
+
+# Custom output file
+suprsend generate-types typescript --output-file src/types/notifications.ts
 ```
 
-```bash typescript
-# Generate TypeScript types from all enabled schemas in staging workspace
-suprsend generate-types typescript --output-file suprsend-types.ts
+```bash python
+# Generate Python types (Pydantic by default)
+suprsend generate-types python
 
-# Generate TypeScript types with Zod in production workspace
-suprsend generate-types typescript --zod --workspace production
+# Generate plain dataclasses
+suprsend generate-types python --pydantic=false
+
+# Generate from production workspace
+suprsend generate-types python --workspace production
 ```
 
 ```bash go
-# Generate Go types from all enabled schemas in staging workspace
-suprsend generate-types go --output-file suprsend-types.go
+# Generate Go types
+suprsend generate-types go
+
+# Custom package name
+suprsend generate-types go --package notifications --output-file notifications/types.go
 ```
 
 ```bash java
-# Generate Java types from all enabled schemas in staging workspace
-suprsend generate-types java --output-file suprsend-types.java
+# Generate Java types
+suprsend generate-types java
 
-# Generate Java types with Lombok in production workspace
-suprsend generate-types java --lombok --workspace production
-
+# Generate with Lombok annotations
+suprsend generate-types java --lombok --package com.myapp.notifications
 ```
 
-```bash kotlin  
-# Generate Kotlin types from all enabled schemas in staging workspace
-suprsend generate-types kotlin --output-file suprsend-types.kt
+```bash kotlin
+# Generate Kotlin data classes
+suprsend generate-types kotlin
+
+# Custom package
+suprsend generate-types kotlin --package com.myapp.notifications
 ```
 
 ```bash swift
-# Generate Swift types from all enabled schemas in staging workspace
-suprsend generate-types swift --output-file suprsend-types.swift
+# Generate Swift Codable structs
+suprsend generate-types swift
 ```
 
 ```bash dart
-# Generate Dart types from all enabled schemas in staging workspace
-suprsend generate-types dart --output-file suprsend-types.dart
+# Generate null-safe Dart classes
+suprsend generate-types dart
 ```
 
 </CodeGroup>

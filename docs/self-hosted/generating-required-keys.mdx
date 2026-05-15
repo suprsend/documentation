@@ -1,0 +1,101 @@
+---
+title: "Generating Required Keys"
+description: "Generate the deployment secret, NATS NKey pair, and AES cipher keys required before installing SuprSend."
+---
+
+Before installing SuprSend, you need to generate **three essential
+keys** for your deployment. These keys ensure secure communication and
+encryption between different components of SuprSend.
+
+## Generate Deployment Secret Key
+
+This key is a unique random string used to authenticate and secure your
+SuprSend installation.
+
+Run the following Python script to generate a strong secret key:
+
+``` bash
+python3
+```
+
+Then, in the interactive shell:
+
+``` python
+import secrets
+"".join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)") for i in range(50))
+```
+
+This will output a **50-character random secret string** --- copy and
+store it securely. Example output:
+
+`x2#e9ahb!@1d3f_4g5jklmn6opq7rstuv8wxyz`
+
+<Warning>
+Keep this key private. It should never be committed to version control or shared publicly.
+</Warning>
+
+## Generate NATS NKey Pair
+
+SuprSend uses **NATS** as its internal messaging backbone.\
+You'll need to generate a **public/private key pair** for secure message
+signing and validation.
+
+
+1.  Install the `nk` CLI tool for generating NATS keys:
+
+    ``` bash
+    go install github.com/nats-io/nkeys/nk@latest
+    ```
+
+2.  Generate a new user key pair:
+
+    ``` bash
+    nk -gen user -pubout
+    ```
+
+You'll get two keys: - **Private Key** → starts with `SU...` - **Public
+Key** → starts with `U...` Example output:
+
+`SUAGC2U8QYUZ7A... (Private Key)`
+`UAGB2UZJBNFJZ3... (Public Key)`
+
+<Warning>
+- Store the private key securely — it must not be exposed or shared.
+- The public key can be shared with your SuprSend deployment configuration.
+</Warning>
+
+## Generate AES Cipher Secret and Vector
+
+SuprSend uses AES encryption for sensitive payloads.\
+You'll need to generate a **shared AES key** and an **initialization
+vector (IV)**.
+
+Run the following Python script:
+
+``` bash
+python3
+```
+
+Then, inside the interactive shell:
+
+``` python
+def aes_cipher():
+    import os
+    shared_secret = os.urandom(32)
+    iv = os.urandom(16)
+    print("Shared Secret (AES Key):", shared_secret.hex())
+    print("Vector (IV):", iv.hex())
+
+aes_cipher()
+```
+
+You'll get two hex-encoded values:
+
+```
+Shared Secret (AES Key): `3f2a9e5b1d0a6c4d4e7f9b1c2d3a4b5c6d7e8f90123456789abcdef1234567890`
+Vector (IV): `1a2b3c4d5e6f70819283746556473829`
+```
+
+<Tip>
+Save both values safely. They'll be required in your SuprSend configuration under encryption settings.
+</Tip>

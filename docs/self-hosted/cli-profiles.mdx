@@ -1,0 +1,100 @@
+---
+title: "Setting Up CLI Access"
+description: "Connect the SuprSend CLI to your self-hosted or BYOC deployment using profiles."
+keywords:
+  - suprsend cli self hosted
+  - suprsend byoc cli
+  - suprsend cli authentication self hosted
+  - suprsend cli configuration
+  - suprsend cli custom endpoints
+---
+
+The [SuprSend CLI](/reference/cli-intro) works with self-hosted and BYOC deployments the same way it does with SuprSend Cloud — all commands for managing workflows, schemas, events, and categories are identical. The only difference is **how you authenticate**.
+
+On SuprSend Cloud, the CLI connects to SuprSend's default API endpoints automatically. For self-hosted and BYOC deployments, your API endpoints are different (e.g., `https://suprsend.internal.yourcompany.com/`), so the CLI needs to know where to connect. **Profiles** solve this by storing your custom endpoint URLs and credentials locally, so you don't have to pass them on every command.
+
+<Warning>
+**Profiles are not workspaces.** A profile stores *server connection details* (custom API endpoint URLs + credentials) for a self-hosted or BYOC deployment. A workspace (`-w staging` or `-w production`) selects a *workspace within* a SuprSend instance. They serve different purposes:
+- **Profile** → *which server* to connect to (only needed for self-hosted / BYOC)
+- **Workspace flag (`-w`)** → *which workspace* on that server (staging, production, etc.)
+
+If you are using SuprSend Cloud (SaaS), you do not need profiles. Use [environment variables or command-line flags](/reference/cli-authentication) instead.
+</Warning>
+
+
+## Prerequisites
+
+- [Install the SuprSend CLI](/reference/cli-installation)
+- Have your **service token** ready (from your self-hosted dashboard → Account Settings → Service Tokens)
+- Know your deployment's **base URL** and **management URL**
+
+## Create a Profile
+
+A profile stores your server's endpoint URLs and service token under a name you choose:
+
+```bash
+suprsend profile add \
+  --name production \
+  --service-token "your-service-token" \
+  --base-url https://hub.your-deployment.com/ \
+  --mgmnt-url https://management-api.your-deployment.com/
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--name string` | Name for this profile (required) | – |
+| `--service-token string` | Service token (required) | – |
+| `--base-url string` | Hub API endpoint for your deployment | `https://hub.suprsend.com/` |
+| `--mgmnt-url string` | Management API endpoint for your deployment | `https://management-api.suprsend.com/` |
+
+You can create multiple profiles for different self-hosted deployments:
+
+```bash
+suprsend profile add --name staging-server \
+  --service-token "staging-token" \
+  --base-url https://hub.staging.yourcompany.com/ \
+  --mgmnt-url https://management-api.staging.yourcompany.com/
+
+suprsend profile add --name production-server \
+  --service-token "prod-token" \
+  --base-url https://hub.prod.yourcompany.com/ \
+  --mgmnt-url https://management-api.prod.yourcompany.com/
+```
+
+## Switch Between Profiles
+
+Set which profile the CLI should use for all subsequent commands:
+
+```bash
+suprsend profile use --name production-server
+```
+
+After this, every CLI command will connect to the production server's endpoints. To target a specific workspace on that server, combine with the `-w` flag:
+
+```bash
+suprsend workflow list -w production
+```
+
+## Manage Profiles
+
+```bash
+suprsend profile list
+
+suprsend profile modify --name production-server --service-token "new-token"
+
+suprsend profile remove --name old-staging-server
+```
+
+| Command | Description |
+|---------|-------------|
+| `profile list` | List all configured profiles and see which one is active |
+| `profile add` | Add a new profile with connection details |
+| `profile modify` | Update a profile's credentials or endpoints |
+| `profile remove` | Delete a profile |
+| `profile use` | Switch the active profile |
+
+Profiles are stored in your local config file at `$HOME/.suprsend.yaml`.
+
+## Next Steps
+
+Once your CLI is connected, refer to the [CLI documentation](/reference/cli-intro) for all available commands — managing workflows, schemas, events, categories, translations, and syncing assets across workspaces.

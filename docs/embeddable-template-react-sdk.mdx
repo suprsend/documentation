@@ -1,0 +1,330 @@
+---
+title: "Embeddable Templates SDK"
+description: "Embed SuprSend multi-channel template editor inside your product with React SDK. Supports editing, testing and committing template variants."
+---
+
+The **`@suprsend/react-editor`** package provides the UI for embeddable templates: channel editors, preview, test, commit, and theming. You can use this to let your customers edit their notification templates or for your internal team to manage templates and run campaigns within your product.
+
+Import the CSS bundle for correct layout and styling.
+
+---
+
+## Installation
+
+<CodeGroup>
+  ```bash npm
+  npm install @suprsend/react-editor
+  ```
+
+  ```bash yarn
+  yarn add @suprsend/react-editor
+  ```
+</CodeGroup>
+
+---
+
+## Quick Start
+
+```tsx
+import {
+  SuprSendTemplateProvider,
+  TemplateEditor,
+  CommitButton,
+  TestButton,
+} from '@suprsend/react-editor';
+import '@suprsend/react-editor/styles.css';
+
+function App() {
+  return (
+    <SuprSendTemplateProvider
+      workspaceUid="your-workspace-uid"
+      templateSlug="order-confirmation"
+      variantId="default"
+      channels={['email', 'inbox', 'androidpush', 'webpush']}
+      tenantId={null}
+      locale="en"
+      accessToken="your-access-token"
+    >
+      <TemplateEditor onCommit={() => console.log('Committed!')} />
+    </SuprSendTemplateProvider>
+  );
+}
+```
+
+<Warning>
+  You must import the stylesheet (`@suprsend/react-editor/styles.css`) for the components to render correctly.
+</Warning>
+
+---
+
+## Supported Channels
+
+| Channel          | ID            | Editor Functionality                                                          |
+| ---------------- | ------------- | ------------------------------------------------------------------------------- |
+| **Email**        | `email`       | 3 types of editor available: **Visual designer**, **raw HTML**, **plain text**. Users can switch between editors and see live preview while editing. |
+| **Slack**        | `slack`       | 2 types of editor available: **Plain text** for designing simple text based notifications and **Block Kit (JSON)** for advanced interactive messages.|
+| **MS Teams**     | `ms_teams`    | 2 types of editor available: **Markdown** for designing simple text based notifications and **Adaptive Cards** (JSON) for advanced interactive messages.|
+| **Android Push** | `androidpush` | Single Form editor with rich text messaging support (title, body, image, buttons). |
+| **iOS Push**     | `iospush`     | Single Form editor with rich text messaging support (title, body, image, action URL). |
+| **Web Push**     | `webpush`     | Single Form editor with support to add title, body, image, buttons. |
+| **In-app Inbox** | `inbox`       | Single Form editor with support for rich content, avatar, buttons, tags, expiry and Pinning.                 |
+| **SMS**          | `sms`         | Coming soon                                                                     |
+| **WhatsApp**     | `whatsapp`    | Coming soon                                                                     |
+
+---
+
+## Components
+
+### SuprSendTemplateProvider
+
+The root context provider. Wrap your editor UI with this component. This is where you configure which template and variant to edit, which channels to enable, theming, and authentication.
+
+```tsx
+<SuprSendTemplateProvider
+  workspaceUid="ws_123"
+  templateSlug="welcome-email"
+  variantId="default"
+  channels={['email', 'inbox', 'webpush']}
+  tenantId={null}
+  locale="en"
+  themeOverrides={{ primary: '#6366f1', radius: '8px' }}
+  accessToken="your-access-token"
+  refreshAccessToken={async (oldToken) => {
+    const newToken = await fetchNewToken(oldToken);
+    return newToken;
+  }}
+>
+  {children}
+</SuprSendTemplateProvider>
+```
+
+**Props**
+
+| Prop                   | Type                                    | Required | Default   | Description                                                  |
+| ---------------------- | --------------------------------------- | -------- | --------- | ------------------------------------------------------------ |
+| `workspaceUid`         | `string`                                | Yes      | —         | Your SuprSend workspace identifier                           |
+| `templateSlug`         | `string`                                | Yes      | —         | The template slug                                            |
+| `variantId`            | `string`                                | Yes      | —         | The variant identifier                                       |
+| `channels`             | `ChannelId[]`                           | Yes      | —         | Array of channels to enable in the editor                    |
+| `tenantId`             | `string \| null`                        | Yes      | —         | Tenant ID for multi-tenant workspaces (pass `null` if N/A)   |
+| `locale`               | `string`                                | Yes      | —         | Language/locale code (e.g. `"en"`)                           |
+| `conditions`           | `unknown`                               | No       | —         | Variant conditions configuration                             |
+| `accessToken`          | `string`                                | Yes      | —         | Authentication token                                         |
+| `refreshAccessToken`   | `(oldToken: string) => Promise<string>` | No       | —         | Callback to refresh an expired token                         |
+| `mode`                 | `'live' \| 'draft'`                     | No       | `'draft'` | Start in draft (editable) or live (read-only) mode           |
+| `theme`                | —                                       | No       | —         | Coming soon                                                  |
+| `themeOverrides`       | `ThemeOverrides`                        | No       | —         | Custom color and styling overrides (see [Theming](#theming)) |
+| `recipientDistinctId`  | `string`                                | No       | —         | Recipient ID for populating mock/preview data                |
+| `actorDistinctId`      | `string`                                | No       | —         | Actor ID for populating mock/preview data                    |
+| `notificationCategory` | `string`                                | No       | —         | Notification category for triggering test                    |
+
+---
+
+### TemplateEditor
+
+The main editor component. Renders channel tabs, channel editor forms, and preview panes.
+
+```tsx
+<TemplateEditor
+  hideActionButtons={false}
+  onCommit={() => console.log('Committed!')}
+/>
+```
+
+**Props**
+
+| Prop                | Type         | Required | Default | Description                                                                                                                                             |
+| ------------------- | ------------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hideActionButtons` | `boolean`    | No       | `false` | Hide the default action buttons (Test, Commit, Edit, Exit)                                                                                              |
+| `hideTestButton`    | `boolean`    | No       | `false` | Hide only the Test button while keeping other action buttons visible                                                                                    |
+| `onCommit`          | `() => void` | No       | —       | Callback invoked after a successful commit. If you hide action buttons, you can pass your handler to the standalone `CommitButton` instead.              |
+
+<Tip>
+  When `hideActionButtons` is `true`, use the standalone `TestButton` and `CommitButton` components to place actions anywhere in your layout.
+</Tip>
+
+---
+
+### CommitButton
+
+A button that opens the commit modal. Validates all variants, lets the user select which to publish, and requires a commit message.
+
+```tsx
+<CommitButton onCommit={() => console.log('Published!')} />
+```
+
+**Props**
+
+| Prop       | Type         | Required | Description                   |
+| ---------- | ------------ | -------- | ----------------------------- |
+| `onCommit` | `() => void` | Yes      | Callback invoked after commit |
+
+---
+
+### TestButton
+
+A button that opens the test modal. Allows sending a test notification to a real recipient with mock data.
+
+```tsx
+<TestButton onTestSent={() => console.log('Test sent!')} />
+```
+
+**Props**
+
+| Prop         | Type         | Required | Description                         |
+| ------------ | ------------ | -------- | ----------------------------------- |
+| `onTestSent` | `() => void` | No       | Callback invoked after test is sent |
+
+---
+
+## Theming
+
+The `theme` prop (`light`, `dark`, `system`) is **coming soon**. Customize the look and feel today using `themeOverrides`.
+
+```tsx
+<SuprSendTemplateProvider
+  themeOverrides={{
+    primary: '#6366f1',
+    primaryForeground: '#ffffff',
+    background: '#fafafa',
+    foreground: '#111827',
+    border: '#e5e7eb',
+    radius: '8px',
+  }}
+  // ...other props
+>
+  {children}
+</SuprSendTemplateProvider>
+```
+
+### Available Overrides
+
+| Property                | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `background`            | Main background color                    |
+| `foreground`            | Main text color                          |
+| `card`                  | Card/panel background                    |
+| `cardForeground`        | Card text color                          |
+| `popover`               | Popover/dropdown background              |
+| `popoverForeground`     | Popover text color                       |
+| `primary`               | Primary brand color                      |
+| `primaryForeground`     | Text on primary backgrounds              |
+| `secondary`             | Secondary color                          |
+| `secondaryForeground`   | Text on secondary backgrounds            |
+| `muted`                 | Muted/subtle backgrounds                 |
+| `mutedForeground`       | Muted text color                         |
+| `accent`                | Accent highlight color                   |
+| `accentForeground`      | Text on accent backgrounds               |
+| `destructive`           | Error/danger color                       |
+| `destructiveForeground` | Text on destructive backgrounds          |
+| `border`                | Border color                             |
+| `input`                 | Input field border color                 |
+| `ring`                  | Focus ring color                         |
+| `radius`                | Border radius (e.g. `"8px"`, `"0.5rem"`) |
+
+All CSS classes are scoped with a `suprsend-` prefix to prevent conflicts with your application's styles.
+
+---
+
+## Authentication
+
+Provide an `accessToken` and optionally a `refreshAccessToken` callback to handle token expiration.
+
+```tsx
+<SuprSendTemplateProvider
+  workspaceUid="ws_123"
+  accessToken={token}
+  refreshAccessToken={async (oldToken) => {
+    const response = await fetch('/api/refresh-token', {
+      method: 'POST',
+      body: JSON.stringify({ token: oldToken }),
+    });
+    const { newToken } = await response.json();
+    return newToken;
+  }}
+  // ...other props
+/>
+```
+
+When a `401` response is received, the SDK automatically calls `refreshAccessToken`, queues pending requests, and retries them with the new token.
+
+### Generating access token
+
+```python
+import time
+import jwt
+from typing import Dict, Any
+
+# ==================== CONFIGURATION ====================
+
+signing_key_id = "signing_key_xxxxxx"
+
+# Private key in PEM format
+signing_private_key = """-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+-----END PRIVATE KEY-----"""
+
+# ==================== PAYLOAD ====================
+
+payload: Dict[str, Any] = {
+    "workspace_uid": "<ws_uid>",
+    "entity_type": "template",
+    "entity_id": "<template-slug>",          # Use "*" to allow access to all templates
+
+    "scope": {
+        # Template-level scope
+        "variant_scope": {                   # variant_scope: If missing, user can access all variants
+            "channels": ["email"],           # If missing, any channel can be accessed
+            "variant_id": "v1",              # If missing, any variant can be accessed
+            "tenant_id": "<tenant1>",        # If missing or null, variants of all tenants can be accessed
+            "locale": "en",                  # If missing, variants of all locales can be accessed
+
+            "conditions": [                  # If missing, variants of all conditions can be accessed
+                {
+                    "expression_v1": {
+                        "op": "AND",
+                        "args": [
+                            {"variable_ns": "", "variable": "age", "op": "==", "value": "18"},
+                            {"variable_ns": "", "variable": "age", "op": "==", "value": "18"}
+                        ]
+                    }
+                }
+            ],
+
+            "fallback_variant_id": "var_1"   # If the requested variant is not present,
+                                             # use content from this fallback variant
+        },
+
+        # Only the recipients mentioned below can be accessed
+        # (used for mock testing and variable fetching)
+        # If this key is missing, mock/variable functionality might not work properly
+        "recipients": [
+            {"distinct_id": "id1"},
+            {"distinct_id": "id2"}
+        ]
+    },
+
+    # Token expiration settings
+    "iat": int(time.time()),                    # Issued at (current time in unix seconds)
+    "exp": int(time.time()) + 3600              # Expiration time (add extra seconds as needed)
+}
+
+# ==================== JWT HEADER ====================
+
+header_dict = {
+    "alg": "ES256",
+    "kid": signing_key_id,
+    "typ": "JWT"
+}
+
+# ==================== GENERATE TOKEN ====================
+
+auth_token = jwt.encode(
+    payload=payload,
+    key=signing_private_key,
+    algorithm="ES256",
+    headers=header_dict
+)
+
+print(auth_token)
+```
