@@ -1,11 +1,10 @@
 ---
 title: "Push Notifications"
-description: "Native FCM + APNs push delivery in Expo and React Native via expo-notifications."
 ---
 
 Native FCM + APNs push delivery via `expo-notifications`.
 
-For platform-specific setup (APNs credentials and entitlement on iOS, `google-services.json` and FCM credentials on Android), see [**Native Push Setup**](/docs/expo-push-setup).
+For platform-specific setup (APNs credentials and entitlement on iOS, `google-services.json` and FCM credentials on Android), see [**Push Setup**](/docs/expo-push-setup).
 
 <CodeGroup>
   ```tsx App.tsx
@@ -108,6 +107,182 @@ Disable auto-registration and call `registerPushNotification()` yourself — e.g
     onPushNotificationReceived: (handler: (notification: Notification) => void) => () => void;
     onPushNotificationTapped:   (handler: (response: NotificationResponse) => void) => () => void;
   };
+  ```
+</CodeGroup>
+
+## Customisations
+
+### Custom notification icon and accent color
+
+Android does not use your launcher icon for notifications — without an explicit icon you get a generic bell. Set a custom small icon and accent color via the `expo-notifications` config plugin in `app.json`:
+
+<CodeGroup>
+  ```json app.json
+  {
+    "expo": {
+      "plugins": [
+        [
+          "expo-notifications",
+          {
+            "icon": "./assets/notification-icon.png",
+            "color": "#FF231F7C"
+          }
+        ]
+      ]
+    }
+  }
+  ```
+</CodeGroup>
+
+- **`icon`** — path to the small icon shown in the status bar and notification tray. Place the file in your project's `assets/` folder and reference it by that path.
+- **`color`** — accent color applied to the icon and used as the notification's default tint.
+
+Then in your SuprSend Dashboard Android template, expand **Advanced Configuration** and set the **App Icon** field to the icon filename **including the `.png` extension** (e.g. `notification-icon.png`).
+
+<Note>
+  iOS uses the app icon for notifications automatically — these settings only apply to Android. After changing the plugin config, rebuild with `npx expo run:android` (Expo Go cannot apply config plugins).
+</Note>
+
+### Adding or removing notification channels
+
+By default the SDK creates a single Android channel named `default` with `MAX` importance, a vibration pattern, and a light color. Override it by passing `setupAndroidNotificationChannel` to `SuprSendPushProvider` — your function is called once before push permission is requested.
+
+<CodeGroup>
+  ```tsx App.tsx
+  import * as Notifications from "expo-notifications";
+  import { SuprSendPushProvider } from "@suprsend/expo-sdk";
+
+  async function setupChannels() {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "General",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7C",
+    });
+
+    await Notifications.setNotificationChannelAsync("transactional", {
+      name: "Order updates",
+      importance: Notifications.AndroidImportance.MAX,
+      sound: "default",
+    });
+  }
+
+  <SuprSendPushProvider setupAndroidNotificationChannel={setupChannels}>
+    {...}
+  </SuprSendPushProvider>
+  ```
+</CodeGroup>
+
+Remove a channel you no longer need with `deleteNotificationChannelAsync`:
+
+<CodeGroup>
+  ```tsx tsx
+  await Notifications.deleteNotificationChannelAsync("transactional");
+  ```
+</CodeGroup>
+
+The channel ID of notification is picked automatically from the workflow's notification category used to trigger the notification in SuprSend. If you want to customise notifications of specific notification channel then pick its id from workflow you are triggering define it's properties like above snippet else they will fallback to default notification channel.
+
+Make sure every channel ID you reference from SuprSend templates exists here — Android silently drops notifications targeting an unknown channel.
+
+<Warning>
+  Channels are immutable after creation. Once a user installs the app, changing a channel's `importance`, `sound`, etc. in code has no effect — the user must change it from system settings, or you must publish a new channel with a different ID.
+</Warning>
+
+### Deep links from notifications
+
+When the user taps a SuprSend push, you usually want to land them on a specific screen — an order, a chat, a settings page. This needs three things wired up:
+
+1. A URL set on the SuprSend template (per platform — see below for the payload key).
+2. The OS configured to route that URL into your app (a custom scheme, an iOS associated domain, and an Android intent filter).
+3. JS code that reads the URL from the tap response and navigates.
+
+#### 1. Set the deep link on the SuprSend template
+
+In the SuprSend Dashboard, open the template you're sending and set the deep-link URL on **both** the iOS and Android variants — the field differs per platform:
+
+- **iOS** — set the **Action URL** field. SuprSend forwards it as `global_action_url` at the top level of the APNs payload.
+- **Android** — open **Advanced Configuration** on the Android push template and add a **Custom Key-Value** entry with key `url` and the deep link as the value. SuprSend forwards it as a data field on the FCM message.
+
+Two URL shapes are supported on either platform:
+
+- **Custom scheme** — e.g. `suprsendexpoexample://home`. Simplest to set up, opens only your app.
+- **Universal / App Links** — e.g. `https://yourdomain.com/home`. Opens your app if installed, otherwise falls back to the web URL.
+
+At runtime the URL ends up in different places depending on platform (see step 3).
+
+#### 2. Configure native deep link entry points in `app.json`
+
+<CodeGroup>
+  ```json app.json
+  {
+    "expo": {
+      "scheme": "suprsendexpoexample",
+      "ios": {
+        "bundleIdentifier": "com.yourcompany.yourapp",
+        "associatedDomains": ["applinks:yourdomain.com"]
+      },
+      "android": {
+        "package": "com.yourcompany.yourapp",
+        "intentFilters": [
+          {
+            "action": "VIEW",
+            "autoVerify": true,
+            "data": [{ "scheme": "https", "host": "yourdomain.com" }],
+            "category": ["BROWSABLE", "DEFAULT"]
+          }
+        ]
+      }
+    }
+  }
+  ```
+</CodeGroup>
+
+- **`scheme`** — registers `suprsendexpoexample://…` as an app-only URL on both platforms. Use only if your custom URLs are simple.
+- **`ios.associatedDomains`** — enables iOS Universal Links for `https://yourdomain.com/…`. Two prerequisites in addition to this entry:
+  - In the Apple Developer portal, open your App ID under **Certificates, IDs & Profiles → Identifiers** and tick the **Associated Domains** capability, then save.
+  - Serve an `apple-app-site-association` (AASA) file at `https://yourdomain.com/.well-known/apple-app-site-association`.
+- **`android.intentFilters`** — handles `https://yourdomain.com/…` taps. With `autoVerify: true` you must also publish an `assetlinks.json` at `https://yourdomain.com/.well-known/assetlinks.json`.
+
+<Note>
+  AASA / assetlinks files are only required for universal/App Links. Custom schemes (`suprsendexpoexample://…`) work without them.
+</Note>
+
+Rebuild after changing any of these — `npx expo run:ios` / `npx expo run:android`. Config plugins don't run inside Expo Go.
+
+#### 3. Read the URL from the tap and navigate
+
+Subscribe to push taps with `useSuprSendPushNotifications().onPushNotificationTapped`. The deep-link URL sits at different paths in the tap response across platforms — iOS gets the raw APNs payload under `trigger.payload`, Android gets the FCM data fields under `content.data`:
+
+<CodeGroup>
+  ```jsx DeeplinkHandler.jsx
+  import { useEffect } from "react";
+  import { Platform } from "react-native";
+  import { useSuprSendPushNotifications } from "@suprsend/expo-sdk";
+
+  function DeeplinkHandler() {
+    const { onPushNotificationTapped } = useSuprSendPushNotifications();
+
+    useEffect(() => {
+      return onPushNotificationTapped((response) => {
+        const { trigger, content } = response.notification.request;
+        const url =
+          Platform.OS === "ios"
+            ? trigger?.payload?.global_action_url
+            : content.data?.url;
+        if (typeof url !== "string") return;
+        navigate(url); // using url you can navigate to specific screen
+      });
+    }, [onPushNotificationTapped, onNavigate]);
+
+    return null;
+  }
+
+  <SuprSendPushProvider>
+    <DeeplinkHandler />
+    {/* …rest of app… */}
+  </SuprSendPushProvider>;
   ```
 </CodeGroup>
 
