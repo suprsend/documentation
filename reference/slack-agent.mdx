@@ -2,10 +2,15 @@
 title: "Slack Agent"
 sidebarTitle: "Slack Agent"
 tag: "BETA"
-description: "Manage users, workflows, preferences, and analytics from Slack — without opening the SuprSend dashboard."
+description: "Manage users, workflows, preferences, and analytics from Slack — with a built-in Privacy Filter that keeps PII out of shared channels."
 ---
 
 Slack Agent brings SuprSend Agent into your Slack workspace. Look up profiles, trigger workflows, change preferences, pull delivery analytics, and ask product questions — all from a DM or channel.
+
+Unlike a generic chatbot bolted on top of an API, Slack Agent is built around two principles:
+
+- **Privacy Filter on by default.** PII never lands in a searchable channel by accident. Sensitive identifiers are routed to a DM; the channel sees a summary.
+- **AI is optional.** SuprSend works fully without AI. If your organization can't share data with third-party model providers, you can disable all AI features in one click — Slack Agent included.
 
 <Warning>
   Slack Agent is in **beta**. Behavior and channel coverage may change. Use a private test channel for experiments before relying on it in production threads.
@@ -32,18 +37,41 @@ Slack Agent brings SuprSend Agent into your Slack workspace. Look up profiles, t
 
 ---
 
-## DMs vs. channels
+## Privacy Filter
 
-Slack Agent works in both DMs and channels, but how it handles sensitive information depends on where you ask.
+Slack channels are searchable, exportable, and often shared with broader audiences than the people who originally asked. A teammate posting *"what's jane@acme.com's phone number?"* into `#growth` shouldn't leak that number to everyone with channel history access.
 
-| Surface | When to use it | PII behavior |
+The **Privacy Filter** is Slack Agent's default behavior in channels. It detects when a response would contain PII — emails, phone numbers, push tokens, device identifiers, channel addresses — and splits the reply:
+
+- The **channel** sees a non-sensitive summary in-thread (e.g., *"Found the profile for user_123. Sent identifiers to your DM."*).
+- The **requester's DM** receives the raw identifiers, so the person doing the work still gets what they need.
+
+DMs are inherently private, so the filter doesn't apply there — full identifiers are returned inline.
+
+| Surface | When to use it | What the Privacy Filter does |
 | --- | --- | --- |
-| **Direct messages** | Private lookups, work tied to a specific user, anything involving identifiers, channel addresses, or device tokens. | Full access — emails, phone numbers, push tokens, and other PII are returned in full. |
-| **Channels** | Team-visible work — analytics summaries, workflow audits, debugging in front of teammates. | **Protective layer** — if your prompt touches PII, Slack Agent does **not** post sensitive identifiers in the channel. It DMs you the sensitive parts and replies in-thread with a non-sensitive summary. |
+| **Direct messages** | Private lookups, work tied to a specific user, anything involving identifiers, channel addresses, or device tokens. | Inactive — emails, phone numbers, push tokens, and other PII are returned in full. |
+| **Channels** | Team-visible work — analytics summaries, workflow audits, debugging in front of teammates. | **Active by default.** PII is stripped from the channel reply and DM'd to the requester instead. |
 
 <Note>
-  **Why the channel protection exists** — Slack channels are searchable, exportable, and often shared with broader audiences than the people who asked. Posting a user's raw email or phone number into `#growth` can leak PII to anyone with channel history access. Slack Agent's protective layer keeps the conversation visible to the team while routing the identifiers to your DM.
+  The Privacy Filter is enforced at the response layer, not the prompt layer. Teammates can still ask sensitive questions in channels — the filter just makes sure the answer doesn't expose PII in a place it shouldn't live.
 </Note>
+
+---
+
+## Using AI is optional
+
+SuprSend uses Anthropic models internally to power Agent features, including Slack Agent. If your organization's policy says **don't share data with third-party model providers**, you can switch off every AI feature in your workspace.
+
+<Note>
+  **Default model provider — Anthropic.** Slack Agent, dashboard Agent, and SuprSend's other AI features call Anthropic models with your prompts and the tool results needed to answer them. No customer data is used to train these models.
+
+  **One-click opt-out.** Workspace admins can disable all AI features from **Account Settings → [AI & Agents](https://app.suprsend.com/en/account-settings/ai-agents)**. With AI disabled, SuprSend's notification infrastructure — workflows, templates, channels, preferences, delivery, analytics — continues to work exactly as before. None of it depends on AI.
+
+  **Bring Your Own Token (coming soon).** Route Agent through your own OpenAI or Anthropic keys if you want the data path to terminate at a provider account your security team already approves.
+</Note>
+
+For a deeper view of the AI surfaces, billing model, and data handling, see [Agent → Settings](/reference/agent#settings).
 
 ---
 
@@ -93,6 +121,7 @@ Manage the Slack App from **Account Settings → [AI & Agents](https://app.suprs
 
 - Install, connect, or disconnect your Slack workspace.
 - Toggle the Slack App on or off (disabling stops Slack Agent from responding in any channel or DM).
+- Turn off all AI features at the workspace level if your organization opts out of third-party model usage.
 - View Slack-attributed credit usage alongside the rest of your AI consumption.
 
 Disabling the Slack App preserves workspace install state — re-enable later without re-authorizing.
