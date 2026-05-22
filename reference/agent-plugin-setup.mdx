@@ -1,0 +1,137 @@
+---
+title: "Setup Guide"
+sidebarTitle: "Setup Guide"
+description: "Install and configure the SuprSend Agent Plugin in Claude Code, VS Code Copilot, and GitHub Copilot CLI."
+---
+
+Detailed setup instructions for each platform. The plugin runs the SuprSend CLI via `npx suprsend`, so the only hard prerequisites are **Node.js (v20+)** and **Claude Code**.
+
+## Prerequisites (all platforms)
+
+| Requirement     | Minimum Version | Check                |
+| --------------- | --------------- | -------------------- |
+| Claude Code CLI | latest          | `claude --version`   |
+| Node.js + npx   | v20+            | `node --version` / `npx --version` |
+| SuprSend CLI    | _optional_      | `suprsend --version` _or_ `npx suprsend --version` |
+
+A global `suprsend` install isn't required — `npx suprsend` fetches it on first use and caches it. Installing globally (brew/Go) is supported and takes precedence over the npx fallback.
+
+## All platforms (npx, recommended)
+
+### 1. Authenticate
+
+Get a service token from [Account Settings → Service Tokens](https://app.suprsend.com).
+
+```bash
+npx suprsend profile add --name default --service-token <YOUR_SERVICE_TOKEN>
+```
+
+Or set it as an environment variable for the current session:
+
+```bash
+export SUPRSEND_SERVICE_TOKEN="your_service_token_here"
+```
+
+### 2. Install the plugin in your AI tool
+
+The plugin format is shared between Claude Code, VS Code Copilot, and GitHub Copilot CLI — pick the install path that matches your editor. The bundled `.mcp.json` invokes `npx -y suprsend start-mcp-server`, so the MCP server starts on demand regardless of host.
+
+#### Claude Code
+
+```
+/plugin marketplace add suprsend/claude-code-plugin
+/plugin install suprsend@suprsend-marketplace
+```
+
+#### VS Code Copilot
+
+<Warning>
+**Preview feature.** VS Code [Agent Plugins](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) are currently in preview. The host requires the `chat.plugins.enabled` setting to be on. This setting is managed at the organization level — if it's disabled, contact your admin to enable it before continuing.
+</Warning>
+
+1. Open the command palette (`Cmd/Ctrl + Shift + P`).
+2. Run **`Chat: Install Plugin From Source`**.
+3. Enter `suprsend/claude-code-plugin` (or the full URL `https://github.com/suprsend/claude-code-plugin.git`).
+4. Verify it's enabled in the Extensions sidebar (search `@agentPlugins`) under **Agent Plugins → Installed**.
+
+For team-wide install, commit `.github/copilot/settings.json` to your project repo:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "suprsend-marketplace": {
+      "source": { "source": "github", "repo": "suprsend/claude-code-plugin" }
+    }
+  },
+  "enabledPlugins": {
+    "suprsend@suprsend-marketplace": true
+  }
+}
+```
+
+When teammates open the repo, the marketplace is auto-registered and the plugin is enabled.
+
+## Optional: global install
+
+If you'd rather have `suprsend` on your `PATH` (faster cold starts, scripting outside the plugin):
+
+### macOS
+
+```bash
+brew tap suprsend/tap
+brew install --cask suprsend
+```
+
+### Linux / WSL (via Go)
+
+```bash
+# Install Go if needed
+sudo apt update && sudo apt install -y golang-go
+
+# Install SuprSend CLI
+go install github.com/suprsend/cli/cmd/suprsend@latest
+
+# Add to PATH (add to ~/.bashrc or ~/.zshrc for persistence)
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+### Windows (WSL)
+
+The plugin runs best under WSL (Windows Subsystem for Linux). Follow the Linux instructions above inside your WSL environment.
+
+```powershell
+# From PowerShell, enter WSL
+wsl
+
+# Then follow Linux instructions
+```
+
+## CI/CD Environments
+
+For automated environments where Claude Code isn't available interactively, use the SuprSend CLI directly:
+
+```bash
+# 1. Either: install CLI globally
+go install github.com/suprsend/cli/cmd/suprsend@latest
+# Or: invoke via npx (Node.js is usually available on CI runners)
+npx -y suprsend --version
+
+# 2. Set SUPRSEND_SERVICE_TOKEN as an encrypted secret in your CI provider
+
+# 3. Use the CLI directly (no plugin needed)
+npx suprsend workflow list
+npx suprsend sync --from staging --to production
+```
+
+The MCP server and plugin are for interactive Claude Code / VS Code Copilot sessions. In CI, call the SuprSend CLI commands directly.
+
+## Uninstall
+
+**Claude Code** — uninstall the plugin and remove the marketplace:
+
+```
+/plugin uninstall suprsend@suprsend-marketplace
+/plugin marketplace remove suprsend-marketplace
+```
+
+**VS Code Copilot** — right-click the `suprsend` plugin in **Agent Plugins → Installed** and choose **Uninstall**. To remove the workspace marketplace registration, delete the `extraKnownMarketplaces.suprsend-marketplace` entry from `.github/copilot/settings.json` (or whichever settings file registered it).
