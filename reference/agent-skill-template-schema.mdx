@@ -1,0 +1,204 @@
+---
+title: "suprsend-template-schema"
+sidebarTitle: "Template Schema"
+description: "Author and edit SuprSend template variants from plain English. This skill teaches your AI agent the variant envelope, per-channel content schemas, and Handlebars/JSONNET syntax across all nine channels."
+---
+
+**Use this skill when** you want your AI agent to create, modify, or edit a template variant - "build an SMS variant", "add a French locale", "create a tenant-specific welcome email" - without making up brand variable keys or missing the per-channel content shape.
+
+The skill loads the variant envelope, per-channel content schemas, and Handlebars/JSONNET syntax references into your agent's context whenever it detects a template task. Every generated variant validates against `https://schema.suprsend.com/template/v2/variant_schema.json` and is ready to push with the [`suprsend-cli`](/reference/agent-skill-cli) skill.
+
+## Install
+
+```bash
+npx skills add https://github.com/suprsend/skills --skill suprsend-template-schema
+```
+
+---
+
+## Try it
+
+Paste this into your agent:
+
+```text
+Create a SuprSend email template variant for a welcome email
+in English. Use the default tenant.
+```
+
+Your agent loads the skill and produces a variant file with the minimum shape:
+
+```json
+{
+  "$schema": "https://schema.suprsend.com/template/v2/variant_schema.json",
+  "channel": "email",
+  "id": "default-en",
+  "tenant_id": null,
+  "locale": "en",
+  "conditions": null,
+  "content": { /* channel-specific - see channel reference */ }
+}
+```
+
+Push it live:
+
+```bash
+suprsend template push --slug welcome-email --commit=true
+```
+
+<Tip>
+  Templates live under `./suprsend/templates/` locally and are pushed as a unit - variants are not managed separately. See [Template Commands](/reference/cli-template-overview).
+</Tip>
+
+---
+
+## How variants work
+
+Every SuprSend template is modeled as a collection of **variants**. A variant pairs a channel, locale, optional tenant, and optional condition with channel-specific content.
+
+Even a simple template with no multi-tenant or multi-language requirements is just one variant - usually `tenant_id: null`, `locale: "en"`, `conditions: null`. Adding more locales, more tenants, or conditional content means adding more variants under the same template.
+
+The `content` object inside a variant validates against a channel-specific schema selected by the `channel` field.
+
+---
+
+## Channels
+
+The variant's `channel` field selects which content schema applies.
+
+<AccordionGroup>
+  <Accordion title="All 9 channels and their channel values" icon="layer-group">
+    | Channel | `channel` value | Reference |
+    |---|---|---|
+    | Email | `email` | [Email content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-email.md) |
+    | SMS | `sms` | [SMS content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-sms.md) |
+    | WhatsApp | `whatsapp` | [WhatsApp content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-whatsapp.md) |
+    | In-app Inbox | `inbox` | [Inbox content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-inbox.md) |
+    | Slack | `slack` | [Slack content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-slack.md) |
+    | Microsoft Teams | `ms_teams` | [MS Teams content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-ms-teams.md) |
+    | Android Push | `androidpush` | [Android push content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-androidpush.md) |
+    | iOS Push | `iospush` | [iOS push content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-iospush.md) |
+    | Web Push | `webpush` | [Web push content schema](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/channel-webpush.md) |
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Brand variables
+
+Templates can reference tenant/brand properties. There are three shapes - the skill teaches your agent which to use for each case.
+
+<Tabs>
+  <Tab title="Reserved $brand.* keys">
+    These are the only keys valid directly under `$brand.`. Any other key under `$brand.` will not resolve and will break preview rendering - put it under `$brand.properties.` instead.
+
+    | Variable | Renders |
+    |---|---|
+    | `{{$brand.brand_id}}` | Tenant slug / id |
+    | `{{$brand.brand_name}}` | Tenant display name. **The key is `brand_name`, not `name`.** |
+    | `{{$brand.logo}}` | Tenant logo URL |
+    | `{{$brand.primary_color}}` | Primary brand color |
+    | `{{$brand.secondary_color}}` | Secondary brand color |
+    | `{{$brand.tertiary_color}}` | Tertiary brand color |
+    | `{{$brand.timezone}}` | Tenant timezone |
+    | `{{$brand.embedded_preference_url}}` | Brand-level embedded preference URL |
+    | `{{$brand.hosted_preference_domain}}` | Brand-level hosted preference domain |
+    | `{{$brand.blocked_channels}}` | List of channels blocked at the brand level |
+    | `{{$brand.social_links.<network>}}` | Brand social link. Built-in `<network>` keys: `x`, `twitter`, `facebook`, `instagram`, `linkedin`, `youtube`, `tiktok`, `discord`, `telegram`, `medium`, `website` |
+  </Tab>
+
+  <Tab title="Custom tenant properties">
+    Any property the customer adds on the tenant object that is **not** in the reserved list is a custom property, and the correct shape is `{{$brand.properties.<key>}}`. Common examples:
+
+    - `{{$brand.properties.address}}`
+    - `{{$brand.properties.unsubscribe_url}}`
+    - `{{$brand.properties.support_url}}`
+    - `{{$brand.properties.support_email}}`
+
+    If you don't recognise the key from the reserved list, default to `$brand.properties.<key>`.
+  </Tab>
+
+  <Tab title="Per-recipient URLs">
+    These are generated per recipient at run-time. They are top-level, not nested under `$brand`:
+
+    - `{{$embedded_preference_url}}`
+    - `{{$hosted_preference_url}}`
+
+    Do not write `{{$brand.$hosted_preference_url}}` or `{{$brand.embedded_preference_url}}` when you mean the per-recipient URL - those are different variables (the `$brand.embedded_preference_url` form refers to the brand-level config, not the recipient-specific URL).
+  </Tab>
+</Tabs>
+
+---
+
+## Common anti-patterns
+
+These are the mistakes the skill is built to prevent.
+
+| Wrong | Correct |
+|---|---|
+| `{{$brand.name}}` | `{{$brand.brand_name}}` |
+| `{{$brand.support_url}}` | `{{$brand.properties.support_url}}` |
+| `{{$brand.unsubscribe_url}}` | `{{$brand.properties.unsubscribe_url}}` |
+| `{{$brand.address}}` | `{{$brand.properties.address}}` |
+| `{{$brand.$hosted_preference_url}}` | `{{$hosted_preference_url}}` (per-recipient) _or_ `{{$brand.hosted_preference_domain}}` (brand config) - pick based on intent |
+
+<Warning>
+  These anti-patterns silently break preview rendering rather than throwing an obvious error. The skill catches them at generation time so you don't ship a template that looks fine in JSON but renders blank values at send time.
+</Warning>
+
+---
+
+## What you can build
+
+A few real things people generate with this skill:
+
+- **Welcome email in English** - single variant, default tenant, default locale.
+- **French locale variant** - add a `locale: "fr"` variant to an existing template.
+- **Tenant-specific welcome email** - one variant per tenant, sharing the same template slug.
+- **Multi-channel template** - email + SMS + push variants for the same notification.
+- **Slack message with JSONNET `body_block`** - dynamic block construction.
+
+---
+
+## Templating syntax
+
+The skill carries both supported templating syntaxes:
+
+| Syntax | When it's used |
+|---|---|
+| **Handlebars** | Default for every channel. Variables, conditionals, comparisons, date/array helpers. [Reference](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/handlebars-helpers.md). |
+| **JSONNET** | Alternative for Slack `body_block` and MS Teams `body_card` when `templating_language: "jsonnet"`. [Reference](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/jsonnet-syntax.md). |
+
+---
+
+## Multi-variant patterns
+
+| Pattern | Reference |
+|---|---|
+| Different content per tenant/brand | [Multi-tenant Variants](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/multi-tenant-variants.md) |
+| Translation keys vs. per-locale variants | [Multi-lingual Variants](https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/multi-lingual-variants.md) |
+
+---
+
+## Related skills
+
+- **[`suprsend-workflow-schema`](/reference/agent-skill-workflow-schema)** - workflow delivery nodes (`send_email`, `send_multi_channel`, etc.) reference variants by template slug. Use it for the workflow shape that wraps these variants.
+- **[`suprsend-cli`](/reference/agent-skill-cli)** - `suprsend template push` / `pull` / `commit` / `get` / `list` move variant JSON between your editor and a SuprSend workspace.
+
+---
+
+## Learn more
+
+<CardGroup cols={2}>
+  <Card title="Template Schema Guide" icon="book" href="https://github.com/suprsend/skills/blob/main/skills/suprsend-template-schema/references/template-schema-guide.md">
+    The full variant envelope, selection rules, and complete examples on GitHub.
+  </Card>
+  <Card title="Templates in SuprSend" icon="file-lines" href="/docs/templates">
+    How templates work end-to-end in SuprSend.
+  </Card>
+  <Card title="suprsend-workflow-schema skill" icon="diagram-project" href="/reference/agent-skill-workflow-schema">
+    Generate the workflow JSON that delivers these variants.
+  </Card>
+  <Card title="Agent Skills Overview" icon="graduation-cap" href="/reference/agent-skills">
+    All available skills.
+  </Card>
+</CardGroup>
