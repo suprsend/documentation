@@ -1,0 +1,392 @@
+---
+title: "Agent Plugin"
+sidebarTitle: "Agent Plugin"
+description: "One install for Claude Code, VS Code Copilot, and GitHub Copilot CLI — bundles the SuprSend MCP server and agent skills."
+---
+
+The plugin runs the SuprSend CLI via `npx suprsend`, so the only hard prerequisites are **Node.js (v20+)** and **Claude Code**.
+
+## Prerequisites
+
+| Requirement     | Minimum Version | Check                |
+| --------------- | --------------- | -------------------- |
+| Claude Code CLI | latest          | `claude --version`   |
+| Node.js + npx   | v20+            | `node --version` / `npx --version` |
+| SuprSend CLI    | _optional_      | `suprsend --version` _or_ `npx suprsend --version` |
+
+A global `suprsend` install isn't required — `npx suprsend` fetches it on first use and caches it. Installing globally (brew/Go) is supported and takes precedence over the npx fallback.
+
+## Setup
+
+<Steps>
+  <Step title="Authenticate">
+    Get a service token from [Account Settings → Service Tokens](https://app.suprsend.com).
+
+    ```bash
+    npx suprsend profile add --name default --service-token <YOUR_SERVICE_TOKEN>
+    ```
+
+    Or set it as an environment variable for the current session:
+
+    ```bash
+    export SUPRSEND_SERVICE_TOKEN="your_service_token_here"
+    ```
+  </Step>
+
+  <Step title="Install the plugin in your AI tool">
+    The plugin format is shared between Claude Code, VS Code Copilot, and GitHub Copilot CLI — pick the install path that matches your editor. The bundled `.mcp.json` invokes `npx -y suprsend start-mcp-server`, so the MCP server starts on demand regardless of host.
+
+    <Tabs>
+      <Tab title="Claude Code">
+        ```
+        /plugin marketplace add suprsend/claude-code-plugin
+        /plugin install suprsend@suprsend-marketplace
+        ```
+      </Tab>
+
+      <Tab title="VS Code Copilot">
+        <Warning>
+        **Preview feature.** VS Code [Agent Plugins](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) are currently in preview. The host requires the `chat.plugins.enabled` setting to be on. This setting is managed at the organization level — if it's disabled, contact your admin to enable it before continuing.
+        </Warning>
+
+        1. Open the command palette (`Cmd/Ctrl + Shift + P`).
+        2. Run **`Chat: Install Plugin From Source`**.
+        3. Enter `suprsend/claude-code-plugin` (or the full URL `https://github.com/suprsend/claude-code-plugin.git`).
+        4. Verify it's enabled in the Extensions sidebar (search `@agentPlugins`) under **Agent Plugins → Installed**.
+
+        For team-wide install, commit `.github/copilot/settings.json` to your project repo:
+
+        ```json
+        {
+          "extraKnownMarketplaces": {
+            "suprsend-marketplace": {
+              "source": { "source": "github", "repo": "suprsend/claude-code-plugin" }
+            }
+          },
+          "enabledPlugins": {
+            "suprsend@suprsend-marketplace": true
+          }
+        }
+        ```
+
+        When teammates open the repo, the marketplace is auto-registered and the plugin is enabled.
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+### Optional: global install
+
+If you'd rather have `suprsend` on your `PATH` (faster cold starts, scripting outside the plugin):
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew tap suprsend/tap
+    brew install --cask suprsend
+    ```
+  </Tab>
+
+  <Tab title="Linux / WSL (via Go)">
+    ```bash
+    # Install Go if needed
+    sudo apt update && sudo apt install -y golang-go
+
+    # Install SuprSend CLI
+    go install github.com/suprsend/cli/cmd/suprsend@latest
+
+    # Add to PATH (add to ~/.bashrc or ~/.zshrc for persistence)
+    export PATH="$PATH:$(go env GOPATH)/bin"
+    ```
+  </Tab>
+
+  <Tab title="Windows (WSL)">
+    The plugin runs best under WSL (Windows Subsystem for Linux). Follow the Linux instructions above inside your WSL environment.
+
+    ```powershell
+    # From PowerShell, enter WSL
+    wsl
+
+    # Then follow Linux instructions
+    ```
+  </Tab>
+</Tabs>
+
+### CI/CD environments
+
+For automated environments where Claude Code isn't available interactively, use the SuprSend CLI directly:
+
+```bash
+# 1. Either: install CLI globally
+go install github.com/suprsend/cli/cmd/suprsend@latest
+# Or: invoke via npx (Node.js is usually available on CI runners)
+npx -y suprsend --version
+
+# 2. Set SUPRSEND_SERVICE_TOKEN as an encrypted secret in your CI provider
+
+# 3. Use the CLI directly (no plugin needed)
+npx suprsend workflow list
+npx suprsend sync --from staging --to production
+```
+
+The MCP server and plugin are for interactive Claude Code / VS Code Copilot sessions. In CI, call the SuprSend CLI commands directly.
+
+### Uninstall
+
+<Tabs>
+  <Tab title="Claude Code">
+    Uninstall the plugin and remove the marketplace:
+
+    ```
+    /plugin uninstall suprsend@suprsend-marketplace
+    /plugin marketplace remove suprsend-marketplace
+    ```
+  </Tab>
+
+  <Tab title="VS Code Copilot">
+    Right-click the `suprsend` plugin in **Agent Plugins → Installed** and choose **Uninstall**. To remove the workspace marketplace registration, delete the `extraKnownMarketplaces.suprsend-marketplace` entry from `.github/copilot/settings.json` (or whichever settings file registered it).
+  </Tab>
+</Tabs>
+
+---
+
+## Usage examples
+
+Make sure the plugin is installed before trying these examples:
+
+```
+/plugin marketplace add suprsend/claude-code-plugin
+```
+
+Examples marked with **(skill)** are answered by bundled skills (no API call needed). All others use MCP tools and require authentication.
+
+### Workflow management
+
+**List and inspect workflows**
+
+```
+> List all my workflows
+
+> Pull the "order-confirmed" workflow and explain each node
+
+> Which workflows are currently disabled?
+```
+
+**Create and modify workflows**
+
+```
+> Create a workflow called "welcome-series" that:
+  1. Sends a welcome email immediately
+  2. Waits 24 hours
+  3. Sends a follow-up SMS if the email wasn't opened
+  4. Falls back to push notification after 2 more hours
+
+> Add a delay of 30 minutes before the SMS step in "payment-reminder"
+
+> Push my local changes to the staging workspace
+```
+
+**Compare environments**
+
+```
+> Pull "order-confirmed" from both staging and production and show me the differences
+```
+
+### Schema operations
+
+```
+> List all schemas in my workspace
+
+> Show me the schema for the "invoice" event
+
+> Validate this workflow payload against the schema:
+  { "workflow": "purchase-made", "recipients": [...] }
+
+> Commit the updated schema for "user-signup"
+```
+
+### Template management
+
+```
+> What email templates do I have?
+
+> Show me the variables used in the "welcome-email" template
+
+> Which templates reference the "first_name" variable?
+```
+
+### CLI reference queries **(skill)**
+
+These are answered by bundled skills (no API call needed):
+
+```
+> What's the CLI command to sync all assets?
+
+> How do I switch between workspace profiles?
+
+> Show me the full list of CLI commands for workflow management
+
+> What flags does the "workflows push" command accept?
+```
+
+### Workflow schema reference **(skill)**
+
+Also powered by bundled skills:
+
+```
+> What node types are available in SuprSend workflows?
+
+> Show me the JSON schema for a "wait-for-event" node
+
+> What are the configuration options for an email channel node?
+
+> Give me an example of a conditional branching node
+```
+
+### Debugging & troubleshooting
+
+```
+> Why might my "payment-reminder" workflow not be triggering?
+
+> Check if the "welcome-series" workflow is enabled
+
+> What events are configured in my workspace? I think I might be
+  missing the "user-signup" event.
+```
+
+### Bulk operations
+
+```
+> Disable all workflows that contain "test" in their name
+
+> Pull all workflows locally so I can review them
+
+> List all categories and their translation status
+```
+
+---
+
+## Troubleshooting
+
+### CLI issues
+
+<AccordionGroup>
+  <Accordion title='"suprsend: command not found"'>
+    The plugin uses `npx suprsend` by default, so a global SuprSend CLI install isn't required — just Node.js v20+ on the system.
+
+    **Fix (npx, recommended):**
+
+    ```bash
+    node --version   # should print v20.x or newer
+    npx --version
+    npx suprsend --version   # fetches + caches the CLI on first run
+    ```
+
+    If you'd rather install globally:
+
+    **Fix (macOS):**
+
+    ```bash
+    brew tap suprsend/tap && brew install --cask suprsend
+    ```
+
+    **Fix (Go):**
+
+    ```bash
+    go install github.com/suprsend/cli/cmd/suprsend@latest
+    # Ensure $GOPATH/bin is in your PATH
+    ```
+  </Accordion>
+
+  <Accordion title="Authentication errors">
+    MCP tools return 401 or "unauthorized" errors.
+
+    The CLI resolves authentication in this priority order: (1) `SUPRSEND_SERVICE_TOKEN` env var, (2) `--service-token` flag, (3) active profile.
+
+    ```bash
+    # Option 1: Set environment variable
+    export SUPRSEND_SERVICE_TOKEN="your_service_token_here"
+
+    # Option 2: Add or re-add a profile (drop the 'npx' prefix if you have a global install)
+    npx suprsend profile add --name default --service-token <YOUR_SERVICE_TOKEN>
+    ```
+
+    Get a new service token from [Account Settings → Service Tokens](https://app.suprsend.com) if needed.
+  </Accordion>
+</AccordionGroup>
+
+### Plugin issues
+
+<AccordionGroup>
+  <Accordion title="Plugin not loading">
+    Try removing and reinstalling the plugin:
+
+    - **Claude Code**:
+      ```
+      /plugin marketplace remove suprsend-marketplace
+      /plugin marketplace add suprsend/claude-code-plugin
+      /plugin install suprsend@suprsend-marketplace
+      ```
+    - **VS Code Copilot**: right-click the `suprsend` plugin in **Agent Plugins → Installed** → **Uninstall**, then run `Chat: Install Plugin From Source` from the command palette and enter `suprsend/claude-code-plugin`.
+  </Accordion>
+
+  <Accordion title="MCP server not connecting">
+    1. Test the server standalone:
+       ```bash
+       npx suprsend start-mcp-server --transport stdio
+       ```
+       You should see no errors. Press Ctrl+C to stop. (Use `suprsend` directly if you have a global install.)
+
+    2. Verify the plugin's `.mcp.json` exists and contains the suprsend server config.
+
+    3. Check host-specific logs:
+       - **Claude Code**: the MCP server output appears in the conversation when tool calls fail.
+       - **VS Code Copilot**: open the **Output** panel and select **MCP — suprsend** from the dropdown.
+
+    4. Reinstall the plugin (see steps above).
+  </Accordion>
+
+  <Accordion title="Tools not appearing">
+    If Claude doesn't seem to have access to SuprSend tools:
+
+    1. Make sure the plugin is loaded: verify with Claude that the suprsend plugin is active
+    2. Try explicitly asking: "Use the suprsend MCP tools to list my workflows"
+    3. Check that your CLI profile has the correct permissions
+  </Accordion>
+</AccordionGroup>
+
+### Skills issues
+
+<AccordionGroup>
+  <Accordion title="Skills not activating">
+    Skills load on demand — they activate when Claude detects you're working on SuprSend-related tasks. If skills seem missing, try reinstalling the plugin:
+
+    ```
+    /plugin marketplace remove suprsend-marketplace
+    /plugin marketplace add suprsend/claude-code-plugin
+    /plugin install suprsend@suprsend-marketplace
+    ```
+  </Accordion>
+
+  <Accordion title="Stale skill content">
+    Skills are bundled in the plugin repo. To get the latest version, reinstall the plugin — it will pull the latest from the GitHub repo.
+  </Accordion>
+</AccordionGroup>
+
+### Environment-specific
+
+<AccordionGroup>
+  <Accordion title="CI/CD environments">
+    For non-interactive environments, set the `SUPRSEND_SERVICE_TOKEN` environment variable. The MCP server reads from the same authentication configuration as the CLI.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Getting help
+
+- [SuprSend Documentation](https://docs.suprsend.com)
+- [SuprSend Slack Community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ)
+- [GitHub Issues — Plugin](https://github.com/suprsend/claude-code-plugin/issues)
+- [GitHub Issues — Skills](https://github.com/suprsend/skills/issues)
+- [GitHub Issues — CLI](https://github.com/suprsend/cli/issues)

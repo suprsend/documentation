@@ -113,60 +113,59 @@ Because workspaces are isolated, you'll need to explicitly move tested changes f
 
 ## Working with workspaces in code
 
-#### Backend SDKs
+<Tabs>
+  <Tab title="Backend SDKs">
+    Initialize the SDK with the **workspace key and secret** of the target workspace. Switching environments is a configuration change, not a code change.
 
-Initialize the SDK with the **workspace key and secret** of the target workspace. Switching environments is a configuration change, not a code change.
+    ```javascript Node.js
+    const { Suprsend } = require("@suprsend/node-sdk");
 
-```javascript Node.js
-const { Suprsend } = require("@suprsend/node-sdk");
+    const supr_client = new Suprsend(
+      process.env.SUPRSEND_WORKSPACE_KEY,
+      process.env.SUPRSEND_WORKSPACE_SECRET
+    );
+    ```
 
-const supr_client = new Suprsend(
-  process.env.SUPRSEND_WORKSPACE_KEY,
-  process.env.SUPRSEND_WORKSPACE_SECRET
-);
-```
+    ```python Python
+    from suprsend import Suprsend
 
-```python Python
-from suprsend import Suprsend
+    supr_client = Suprsend(
+        workspace_key=os.environ["SUPRSEND_WORKSPACE_KEY"],
+        workspace_secret=os.environ["SUPRSEND_WORKSPACE_SECRET"],
+    );
+    ```
+  </Tab>
+  <Tab title="REST API">
+    Pass the workspace's **API key** as a Bearer token. The host (`https://hub.suprsend.com`) is the same across workspaces. The credential determines which workspace you're acting on.
 
-supr_client = Suprsend(
-    workspace_key=os.environ["SUPRSEND_WORKSPACE_KEY"],
-    workspace_secret=os.environ["SUPRSEND_WORKSPACE_SECRET"],
-)
-```
+    ```bash
+    curl -X POST "https://hub.suprsend.com/trigger/" \
+      -H "Authorization: Bearer <WORKSPACE_API_KEY>" \
+      -H "Content-Type: application/json" \
+      -d '{ "workflow": "welcome", "recipients": [{ "distinct_id": "u_123" }] }'
+    ```
+  </Tab>
+  <Tab title="CLI">
+    Pass the workspace **slug** with the `-w` (`--workspace`) flag. Defaults to `staging` if omitted.
 
-#### REST API
+    ```bash
+    suprsend workflow list -w production
+    suprsend workflow push welcome -w staging
+    ```
 
-Pass the workspace's **API key** as a Bearer token. The host (`https://hub.suprsend.com`) is the same across workspaces. The credential determines which workspace you're acting on.
+    See [CLI Global Flags](/reference/cli-global-flags).
+  </Tab>
+  <Tab title="Management API">
+    Most management endpoints are scoped per workspace via the path parameter. Authentication uses an account-level **Service Token**.
 
-```bash
-curl -X POST "https://hub.suprsend.com/trigger/" \
-  -H "Authorization: Bearer <WORKSPACE_API_KEY>" \
-  -H "Content-Type: application/json" \
-  -d '{ "workflow": "welcome", "recipients": [{ "distinct_id": "u_123" }] }'
-```
+    ```bash
+    curl -X GET "https://management-api.suprsend.com/v1/staging/ws_api_key/" \
+      -H "Authorization: ServiceToken <SERVICE_TOKEN>"
+    ```
 
-#### CLI
-
-Pass the workspace **slug** with the `-w` (`--workspace`) flag. Defaults to `staging` if omitted.
-
-```bash
-suprsend workflow list -w production
-suprsend workflow push welcome -w staging
-```
-
-See [CLI Global Flags](/reference/cli-global-flags).
-
-#### Management API
-
-Most management endpoints are scoped per workspace via the path parameter. Authentication uses an account-level **Service Token**.
-
-```bash
-curl -X GET "https://management-api.suprsend.com/v1/staging/ws_api_key/" \
-  -H "Authorization: ServiceToken <SERVICE_TOKEN>"
-```
-
-Use [`GET /v1/workspace`](/reference/list-workspaces) to list all workspaces in your account, and [`POST /v1/workspace`](/reference/create-workspace) to create new ones. See [Workspaces & Auth Keys](/reference/list-workspaces) for the full set of workspace-scoped endpoints (API keys, public keys, signing keys).
+    Use [`GET /v1/workspace`](/reference/list-workspaces) to list all workspaces in your account, and [`POST /v1/workspace`](/reference/create-workspace) to create new ones. See [Workspaces & Auth Keys](/reference/list-workspaces) for the full set of workspace-scoped endpoints (API keys, public keys, signing keys).
+  </Tab>
+</Tabs>
 
 ## Members, roles, and access in workspaces
 
@@ -205,7 +204,7 @@ For the full permission matrix, see [Managing Team Members → Permissions](/doc
   </Accordion>
 
   <Accordion title="How do I authenticate against a specific workspace?">
-    For the **REST API** and **Backend SDKs**, use that workspace's API key (or workspace key & secret). For the **CLI**, pass `-w <workspace_slug>`. For the **Management API**, the workspace slug is part of the URL path (e.g., `/v1/staging/ws_api_key/`). Service Tokens authenticate the request; the path or credential determines the workspace.
+    For the **REST API** and **Backend SDKs**, use that workspace's API key (or workspace key & secret). For the **CLI**, pass `-w <workspace_slug>`. For the **Management API**, the workspace slug is part of the URL path (for example, `/v1/staging/ws_api_key/`). Service Tokens authenticate the request; the path or credential determines the workspace.
   </Accordion>
 
   <Accordion title="Can members see all workspaces?">
@@ -221,7 +220,7 @@ For the full permission matrix, see [Managing Team Members → Permissions](/doc
   </Accordion>
 
   <Accordion title="Can I rename a workspace?">
-    Yes, you can update a workspace's display name and description from the dashboard. Note that the workspace **slug** (used in API paths and URLs, e.g., `staging`, `production`) is permanent and cannot be changed after creation.
+    Yes, you can update a workspace's display name and description from the dashboard. Note that the workspace **slug** (used in API paths and URLs, for example, `staging`, `production`) is permanent and cannot be changed after creation.
   </Accordion>
 
   <Accordion title="How should I model multi-region workspaces?">
