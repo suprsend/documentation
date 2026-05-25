@@ -1,71 +1,214 @@
 ---
 title: "Quickstart: Claude"
 sidebarTitle: "Claude"
-description: "Connect the SuprSend MCP server to Claude Desktop."
+description: "Connect the SuprSend MCP server to Claude Code or Claude Desktop."
 ---
 
+<Note>
+  **Not sure which one you're using?** Claude Code runs in your terminal or IDE and is invoked with the `claude` command. Claude Desktop is the standalone chat app downloaded from [claude.ai/download](https://claude.ai/download). Setup is different for each — pick the matching tab below.
+</Note>
+
+<Tabs>
+
+<Tab title="Claude Code">
+
 <Steps>
-  <Step title="Install the SuprSend CLI">
-    The MCP server runs through the SuprSend CLI.
+  <Step title="Install Claude Code">
+    Claude Code is distributed as an npm package and requires [Node.js](https://nodejs.org/) 18+.
 
     ```bash
-    # macOS / Linux
-    brew tap suprsend/tap
-    brew install --cask suprsend
+    npm install -g @anthropic-ai/claude-code
     ```
 
-    For Windows or CI environments, download the binary from [GitHub Releases](https://github.com/suprsend/cli/releases).
+    Run `claude` once and complete the one-time browser login it prompts.
   </Step>
 
   <Step title="Get a service token">
-    Go to [Dashboard → Account Settings → Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens) and generate a token for your workspace.
+    Go to [Dashboard → Account Settings → Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens) and generate a token for the workspace you want to expose.
+
+    <Warning>
+      Service tokens grant full workspace access. Store the token as an environment variable — never commit it to version control or share it via screenshot or screen recording. Rotate immediately if exposed.
+    </Warning>
+  </Step>
+
+  <Step title="Register the MCP server">
+    The SuprSend MCP server runs through the SuprSend CLI via [`npx`](https://docs.npmjs.com/cli/v10/commands/npx) — no install step, always the latest version. Requires Node.js 18+.
+
+    Add the server with one command in your **regular terminal** (not inside a running `claude` session):
+
+    ```bash
+    claude mcp add suprsend \
+      --scope user \
+      --env SUPRSEND_SERVICE_TOKEN=your_token_here \
+      -- npx -y suprsend -w staging start-mcp-server
+    ```
+
+    This writes the configuration to `~/.claude.json`. The flags:
+
+    - `--scope user` makes the server available across all your projects. Use `--scope project` if you want to commit an `.mcp.json` file for your team.
+    - `--env` injects your token into the spawned process so it doesn't appear in your shell history.
+    - `-w staging` runs against your staging workspace. Switch to `-w production` only after you've confirmed everything works and scoped tools appropriately.
+
+    <Tip>
+      Prefer a managed install over `npx`? Install the CLI via [Homebrew, binary, or source build](https://docs.suprsend.com/reference/cli-installation), then replace `npx -y suprsend` with `suprsend` in the command above.
+    </Tip>
+  </Step>
+
+  <Step title="Verify the connection">
+    From your terminal:
+
+    ```bash
+    claude mcp list
+    ```
+
+    You should see `suprsend` listed as connected. Then start a Claude Code session and check the tools are available:
+
+    ```bash
+    cd ~/any-project
+    claude
+    ```
+
+    Inside the session, type `/mcp`. You should see `suprsend` with its tool count. Try a read-only prompt to confirm the loop works end-to-end:
+
+    ```
+    Search the SuprSend docs for how preference categories work.
+    ```
+
+    Claude will ask permission before the first tool call — approve it, and you're done.
+  </Step>
+</Steps>
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+<Steps>
+  <Step title="Install Claude Desktop">
+    Download Claude Desktop from [claude.ai/download](https://claude.ai/download) (available for macOS and Windows). Sign in with your Claude account.
+  </Step>
+
+  <Step title="Get a service token">
+    Go to [Dashboard → Account Settings → Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens) and generate a token for the workspace you want to expose.
+
+    <Warning>
+      Service tokens grant full workspace access. Store the token as an environment variable — never commit it to version control or share it via screenshot or screen recording. Rotate immediately if exposed.
+    </Warning>
   </Step>
 
   <Step title="Add the MCP configuration">
-    1. Open **Claude Desktop**
-    2. Go to **Settings → Developer**
-    3. Click **Edit Config** under Local MCP Servers
-    4. Add the following:
+    The SuprSend MCP server runs through the SuprSend CLI via [`npx`](https://docs.npmjs.com/cli/v10/commands/npx) — no install step, always the latest version. Requires Node.js 18+.
+
+    1. Open **Claude Desktop**.
+    2. Go to **Settings → Developer**.
+    3. Click **Edit Config** under Local MCP Servers.
+    4. Add the following to the JSON:
 
     ```json
     {
       "mcpServers": {
         "suprsend": {
-          "command": "suprsend",
-          "args": ["start-mcp-server"],
+          "command": "npx",
+          "args": ["-y", "suprsend", "-w", "staging", "start-mcp-server"],
           "env": {
-            "SUPRSEND_SERVICE_TOKEN": "your_service_token_here"
+            "SUPRSEND_SERVICE_TOKEN": "your_token_here"
           }
         }
       }
     }
     ```
 
-    5. Save and restart Claude Desktop.
+    5. Save the file and **fully quit and restart** Claude Desktop (⌘Q on macOS, or right-click the tray icon → Quit on Windows — closing the window isn't enough).
+
+    <Tip>
+      Prefer a managed install over `npx`? Install the CLI via [Homebrew, binary, or source build](https://docs.suprsend.com/reference/cli-installation), then use `"command": "suprsend"` with `"args": ["-w", "staging", "start-mcp-server"]`.
+    </Tip>
   </Step>
 
   <Step title="Verify the connection">
-    In a new Claude conversation, try:
+    After restart, open a new conversation in Claude Desktop. Look for the **tools icon** (hammer) in the input area — clicking it should list SuprSend's tools.
+
+    Try a read-only prompt:
 
     ```
-    List all workflows in my SuprSend workspace.
+    Search the SuprSend docs for how preference categories work.
     ```
 
-    If the MCP server is connected, Claude will call the tool and return your workflows.
+    Claude will ask permission before the first tool call. Approve it, and you're done.
   </Step>
 </Steps>
 
-<Tip>
-  Restrict which tools Claude can access using the `--tools` flag. See [Tool List](/reference/mcp-tool-list) for available identifiers.
-</Tip>
+</Tab>
 
----
+</Tabs>
+
+## Restricting which tools Claude can access
+
+By default the SuprSend MCP server exposes all user, object, tenant, workflow-listing, and documentation tools. Event-triggering and workflow-triggering tools are **disabled by default** for safety — you opt in explicitly per slug.
+
+Scope this down further with the `--tools`, `--workflows`, and `--events` flags. Add them to your `args` (Claude Desktop) or after `start-mcp-server` in your `claude mcp add` command (Claude Code).
+
+**Docs-only mode** — the safest configuration, read-only documentation lookups:
+
+```bash
+npx -y suprsend start-mcp-server --tools=documentation.*
+```
+
+**Read-only platform access** — fetch users, objects, and tenants without write capability:
+
+```bash
+npx -y suprsend start-mcp-server --tools=users.get,objects.get,tenants.get
+```
+
+**Allow workflow triggering for specific slugs**:
+
+```bash
+npx -y suprsend start-mcp-server --workflows=order-confirmed,welcome-email
+```
+
+See the [Tool List](https://docs.suprsend.com/reference/mcp-tool-list) for available identifiers.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="spawn npx ENOENT on Windows">
+    Windows doesn't invoke `npx` through a shell by default. Wrap the command in `cmd /c`.
+
+    For Claude Desktop:
+
+    ```json
+    {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "suprsend", "-w", "staging", "start-mcp-server"]
+    }
+    ```
+
+    For Claude Code:
+
+    ```bash
+    claude mcp add suprsend --scope user --env SUPRSEND_SERVICE_TOKEN=... -- cmd /c npx -y suprsend -w staging start-mcp-server
+    ```
+  </Accordion>
+
+  <Accordion title="Server shows disconnected or failed">
+    Run `claude mcp get suprsend` (Claude Code) to see the underlying error. Common causes:
+
+    - **Wrong workspace**: confirm `-w staging` vs `-w production` matches the workspace the token was generated in.
+    - **Invalid or expired token**: regenerate from the SuprSend dashboard and re-add.
+    - **Stale npx cache** after a CLI release: pin `suprsend@latest` in `args`, or clear with `npx clear-npx-cache`.
+  </Accordion>
+
+  <Accordion title="Tools don't appear after restart">
+    **Claude Desktop**: ensure you fully quit the app (⌘Q on macOS, Quit from the tray on Windows). MCP servers only reload on a full restart — closing the window isn't enough.
+
+    **Claude Code**: run `/mcp` inside the session to force a reconnect. If the server is still missing, run `claude mcp list` from your regular terminal to confirm it's registered. If it isn't, re-run `claude mcp add`.
+  </Accordion>
+</AccordionGroup>
 
 <CardGroup cols={2}>
-  <Card title="Tool List" icon="wrench" href="/reference/mcp-tool-list">
+  <Card title="Tool List" icon="list" href="/reference/mcp-tool-list">
     All available tools and how to scope them.
   </Card>
-  <Card title="Prompt Cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
+  <Card title="Prompt Cheatsheet" icon="message" href="/reference/mcp-prompts">
     Ready-to-use prompts to get started fast.
   </Card>
 </CardGroup>

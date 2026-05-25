@@ -106,79 +106,64 @@ psql -h $SQL_HOST -U $SQL_USER -d postgres -c "\l" | grep temporal
 You should see both `temporal` and `temporal_visibility` databases listed.
 
 
-### Step 3: Install Temporal
+### Step 4: Install Temporal
 
-Checout temporal helm repository from https://github.com/temporalio/helm-charts
+Check out the Temporal Helm chart from [temporalio/helm-charts](https://github.com/temporalio/helm-charts) and work from the chart directory:
 
-```
+```bash
 git clone https://github.com/temporalio/helm-charts
-
-cd charts/temporal
+cd helm-charts/charts/temporal
 ```
 
-Now modify `values/values.postgres.yaml` 
+Create a values file (for example `values-temporal-postgres.yaml`) that uses your PostgreSQL instance for both default and visibility stores, enables the **Web UI** and **admintools**, and disables bundled databases you do not need. The structure below matches the chart’s `server.config.persistence` + `datastores` style; align field names with your chart version using `helm show values temporal/temporal` if anything differs.
 
 <details>
-<summary>Sample values/values.postgres.yaml</summary>
-```yaml title="values/values.postgres.yaml"
+<summary>Sample `values-temporal-postgres.yaml` (PostgreSQL + Web UI + admintools)</summary>
+
+```yaml title="values-temporal-postgres.yaml"
 server:
   config:
     persistence:
+      defaultStore: default
+      visibilityStore: visibility
+      numHistoryShards: 512
+    datastores:
       default:
-        driver: "sql"
-
         sql:
-          driver: "postgres12"
-          host: YOUR_PG_INSTANCE_URL
-          port: PG_PORT
-          database: temporal
-          user: PG_USER
-          password: PG_PASSWORD
-          # for a production deployment use this instead of `password` and provision the secret beforehand e.g. with a sealed secret
-          # it has a single key called `password`
-          # existingSecret: temporal-default-store
+          pluginName: postgres12
+          databaseName: temporal
+          connectAddr: "<HOST:PORT>"
+          connectProtocol: "tcp"
+          user: "<USERNAME>"
+          password: "<PASSWORD>"
           maxConns: 20
           maxIdleConns: 20
           maxConnLifetime: "1h"
-          tls:
-            enabled: true
-            enableHostVerification: false
-          #  serverName: _HOST_ # this is strictly required when using serverless CRDB offerings
-          #  caFile: /path/to/certs/<CA-file> # Here we assumed that caFile, certFile, keyFile are stored in one secret mounted as 'secret-with-certs' (see: server.additionalVolumes and server.additionalVolumeMounts sections).
-          #  certFile: /path/to/certs/<client-cert-file>
-          #  keyFile: /path/to/certs/<client-key-file>
-
+          # Uncomment to enable SSL/TLS for Postgres (set sslmode to match your server).
+          # connectAttributes:
+          #   sslmode: require
       visibility:
-        driver: "sql"
-
         sql:
-          driver: "postgres12"
-          host: YOUR_PG_INSTANCE_URL
-          port: PG_PORT
-          database: temporal_visibility
-          user: PG_USER
-          password: PG_PASSWORD
-          # for a production deployment use this instead of `password` and provision the secret beforehand e.g. with a sealed secret
-          # it has a single key called `password`
-          # existingSecret: temporal-visibility-store
+          pluginName: postgres12
+          databaseName: temporal_visibility
+          connectAddr: "<HOST:PORT>"
+          connectProtocol: "tcp"
+          user: "<USERNAME>"
+          password: "<PASSWORD>"
           maxConns: 20
           maxIdleConns: 20
           maxConnLifetime: "1h"
-          tls:
-            enabled: true
-            enableHostVerification: false
-          #  serverName: _HOST_ # this is strictly required when using serverless CRDB offerings
-          #  caFile: /path/to/certs/<CA-file> # Here we assumed that caFile, certFile, keyFile are stored in one secret mounted as 'secret-with-certs' (see: server.additionalVolumes and server.additionalVolumeMounts sections).
-          #  certFile: /path/to/certs/<client-cert-file>
-          #  keyFile: /path/to/certs/<client-key-file>
+          # connectAttributes:
+          #   sslmode: require
 
-  # additionalVolumes:
-  #   - name: secret-with-certs
-  #     secret:
-  #       secretName: secret-with-certs
-  # additionalVolumeMounts:
-  #   - name: secret-with-certs
-  #     mountPath: /path/to/certs/
+web:
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+
+admintools:
+  enabled: true
 
 cassandra:
   enabled: false
@@ -208,25 +193,24 @@ schema:
 ```
 </details>
 
-
-and install Temporal using Helm:
+Install Temporal with Helm (from `helm-charts/charts/temporal`, or pass the full path to `-f`):
 
 ```bash
 # Add the Temporal Helm repository
 helm repo add temporal https://go.temporal.io/helm-charts
 helm repo update
 
-# Install Temporal
+# Install Temporal (adjust the values filename to match your file)
 helm install temporal temporal/temporal \
-  -f values/values.postgresql.yaml \
+  -f values-temporal-postgres.yaml \
   --timeout 900s \
   --namespace temporal \
   --create-namespace
 ```
 
-#### Alternative: Command Line Configuration
+#### Alternative: command-line `--set` flags
 
-Instead of modifying the values file, you can pass configuration directly via command line:
+Some chart versions still expose Postgres settings under `server.config.persistence.default.sql.*`. If that matches your `helm show values` output, you can pass overrides directly (for simpler setups only):
 
 ```bash
 helm install temporal temporal/temporal \
@@ -242,7 +226,11 @@ helm install temporal temporal/temporal \
   --create-namespace
 ```
 
-### Step 4: Verify Installation
+<Note>
+Prefer the **values file** (`datastores` / `connectAddr` layout) above when it matches your chart; the `--set` keys vary by chart version.
+</Note>
+
+### Step 5: Verify installation
 
 Check that all Temporal components are running:
 
@@ -253,41 +241,59 @@ kubectl get pods -n temporal
 # Check services
 kubectl get svc -n temporal
 
-# Check if Temporal UI is accessible
-kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
+# Temporal Web UI (HTTP). Service name may vary by chart version - confirm with: kubectl get svc -n temporal
+kubectl port-forward -n temporal svc/temporal-web 8080:8080
 ```
 
-Open http://localhost:8080 in your browser to access the Temporal Web UI.
+Open [http://localhost:8080](http://localhost:8080) in your browser to access the Temporal Web UI.
 
-### Step 5: Setup default namespace for temporal
+### Step 6: Set up the default namespace for Temporal
 
-SuprSend will need a namespace in temporal to store workflow state, create one using following commands:
+SuprSend expects a Temporal namespace named `default`. The admintools image does not include `bash`; use `sh`.
 
 ```bash
-# Get shell access inside temporal admintools
-kubectl exec -it deployment/temporal-admintools -n temporal -- /bin/bash
+kubectl exec -it deployment/temporal-admintools -n temporal -- /bin/sh
+```
 
-# create default namespace, Important: *DO NOT* change namespace name
-# change retention period based on your need
+Inside that shell, create the namespace (**do not** change the name `default`; adjust retention if needed):
+
+```
 temporal operator namespace create \
   --retention 7d \
   --namespace default
 ```
 
+Exit with `exit` when finished.
 
-### Step 6: Configure SuprSend Search Attributes (Required)
+### Step 7: Configure SuprSend search attributes (required)
+
+The `temporal` CLI runs **inside** the admintools pod. `jq` is **not** installed in that image - run `jq` on your **workstation** by piping `kubectl exec` output to your local shell.
+
 <Steps>
-<Step title="Verify if the namepsaces are created properly">
+<Step title="Verify namespaces">
+
+From your machine (pipes remote JSONL to local `jq`):
 
 ```bash
-# check the namespaces, you should get two namespaces temporal-system, default
-$ temporal operator namespace list --output jsonl | jq ".namespaceInfo.name"
-"temporal-system"
-"default"
-
+kubectl exec deployment/temporal-admintools -n temporal -- \
+  temporal operator namespace list --output jsonl | jq -r ".namespaceInfo.name"
 ```
+
+You should see `temporal-system` and `default`.
+
 </Step>
-<Step title="Add Search attributes needed for SuprSend">
+<Step title="Open an admintools shell (for the next step)">
+
+Search-attribute commands must run where the `temporal` CLI is available - **inside** the admintools pod. Open a shell first:
+
+```bash
+kubectl exec -it deployment/temporal-admintools -n temporal -- /bin/sh
+```
+
+Then run the `temporal operator search-attribute create` commands below **in that shell**.
+
+</Step>
+<Step title="Add search attributes needed for SuprSend">
 
 ```
 temporal operator search-attribute create --name SS_WorkspaceId --type Int
@@ -300,8 +306,9 @@ temporal operator search-attribute create --name SS_HasBatchDigestNode --type Bo
 temporal operator search-attribute create --name SS_IsBatchDigestInProgress --type Bool
 ```
 </Step>
-<Step title="Check if the attributes are created properly">
-You can check if above attributes have been setup properly by executing:
+<Step title="Verify search attributes">
+
+Still inside the admintools shell:
 
 ```
 temporal operator search-attribute list
@@ -309,7 +316,7 @@ temporal operator search-attribute list
 </Step>
 </Steps>
 
-### Step 7: SuprSend Helm Configuration
+### Step 8: SuprSend Helm configuration
 
 Once your Temporal cluster is set up and running with the required search attributes, configure SuprSend to connect to it.
 
@@ -328,7 +335,7 @@ temporalServerHostPort: "temporal-frontend.temporal.svc.cluster.local:7233"
 The above configuration goes under `global.config` section in your `suprsend-values.yaml`.
 </Note>
 
-### Step 8: Upsize temporal based on your need
+### Step 9: Upsize Temporal based on your need
 
 ----
 
@@ -494,11 +501,10 @@ kubectl top pods -n temporal
 ### Access Temporal Web UI
 
 ```bash
-# Port forward to access the Web UI
-kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
+kubectl port-forward -n temporal svc/temporal-web 8080:8080
 ```
 
-Open http://localhost:8080 in your browser to access the Temporal Web UI.
+Open [http://localhost:8080](http://localhost:8080) in your browser to access the Temporal Web UI.
 
 ### Verify Search Attributes
 
@@ -527,11 +533,11 @@ You should see all the SuprSend-specific search attributes listed in the output.
     ```
   </Accordion>
   <Accordion title="Web UI not accessible">
-    Check service status and port-forward to access the UI:
+    Check service status and port-forward to the Web UI service (not the gRPC frontend):
     ```bash
     kubectl get svc -n temporal
-    kubectl port-forward -n temporal svc/temporal-frontend 8080:8080
-    kubectl get pods -n temporal -l app.kubernetes.io/component=frontend
+    kubectl port-forward -n temporal svc/temporal-web 8080:8080
+    kubectl get pods -n temporal -l app.kubernetes.io/component=web
     ```
   </Accordion>
   <Accordion title="High memory usage">

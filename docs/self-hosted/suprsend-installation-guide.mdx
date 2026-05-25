@@ -12,13 +12,13 @@ This guide walks you through installing **SuprSend** on Kubernetes using Helm. I
 - **Kubernetes**: A working cluster (managed or self‑managed). Permissions to create namespaces, deployments, services, and ingress.
 - **kubectl**: Configured to point to the target cluster.
 - **Helm**: v3.9+ recommended.
-- **Ingress & TLS** (optional but recommended): Your ingress controller (e.g., NGINX, ALB, etc.) and a TLS secret if exposing public endpoints.
+- **Ingress & TLS** (optional but recommended): Your ingress controller (for example, NGINX, ALB, etc.) and a TLS secret if exposing public endpoints.
 - **Platform dependencies**: SuprSend components expect supporting services (you can bring your own or run them separately):
   - **PostgreSQL** (v17+ recommended; with required extensions)
   - **Redis / KV-compatible store**
   - **Temporal**
   - **OpenSearch**
-  - **NATS (JetStream enabled)** — can be installed via the included subchart (see below) or point to an existing NATS cluster.
+  - **NATS (JetStream enabled)** - can be installed via the included subchart (see below) or point to an existing NATS cluster.
 <Tip>
 For production, consider managed offerings from your cloud provider for critical data services.
 </Tip>
@@ -37,7 +37,7 @@ You’ll use this token to authenticate to the private Helm repository.
 
 ```bash
 helm repo add suprsend \
-  https://byoc.suprsend.com/charts/suprsend \
+  https://helm.suprsend.com/charts/suprsend \
   --username license \
   --password <REPLACE_WITH_YOUR_LICENSE_TOKEN>
 ```
@@ -73,7 +73,7 @@ metadata:
   name: suprsend-secrets
 type: Opaque
 stringData:
-  # connection URL for Redis without database-number(e.g., `redis://user:password@host:port`)
+  # connection URL for Redis without database-number(for example, `redis://user:password@host:port`)
   redisConnBaseUrlKey: ""
   #private/seed key used to authenticate the client using Nkey-Auth (starts with 'SU'). counterpart to `natsNkeyPub`
   natsNkeyPriKey: ""
@@ -87,7 +87,7 @@ stringData:
   pgDbPasswordKey: ""
   # password of the clickhouse DB
   clickhouseConnUrlPassKey: ""
-  # full connection url(with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (e.g., `redis://user:password@host:port/0`)
+  # full connection url(with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (for example, `redis://user:password@host:port/0`)
   redisWorkercacheConnUrlKey: ""
   # shared secret key for AES encryption/decryption. refer to docs
   cryptoAesCipherSharedSecretKeyKey: ""
@@ -107,6 +107,10 @@ stringData:
   blobS3AccessKeyIdKey: ""
   # connection url for opensearch
   opensearchConnUrlKey: ""
+  # WorkOS secret key (from WorkOS dashboard → API Keys). Required only if WorkOS integration is enabled.
+  workosApiKey: ""
+  # WorkOS webhook signing secret (from WorkOS dashboard → Webhooks). Required only if WorkOS integration is enabled.
+  workosWebhookSecretKey: ""
 ```
 and create it by 
 
@@ -143,13 +147,17 @@ Wait for all pods to be `Running` or `Completed`. Investigate any `CrashLoopBack
 
 ---
 
-## Step 8: Configuration — `suprsend-values.yaml`
+## Step 8: Configuration - `suprsend-values.yaml`
 
 Below is a **starter** `suprsend-values.yaml` you can copy and edit. Replace placeholders (hosts, TLS secrets, replicas, etc.) per your environment. The `license.token` should be set **before** install/upgrade.
 
+<Warning>
+**Not a full chart default:** this starter does not list every key from the current Helm chart. For example, the **Unlayer** email editor in the dashboard requires `suprsendApp.config.viteEmailEditorToken` (request the token from SuprSend). Download or inspect the latest **`values.yaml`** bundled with the chart (`helm show values suprsend/suprsend` after adding the repo) and merge any missing features into your file.
+</Warning>
+
 ```yaml title="suprsend-values.yaml"
 license:
-  endpoint: "https://byoc.suprsend.com/licenses/charts/auth" # keep this as is
+  endpoint: "https://helm.suprsend.com/licenses/charts/auth" # keep this as is
   token: "" # Your license token
 
 serviceAccount: ""
@@ -207,9 +215,11 @@ global:
     suprsendJsonnetRendererApiBaseUrl: 
     # base url of outbound-webhook service (e.g: https://webhooks.yourdomain.com)
     suprsendWebhooksApiBaseUrl: 
+    # base url of designer-editor service (e.g: https://designer-editor.yourdomain.com)
+    suprsendDesignerEditorBaseUrl: 
   secret:
     existingKubeSecret: "suprsend-secrets"
-    # connection URL for Redis without database-number(e.g., `redis://user:password@host:port`)
+    # connection URL for Redis without database-number(for example, `redis://user:password@host:port`)
     redisConnBaseUrlKey: "redisConnBaseUrlKey"
     # private/seed key used to authenticate the client using Nkey-Auth (starts with 'SU'). counterpart to `natsNkeyPub`
     natsNkeyPriKey: "natsNkeyPriKey"
@@ -219,7 +229,7 @@ global:
     pgDbUserKey: "pgDbUserKey"
     # password of the PostgreSQL database
     pgDbPasswordKey: "pgDbPasswordKey"
-    # full connection url(with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (e.g., `redis://user:password@host:port/0`)
+    # full connection url(with db-number if applicable) for a Redis database used exclusively for worker caching tasks. (for example, `redis://user:password@host:port/0`)
     redisWorkercacheConnUrlKey: "redisWorkercacheConnUrlKey"
     # password of the clickhouse DB
     clickhouseConnUrlPassKey: "clickhouseConnUrlPassKey"
@@ -250,7 +260,7 @@ suprsendapi:
     gunicornWorkers: "4"
     # if blobstore='azblob', unique name of the Azure Storage Account
     blobAzblobAccountName: 
-    # comma-separated list of allowed domains (e.g. yourdomain.com)
+    # comma-separated list of allowed domains (for example yourdomain.com)
     allowedHosts: 
     # domain to which application cookies are scoped (e.g: .yourdomain.com)
     cookieDomain: 
@@ -288,8 +298,14 @@ suprsendapi:
     blobS3Endpoint: 
     # if blobstore='s3', AWS region of the S3 bucket
     blobS3Region: 
-    # object store for files (e.g: s3/azblob)
+    # object store for files (e.g: s3/azblob/gcs)
     blobStore: 
+    # enable WorkOS integration for SSO login (e.g: true/false). Refer to WorkOS integration guide.
+    isWorkosIntegrated: 
+    # WorkOS Client ID (from WorkOS dashboard → API Keys)
+    workosClientId: 
+    # WorkOS AuthKit hosted base URL (e.g: https://your-app.authkit.app)
+    workosSigninBaseUrl: 
   secret:
     existingKubeSecret: "suprsend-secrets"
     # username of SMTP mail server
@@ -302,6 +318,10 @@ suprsendapi:
     blobS3SecretAccessKeyKey: "blobS3SecretAccessKeyKey"
     # if blobstore='s3', AWS S3 access key ID
     blobS3AccessKeyIdKey: "blobS3AccessKeyIdKey"
+    # WorkOS API secret key reference
+    workosApiKeyKey: "workosApiKey"
+    # WorkOS webhook secret reference
+    workosWebhookSecretKey: "workosWebhookSecretKey"
   
   nodeSelector: {}
   tolerations: []
@@ -359,6 +379,8 @@ suprsendApp:
   config:
     # email editor token, contact suprsend to get one
     viteEmailEditorToken: 
+    # set to "false" to enable WorkOS login flow, "true" to use default email+code login
+    viteDisableWorkosLoginFlow: 
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -380,6 +402,19 @@ prontoNatsListener:
   affinity: {}
 
 jsonnetrenderer:
+  podLabels: {}
+  podAnnotations: {}
+  replicaCount: 1
+  ingress:
+    annotations: {}
+    ingressClassName: "" 
+    host: ""
+    tlsSecretKey: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+designerEditor:
   podLabels: {}
   podAnnotations: {}
   replicaCount: 1
@@ -517,6 +552,13 @@ managementService:
     ingressClassName: "" 
     host: ""
     tlsSecretKey: ""
+  config:
+    # pipe-separated list of exact origins allowed for CORS (e.g: https://app.yourdomain.com|https://admin.yourdomain.com)
+    allowedOrigins: 
+    # pipe-separated list of domains allowed for CORS (matches all subdomains). Use "*" to allow any origin (e.g: yourdomain.com)
+    corsDomainWhitelist: 
+    # port on which the management-proxy listens (defaults to 8888)
+    port: "8888"
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -737,18 +779,21 @@ nats:
 
 - `license.endpoint` and `license.token`: Set both to enable license verification and chart pulls.
 - `serviceAccount`: Provide a name to bind specific RBAC, or leave empty to use the default.
-- `global.secret.existingKubeSecret`: Reference to the Kubernetes secret containing sensitive configuration (e.g., `suprsend-secrets`).
+- `global.secret.existingKubeSecret`: Reference to the Kubernetes secret containing sensitive configuration (for example, `suprsend-secrets`).
 - `global.secret.*Key`: Keys in the secret that point to actual secret values (should match keys in your Kubernetes secret).
 - `*-api`, `*-app`, and `consumer-*` sections: Each component supports `replicaCount`, `podLabels`, `podAnnotations`, `nodeSelector`, `tolerations`, and `affinity` (see detailed explanation below).
 - `ingress`: For public-facing components, configure:
-  - `annotations`: Object for ingress annotations (e.g., cert-manager, load balancer config)
-  - `ingressClassName`: Ingress controller class (e.g., `nginx`, `alb`)
+  - `annotations`: Object for ingress annotations (for example, cert-manager, load balancer config)
+  - `ingressClassName`: Ingress controller class (for example, `nginx`, `alb`)
   - `host`: Public hostname
   - `tlsSecretKey`: Name of existing TLS secret
+- `managementService.config`: CORS and proxy port for the management API (`allowedOrigins`, `corsDomainWhitelist`, `port`).
+- `designerEditor`: Ingress and scaling for the designer editor; set `global.config.suprsendDesignerEditorBaseUrl` to match the public URL.
 - `nats`: Enable the included subchart if you don't manage NATS externally. Configure:
   - `nkey`: The public part of your NATS NKey authentication (starts with 'U'). This must match the `natsNkeyPubKey` in your secrets.
   - JetStream storage size (default: 20Gi)
   - Retention settings via `natsman.config`
+- **WorkOS (optional)**: For dashboard SSO via AuthKit, set `suprsendapi.config.isWorkosIntegrated`, `workosClientId`, and `workosSigninBaseUrl`; map `workosApiKey` and `workosWebhookSecretKey` in secrets; set `suprsendApp.config.viteDisableWorkosLoginFlow` as needed. See [WorkOS Integration (SSO)](/docs/self-hosted/workos-integration).
 
 ### Advanced Pod Scheduling and Metadata Configuration
 

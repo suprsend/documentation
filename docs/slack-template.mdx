@@ -1,515 +1,111 @@
 ---
-title: "Slack Template"
-description: "How to design Slack templates using text editor or JSONNET editor for rich block kit templates."
+title: "Slack"
+description: "Design Slack notification templates using the Text editor for simple messages or the JSONNET editor for rich Block Kit layouts."
 ---
 
-## Edit Template
+The Slack editor supports two modes: a **Text** editor for simple messages, and a **JSONNET** editor for rich [Block Kit](https://api.slack.com/block-kit) layouts with buttons, images, and structured sections.
 
-SuprSend provides two ways to design Slack templates:
-
-- **Text Editor**: For simple text-based messages with variable interpolation
-- **JSONNET Editor**: For rich, interactive templates using Slack's Block Kit with buttons, images, and complex layouts
-
-### Text Editor
-
-The text editor is ideal for simple text messages with variable content. You can add variables in Handlebars syntax as `{{...}}`. If the output has special html text, enclose variable in triple curly braces as `{{{url}}}` to avoid HTML escaping.
-
-<CodeGroup>
-
-```text Sample Template
-New Signup request in ABC company
-
-UserName: {{user_name}}
-Email: {{user_email}}
-Organization: {{org.name}}
-Domain: {{org.domain}}
-```
-
-
-```json Mock Data
-{
-  "user_name": "John Doe",
-  "user_email": "john@doe.com",
-  "org": {
-    "name": "ABC company",
-    "domain": "abc.com"
-  }
-}
-```
-
-</CodeGroup>
-
-### JSONNET Editor
-
-The JSONNET editor enables rich template design using [Slack Block Kit Builder](https://app.slack.com/block-kit-builder/). This allows you to create interactive templates with buttons, images, checkboxes, and styled text.
-It is essentially JSON template where variables can be added in JSONNET syntax as `data.variable_name` or `data["$variable_name"]`.
-
-<Frame>
-  <img src="https://files.readme.io/ae3572a-slack_editor.gif" alt="Slack Editor Demo" />
+<Frame caption="Slack editor with JSONNET and live preview">
+  <img src="/images/docs/templates-editor-slack.png" />
 </Frame>
 
-#### Template Examples
+<Note>
+  To send Slack notifications, you need a Slack vendor integrated with SuprSend. See [Slack vendor integration](/docs/slack) for setup.
+</Note>
+
+## Slack fields
+
+**Text mode** - a single text field. Supports [Handlebars](/docs/handlebars-helpers) variables (`{{variable_name}}`). Use triple braces `{{{url}}}` for URLs with special characters.
+
+**JSONNET mode** - a code editor that outputs [Slack Block Kit](https://api.slack.com/block-kit) JSON. Variables use `data.key` syntax (not Handlebars). Design visually in the [Block Kit Builder](https://app.slack.com/block-kit-builder/) first, then adapt the JSON into JSONNET. See the full [JSONNET reference](/docs/jsonnet-templates) for syntax, examples, and debugging.
+
+<Warning>
+  Slack JSONNET templates must be wrapped in `{"blocks": [...]}`. A bare array of blocks will not render - see the [JSONNET reference](/docs/jsonnet-templates#slack-block-kit-examples) for the correct shape.
+</Warning>
+
+<Tip>
+  **AI prompt - convert text to Block Kit:** *"Convert this Slack notification into Block Kit JSON: [paste message]. Variables: [list]. Return valid JSON I can adapt into JSONNET for SuprSend (replacing values with data.key)."*
+</Tip>
+
+<Tip>
+  **AI prompt - debug JSONNET:** *"Fix this JSONNET error from the SuprSend Slack editor. Error: [paste error]. Code: [paste JSONNET]. Variables are accessed as data.key or data['$special_key']."*
+</Tip>
+
+<Info>
+  You can switch between Text and JSONNET at any time. Content is saved independently for each mode.
+</Info>
+
+## Adding dynamic content
+
+**In Text mode** - type `{{` for auto-suggestions. Standard Handlebars syntax:
+
+- `{{order_id}}` - top-level variable
+- `{{order.address.city}}` - nested variable
+- `{{{tracking_url}}}` - URL (avoid escaping)
+- `{{$recipient.name}}` - recipient property
+- `{{$brand.brand_name}}` - tenant property
+
+**In JSONNET mode** - variables use `data.key` syntax. See [JSONNET variable reference](/docs/jsonnet-templates#variable-syntax) for the full table.
+
+For conditionals, loops, and helpers in Text mode, see [Handlebars Helpers](/docs/handlebars-helpers).
+
+<Warning>
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the Slack notification for that user. Other channels in the same template group are still sent.
+</Warning>
+
+## Preview and test
+
+**Text mode** - the right panel shows a Slack message preview. It does not update automatically - **refresh the page** to see the latest changes.
+
+**JSONNET mode** - preview is not available in the editor. Click **View on Slack Builder** to render and validate your Block Kit output in Slack's [Block Kit Builder](https://app.slack.com/block-kit-builder/).
+
+Click **Test** in the top-right corner to send a real Slack message. This uses the **live version** - commit your changes before testing. See [Testing a Template](/docs/templates#test) for the full guide.
+
+## Commit
+
+Click **Commit** in the top bar to publish the current draft as a new live version. Add an optional description for versioning.
+
+## Common patterns
 
 <AccordionGroup>
-  <Accordion title="1. Simple Text Template">
-    
-
-    <Frame>
-      <img
-        src="/images/slack_text_message.png"
-        alt="Slack Text Message Pn"
-        title="Slack Text Message Pn"
-        className="mr-auto"
-        style={{ width:"70%" }}
-      />
-    </Frame>
-
-    <CodeGroup>
-
-    ```json JSONNET Template
-    [
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": "New Signup on ABC company"
-        }
-      },
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": ">_UserName_: *%(user_name)s*\n>_Email_: *%(email)s*\n>_Organization_: *%(org_name)s*\n>_Domain_: *%(domain)s*" % {
-            user_name: data.user_name, 
-            email: data.user_email, 
-            org_name: data.org.name, 
-            domain: data.org.domain
-          }
-        }
-      },
-      {
-        "type": "divider"
-      }
-    ]
-    ```
-
-    
-    ```json Mock Data
-    {
-      "user_name": "John Doe",
-      "user_email": "john@doe.com",
-      "org": {
-        "name": "ABC company",
-        "domain": "abc.com"
-      }
-    }
-    ```
-
-    </CodeGroup>
+  <Accordion title="Thread-aware notifications">
+    Slack automatically threads messages sent to the same channel with the same `thread_ts`. Pass a consistent `thread_ts` in your trigger payload to keep related messages threaded.
   </Accordion>
-  <Accordion title="2. With Buttons: Approval Request">
-    <Frame>
-      <img
-        src="/images/slack_approval_template.png"
-        alt="Slack Approval Template Pn"
-        title="Slack Approval Template Pn"
-        style={{ width:"69%" }}
-      />
-    </Frame>
-
-    <CodeGroup>
-
-    ```json Template
-    [
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": "Share access requested for *<%(document_link)s|%(document_name)s>*" % {
-            document_link: data.document_link,
-            document_name: data.document_name
-          }
-        }
-      },
-      {
-        "type": "section",
-        "fields": [
-          {
-            "type": "mrkdwn",
-            "text": "*Requested by:*\n" + data.requester_name
-          },
-          {
-            "type": "mrkdwn",
-            "text": "*When:*\n" + data.submitted_at
-          },
-          {
-            "type": "mrkdwn",
-            "text": "*Reason:*\n" + data.access_reason
-          }
-        ]
-      },
-      {
-        "type": "actions",
-        "elements": [
-          {
-            "type": "button",
-            "text": {
-              "type": "plain_text",
-              "emoji": true,
-              "text": "Approve"
-            },
-            "style": "primary",
-            "value": "approve_access"
-          },
-          {
-            "type": "button",
-            "text": {
-              "type": "plain_text",
-              "emoji": true,
-              "text": "Deny"
-            },
-            "style": "danger",
-            "value": "deny_access"
-          }
-        ]
-      }
-    ]
-    ```
-
-    
-    ```json Mock Data
-    {
-      "access_type": "View",
-      "submitted_at": "Jul 14, 2025",
-      "access_reason": "Need to review figures before tomorrow's board meeting.",
-      "document_link": "https://docs.company.com/12345",
-      "document_name": "Q3 Financial Report",
-      "requester_name": "Jane Doe"
-    }
-    ```
-
-    </CodeGroup>
+  <Accordion title="Mentioning users">
+    Use `<@SLACK_USER_ID>` to @mention a user. Pass the ID as a variable: `<@{{assignee_slack_id}}>`.
   </Accordion>
-  <Accordion title="3. With Image: Anomaly Alert">
-    <Frame>
-      <img
-        src="/images/Slack_anomaly_alert.png"
-        alt="Slack Anomaly Alert Pn"
-        title="Slack Anomaly Alert Pn"
-        style={{ width:"74%" }}
-      />
-    </Frame>
-
-    <CodeGroup>
-
-    ```json Template
-    [
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": ":warning: *High Error Rate Detected*\nOur system has experienced a spike in errors over the last *30 minutes*."
-        }
-      },
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": "The error rate has significantly increased, impacting reliability.\nPlease investigate immediately to avoid service degradation."
-        }
-      },
-      {
-        "type": "image",
-        "title": {
-          "type": "plain_text",
-          "text": "Request vs Failure Trend (Last 6 Hours)",
-          "emoji": true
-        },
-        "image_url": data.image_url,
-        "alt_text": "Graph showing high error rate spike"
-      },
-      {
-        "type": "section",
-        "fields": [
-          {
-            "type": "mrkdwn",
-            "text": "*Impacted Services:*\n" + data.impacted_services
-          },
-          {
-            "type": "mrkdwn",
-            "text": "*Time Range:*\n" + data.time_range
-          },
-          {
-            "type": "mrkdwn",
-            "text": "*Error Rate:*\n" + data.error_rate
-          }
-        ]
-      },
-      {
-        "type": "divider"
-      },
-      {
-        "type": "context",
-        "elements": [
-          {
-            "type": "mrkdwn",
-            "text": "🔍 View logs: <%(log_url)s|Open in Monitoring Tool>\n📊 See metrics dashboard: <%(dashboard_url)s|Error Trends>" % {
-              log_url: data.log_url,
-              dashboard_url: data.dashboard_url
-            }
-          }
-        ]
-      }
-    ]
-    ```
-
-    
-    ```json Mock Data
-    {
-      "log_url": "https://monitoring.company.com/logs?range=last_30_minutes",
-      "image_url": "https://datadog-docs.imgix.net/images/dashboards/widgets/alert_graph/alert_graph.0ddfb73f548355b8adbe31723dff1dd3.png?fit=max&auto=format",
-      "error_rate": "17.2% (normally <1%)",
-      "time_range": "12:00 PM – 12:30 PM UTC",
-      "dashboard_url": "https://monitoring.company.com/dashboards/error-trends",
-      "impacted_services": "API Gateway, Auth Service"
-    }
-    ```
-
-    </CodeGroup>
+  <Accordion title="Linking to resources">
+    Slack uses `<URL|display text>` syntax. In JSONNET: `"*<" + data.url + "|" + data.title + ">*"`.
   </Accordion>
-  <Accordion title="4. With Array List: Pending Task Digest (Batched Alert)">
-    <Frame>
-      <img
-        src="/images/slack_task_reminder.png"
-        alt="Slack Task Reminder Pn"
-        title="Slack Task Reminder Pn"
-        style={{ width:"73%" }}
-      />
-    </Frame>
-
-    <CodeGroup>
-
-    ```json Template
-    [
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": "Hi " + data["$recipient"].name + " :wave:"
-        }
-      },
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": "You have "+data["$batched_events_count"]+" *pending tasks* for today:"
-        }
-      },
-      {
-        "type": "rich_text",
-        "elements": [
-          {
-            "type": "rich_text_list",
-            "style": "bullet",
-            "indent": 0,
-            "elements": [
-              {
-                "type": "rich_text_section",
-                "elements": [
-                  {
-                    "type": "text",
-                    "text": task.title + " (" + task.status + ")"
-                  }
-                ]
-              }
-              for task in data["$batched_events"]
-            ]
-          }
-        ]
-      },
-      {
-        "type": "actions",
-        "elements": [
-          {
-            "type": "button",
-            "text": {
-              "type": "plain_text",
-              "text": "View Pending tasks",
-              "emoji": true
-            },
-            "url": "https://app.company.com/tasks",
-            "value": "task_url"
-          }
-        ]
-      }
-    ]
-    ```
-
-    
-    ```json Mock Data
-    {
-      "$batched_events_count": 3,
-      "$batched_events": [
-        {
-          "title": "Fix login bug on mobile",
-          "status": "In Progress",
-        },
-        {
-          "title": "Write API docs for new endpoints",
-          "status": "Todo"
-        },
-        {
-          "title": "Review design spec for onboarding",
-          "status": "Blocked"
-        }
-      ]
-    }
-    ```
-
-    </CodeGroup>
+  <Accordion title="Emoji">
+    Use `:emoji_name:` syntax (for example, `:white_check_mark:`, `:warning:`).
   </Accordion>
 </AccordionGroup>
 
-### Adding dynamic content
+## Frequently asked questions
 
-Here's how you can different types of variables in both [handlebars](https://docs.suprsend.com/docs/handlebars-helpers) and [JSONNET](https://jsonnet.org/ref/language.html) syntax.
+<AccordionGroup>
+  <Accordion title="Text or JSONNET - which should I use?">
+    Start with Text for simple alerts and status updates. Switch to JSONNET when you need buttons, images, structured layouts, or batched event lists.
+  </Accordion>
 
-| Variable Type                    | Handlebars Syntax             | JSONNET Syntax                |
-| -------------------------------- | ----------------------------- | ----------------------------- |
-| **Parent Level variables**       | `{{user_name}}`               | `data.user_name`              |
-| **Nested Object**                | `{{org.name}}`                | `data.org.name`               |
-| **Print Array element at Index** | `{{task_list.[0].task_name}}` | `data.task_list[0].task_name` |
-| **Recipient**                    | `{{$recipient.name}}`         | `data["$recipient"].name`     |
-| **Actor**                        | `{{$actor.name}}`             | `data["$actor"].name`         |
-| **Tenant**                       | `{{$tenant.brand_name}}`      | `data["$tenant"].brand_name`  |
+  <Accordion title="How do I validate my Block Kit JSON?">
+    Click **View on Slack Builder** in the JSONNET editor. Slack silently drops invalid blocks instead of showing errors - always validate before committing.
+  </Accordion>
 
-**Print each item in the Array**
+  <Accordion title="Why isn't my Slack template rendering?">
+    The most common reason is missing the `{"blocks": [...]}` wrapper. The SuprSend JSONNET editor only accepts the object form - a bare array (`[{...}]`) will not work. Wrap all your blocks inside a top-level object with a `blocks` key.
+  </Accordion>
 
-<CodeGroup>
+  <Accordion title="What's the message length limit?">
+    Slack truncates messages over 4000 characters. For batched notifications with many items, show the top 5-10 and add a "View all" button.
+  </Accordion>
 
-```text Handlebars
-{{#each task_list}}
-{{task_name}}: {{task_description}}
-{{/each}}
-```
+  <Accordion title="What formatting does Slack support?">
+    Slack uses `mrkdwn`, not standard Markdown. Bold: `*text*`, italic: `_text_`, strikethrough: `~text~`, code: triple backticks.
+  </Accordion>
 
-
-```json JSONNET
-[
-  {
-    "type": "section",
-    "fields": [
-      {
-        "type": "plain_text",
-        "text": tasks.task_name + ": " + tasks.task_description,
-        "emoji": true
-      }
-      for tasks in data.task_list
-    ]
-  }
-]
-```
-
-</CodeGroup>
-
-**Conditional Logic**
-
-<CodeGroup>
-
-```text Handlebars
-{{#if is_new_org}}
-New Organization
-{{else}}
-Existing Organization
-{{/if}}
-```
-
-
-```json JSONNET
-{
-  "type": "section",
-  "text": {
-    "type": "mrkdwn",
-    "text": if "is_new_org" in data then
-      "New Organization"
-    else
-      "Existing Organization"
-  }
-}
-```
-
-</CodeGroup>
-
-**Batched Template**
-
-<CodeGroup>
-
-```text Handlebars
-Total events: {{$batched_events_count}}
-
-{{#each $batched_events}}
-{{item}}
-{{/each}}
-```
-
-
-```json JSONNET
-[
-  {
-    "type": "section",
-    "text": {
-      "type": "plain_text",
-      "text": "Total events: " + data["$batched_events_count"],
-      "emoji": true
-    }
-  },
-  {
-    "type": "section",
-    "fields": [
-      {
-        "type": "plain_text",
-        "text": events.item,
-        "emoji": true
-      }
-      for events in data["$batched_events"]
-    ]
-  }
-]
-```
-
-</CodeGroup>
-
-## Preview Template
-
-1. Add mock JSON data using the `Mock data` button for all variables used in the template
-2. Click `Load Preview` to see the rendered template
-3. For JSONNET templates, click `View in Slack Block Kit` to see the actual Slack UI preview
-
-<Warning>
-  You must add mock data for all variables in your template. Missing mock data will cause rendering errors and prevent the preview from loading.
-</Warning>
-
-<Frame>
-  <img src="https://files.readme.io/b481ef6-slack_preview.gif" alt="Slack Preview Demo" />
-</Frame>
-
-## Publish Template
-
-Once your template is ready, click **Publish Draft** and provide a version name to publish it. The published template becomes the live version and will be used whenever the associated workflow is triggered.
-
-## Test Template
-
-Use this option to send a test message in Slack and preview how it will appear in user's device.
-Click the Test button, then enter the user's distinct_id and select the Slack channel where the test message should be sent.
-
-<Note>
-  Template testing only uses the published Live version, so make sure to publish your changes before testing.
-</Note>
-
-## Promote to Production
-
-You can clone template across workspaces by using Clone -\> Outside Template option. Clone -\> Within template can be used to clone within different languages and versions of the same template.
-
-<Tip>
-  **Best Practice**: Always design templates in your staging workspace first, then promote them to production. This ensures thorough testing of the changes without impacting end users.
-</Tip>
+  <Accordion title="What happens if a variable is missing at send time?">
+    SuprSend discards the Slack notification for that user. Other channels in the same template group are still sent.
+  </Accordion>
+</AccordionGroup>

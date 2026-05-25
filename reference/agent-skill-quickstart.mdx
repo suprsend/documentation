@@ -1,91 +1,151 @@
 ---
 title: "Quickstart"
 sidebarTitle: "Quickstart"
-description: "Install SuprSend Agent Skills and build your first workflow in under 5 minutes."
+description: "Install SuprSend Agent Skills and ship your first AI-generated workflow in under 5 minutes."
 ---
 
-## Install Skills
+By the end of this page you'll have:
 
-Install all SuprSend skills at once:
+<CardGroup cols={3}>
+  <Card title="Skills installed" icon="circle-check">
+    All four SuprSend skills active in your AI agent.
+  </Card>
+  <Card title="Workflow generated" icon="diagram-project">
+    A real cart-abandonment workflow built by AI from a single prompt.
+  </Card>
+  <Card title="Workflow live" icon="rocket">
+    That workflow pushed to your SuprSend workspace and ready to fire.
+  </Card>
+</CardGroup>
 
-```bash
-npx skills add suprsend/skills
-```
-
-The installer detects which agents are on your machine and asks which to install. Choose project-scoped (committed to your repo) or global.
-
-Or install a single skill:
-
-```bash
-npx skills add https://github.com/suprsend/skills --skill suprsend-workflow-schema
-npx skills add https://github.com/suprsend/skills --skill suprsend-cli
-npx skills add https://github.com/suprsend/skills --skill suprsend-docs-support
-```
-
-<Tip>
-  Commit skills to your repo. Your whole team gets consistent agent behavior with no extra setup.
-</Tip>
-
-After installation, skills are passive — nothing extra to run. Open your agent, describe what you want to build, and the agent loads the relevant skill automatically.
+<Note>
+  You'll need [Node.js](https://nodejs.org/) 18+ and a SuprSend [service token](https://docs.suprsend.com/docs/developer/service-tokens.md).
+</Note>
 
 ---
 
-## Try it — build a cart abandonment workflow
+<Steps>
+  <Step title="Install the skills">
+    Run this in your project folder:
 
-Open Cursor (`Cmd+L` / `Ctrl+L`) and paste this prompt:
+    ```bash
+    npx skills add suprsend/skills
+    ```
 
-```text
-Create a SuprSend cart abandonment workflow JSON
-with slug "cart-abandonment". It should send 1 hour after user
-leaves the cart and then send email and In-app notification.
-```
+    The installer detects which agents you have (Cursor, Claude Code, Copilot, etc.), asks which to install into, and lets you choose where the files land.
 
-The `suprsend-workflow-schema` skill activates automatically and generates correct `node_type` values, branch structure, and field names.
+    <Tabs>
+      <Tab title="Project-scoped (recommended)">
+        Committed to your repo, shared with your team. Recommended.
 
----
+        <Tip>
+          Pick this option and commit the skills folder. Your whole team gets identical agent behavior with zero extra setup.
+        </Tip>
+      </Tab>
+      <Tab title="Global">
+        Available across every project on your machine. Pick this if you're trying skills out solo.
+      </Tab>
+    </Tabs>
 
-## Review and push
+    After install, skills are passive - nothing extra to run. Open your agent and start describing what you want.
+  </Step>
 
-Open `suprsend/workflow/cart-abandonment.json` and verify the structure — especially any `branch_waituntil` conditions.
+  <Step title="Generate a workflow with a single prompt">
+    Open your agent (in Cursor, hit `Cmd+L` / `Ctrl+L`) and paste:
 
-```bash
-suprsend profile list
-suprsend profile use --name my-workspace   # if needed
-suprsend workflow push --slug cart-abandonment --commit=true
-```
+    ```text
+    Create a SuprSend cart abandonment workflow JSON with slug
+    "cart-abandonment". It should send 1 hour after the user
+    leaves the cart, then send email and in-app notifications.
+    ```
 
-Go to [app.suprsend.com](https://app.suprsend.com) → **Workflows**. Your workflow is live.
+    Your agent will say something like *"I'll use the suprsend-workflow-schema skill"* and create a new file at `suprsend/workflow/cart-abandonment.json` containing valid workflow JSON - correct `node_type` values, a properly nested branch structure, and the exact field names the SuprSend schema expects.
+
+    <Tip>
+      If your agent doesn't mention loading the skill, paste the prompt again and add *"use the suprsend-workflow-schema skill"* - some agents need an explicit nudge the first time.
+    </Tip>
+
+    **Sanity-check the output**
+
+    Open `suprsend/workflow/cart-abandonment.json` and verify:
+
+    - `slug` is set to `cart-abandonment`
+    - A `delay` node sits before the delivery nodes
+    - Each delivery node uses the correct `node_type` (`send_email`, `send_inbox`, etc.)
+    - Any `branch_waituntil` conditions match your intent - agents are most likely to misfire here
+  </Step>
+
+  <Step title="Push it live">
+    Confirm you're pointed at the right workspace, then push:
+
+    ```bash
+    suprsend profile list
+    suprsend profile use --name my-workspace   # if needed
+    suprsend workflow push --slug cart-abandonment --commit=true
+    ```
+
+    <Warning>
+      Without `--commit=true`, the workflow is pushed as a **draft** and won't fire. This catches almost everyone the first time.
+    </Warning>
+
+    Open [app.suprsend.com](https://app.suprsend.com) → **Workflows**. Your workflow is live.
+  </Step>
+</Steps>
 
 ---
 
 ## Common gotchas
 
-These are the mistakes agents make most often. Watch for these before pushing.
+These are the mistakes agents (and humans) make most often.
 
-| What goes wrong | Why | Fix |
-|---|---|---|
-| `workflow push myfile.json` silently pushes 0 | Command expects `--slug` or `--dir`, not a file path | Use `--slug` or `--dir suprsend/workflow/` |
-| Workflow pushed but nothing fires | Pushed workflows are **drafts by default** | Add `--commit=true` |
-| "Successfully pushed: 0" | Wrong active profile or workspace | Run `suprsend profile list` and switch |
-| Workflow JSON can't be targeted by slug | Missing `slug` field in the JSON | Always include `"slug": "your-slug"` |
-| Validation error on push | Schema or category doesn't exist yet | Push schema and category first |
-| Branch logic routes wrong | Incorrect `expression_v1` conditions | Review conditions. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md) |
+<AccordionGroup>
+  <Accordion title='workflow push myfile.json silently pushes 0' icon="circle-exclamation">
+    **Why:** The command expects `--slug` or `--dir`, not a file path.
+
+    **Fix:** Use `--slug` or `--dir suprsend/workflow/`.
+  </Accordion>
+  <Accordion title="Workflow pushed but nothing fires" icon="circle-exclamation">
+    **Why:** Pushed workflows are drafts by default.
+
+    **Fix:** Add `--commit=true`.
+  </Accordion>
+  <Accordion title='"Successfully pushed: 0"' icon="circle-exclamation">
+    **Why:** Wrong active profile or workspace.
+
+    **Fix:** Run `suprsend profile list` and switch with `suprsend profile use --name <name>`.
+  </Accordion>
+  <Accordion title="Workflow JSON can't be targeted by slug" icon="circle-exclamation">
+    **Why:** Missing `slug` field in the JSON.
+
+    **Fix:** Always include `"slug": "your-slug"`.
+  </Accordion>
+  <Accordion title="Validation error on push" icon="circle-exclamation">
+    **Why:** Referenced schema or category doesn't exist yet.
+
+    **Fix:** Push schema and category first.
+  </Accordion>
+  <Accordion title="Branch logic routes wrong" icon="circle-exclamation">
+    **Why:** Incorrect `expression_v1` conditions.
+
+    **Fix:** Review by hand. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md).
+  </Accordion>
+</AccordionGroup>
 
 ---
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Workflow Schema Skill" icon="diagram-project" href="/reference/agent-skill-workflow-schema">
-    All node types and configuration fields.
+  <Card title="Workflow Schema skill" icon="diagram-project" href="/reference/agent-skill-workflow-schema">
+    All workflow nodes, fields, and the prompts that work best.
   </Card>
-  <Card title="CLI Skill" icon="terminal" href="/reference/agent-skill-cli">
-    Every CLI command, flag, and troubleshooting tip.
+  <Card title="Template Schema skill" icon="file-lines" href="/reference/agent-skill-template-schema">
+    Author template variants across all nine channels from plain English.
   </Card>
-  <Card title="Prompt Cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
-    More copy-paste prompts for common tasks.
+  <Card title="CLI skill" icon="terminal" href="/reference/agent-skill-cli">
+    Ask your agent to push, sync, generate types, and more.
   </Card>
-  <Card title="Agent Skills Overview" icon="graduation-cap" href="/reference/agent-skills">
-    All available skills and how they work.
+  <Card title="Docs & Support skill" icon="book-open" href="/reference/agent-skill-docs-support">
+    Let your agent fetch live SuprSend docs to answer questions.
   </Card>
 </CardGroup>
