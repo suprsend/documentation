@@ -13,14 +13,16 @@ Export your SuprSend notification data directly to your S3 bucket. Build custom 
 
 ## How it works
 
-- **Every 5 minutes**, SuprSend syncs your notification data to S3 in Parquet format. Data lands in hourly partitions across three data points, depending on your connector settings:
+- **Every 5 minutes**, SuprSend syncs your notification data to S3 in Parquet format. Data lands in hourly partitions across three data points, depending on your connector settings. With the default path layout (`per_type`), files are organized like this:
 
   ```
   your-bucket/
-  ├── year=2025/month=01/day=15/hour=14/messages.parquet
-  ├── year=2025/month=01/day=15/hour=14/workflow_executions.parquet
-  └── year=2025/month=01/day=15/hour=14/requests.parquet
+  ├── messages/year=2025/month=01/day=15/hour=14/messages.parquet
+  ├── workflow_executions/year=2025/month=01/day=15/hour=14/workflow_executions.parquet
+  └── requests/year=2025/month=01/day=15/hour=14/requests.parquet
   ```
+
+  You can switch to a `shared` layout where all data points share the same date-partitioned path—see [Compression and path layout](#compression-and-path-layout).
 - At every sync, we **add or replace the existing hourly parquet files** where the data has been changed.
   - For query engines like AWS Athena, changes in hourly partitions are automatically detected and reflected in the final tables.
   - For data warehouses that don’t support automatic row overwrites (for example, BigQuery), use the updated_at column to select the latest state of the data.
@@ -174,6 +176,59 @@ graph LR
 | Requests → Workflow Executions | `execution_id` |
 | Workflow Executions → Messages | `wf_execution_id` |
 | Requests → Messages (shortcut) | `idempotency_key` |
+
+
+## Compression and path layout
+
+When you add or edit the connector, you can configure how Parquet files are written to your bucket.
+
+### Compression
+
+Parquet files are compressed using the codec you select. The codec only affects how the file is encoded on disk; pick one your downstream query engine or warehouse supports.
+
+| Option | Default | Notes |
+|--------|:-------:|-------|
+| `snappy` | ✅ | Fast compression and decompression; balanced choice for analytics workloads. |
+| `lz4` |  | Faster than Snappy, slightly larger files. |
+| `gzip` |  | Smaller files, slower to read and write. |
+| `zstd` |  | Strong compression ratio with read/write speeds comparable to gzip. |
+| `brotli` |  | Highest compression ratio in this list; slower to read. |
+| `none` |  | No compression. Use only if your downstream system requires uncompressed Parquet. |
+
+### Path layout
+
+Two layouts are available for how files are organized inside your bucket. Both use Hive-style date partitions (`year=YYYY/month=MM/day=DD/hour=HH`).
+
+<Tabs>
+<Tab title="per_type (default)">
+
+Each data point gets its own top-level folder, then date-partitioned subfolders:
+
+```
+your-bucket/
+├── messages/year=2025/month=01/day=15/hour=14/messages.parquet
+├── workflow_executions/year=2025/month=01/day=15/hour=14/workflow_executions.parquet
+└── requests/year=2025/month=01/day=15/hour=14/requests.parquet
+```
+
+Use this when you want each data point as a separate table in Athena, Glue, Spark, or BigQuery—each table points at its own prefix.
+
+</Tab>
+<Tab title="shared">
+
+All data points share the same date-partitioned path, distinguished only by file name:
+
+```
+your-bucket/
+├── year=2025/month=01/day=15/hour=14/messages.parquet
+├── year=2025/month=01/day=15/hour=14/workflow_executions.parquet
+└── year=2025/month=01/day=15/hour=14/requests.parquet
+```
+
+Use this if you already have a pipeline that consumes a single date-partitioned prefix.
+
+</Tab>
+</Tabs>
 
 
 ## Setup
