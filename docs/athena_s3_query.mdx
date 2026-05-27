@@ -1,0 +1,237 @@
+---
+title: "Query S3 export with Amazon Athena"
+description: "Set up Amazon Athena to query notification data synced to S3 by the Amazon S3 v2.0 connector."
+---
+
+Amazon Athena lets you run SQL directly against the Parquet files that the [Amazon S3 v2.0 connector](/docs/amazon_s3_v2) writes to your bucket—no ETL, no separate warehouse. Athena reads the files in place and bills per TB scanned.
+
+This guide assumes the S3 v2.0 connector is already running and writing Parquet files to your bucket. If not, complete the [S3 v2.0 setup](/docs/amazon_s3_v2#setup) first.
+
+---
+
+## Before you start
+
+- An S3 bucket that the connector is already writing to (you should see `year=.../month=.../day=.../hour=.../*.parquet` files in it).
+- Access to the AWS account that owns the bucket, with permissions to use Athena and read from the bucket.
+- An S3 location for Athena to store query results (a separate prefix or bucket—Athena writes here every time you run a query).
+
+For Athena fundamentals, see the [AWS Athena getting started guide](https://docs.aws.amazon.com/athena/latest/ug/getting-started.html).
+
+---
+
+## Step 1: Set the Athena query result location
+
+Open the [Athena console](https://console.aws.amazon.com/athena/) and pick the same region as your S3 bucket. The first time you use Athena in a region, you must set a query result location:
+
+1. Go to **Settings** → **Manage**.
+2. Set **Location of query result** to an S3 path you control, for example `s3://YOUR_BUCKET_NAME/athena-results/`.
+3. Save.
+
+---
+
+## Step 2: Create a database
+
+In the Athena query editor, run:
+
+```sql
+CREATE DATABASE IF NOT EXISTS s3_connector_external_test_db;
+```
+
+Rename `s3_connector_external_test_db` to whatever you'd like to use as the database name. The rest of this guide uses the same name.
+
+---
+
+## Step 3: Create external tables
+
+Create one external table per data point you're syncing. Each table points at the corresponding folder in your bucket and uses [Athena partition projection](https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html) on `year/month/day/hour`, so you don't need to run `MSCK REPAIR TABLE` or a Glue Crawler—new hourly partitions are picked up automatically.
+
+Replace `s3://suprsend-parqvault-external-test/staging/` in the `LOCATION` and `storage.location.template` values with the actual S3 path the connector is writing to.
+
+<Tabs>
+<Tab title="Workflow Executions">
+
+```sql
+CREATE EXTERNAL TABLE s3_connector_external_test_db.ss_workflow_executions (
+  workspace_key                 string,
+  created_at                    timestamp,
+  updated_at                    timestamp,
+  execution_id                  string,
+  recipient_distinct_id         string,
+  tenant_id                     string,
+  idempotency_key               string,
+  parent_object_execution_id    string,
+  parent_object                 string,
+  workflow_slug                 string,
+  workflow_version              string,
+  node_id                       string,
+  node_name                     string,
+  node_type                     string,
+  execution_stage               string,
+  status                        string,
+  message                       string,
+  properties                    string
+)
+PARTITIONED BY (
+  year  string,
+  month string,
+  day   string,
+  hour  string
+)
+STORED AS PARQUET
+LOCATION 's3://suprsend-parqvault-external-test/staging/workflow_executions/'
+TBLPROPERTIES (
+  'projection.enabled'         = 'true',
+  'projection.year.type'       = 'integer',
+  'projection.year.range'      = '2022,2030',
+  'projection.month.type'      = 'integer',
+  'projection.month.range'     = '1,12',
+  'projection.day.type'        = 'integer',
+  'projection.day.range'       = '1,31',
+  'projection.hour.type'       = 'integer',
+  'projection.hour.range'      = '0,23',
+  'storage.location.template'  = 's3://suprsend-parqvault-external-test/staging/workflow_executions/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+);
+```
+
+</Tab>
+
+<Tab title="Requests">
+
+```sql
+CREATE EXTERNAL TABLE s3_connector_external_test_db.ss_requests (
+  workspace_key       string,
+  created_at          timestamp,
+  updated_at          timestamp,
+  api_type            string,
+  api_name            string,
+  wf_trigger_type     string,
+  distinct_id_list    array<string>,
+  actor               string,
+  tenant_id           string,
+  payload             string,
+  response            string,
+  metadata            string,
+  errors              array<struct<error_code:string,error_description:string,error_type:string,severity:string,workflow_slug:string>>,
+  executions          array<struct<distinct_id:string,exec_id:string,workflow_slug:string>>,
+  idempotency_key     string,
+  status              string
+)
+PARTITIONED BY (
+  year  string,
+  month string,
+  day   string,
+  hour  string
+)
+STORED AS PARQUET
+LOCATION 's3://suprsend-parqvault-external-test/staging/requests/'
+TBLPROPERTIES (
+  'projection.enabled'         = 'true',
+  'projection.year.type'       = 'integer',
+  'projection.year.range'      = '2022,2030',
+  'projection.month.type'      = 'integer',
+  'projection.month.range'     = '1,12',
+  'projection.day.type'        = 'integer',
+  'projection.day.range'       = '1,31',
+  'projection.hour.type'       = 'integer',
+  'projection.hour.range'      = '0,23',
+  'storage.location.template'  = 's3://suprsend-parqvault-external-test/staging/requests/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+);
+```
+
+</Tab>
+
+<Tab title="Messages">
+
+```sql
+CREATE EXTERNAL TABLE s3_connector_external_test_db.ss_messages (
+  workspace_key                 string,
+  created_at                    timestamp,
+  updated_at                    timestamp,
+  wf_execution_id               string,
+  broadcast_execution_id        string,
+  message_id                    string,
+  recipient_distinct_id         string,
+  tenant_id                     string,
+  idempotency_key               string,
+  parent_object                 string,
+  parent_object_execution_id    string,
+  workflow_slug                 string,
+  template_name                 string,
+  template_slug                 string,
+  message_status                string,
+  message_triggered_at          timestamp,
+  message_delivered_at          timestamp,
+  message_seen_at               timestamp,
+  message_clicked_at            timestamp,
+  node_id                       string,
+  node_name                     string,
+  node_type                     string,
+  execution_failure_reason      string,
+  delivery_failure_reason       string,
+  note                          string,
+  message_id_by_vendor          string,
+  vendor_fallback_applicable    string,
+  vendor_fallback_level         string,
+  vendor_nickname               string,
+  vendor_slug                   string,
+  is_smart                      string,
+  success_metric                string,
+  success_achieved_at           string,
+  wait_time_in_seconds          string,
+  channel_slug                  string,
+  channel_value                 string,
+  webhook_data                  string
+)
+PARTITIONED BY (
+  year  string,
+  month string,
+  day   string,
+  hour  string
+)
+STORED AS PARQUET
+LOCATION 's3://suprsend-parqvault-external-test/staging/messages/'
+TBLPROPERTIES (
+  'projection.enabled'         = 'true',
+
+  'projection.year.type'       = 'integer',
+  'projection.year.range'      = '2022,2030',
+
+  'projection.month.type'      = 'integer',
+  'projection.month.range'     = '1,12',
+
+  'projection.day.type'        = 'integer',
+  'projection.day.range'       = '1,31',
+
+  'projection.hour.type'       = 'integer',
+  'projection.hour.range'      = '0,23',
+
+  'storage.location.template'  = 's3://suprsend-parqvault-external-test/staging/messages/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+);
+```
+
+</Tab>
+</Tabs>
+
+<Note>
+The `projection.year.range` is set to `2022,2030`. Widen the upper bound if you plan to query data beyond 2030.
+</Note>
+
+---
+
+## Step 4: Run a query
+
+Filter on the partition columns (`year`, `month`, `day`, `hour`) wherever possible—Athena will skip files outside the range and you'll pay less per query.
+
+```sql
+SELECT *
+FROM s3_connector_external_test_db.ss_workflow_executions
+WHERE year = '2026';
+```
+
+---
+
+## Notes
+
+- Athena charges per TB scanned. Always filter on `year`/`month`/`day`/`hour` and select only the columns you need.
+- Because the connector replaces hourly Parquet files when data changes, Athena automatically sees the latest state on the next query—no manual refresh needed.
+- If you change the connector's S3 path or prefix later, drop and recreate the tables with the new `LOCATION` and `storage.location.template`.
