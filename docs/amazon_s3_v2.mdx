@@ -13,14 +13,7 @@ Export your SuprSend notification data directly to your S3 bucket. Build custom 
 
 ## How it works
 
-SuprSend syncs your notification data to S3 every **5 minutes** as Parquet files, partitioned by hour. With the default `per_type` path layout, your bucket ends up structured like this:
-
-```
-your-bucket/
-├── messages/year=2025/month=01/day=15/hour=14/messages.parquet
-├── workflow_executions/year=2025/month=01/day=15/hour=14/workflow_executions.parquet
-└── requests/year=2025/month=01/day=15/hour=14/requests.parquet
-```
+SuprSend syncs your notification data to S3 every **5 minutes** as Parquet files, partitioned by hour. By default, each data point goes into its own top-level folder (the `per_type` path layout)—see [Compression and path layout](#compression-and-path-layout) for the exact folder structure and how to change it.
 
 A few details worth knowing:
 
@@ -28,7 +21,6 @@ A few details worth knowing:
 - **Parquet is read natively** by every common query engine and warehouse. For Athena specifically, see [Query with Athena](/docs/athena_s3_query).
 - **Data is encrypted in transit** (TLS 1.2+) and **at rest** (SSE-S3 or SSE-KMS).
 - **If you pause the sync, the pause period backfills automatically** when you resume.
-- The path layout and compression codec are configurable—see [Compression and path layout](#compression-and-path-layout).
 
 
 ---
@@ -188,7 +180,7 @@ graph LR
 You can configure how Parquet files are written when you add or edit the connector. The defaults work for almost every use case—change them only if you have a specific need.
 
 <Note>
-**Connectors created before 27 May 2026** still use the previous defaults—**`lz4` compression** and the **`shared` path layout**. New connectors default to `snappy` + `per_type`. Changing either setting on an existing connector only affects files written **after** the change; everything already in your bucket keeps its original codec and folder.
+**Connectors created before 21 May 2026** still use the previous defaults—**`lz4` compression** and the **`shared` path layout**. New connectors default to `snappy` + `per_type`. Changing either setting on an existing connector only affects files written **after** the change; everything already in your bucket keeps its original codec and folder.
 </Note>
 
 ### Compression
@@ -382,10 +374,6 @@ If you want to run SQL on the exported data, [Amazon Athena](https://docs.aws.am
 4. **Query**, always filtering on the partition columns to keep cost down.
 
 For the full DDL, partition-projection settings, and example queries (including a join that traces a single request across all three tables), follow the [Query with Athena](/docs/athena_s3_query) guide.
-
-<Note>
-Athena only works with `per_type` path layout and a non-`lz4` compression codec. Both are the defaults for new connectors; existing connectors created before these options were introduced need to be reconfigured first—details in the [Athena guide](/docs/athena_s3_query#prerequisites).
-</Note>
 
 ---
 
