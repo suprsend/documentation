@@ -1,10 +1,10 @@
 ---
-title: "Amazon S3 v2.0"
+title: "Overview"
 description: "Export your notification logs to Amazon S3 for analytics, debugging, and compliance."
 ---
 
 <Note>
-**Old S3 connector (v1.0) will be deprecated over time:** If you’re using the existing S3 connector (v1.0), [migrate to v2.0](/docs/amazon_s3) to support the latest logging and analytics updates. The v2.0 connector exports all log types and notification analytics and fixes gaps in error logging present in v1.0.
+**On the old S3 connector (v1.0)?** v1.0 will be deprecated over time. v2.0 exports all log types and notification analytics and closes gaps in error logging that exist in v1.0—see the [v1.0 doc](/docs/amazon_s3) for the migration path.
 </Note>
 
 Export your SuprSend notification data directly to your S3 bucket. Build custom analytics dashboards, debug delivery issues, surface errors to your customers, or maintain compliance audit trails—all with data you fully own and control.
@@ -13,28 +13,21 @@ Export your SuprSend notification data directly to your S3 bucket. Build custom 
 
 ## How it works
 
-- **Every 5 minutes**, SuprSend syncs your notification data to S3 in Parquet format. Data lands in hourly partitions across three data points, depending on your connector settings:
+SuprSend syncs your notification data to S3 every **5 minutes** as Parquet files, partitioned by hour. By default, each data point goes into its own top-level folder (the `per_type` path layout)—see [Compression and path layout](#compression-and-path-layout) for the exact folder structure and how to change it.
 
-  ```
-  your-bucket/
-  ├── year=2025/month=01/day=15/hour=14/messages.parquet
-  ├── year=2025/month=01/day=15/hour=14/workflow_executions.parquet
-  └── year=2025/month=01/day=15/hour=14/requests.parquet
-  ```
-- At every sync, we **add or replace the existing hourly parquet files** where the data has been changed.
-  - For query engines like AWS Athena, changes in hourly partitions are automatically detected and reflected in the final tables.
-  - For data warehouses that don’t support automatic row overwrites (for example, BigQuery), use the updated_at column to select the latest state of the data.
-- **Data is encrypted with TLS 1.2+** in transit and **SSE-S3/SSE-KMS** at rest. 
-- The Parquet format and partition structure work natively with query engines like Athena, Spark, and Presto. 
-- If you pause sync, **data from the pause period backfills automatically** when you resume.
+A few details worth knowing:
+
+- **Updates rewrite files in place.** Each sync re-writes the hourly Parquet files whose data has changed. Query engines like Athena, Spark, and Presto see the new state automatically. For warehouses that don't overwrite rows (e.g., BigQuery), use the `updated_at` column to pick the latest version.
+- **Parquet is read natively** by every common query engine and warehouse. For Athena specifically, see [Query with Athena](/docs/athena_s3_query).
+- **Data is encrypted in transit** (TLS 1.2+) and **at rest** (SSE-S3 or SSE-KMS).
+- **If you pause the sync, the pause period backfills automatically** when you resume.
 
 
 ---
 
 ## What you can export
 
-You can choose which data points to sync based on your use case. Each data point should be synced in a separate table in your data warehouse.
-Most users sync **Messages for analytics and delivery troubleshooting**. For **internal logging, error analysis, and audit trails, you can sync all data points**.
+You can pick which data points to sync based on what you're trying to do. Most teams start with **Messages** (analytics and delivery troubleshooting) and add **Workflow Executions** and **Requests** when they need to debug end-to-end. Each data point maps to its own table in your warehouse or query engine.
 
 ### Data points
 
@@ -43,6 +36,8 @@ Most users sync **Messages for analytics and delivery troubleshooting**. For **i
 | **Messages** | Delivery status, engagement, vendor info, failures | Analytics, delivery troubleshooting |
 | **Workflow Executions** | Step-by-step workflow logs | Debugging workflow level errors or computations like user preferences |
 | **Requests** | API payloads and their responses | API debugging, Audit trails, Workflow Trigger level errors |
+
+You'll choose which data points to export when you create the connector—open the SuprSend dashboard at [app.suprsend.com](https://app.suprsend.com) and go to **Connectors** → **Add connector** → **Amazon S3 v2.0** to see the selection panel:
 
 <Frame>
   <img src="/images/s3v2-types.png" alt="Data Points Parameter on SuprSend Platform" />
@@ -56,55 +51,60 @@ Most users sync **Messages for analytics and delivery troubleshooting**. For **i
 | Messages | Delivery failures |
 
 
-### Table Schema
+### Table schema
+
+Columns and types below match the Parquet files SuprSend writes to S3. Several semantically-typed fields (JSON, boolean, integer, timestamp) are stored as `string` in Parquet—they're called out in the description so you can cast them in your queries.
 
 <Tabs>
 <Tab title="Requests">
 
 | Column name | Description | Datatype |
 |------------|-------------|----------|
+| workspace_key | SuprSend workspace identifier | string |
+| created_at | Time when the request was received by SuprSend (UTC) | timestamp |
+| updated_at | Time when this entry was last updated | timestamp |
 | api_type | Entity type for the API call | string |
 | api_name | Workflow, event, or broadcast name passed in the API call | string |
-| distinct_id_list | List of user `distinct_id` values or object type/id the request was sent for | array |
+| wf_trigger_type | Workflow trigger type | string |
+| distinct_id_list | List of user `distinct_id` values, or `object_type/id` for object recipients | `array<string>` |
 | actor | Actor passed in the event or workflow API request | string |
 | tenant_id | Tenant ID for which the API request was sent | string |
-| payload | Input payload passed in the trigger, including API call details | json |
-| response | HTTP API response | json |
-| metadata | SDK, machine, and location information for the request | json |
-| errors | Request-level errors with message and severity | array(json) |
-| executions | Workflow or broadcast execution IDs and slugs triggered by this API call. Execution IDs can be used to link with the workflow executions table | array(json) |
+| payload | Input payload passed in the trigger, including API call details (JSON serialized as string) | string |
+| response | HTTP API response (JSON serialized as string) | string |
+| metadata | SDK, machine, and location information for the request (JSON serialized as string) | string |
+| errors | Request-level errors. Each element has `error_code`, `error_description`, `error_type`, `severity`, `workflow_slug` | `array<struct>` |
+| executions | Workflow or broadcast executions triggered by this API call. Each element has `distinct_id`, `exec_id`, `workflow_slug`. `exec_id` joins to `workflow_executions.execution_id` | `array<struct>` |
 | idempotency_key | Idempotency key passed in the API request. A UUID is generated if not provided | string |
-| created_at | Time when the request was received by SuprSend (UTC) | datetime |
-| updated_at | Time when this entry was last updated | datetime |
 | status | Status of the API request | string |
 
 **status** can have these values:
 - `completed`: request is successfully processed.
-- `failure`: request failed to process due to some error
-- `partial_failure`: request has been partially processed with some failure or has an acceptable warning (like workflow conditions evaluated to false)*
+- `failure`: request failed to process due to some error.
+- `partial_failure`: request has been partially processed with some failure or has an acceptable warning (like workflow conditions evaluated to false).
 </Tab>
 
 <Tab title="Workflow Executions">
+
 | Column name | Description | Datatype |
 |------------|-------------|----------|
+| workspace_key | SuprSend workspace identifier | string |
+| created_at | Time when the workflow execution started | timestamp |
+| updated_at | Time when the workflow step log was last updated | timestamp |
 | execution_id | Unique identifier for a workflow execution | string |
 | recipient_distinct_id | User `distinct_id`; for objects, `object_type/id` | string |
 | tenant_id | Unique identifier of the tenant | string |
 | idempotency_key | Idempotency key passed in the API request. A UUID is generated if not provided | string |
-| parent_object | Parent `object_type/id` when the workflow runs for subscribers | string |
 | parent_object_execution_id | Execution ID of the parent object when triggered on an object | string |
+| parent_object | Parent `object_type/id` when the workflow runs for subscribers | string |
 | workflow_slug | Unique slug of the workflow | string |
 | workflow_version | Version of the workflow | string |
-| created_at | Time when the workflow execution started | datetime |
-| updated_at | Time when the workflow step log was last updated | datetime |
 | node_id | Unique identifier of the node | string |
 | node_name | Name of the node | string |
 | node_type | Type of the node | string |
 | execution_stage | Current execution stage of the node | string |
-| message | Short description of the event or error at this stage | string |
 | status | Log status of the step (`error`, `warning`, `info`) | string |
-| properties | Additional input or output data for the node execution | json |
-
+| message | Short description of the event or error at this stage | string |
+| properties | Additional input or output data for the node execution (JSON serialized as string) | string |
 
 </Tab>
 
@@ -112,8 +112,11 @@ Most users sync **Messages for analytics and delivery troubleshooting**. For **i
 
 | Column name | Description | Datatype |
 |------------|-------------|----------|
-| wf_execution_id | Unique identifier for a workflow execution | string |
-| broadcast_execution_id | Unique identifier for a broadcast execution | string |
+| workspace_key | SuprSend workspace identifier | string |
+| created_at | Time when this entry was created | timestamp |
+| updated_at | Time when the message status was last updated | timestamp |
+| wf_execution_id | Workflow execution this message belongs to. Joins to `workflow_executions.execution_id` | string |
+| broadcast_execution_id | Broadcast execution this message belongs to | string |
 | message_id | Message identifier; present only when there is no execution error | string |
 | recipient_distinct_id | User `distinct_id`; for objects, `object_type/id` | string |
 | tenant_id | Unique identifier of the tenant | string |
@@ -123,31 +126,29 @@ Most users sync **Messages for analytics and delivery troubleshooting**. For **i
 | workflow_slug | Unique slug of the workflow | string |
 | template_name | Name of the template group | string |
 | template_slug | Unique slug of the template | string |
-| status | Delivery status of the message | string |
-| created_at | Time when this entry was created | datetime |
-| updated_at | Time when the message status was last updated | datetime |
+| message_status | Delivery status of the message | string |
+| message_triggered_at | Timestamp when SuprSend sent the message request to the vendor | timestamp |
+| message_delivered_at | Timestamp when the vendor reported delivery | timestamp |
+| message_seen_at | Timestamp when the message was seen by the user | timestamp |
+| message_clicked_at | Timestamp when the message was clicked by the user | timestamp |
 | node_id | Unique identifier of the node | string |
 | node_name | Name of the node | string |
 | node_type | Type of the node | string |
-| execution_failure_reason | Workflow execution–level failure details with severity | json |
+| execution_failure_reason | Workflow-execution-level failure details with severity (JSON serialized as string) | string |
 | delivery_failure_reason | Failure reason returned by the vendor | string |
-| triggered_at | Timestamp when SuprSend sent the message request to the vendor | datetime |
-| delivered_at | Timestamp when the vendor reported delivery | datetime |
-| seen_at | Timestamp when the message was seen by the user | datetime |
-| clicked_at | Timestamp when the message was clicked by the user | datetime |
-| dismissed_at | Timestamp when the message was dismissed by the user | datetime |
-| vendor_ack_id | Vendor-generated identifier for this request | string |
-| vendor_fallback_applicable | Indicates whether vendor fallback was enabled | boolean |
-| vendor_fallback_level | Order in which this vendor was used during fallback (starts at 0) | integer |
-| vendor_name | Vendor nickname configured in SuprSend | string |
-| vendor_name_slug | Vendor identifier combining vendor type and channel | string |
-| is_smart | Indicates if the node used smart channel routing | boolean |
+| note | Additional note attached to the message | string |
+| message_id_by_vendor | Vendor-generated identifier for this message | string |
+| vendor_fallback_applicable | Whether vendor fallback was enabled (`true` / `false` as string) | string |
+| vendor_fallback_level | Order in which this vendor was used during fallback, starting at `0` (integer as string) | string |
+| vendor_nickname | Vendor nickname configured in SuprSend | string |
+| vendor_slug | Vendor identifier combining vendor type and channel | string |
+| is_smart | Whether the node used smart channel routing (`true` / `false` as string) | string |
 | success_metric | Success metric defined for smart channel routing | string |
-| success_achieved_at | Timestamp when the success metric was achieved | datetime |
-| wait_time_in_seconds | Wait time between channels for smart routing | integer |
+| success_achieved_at | Timestamp when the success metric was achieved (ISO timestamp as string) | string |
+| wait_time_in_seconds | Wait time between channels for smart routing, in seconds (integer as string) | string |
 | channel_slug | Communication channel | string |
-| channel_info | Channel-specific value (for example, email address) | string |
-| webhook_data | Request and response payload for webhook nodes | json |
+| channel_value | Channel-specific value (for example, email address) | string |
+| webhook_data | Request and response payload for webhook nodes (JSON serialized as string) | string |
 
 </Tab>
 
@@ -156,12 +157,12 @@ Most users sync **Messages for analytics and delivery troubleshooting**. For **i
 
 ### Linking different data points
 
-These data points are linked, allowing you to trace a notification from the initial API request to final delivery. The idempotency key is the common identifier across all tables and can be used to follow a single request end to end. Since the idempotency key is provided in the API request, you can also store it in your system to correlate SuprSend processing with your internal logs.
+These data points are linked, so you can trace a notification from the initial API request all the way to final delivery. The `idempotency_key` is shared across all three tables and is the easiest way to follow a single request end to end—it's also the value you can pass in your API call and store on your side to correlate SuprSend logs with your internal ones.
 
 ```mermaid
 graph LR
-    A[Requests] -->|execution_id| B[Workflow Executions]
-    B -->|wf_execution_id| C[Messages]
+    A[Requests] -->|executions[].exec_id → execution_id| B[Workflow Executions]
+    B -->|execution_id → wf_execution_id| C[Messages]
     A -->|idempotency_key| C
     
     style A fill:#60a5fa,stroke:#93c5fd,color:#000000
@@ -171,9 +172,63 @@ graph LR
 
 | From → To | Join on |
 |-----------|---------|
-| Requests → Workflow Executions | `execution_id` |
-| Workflow Executions → Messages | `wf_execution_id` |
-| Requests → Messages (shortcut) | `idempotency_key` |
+| Requests → Workflow Executions | `UNNEST(requests.executions).exec_id = workflow_executions.execution_id` |
+| Workflow Executions → Messages | `workflow_executions.execution_id = messages.wf_execution_id` |
+| Requests → Messages (shortcut) | `requests.idempotency_key = messages.idempotency_key` |
+
+
+## Compression and path layout
+
+You can configure how Parquet files are written when you add or edit the connector. The defaults work for almost every use case—change them only if you have a specific need.
+
+<Note>
+**Connectors created before 21 May 2026** still use the previous defaults—**`lz4` compression** and the **`shared` path layout**. New connectors default to `snappy` + `per_type`. Changing either setting on an existing connector only affects files written **after** the change; everything already in your bucket keeps its original codec and folder.
+
+If you're on the old defaults and want to switch, write to [support@suprsend.com](mailto:support@suprsend.com)—we'll help you migrate and rewrite the historical files if you need them in the new layout.
+</Note>
+
+### Compression
+
+Parquet files are written with **`snappy`** by default, which works well for almost every query engine and warehouse. You can switch the codec to `lz4`, `gzip`, `zstd`, `brotli`, or `none` if you have a specific need.
+
+<Warning>
+Don't use `lz4` if you plan to query the data with Amazon Athena—Athena can't read `lz4`-compressed Parquet reliably (a known Athena limitation, not specific to SuprSend).
+</Warning>
+
+### Path layout
+
+Two layouts are available for how files are organized inside your bucket. Both use Hive-style date partitions (`year=YYYY/month=MM/day=DD/hour=HH`).
+
+<Tabs>
+<Tab title="per_type (default)">
+
+Each data point gets its own top-level folder, then date-partitioned subfolders:
+
+```
+your-bucket/
+├── messages/year=2025/month=01/day=15/hour=14/messages.parquet
+├── workflow_executions/year=2025/month=01/day=15/hour=14/workflow_executions.parquet
+└── requests/year=2025/month=01/day=15/hour=14/requests.parquet
+```
+
+**Recommended for every query engine and warehouse.** Each data point lives in its own prefix, so tables, schemas, and IAM scopes stay cleanly separated—a one-to-one mapping between table and folder. **Required if you're using Amazon Athena**—see [Query with Athena](/docs/athena_s3_query).
+
+</Tab>
+<Tab title="shared">
+
+All data points share the same date-partitioned path, distinguished only by file name:
+
+```
+your-bucket/
+├── year=2025/month=01/day=15/hour=14/messages.parquet
+├── year=2025/month=01/day=15/hour=14/workflow_executions.parquet
+└── year=2025/month=01/day=15/hour=14/requests.parquet
+```
+
+Works with BigQuery and DuckDB if you already consume data from a single date-partitioned prefix. **Not compatible with Amazon Athena.**
+
+</Tab>
+</Tabs>
 
 
 ## Setup
@@ -284,7 +339,7 @@ Now configure the trust relationship. Generate an External ID at [uuidgenerator.
 
 ### Step 4: Connect in SuprSend
 
-Go to **Settings** → **Connectors** → **Amazon S3 v2.0** → **Add Connector**
+In the SuprSend dashboard ([app.suprsend.com](https://app.suprsend.com)), go to **Connectors** → **Add connector** → **Amazon S3 v2.0**.
 
 <Tabs>
 <Tab title="IAM Role">
@@ -307,40 +362,49 @@ Enter your AWS credentials, select which data points to export, then **Save** an
 
 ### Step 5: Verify it's working
 
-Give it about 10 minutes, then check your S3 bucket. You should see folders like `year=2025/month=01/...` appearing.
+Give it about 10 minutes, then check your S3 bucket. With the default `per_type` layout, you should see one folder per data point you enabled (`messages/`, `workflow_executions/`, `requests/`), each containing hourly partitions like `year=2025/month=01/day=15/hour=14/...`.
 
 <Warning>
 Nothing showing up? Jump to [FAQs](#faqs) for troubleshooting steps.
 </Warning>
+
+### Step 6: Query the data with Athena (optional)
+
+If you want to run SQL on the exported data, [Amazon Athena](https://docs.aws.amazon.com/athena/latest/ug/what-is.html) reads the Parquet files in place—no warehouse to provision, no ingestion pipeline. The flow is:
+
+1. **Set the Athena query result location** in the same region as your S3 bucket.
+2. **Create a database**, e.g., `suprsend_db`.
+3. **Register one external table per data point** (`ss_requests`, `ss_workflow_executions`, `ss_messages`) using partition projection on `year/month/day/hour`, so new hourly partitions show up automatically.
+4. **Query**, always filtering on the partition columns to keep cost down.
+
+For the full DDL, partition-projection settings, and example queries (including a join that traces a single request across all three tables), follow the [Query with Athena](/docs/athena_s3_query) guide.
 
 ---
 
 ## Best practices
 
 <AccordionGroup>
-<Accordion title="Security">
+<Accordion title="Security & access">
 
-- Use IAM Role in production—no keys to manage
-- Never commit credentials to git
-- Keep your bucket private with encryption enabled (SSE-S3 or SSE-KMS)
-- Block all public access to your bucket
-
-</Accordion>
-
-<Accordion title="Managing roles & permissions">
-
-- **Use IAM Role for production**—credentials rotate automatically, no secrets to manage
-- **Rotate IAM User keys every 90 days**—required for security compliance
-- **Use External ID for IAM Roles**—prevents "confused deputy" attacks
-- **Assign policies to groups, not users**—simplifies permission management
+- **Use an IAM Role in production**—credentials rotate automatically, with no long-lived secrets to manage.
+- **Use an External ID on the role's trust policy** to prevent "confused deputy" attacks.
+- If you must use an IAM User, **rotate the access keys every 90 days** and never commit them to git.
+- **Assign policies to IAM groups rather than individual users** to keep permissions easy to manage.
+- **Keep the bucket private**: block all public access and enable encryption (SSE-S3 or SSE-KMS).
 
 </Accordion>
 
-<Accordion title="Data syncing & querying">
+<Accordion title="Querying efficiently">
 
-- **Sync only what you need**—for analytics, Messages is often enough. Add Workflow Executions and Requests for debugging.
-- **Use `updated_at` for incremental queries**—`updated_at` tells you when a given row was last updated. You can filter by this field instead of scanning all data when you just need to recently updated data, especially while fetching logs.
-- **Clean up old data regularly**— we always append new data. So, your files can accumulate over time. It's better to clean up old data regularly to avoid unnecessary storage costs.
+- **Only sync the data points you need.** Messages alone covers analytics and delivery troubleshooting; add Workflow Executions and Requests when you need to debug end-to-end.
+- **Filter on the partition columns first.** Engines like Athena scan only the matching `year`/`month`/`day`/`hour` folders, which keeps queries fast and cheap.
+- **Use `updated_at` for incremental jobs.** Pulling only rows where `updated_at` is newer than your last checkpoint avoids re-scanning history.
+
+</Accordion>
+
+<Accordion title="Storage hygiene">
+
+- Files accumulate over time. Set up an S3 Lifecycle rule to transition or expire old partitions if you don't need them indefinitely.
 
 </Accordion>
 </AccordionGroup>
@@ -354,19 +418,21 @@ Nothing showing up? Jump to [FAQs](#faqs) for troubleshooting steps.
 
 Work through this checklist:
 
-1. **Wait 10 minutes**—first sync takes time
-2. **Check bucket name**—must match exactly, case-sensitive
-3. **Check region**—must match in both AWS and SuprSend
-4. **Check IAM**—Check if the Role ARN, Access Key and External ID are correct.
-5. **Check policy**- See if the policy has these actions: `"Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject"]` assigned to the right bucket.
+1. **Wait 10 minutes.** The first sync takes time.
+2. **Bucket name** matches exactly in AWS and SuprSend (case-sensitive).
+3. **Region** matches in both AWS and SuprSend.
+4. **Credentials** are right—Role ARN + External ID, or Access Key + Secret.
+5. **Policy** grants `s3:PutObject`, `s3:ListBucket`, and `s3:GetObject` on the correct bucket ARNs.
 
 </Accordion>
 
 <Accordion title="How do I know it's working?">
-It should work if the AWS setup is correct and in  SuprSend → **Settings** → **Connectors** → **Amazon S3 v2.0**, you see:
-- Sync toggle is ON
-- Status shows "Active"
-- At least one dataset selected
+
+In the SuprSend dashboard, open **Connectors** → **Amazon S3 v2.0**. You should see:
+
+- Sync toggle ON
+- Status: **Active**
+- At least one data point selected
 
 </Accordion>
 
@@ -381,22 +447,16 @@ It should work if the AWS setup is correct and in  SuprSend → **Settings** →
 
 </Accordion>
 
-<Accordion title="How does backfilling work?">
+<Accordion title="Can I change data points later, and how does backfilling work?">
+
+Yes—you can add or remove data points at any time. Here's how each action behaves:
 
 | What you did | What happens |
 |--------------|--------------|
-| Paused then resumed | Backfills everything from the pause |
-| Added a new dataset | Starts fresh, historical data will not be backfilled |
-| Re-enabled a dataset | Backfills from when it was disabled |
-
-</Accordion>
-
-<Accordion title="Can I change data points later?">
-
-Absolutely:
-- **Add one**: Starts exporting going forward
-- **Remove one**: Stops syncing, data stays in S3
-- **Re-enable**: Backfills automatically
+| Paused then resumed the connector | Backfills everything from the pause window |
+| Added a brand-new data point | Starts exporting going forward; no historical backfill |
+| Removed a data point | Sync stops for it; data already in S3 stays there |
+| Re-enabled a previously enabled data point | Backfills from when it was disabled |
 
 </Accordion>
 </AccordionGroup>

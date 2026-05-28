@@ -1,0 +1,290 @@
+---
+title: "Query with Athena"
+description: "Run SQL on your SuprSend logs in S3 — no warehouse, no ETL. Set up the database, register external tables, and run your first query."
+---
+
+[Amazon Athena](https://docs.aws.amazon.com/athena/latest/ug/what-is.html) reads Parquet files directly from S3 and bills per terabyte scanned, so it's a fast way to explore the data the [Amazon S3 v2.0 connector](/docs/amazon_s3_v2) writes—no warehouse to provision, no ingestion pipeline to maintain.
+
+By the end of this guide you'll have a database named `suprsend_db` with three tables (`ss_requests`, `ss_workflow_executions`, `ss_messages`), and you'll have run your first query.
+
+---
+
+## Prerequisites
+
+You'll need:
+
+- The [S3 v2.0 connector](/docs/amazon_s3_v2#setup) running and writing Parquet files to your bucket.
+- Access to the AWS account that owns the bucket, with permission to use Athena and read the bucket.
+- An S3 location for Athena to store query results (a separate prefix or a different bucket).
+
+Your connector also needs two specific settings—both are defaults for new connectors:
+
+- **Path layout: `per_type`.** The DDL in this guide creates a separate external table for each data point, with each one pointing at its own S3 prefix (`<bucket>/workflow_executions/`, `.../requests/`, `.../messages/`). That folder structure exists only with `per_type`.
+- **Compression: any codec except `lz4`.** Athena can't reliably read `lz4`-encoded Parquet—this is a known Athena limitation, not something specific to SuprSend. `snappy` is the default compression which works well with Athena.
+
+You can review or change either setting in [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout).
+
+<Warning>
+**Connectors enabled before 21 May 2026** were on `lz4` compression and `shared` path layout which had issues with Athena connector setup. So, we recommend changing your compression to `snappy` and path layout to `per_type` which works very well with Athena.
+
+When you change the setting, the new setting will only apply to files written **after** the switch. In order to sync the older data, you can reach out to suppport@suprsend.com and we can run one time sync of older data in your S3 bucket.
+</Warning>
+
+---
+
+## 1. Set the Athena query result location
+
+Open the [Athena console](https://console.aws.amazon.com/athena/) in the same region as your S3 bucket. The first time you use Athena in a region you have to set a result location:
+
+1. Go to **Settings** → **Manage**.
+2. Set **Location of query result** to a path you control, for example `s3://YOUR_BUCKET_NAME/athena-results/`.
+3. Save.
+
+---
+
+## 2. Create the database
+
+In the query editor, run:
+
+```sql
+CREATE DATABASE IF NOT EXISTS suprsend_db;
+```
+
+The rest of the guide uses `suprsend_db`. If you pick a different name, update the `CREATE EXTERNAL TABLE` statements below to match.
+
+---
+
+## 3. Create the external tables
+
+Run each statement to register one external table per data point. They use [Athena partition projection](https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html) on `year/month/day/hour`, so new hourly partitions are picked up automatically—you don't need `MSCK REPAIR TABLE` or a Glue Crawler.
+
+Replace `YOUR_BUCKET_NAME` in `LOCATION` and `storage.location.template` with your bucket. If your connector writes under a path prefix (for example `staging/`), include it before the data-point folder—`s3://YOUR_BUCKET_NAME/staging/workflow_executions/`.
+
+<Tabs>
+<Tab title="Workflow executions">
+
+```sql
+CREATE EXTERNAL TABLE suprsend_db.ss_workflow_executions (
+  workspace_key                 string,
+  created_at                    timestamp,
+  updated_at                    timestamp,
+  execution_id                  string,
+  recipient_distinct_id         string,
+  tenant_id                     string,
+  idempotency_key               string,
+  parent_object_execution_id    string,
+  parent_object                 string,
+  workflow_slug                 string,
+  workflow_version              string,
+  node_id                       string,
+  node_name                     string,
+  node_type                     string,
+  execution_stage               string,
+  status                        string,
+  message                       string,
+  properties                    string
+)
+PARTITIONED BY (
+  year  string,
+  month string,
+  day   string,
+  hour  string
+)
+STORED AS PARQUET
+LOCATION 's3://YOUR_BUCKET_NAME/workflow_executions/'
+TBLPROPERTIES (
+  'projection.enabled'         = 'true',
+  'projection.year.type'       = 'integer',
+  'projection.year.range'      = '2022,2030',
+  'projection.month.type'      = 'integer',
+  'projection.month.range'     = '1,12',
+  'projection.day.type'        = 'integer',
+  'projection.day.range'       = '1,31',
+  'projection.hour.type'       = 'integer',
+  'projection.hour.range'      = '0,23',
+  'storage.location.template'  = 's3://YOUR_BUCKET_NAME/workflow_executions/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+);
+```
+
+</Tab>
+
+<Tab title="Requests">
+
+```sql
+CREATE EXTERNAL TABLE suprsend_db.ss_requests (
+  workspace_key       string,
+  created_at          timestamp,
+  updated_at          timestamp,
+  api_type            string,
+  api_name            string,
+  wf_trigger_type     string,
+  distinct_id_list    array<string>,
+  actor               string,
+  tenant_id           string,
+  payload             string,
+  response            string,
+  metadata            string,
+  errors              array<struct<error_code:string,error_description:string,error_type:string,severity:string,workflow_slug:string>>,
+  executions          array<struct<distinct_id:string,exec_id:string,workflow_slug:string>>,
+  idempotency_key     string,
+  status              string
+)
+PARTITIONED BY (
+  year  string,
+  month string,
+  day   string,
+  hour  string
+)
+STORED AS PARQUET
+LOCATION 's3://YOUR_BUCKET_NAME/requests/'
+TBLPROPERTIES (
+  'projection.enabled'         = 'true',
+  'projection.year.type'       = 'integer',
+  'projection.year.range'      = '2022,2030',
+  'projection.month.type'      = 'integer',
+  'projection.month.range'     = '1,12',
+  'projection.day.type'        = 'integer',
+  'projection.day.range'       = '1,31',
+  'projection.hour.type'       = 'integer',
+  'projection.hour.range'      = '0,23',
+  'storage.location.template'  = 's3://YOUR_BUCKET_NAME/requests/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+);
+```
+
+</Tab>
+
+<Tab title="Messages">
+
+```sql
+CREATE EXTERNAL TABLE suprsend_db.ss_messages (
+  workspace_key                 string,
+  created_at                    timestamp,
+  updated_at                    timestamp,
+  wf_execution_id               string,
+  broadcast_execution_id        string,
+  message_id                    string,
+  recipient_distinct_id         string,
+  tenant_id                     string,
+  idempotency_key               string,
+  parent_object                 string,
+  parent_object_execution_id    string,
+  workflow_slug                 string,
+  template_name                 string,
+  template_slug                 string,
+  message_status                string,
+  message_triggered_at          timestamp,
+  message_delivered_at          timestamp,
+  message_seen_at               timestamp,
+  message_clicked_at            timestamp,
+  node_id                       string,
+  node_name                     string,
+  node_type                     string,
+  execution_failure_reason      string,
+  delivery_failure_reason       string,
+  note                          string,
+  message_id_by_vendor          string,
+  vendor_fallback_applicable    string,
+  vendor_fallback_level         string,
+  vendor_nickname               string,
+  vendor_slug                   string,
+  is_smart                      string,
+  success_metric                string,
+  success_achieved_at           string,
+  wait_time_in_seconds          string,
+  channel_slug                  string,
+  channel_value                 string,
+  webhook_data                  string
+)
+PARTITIONED BY (
+  year  string,
+  month string,
+  day   string,
+  hour  string
+)
+STORED AS PARQUET
+LOCATION 's3://YOUR_BUCKET_NAME/messages/'
+TBLPROPERTIES (
+  'projection.enabled'         = 'true',
+  'projection.year.type'       = 'integer',
+  'projection.year.range'      = '2022,2030',
+  'projection.month.type'      = 'integer',
+  'projection.month.range'     = '1,12',
+  'projection.day.type'        = 'integer',
+  'projection.day.range'       = '1,31',
+  'projection.hour.type'       = 'integer',
+  'projection.hour.range'      = '0,23',
+  'storage.location.template'  = 's3://YOUR_BUCKET_NAME/messages/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+);
+```
+
+</Tab>
+</Tabs>
+
+<Note>
+`projection.year.range` is set to `2022,2030`. Widen the upper bound if you'll be querying data beyond 2030.
+</Note>
+
+For column meanings, see the [table schemas](/docs/amazon_s3_v2#table-schema) in the S3 v2.0 doc.
+
+---
+
+## 4. Run your first query
+
+You're ready to query. The cardinal rule with Athena is to always filter on the partition columns (`year`, `month`, `day`, `hour`) where you can—Athena bills per TB scanned, so partition pruning is the main way to keep costs predictable.
+
+```sql
+SELECT *
+FROM suprsend_db.ss_workflow_executions
+WHERE year = '2026'
+LIMIT 100;
+```
+
+Trace a single request across all three tables using `idempotency_key`, which is shared across Requests, Workflow Executions, and Messages:
+
+```sql
+SELECT
+  r.idempotency_key,
+  w.execution_id,
+  m.message_id,
+  m.message_status
+FROM suprsend_db.ss_requests       AS r
+LEFT JOIN suprsend_db.ss_workflow_executions AS w
+  ON w.idempotency_key = r.idempotency_key
+LEFT JOIN suprsend_db.ss_messages  AS m
+  ON m.wf_execution_id = w.execution_id
+WHERE r.year = '2026'
+  AND r.idempotency_key = 'YOUR_IDEMPOTENCY_KEY';
+```
+
+For the canonical relational join (Requests → Workflow Executions via `UNNEST(requests.executions).exec_id = workflow_executions.execution_id`), see the [linking columns](/docs/amazon_s3_v2#linking-different-data-points) reference.
+
+---
+
+## Points to note
+
+<AccordionGroup>
+<Accordion title="Working with string-typed columns">
+
+Some columns are stored as `string` in Parquet even though they hold JSON, booleans, integers, or timestamps. Cast them explicitly:
+
+- **JSON** (`payload`, `response`, `metadata`, `properties`, `webhook_data`, `execution_failure_reason`) → `json_extract(column, '$.field')`
+- **Integer** (`vendor_fallback_level`, `wait_time_in_seconds`) → `CAST(column AS BIGINT)`
+- **Boolean** (`vendor_fallback_applicable`, `is_smart`) → compare against `'true'` / `'false'`
+- **Timestamp** (`success_achieved_at`) → `from_iso8601_timestamp(column)` or `date_parse(column, '<format>')`
+
+Full column list in the [table schemas](/docs/amazon_s3_v2#table-schema).
+
+</Accordion>
+
+<Accordion title="Data freshness">
+
+The connector rewrites hourly Parquet files when upstream data changes. The next Athena query picks up the new state automatically — no `MSCK REPAIR TABLE` or Glue Crawler refresh needed.
+
+</Accordion>
+
+<Accordion title="Changing the connector's S3 path">
+
+If you point the connector at a new bucket or prefix, existing tables stop returning new data. Drop and recreate each table with the updated `LOCATION` and `storage.location.template`.
+
+</Accordion>
+</AccordionGroup>
