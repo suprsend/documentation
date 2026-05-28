@@ -17,17 +17,17 @@ You'll need:
 - Access to the AWS account that owns the bucket, with permission to use Athena and read the bucket.
 - An S3 location for Athena to store query results (a separate prefix or a different bucket).
 
-Your connector must be configured with:
+Your connector also needs two specific settings—both are defaults for new connectors:
 
-- **Path layout: `per_type`** — the tables in this guide point at one S3 prefix per data point (`<bucket>/workflow_executions/`, `.../requests/`, `.../messages/`), which only exists with `per_type`. It's the default for new connectors.
-- **Compression: anything other than `lz4`** — Athena can't read `lz4`-compressed Parquet reliably (a generic Athena limitation, not specific to SuprSend). `snappy` (the default), `gzip`, `zstd`, `brotli`, and `none` all work.
+- **Path layout: `per_type`.** The DDL in this guide creates a separate external table for each data point, with each one pointing at its own S3 prefix (`<bucket>/workflow_executions/`, `.../requests/`, `.../messages/`). That folder structure exists only with `per_type`.
+- **Compression: any codec except `lz4`.** Athena can't reliably read `lz4`-encoded Parquet—this is a known Athena limitation, not something specific to SuprSend. `snappy` (the default), `gzip`, `zstd`, `brotli`, and `none` all work.
 
-You can view or change either setting from [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout).
+You can review or change either setting in [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout).
 
 <Warning>
-**On a connector created before these options existed?** It's running on `lz4` + `shared`, which this guide doesn't support. Edit the connector and switch to a non-`lz4` codec and `per_type`.
+**Connectors created before 27 May 2026** run on `lz4` + `shared` by default, and neither setting is compatible with this guide. Open the connector, switch the codec to anything other than `lz4`, and set the path layout to `per_type`.
 
-The change applies only to files written **after** the switch—existing files keep their original codec and folder. For the historical data you can either scope queries to the post-switch date range using the `year`/`month`/`day`/`hour` filters, or contact support to rewrite the files.
+The new settings apply only to files written **after** the switch—everything already in your bucket keeps its original codec and folder. To work with the historical data, either scope queries to the post-switch date range using the `year`/`month`/`day`/`hour` filters, or contact support to rewrite the existing files.
 </Warning>
 
 ---
