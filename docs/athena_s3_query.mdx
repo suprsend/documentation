@@ -1,66 +1,67 @@
 ---
-title: "Query S3 export with Amazon Athena"
-description: "Set up Amazon Athena to query notification data synced to S3 by the Amazon S3 v2.0 connector."
+title: "Query S3 data with Amazon Athena"
+description: "Run SQL on your SuprSend logs in S3 — no warehouse, no ETL. Set up the database, register external tables, and run your first query."
 ---
 
-Amazon Athena lets you run SQL directly against the Parquet files that the [Amazon S3 v2.0 connector](/docs/amazon_s3_v2) writes to your bucket—no ETL, no separate warehouse. Athena reads the files in place and bills per TB scanned.
+[Amazon Athena](https://docs.aws.amazon.com/athena/latest/ug/what-is.html) reads Parquet files directly from S3 and bills per terabyte scanned, so it's a fast way to explore the data the [Amazon S3 v2.0 connector](/docs/amazon_s3_v2) writes—no warehouse to provision, no ingestion pipeline to maintain.
 
-This guide assumes the S3 v2.0 connector is already running and writing Parquet files to your bucket. If not, complete the [S3 v2.0 setup](/docs/amazon_s3_v2#setup) first.
+By the end of this guide you'll have a database named `suprsend_db` with three tables (`ss_requests`, `ss_workflow_executions`, `ss_messages`), and you'll have run your first query.
 
 ---
 
-## Before you start
+## Prerequisites
 
-To use the DDL in this guide, your S3 v2.0 connector must be configured with:
+You'll need:
 
-- **Path layout: `per_type`** — the tables below point at one S3 prefix per data point (`<bucket>/<prefix>/workflow_executions/`, `.../requests/`, `.../messages/`), which only exists with the `per_type` layout. This is the default for new connectors.
+- The [S3 v2.0 connector](/docs/amazon_s3_v2#setup) running and writing Parquet files to your bucket.
+- Access to the AWS account that owns the bucket, with permission to use Athena and read the bucket.
+- An S3 location for Athena to store query results (a separate prefix or a different bucket).
+
+Your connector must be configured with:
+
+- **Path layout: `per_type`** — the tables in this guide point at one S3 prefix per data point (`<bucket>/workflow_executions/`, `.../requests/`, `.../messages/`), which only exists with `per_type`. It's the default for new connectors.
 - **Compression: anything other than `lz4`** — Athena can't read `lz4`-compressed Parquet reliably (a generic Athena limitation, not specific to SuprSend). `snappy` (the default), `gzip`, `zstd`, `brotli`, and `none` all work.
 
-See [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout) to view or change these settings.
-
-You'll also need access to the AWS account that owns the bucket (with permission to use Athena and read the bucket), and an S3 location for Athena to store query results. For Athena fundamentals, see the [AWS Athena getting started guide](https://docs.aws.amazon.com/athena/latest/ug/getting-started.html).
+You can view or change either setting from [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout).
 
 <Warning>
-**Existing connectors default to `lz4` + `shared`** and need to be reconfigured before this setup will work. Edit your connector and switch compression to a non-`lz4` codec and path layout to `per_type`.
+**On a connector created before these options existed?** It's running on `lz4` + `shared`, which this guide doesn't support. Edit the connector and switch to a non-`lz4` codec and `per_type`.
 
-The switch only affects files written **after** the change—files already in your bucket keep their original codec and folder structure. For the historical data you have two options:
-
-- **Scope queries to the post-switch date range** using the `year`/`month`/`day`/`hour` partition filters. Older partitions will simply be empty in the new `per_type` folders.
-- **Rewrite or backfill the historical files** into the new layout/codec. Contact support if you need help with this.
+The change applies only to files written **after** the switch—existing files keep their original codec and folder. For the historical data you can either scope queries to the post-switch date range using the `year`/`month`/`day`/`hour` filters, or contact support to rewrite the files.
 </Warning>
 
 ---
 
-## Step 1: Set the Athena query result location
+## 1. Set the Athena query result location
 
-Open the [Athena console](https://console.aws.amazon.com/athena/) and pick the same region as your S3 bucket. The first time you use Athena in a region, you must set a query result location:
+Open the [Athena console](https://console.aws.amazon.com/athena/) in the same region as your S3 bucket. The first time you use Athena in a region you have to set a result location:
 
 1. Go to **Settings** → **Manage**.
-2. Set **Location of query result** to an S3 path you control, for example `s3://YOUR_BUCKET_NAME/athena-results/`.
+2. Set **Location of query result** to a path you control, for example `s3://YOUR_BUCKET_NAME/athena-results/`.
 3. Save.
 
 ---
 
-## Step 2: Create a database
+## 2. Create the database
 
-In the Athena query editor, run:
+In the query editor, run:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS suprsend_db;
 ```
 
-`suprsend_db` is used throughout the rest of this guide—rename it if you prefer a different database name (remember to update the table-creation statements below to match).
+The rest of the guide uses `suprsend_db`. If you pick a different name, update the `CREATE EXTERNAL TABLE` statements below to match.
 
 ---
 
-## Step 3: Create external tables
+## 3. Create the external tables
 
-Create one external table per data point you're syncing. Each table points at the corresponding folder in your bucket and uses [Athena partition projection](https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html) on `year/month/day/hour`, so you don't need to run `MSCK REPAIR TABLE` or a Glue Crawler—new hourly partitions are picked up automatically.
+Run each statement to register one external table per data point. They use [Athena partition projection](https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html) on `year/month/day/hour`, so new hourly partitions are picked up automatically—you don't need `MSCK REPAIR TABLE` or a Glue Crawler.
 
-Replace `s3://suprsend-parqvault-external-test/staging/` in the `LOCATION` and `storage.location.template` values with the actual S3 path the connector is writing to.
+Replace `YOUR_BUCKET_NAME` in `LOCATION` and `storage.location.template` with your bucket. If your connector writes under a path prefix (for example `staging/`), include it before the data-point folder—`s3://YOUR_BUCKET_NAME/staging/workflow_executions/`.
 
 <Tabs>
-<Tab title="Workflow Executions">
+<Tab title="Workflow executions">
 
 ```sql
 CREATE EXTERNAL TABLE suprsend_db.ss_workflow_executions (
@@ -90,7 +91,7 @@ PARTITIONED BY (
   hour  string
 )
 STORED AS PARQUET
-LOCATION 's3://suprsend-parqvault-external-test/staging/workflow_executions/'
+LOCATION 's3://YOUR_BUCKET_NAME/workflow_executions/'
 TBLPROPERTIES (
   'projection.enabled'         = 'true',
   'projection.year.type'       = 'integer',
@@ -101,7 +102,7 @@ TBLPROPERTIES (
   'projection.day.range'       = '1,31',
   'projection.hour.type'       = 'integer',
   'projection.hour.range'      = '0,23',
-  'storage.location.template'  = 's3://suprsend-parqvault-external-test/staging/workflow_executions/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+  'storage.location.template'  = 's3://YOUR_BUCKET_NAME/workflow_executions/year=${year}/month=${month}/day=${day}/hour=${hour}/'
 );
 ```
 
@@ -135,7 +136,7 @@ PARTITIONED BY (
   hour  string
 )
 STORED AS PARQUET
-LOCATION 's3://suprsend-parqvault-external-test/staging/requests/'
+LOCATION 's3://YOUR_BUCKET_NAME/requests/'
 TBLPROPERTIES (
   'projection.enabled'         = 'true',
   'projection.year.type'       = 'integer',
@@ -146,7 +147,7 @@ TBLPROPERTIES (
   'projection.day.range'       = '1,31',
   'projection.hour.type'       = 'integer',
   'projection.hour.range'      = '0,23',
-  'storage.location.template'  = 's3://suprsend-parqvault-external-test/staging/requests/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+  'storage.location.template'  = 's3://YOUR_BUCKET_NAME/requests/year=${year}/month=${month}/day=${day}/hour=${hour}/'
 );
 ```
 
@@ -201,23 +202,18 @@ PARTITIONED BY (
   hour  string
 )
 STORED AS PARQUET
-LOCATION 's3://suprsend-parqvault-external-test/staging/messages/'
+LOCATION 's3://YOUR_BUCKET_NAME/messages/'
 TBLPROPERTIES (
   'projection.enabled'         = 'true',
-
   'projection.year.type'       = 'integer',
   'projection.year.range'      = '2022,2030',
-
   'projection.month.type'      = 'integer',
   'projection.month.range'     = '1,12',
-
   'projection.day.type'        = 'integer',
   'projection.day.range'       = '1,31',
-
   'projection.hour.type'       = 'integer',
   'projection.hour.range'      = '0,23',
-
-  'storage.location.template'  = 's3://suprsend-parqvault-external-test/staging/messages/year=${year}/month=${month}/day=${day}/hour=${hour}/'
+  'storage.location.template'  = 's3://YOUR_BUCKET_NAME/messages/year=${year}/month=${month}/day=${day}/hour=${hour}/'
 );
 ```
 
@@ -225,25 +221,46 @@ TBLPROPERTIES (
 </Tabs>
 
 <Note>
-The `projection.year.range` is set to `2022,2030`. Widen the upper bound if you plan to query data beyond 2030.
+`projection.year.range` is set to `2022,2030`. Widen the upper bound if you'll be querying data beyond 2030.
 </Note>
+
+For column meanings, see the [table schemas](/docs/amazon_s3_v2#table-schema) in the S3 v2.0 doc.
 
 ---
 
-## Step 4: Run a query
+## 4. Run your first query
 
-Filter on the partition columns (`year`, `month`, `day`, `hour`) wherever possible—Athena will skip files outside the range and you'll pay less per query.
+You're ready to query. The cardinal rule with Athena is to always filter on the partition columns (`year`, `month`, `day`, `hour`) where you can—Athena bills per TB scanned, so partition pruning is the main way to keep costs predictable.
 
 ```sql
 SELECT *
 FROM suprsend_db.ss_workflow_executions
-WHERE year = '2026';
+WHERE year = '2026'
+LIMIT 100;
+```
+
+Trace a single request across all three tables using the [linking columns](/docs/amazon_s3_v2#linking-different-data-points):
+
+```sql
+SELECT
+  r.idempotency_key,
+  w.execution_id,
+  m.message_id,
+  m.message_status
+FROM suprsend_db.ss_requests       AS r
+LEFT JOIN suprsend_db.ss_workflow_executions AS w
+  ON w.idempotency_key = r.idempotency_key
+LEFT JOIN suprsend_db.ss_messages  AS m
+  ON m.wf_execution_id = w.execution_id
+WHERE r.year = '2026'
+  AND r.idempotency_key = 'YOUR_IDEMPOTENCY_KEY';
 ```
 
 ---
 
-## Notes
+## Tips
 
-- Athena charges per TB scanned. Always filter on `year`/`month`/`day`/`hour` and select only the columns you need.
-- Because the connector replaces hourly Parquet files when data changes, Athena automatically sees the latest state on the next query—no manual refresh needed.
-- If you change the connector's S3 path or prefix later, drop and recreate the tables with the new `LOCATION` and `storage.location.template`.
+- **Cost** — Athena charges per terabyte scanned. Always include partition filters and `SELECT` only the columns you actually need.
+- **Freshness** — The connector rewrites hourly Parquet files when data updates. The next Athena query sees the new state, no refresh step needed.
+- **Cast where you need typed values** — Several columns are stored as `string` even though they represent JSON, booleans, integers, or timestamps. Use `CAST(... AS BIGINT)`, `from_iso8601_timestamp(...)`, or `json_extract(...)` in your queries (see the [table schemas](/docs/amazon_s3_v2#table-schema) for which columns this applies to).
+- **Changed the S3 path?** If you reconfigure the connector to write to a different bucket or prefix, drop and recreate each table with the new `LOCATION` and `storage.location.template`.
