@@ -190,12 +190,12 @@ Changing these settings only affects **files written after the change**. Files a
 
 ### Compression
 
-Parquet files are compressed using the codec you select. The codec only affects how the file is encoded on disk; pick one your downstream query engine or warehouse supports.
+Parquet files are compressed using the codec you select. **`snappy` is the recommended default**—it's fast and broadly supported by query engines and warehouses. Other codecs are available if you have a specific need.
 
 | Option | Default | Notes |
 |--------|:-------:|-------|
 | `snappy` | ✅ | Fast compression and decompression; balanced choice for analytics workloads. |
-| `lz4` |  | Faster than Snappy, slightly larger files. **Not recommended if you plan to query with Amazon Athena**—Athena doesn't read lz4-compressed Parquet reliably. |
+| `lz4` |  | Faster than Snappy, slightly larger files. **Not compatible with Amazon Athena**—Athena can't read `lz4`-compressed Parquet reliably (a generic Athena limitation). |
 | `gzip` |  | Smaller files, slower to read and write. |
 | `zstd` |  | Strong compression ratio with read/write speeds comparable to gzip. |
 | `brotli` |  | Highest compression ratio in this list; slower to read. |
@@ -217,7 +217,7 @@ your-bucket/
 └── requests/year=2025/month=01/day=15/hour=14/requests.parquet
 ```
 
-Use this when you want each data point as a separate table in Athena, Glue, Spark, or BigQuery—each table points at its own prefix.
+**Recommended for every query engine and warehouse.** Each data point lives in its own prefix, so tables, schemas, and IAM scopes stay cleanly separated—a one-to-one mapping between table and folder. **Required if you're using Amazon Athena**—see [Query S3 export with Amazon Athena](/docs/athena_s3_query).
 
 </Tab>
 <Tab title="shared">
@@ -231,7 +231,7 @@ your-bucket/
 └── year=2025/month=01/day=15/hour=14/requests.parquet
 ```
 
-Use this if you already have a pipeline that consumes a single date-partitioned prefix.
+Works with BigQuery and DuckDB if you already consume data from a single date-partitioned prefix. **Not compatible with Amazon Athena.**
 
 </Tab>
 </Tabs>

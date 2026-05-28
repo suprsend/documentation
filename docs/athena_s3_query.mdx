@@ -7,36 +7,26 @@ Amazon Athena lets you run SQL directly against the Parquet files that the [Amaz
 
 This guide assumes the S3 v2.0 connector is already running and writing Parquet files to your bucket. If not, complete the [S3 v2.0 setup](/docs/amazon_s3_v2#setup) first.
 
-<Warning>
-**Existing connectors need to be reconfigured before Athena will work.** Connectors created before the compression and path-layout options were introduced default to **`lz4` compression** + **`shared` path layout**, and neither is compatible with the setup in this guide:
-
-- Athena can't read `lz4`-compressed Parquet reliably.
-- The DDL below assumes the `per_type` folder structure (`<bucket>/<prefix>/workflow_executions/…`), which the `shared` layout doesn't produce.
-
-Edit your connector and switch compression to `snappy` (default), `gzip`, `zstd`, `brotli`, or `none`, and set path layout to `per_type`.
-
-**The switch only affects files written after the change.** Existing files stay in their original location with their original codec. You have two options for the historical data:
-
-- **Scope your queries to the post-switch date range** using the `year`/`month`/`day`/`hour` partition filters. Older partitions will simply be empty in the new `per_type` folders.
-- **Rewrite or backfill the historical files** into the new layout/codec if you need them queryable. Contact support if you need help with this.
-</Warning>
-
 ---
 
 ## Before you start
 
-- An S3 bucket that the connector is already writing to.
-- The connector's **path layout** is set to `per_type` (the default). The DDL in this guide uses one S3 prefix per data point (`<bucket>/<prefix>/workflow_executions/`, `.../requests/`, `.../messages/`)—that structure only exists with `per_type`. See [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout) to verify your setting.
-- The connector's **compression** is set to anything **other than `lz4`** (e.g., the default `snappy`, or `gzip`/`zstd`/`brotli`/`none`). Athena doesn't read lz4-compressed Parquet reliably.
-- Access to the AWS account that owns the bucket, with permissions to use Athena and read from the bucket.
-- An S3 location for Athena to store query results (a separate prefix or bucket—Athena writes here every time you run a query).
+To use the DDL in this guide, your S3 v2.0 connector must be configured with:
 
-For Athena fundamentals, see the [AWS Athena getting started guide](https://docs.aws.amazon.com/athena/latest/ug/getting-started.html).
+- **Path layout: `per_type`** — the tables below point at one S3 prefix per data point (`<bucket>/<prefix>/workflow_executions/`, `.../requests/`, `.../messages/`), which only exists with the `per_type` layout. This is the default for new connectors.
+- **Compression: anything other than `lz4`** — Athena can't read `lz4`-compressed Parquet reliably (a generic Athena limitation, not specific to SuprSend). `snappy` (the default), `gzip`, `zstd`, `brotli`, and `none` all work.
+
+See [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout) to view or change these settings.
+
+You'll also need access to the AWS account that owns the bucket (with permission to use Athena and read the bucket), and an S3 location for Athena to store query results. For Athena fundamentals, see the [AWS Athena getting started guide](https://docs.aws.amazon.com/athena/latest/ug/getting-started.html).
 
 <Warning>
-**Path layout:** if your connector is configured with the `shared` path layout, the `LOCATION` and `storage.location.template` values below won't match where the files actually live. Either switch the connector to `per_type`, or adapt every `LOCATION` and `storage.location.template` to point at the shared prefix (and remember that all three tables will then read from the same folder, distinguished only by file name).
+**Existing connectors default to `lz4` + `shared`** and need to be reconfigured before this setup will work. Edit your connector and switch compression to a non-`lz4` codec and path layout to `per_type`.
 
-**Compression:** Athena does not handle `lz4`-compressed Parquet reliably. If your connector is set to `lz4`, switch it to `snappy` (default), `gzip`, `zstd`, `brotli`, or `none` before running these queries—existing lz4 files will need to be rewritten by the connector or excluded from the table.
+The switch only affects files written **after** the change—files already in your bucket keep their original codec and folder structure. For the historical data you have two options:
+
+- **Scope queries to the post-switch date range** using the `year`/`month`/`day`/`hour` partition filters. Older partitions will simply be empty in the new `per_type` folders.
+- **Rewrite or backfill the historical files** into the new layout/codec. Contact support if you need help with this.
 </Warning>
 
 ---
@@ -56,10 +46,10 @@ Open the [Athena console](https://console.aws.amazon.com/athena/) and pick the s
 In the Athena query editor, run:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS s3_connector_external_test_db;
+CREATE DATABASE IF NOT EXISTS suprsend_db;
 ```
 
-Rename `s3_connector_external_test_db` to whatever you'd like to use as the database name. The rest of this guide uses the same name.
+`suprsend_db` is used throughout the rest of this guide—rename it if you prefer a different database name (remember to update the table-creation statements below to match).
 
 ---
 
@@ -73,7 +63,7 @@ Replace `s3://suprsend-parqvault-external-test/staging/` in the `LOCATION` and `
 <Tab title="Workflow Executions">
 
 ```sql
-CREATE EXTERNAL TABLE s3_connector_external_test_db.ss_workflow_executions (
+CREATE EXTERNAL TABLE suprsend_db.ss_workflow_executions (
   workspace_key                 string,
   created_at                    timestamp,
   updated_at                    timestamp,
@@ -120,7 +110,7 @@ TBLPROPERTIES (
 <Tab title="Requests">
 
 ```sql
-CREATE EXTERNAL TABLE s3_connector_external_test_db.ss_requests (
+CREATE EXTERNAL TABLE suprsend_db.ss_requests (
   workspace_key       string,
   created_at          timestamp,
   updated_at          timestamp,
@@ -165,7 +155,7 @@ TBLPROPERTIES (
 <Tab title="Messages">
 
 ```sql
-CREATE EXTERNAL TABLE s3_connector_external_test_db.ss_messages (
+CREATE EXTERNAL TABLE suprsend_db.ss_messages (
   workspace_key                 string,
   created_at                    timestamp,
   updated_at                    timestamp,
@@ -246,7 +236,7 @@ Filter on the partition columns (`year`, `month`, `day`, `hour`) wherever possib
 
 ```sql
 SELECT *
-FROM s3_connector_external_test_db.ss_workflow_executions
+FROM suprsend_db.ss_workflow_executions
 WHERE year = '2026';
 ```
 
