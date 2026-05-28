@@ -20,14 +20,14 @@ You'll need:
 Your connector also needs two specific settings—both are defaults for new connectors:
 
 - **Path layout: `per_type`.** The DDL in this guide creates a separate external table for each data point, with each one pointing at its own S3 prefix (`<bucket>/workflow_executions/`, `.../requests/`, `.../messages/`). That folder structure exists only with `per_type`.
-- **Compression: any codec except `lz4`.** Athena can't reliably read `lz4`-encoded Parquet—this is a known Athena limitation, not something specific to SuprSend. `snappy` (the default), `gzip`, `zstd`, `brotli`, and `none` all work.
+- **Compression: any codec except `lz4`.** Athena can't reliably read `lz4`-encoded Parquet—this is a known Athena limitation, not something specific to SuprSend. `snappy` is the default compression which works well with Athena.
 
 You can review or change either setting in [Compression and path layout](/docs/amazon_s3_v2#compression-and-path-layout).
 
 <Warning>
-**Connectors created before 21 May 2026** run on `lz4` + `shared` by default, and neither setting is compatible with this guide. To switch, write to [support@suprsend.com](mailto:support@suprsend.com)—we'll help you change the codec to a non-`lz4` option and move the path layout to `per_type`.
+**Connectors enabled before 21 May 2026** were on `lz4` compression and `shared` path layout which had issues with Athena connector setup. So, we recommend changing your compression to `snappy` and path layout to `per_type` which works very well with Athena.
 
-The new settings apply only to files written **after** the switch—everything already in your bucket keeps its original codec and folder. To work with the historical data, either scope queries to the post-switch date range using the `year`/`month`/`day`/`hour` filters, or ask support to rewrite the existing files.
+When you change the setting, the new setting will only apply to files written **after** the switch. In order to sync the older data, you can reach out to suppport@suprsend.com and we can run one time sync of older data in your S3 bucket.
 </Warning>
 
 ---
@@ -260,33 +260,31 @@ For the canonical relational join (Requests → Workflow Executions via `UNNEST(
 
 ---
 
-## Best practices
+## Points to note
 
 <AccordionGroup>
 <Accordion title="Working with string-typed columns">
 
-Several columns are stored as `string` in Parquet even though they represent JSON, booleans, integers, or timestamps. Cast them explicitly in your queries:
+Some columns are stored as `string` in Parquet even though they hold JSON, booleans, integers, or timestamps. Cast them explicitly:
 
-- JSON columns (`payload`, `response`, `metadata`, `properties`, `webhook_data`, `execution_failure_reason`): `json_extract(column, '$.field')`.
-- Integer-as-string columns (`vendor_fallback_level`, `wait_time_in_seconds`): `CAST(column AS BIGINT)`.
-- Boolean-as-string columns (`vendor_fallback_applicable`, `is_smart`): compare against `'true'` / `'false'`.
-- Timestamp-as-string columns (`success_achieved_at`): parse with `from_iso8601_timestamp(column)` or `date_parse(column, '<format>')` depending on the format your data is written in.
+- **JSON** (`payload`, `response`, `metadata`, `properties`, `webhook_data`, `execution_failure_reason`) → `json_extract(column, '$.field')`
+- **Integer** (`vendor_fallback_level`, `wait_time_in_seconds`) → `CAST(column AS BIGINT)`
+- **Boolean** (`vendor_fallback_applicable`, `is_smart`) → compare against `'true'` / `'false'`
+- **Timestamp** (`success_achieved_at`) → `from_iso8601_timestamp(column)` or `date_parse(column, '<format>')`
 
-See the [table schemas](/docs/amazon_s3_v2#table-schema) for the full list of which columns this applies to.
+Full column list in the [table schemas](/docs/amazon_s3_v2#table-schema).
 
 </Accordion>
 
 <Accordion title="Data freshness">
 
-- The connector rewrites hourly Parquet files when data updates upstream.
-- The next Athena query sees the new state automatically—no refresh, no `MSCK REPAIR TABLE`, no Glue Crawler.
+The connector rewrites hourly Parquet files when upstream data changes. The next Athena query picks up the new state automatically — no `MSCK REPAIR TABLE` or Glue Crawler refresh needed.
 
 </Accordion>
 
 <Accordion title="Changing the connector's S3 path">
 
-- If you reconfigure the connector to write to a different bucket or prefix, the existing tables stop returning new data.
-- Drop and recreate each table with the updated `LOCATION` and `storage.location.template` to pick up the new path.
+If you point the connector at a new bucket or prefix, existing tables stop returning new data. Drop and recreate each table with the updated `LOCATION` and `storage.location.template`.
 
 </Accordion>
 </AccordionGroup>
