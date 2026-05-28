@@ -1,5 +1,5 @@
 ---
-title: "Query S3 data with Amazon Athena"
+title: "Query with Athena"
 description: "Run SQL on your SuprSend logs in S3 — no warehouse, no ETL. Set up the database, register external tables, and run your first query."
 ---
 
@@ -258,9 +258,41 @@ WHERE r.year = '2026'
 
 ---
 
-## Tips
+## Best practices
 
-- **Cost** — Athena charges per terabyte scanned. Always include partition filters and `SELECT` only the columns you actually need.
-- **Freshness** — The connector rewrites hourly Parquet files when data updates. The next Athena query sees the new state, no refresh step needed.
-- **Cast where you need typed values** — Several columns are stored as `string` even though they represent JSON, booleans, integers, or timestamps. Use `CAST(... AS BIGINT)`, `from_iso8601_timestamp(...)`, or `json_extract(...)` in your queries (see the [table schemas](/docs/amazon_s3_v2#table-schema) for which columns this applies to).
-- **Changed the S3 path?** If you reconfigure the connector to write to a different bucket or prefix, drop and recreate each table with the new `LOCATION` and `storage.location.template`.
+<AccordionGroup>
+<Accordion title="Keep query cost under control">
+
+- Always include partition filters (`year`, `month`, `day`, `hour`) in your `WHERE` clause—Athena scans only the matching folders.
+- `SELECT` only the columns you actually need; avoid `SELECT *` in production queries.
+- Athena bills per terabyte scanned, so partition pruning is the main lever for cost.
+
+</Accordion>
+
+<Accordion title="Working with string-typed columns">
+
+Several columns are stored as `string` in Parquet even though they represent JSON, booleans, integers, or timestamps. Cast them explicitly in your queries:
+
+- JSON columns (`payload`, `response`, `metadata`, `properties`, `webhook_data`, `execution_failure_reason`): `json_extract(column, '$.field')`.
+- Integer-as-string columns (`vendor_fallback_level`, `wait_time_in_seconds`): `CAST(column AS BIGINT)`.
+- Boolean-as-string columns (`vendor_fallback_applicable`, `is_smart`): compare against `'true'` / `'false'`.
+- ISO timestamp strings (`success_achieved_at`): `from_iso8601_timestamp(column)`.
+
+See the [table schemas](/docs/amazon_s3_v2#table-schema) for the full list of which columns this applies to.
+
+</Accordion>
+
+<Accordion title="Data freshness">
+
+- The connector rewrites hourly Parquet files when data updates upstream.
+- The next Athena query sees the new state automatically—no refresh, no `MSCK REPAIR TABLE`, no Glue Crawler.
+
+</Accordion>
+
+<Accordion title="Changing the connector's S3 path">
+
+- If you reconfigure the connector to write to a different bucket or prefix, the existing tables stop returning new data.
+- Drop and recreate each table with the updated `LOCATION` and `storage.location.template` to pick up the new path.
+
+</Accordion>
+</AccordionGroup>
