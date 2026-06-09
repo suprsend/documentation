@@ -1,0 +1,1 @@
+- [Preserve enums in OpenAPI spec](feedback_openapi_enums.md) — Don't remove enum values when adding descriptions to OpenAPI fields
