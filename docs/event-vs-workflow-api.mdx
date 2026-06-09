@@ -9,9 +9,9 @@ SuprSend provides two distinct methods to trigger notification workflows: **Even
 
 This guide lays out how each method works, when to prefer one over the other, and what trade-offs to keep in mind.
 
-## How Each Method Works
+## How each method works
 
-### Event-Based Trigger
+### Event-based trigger
 
 Your system publishes an event to SuprSend via backend SDK, frontend SDK, HTTP API, or a third-party CDP like Segment. The event carries a `distinct_id` (identifying the user), an `event_name`, and a `properties` payload with relevant data.
 
@@ -22,7 +22,7 @@ Check [Send and Track Events](/docs/node-send-event-data) doc for implementation
 </Note>
 
 
-### Workflow API Trigger
+### Workflow API trigger
 
 Here, you explicitly call a workflow using its `workflow_slug`, specifying the workflow and recipients directly in the API request. You control the full payload - including inline user and channel information if needed.
 
@@ -39,16 +39,16 @@ Here, you explicitly call a workflow using its `workflow_slug`, specifying the w
 | Dimension | Event-Based Trigger | Workflow API Trigger |
 |---|---|---|
 | **Coupling** | Loose - code emits events, SuprSend maps to workflows | Tight - code references `workflow_slug` directly. If there's a mismatch in workflow slug on dashboard vs code, trigger fails. Treat `workflow_slug` as a stable API contract |
-| **User pre-creation** | Mandatory - event is silently discarded if user doesn't exist | Not mandatory - supports [defining recipient inline](https://docs.suprsend.com/docs/trigger-workflow#identifying-recipients-inline) (acts as UPSERT). Also supports [anonymous/transient recipients](https://docs.suprsend.com/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) via `is_transient: true` |
+| **User pre-creation** | Mandatory - event is silently discarded if user doesn't exist | Not mandatory - supports [defining recipient inline](/docs/trigger-workflow#identifying-recipients-inline) (acts as UPSERT). Also supports [anonymous/transient recipients](/docs/python-trigger-workflow-from-api#sending-notification-to-anonymous-user) via `is_transient: true` |
 | **Recipient resolution** | Either pass the recipient's `distinct_id` directly in the event call, or [override recipient](/docs/override-recipient-list) in workflow trigger settings on the SuprSend dashboard to resolve the actual recipient from event properties (you'll need to pass a dummy recipient `distinct_id` in this case) | Recipients (user or object) are specified explicitly in the API request payload |
-| **Object triggers** | Supported via [override recipient](https://docs.suprsend.com/docs/override-recipient-list) - point to an event property containing the `object_type` and `object_id` | Supported natively - pass `object_type` and `object_id` directly in the recipients array. Recommended approach for sending to non-user entities like [objects](https://docs.suprsend.com/docs/objects) |
+| **Object triggers** | Supported via [override recipient](/docs/override-recipient-list) - point to an event property containing the `object_type` and `object_id` | Supported natively - pass `object_type` and `object_id` directly in the recipients array. Recommended approach for sending to non-user entities like [objects](/docs/objects) |
 | **One event → multiple workflows** | Yes - a single event can fan out to many workflows| No - each API call targets one workflow|
-| **Payload schema validation** | [Supported](https://docs.suprsend.com/docs/validate-workflow-payload) - validates event properties with the defined schema and throws error in the API response if validation fails | [Supported](https://docs.suprsend.com/docs/validate-workflow-payload) - validates workflow data with the defined schema and throws error in the API response if validation fails |
+| **Payload schema validation** | [Supported](/docs/validate-workflow-payload) - validates event properties with the defined schema and throws error in the API response if validation fails | [Supported](/docs/validate-workflow-payload) - validates workflow data with the defined schema and throws error in the API response if validation fails |
 | **Who controls workflow mapping** | Product/ops team via dashboard | Engineering team via code|
 | **Adding new notifications** | Dashboard-only change if added on an existing event| Requires code change for every new notification |
 | **CDP/Segment integration** | Native fit - events flow through your existing data pipeline (Segment, Rudderstack, etc.) | Not applicable |
 
-## When to Use Event-Based Triggers
+## When to use event-based triggers
 
 Event-based triggers are the right choice when:
 
@@ -64,7 +64,7 @@ Event-based triggers are the right choice when:
 
 - **You're integrating via a CDP.** If you use Segment, Rudderstack, or similar platforms, you can route events from your CDP directly into SuprSend. This avoids adding another integration point in your backend.
 
-### Watch Out For
+### Watch out for
 
 - **Silent failures.** If the user doesn't exist in SuprSend already, the event is silently discarded. There's no error returned to the caller. You'll need to monitor SuprSend logs or set up webhook callbacks to detect these.
 
@@ -75,7 +75,7 @@ Event-based triggers are the right choice when:
 - **Debugging complexity.** When a notification doesn't fire, the root cause could be at multiple layers: event not sent, event sent but user not found, or workflow not linked to the event. The indirection adds debugging surface area.
 
 ----
-## When to Use Workflow API Triggers
+## When to use Workflow API triggers
 
 Workflow API triggers are the right choice when:
 
@@ -89,7 +89,7 @@ Workflow API triggers are the right choice when:
 
 - **You want engineering control over what triggers.** Every trigger is an explicit API call in your codebase. This means triggers go through code review, are version-controlled, and can't be accidentally modified via the dashboard.
 
-### Watch Out For
+### Watch out for
 
 - **Tight coupling.** Your code references specific `workflow_slug` values. Renaming a workflow on the dashboard doesn't change its slug, but if a workflow is deleted and recreated with a different slug, your code breaks. You'll need coordination between dashboard changes and deploys.
 
@@ -111,20 +111,20 @@ In practice, most teams end up using both methods depending on the notification 
 | Transactional notifications requiring tight coupling with code (OTP, password reset) | Workflow API |
 | Scheduled / batch notifications (digests, reports) | Workflow API |
 | Notifications to anonymous users | Workflow API |
-| Notifications to objects (departments, teams, topics) | Either - Workflow API for direct targeting, Event via [override recipients](https://docs.suprsend.com/docs/override-recipient-list) when object ID is in event data |
+| Notifications to objects (departments, teams, topics) | Either - Workflow API for direct targeting, Event via [override recipients](/docs/override-recipient-list) when object ID is in event data |
 | Notifications integrated via CDP (Segment, Rudderstack) | Event |
 | Notifications where product team needs to iterate quickly | Event |
 | Critical-path notifications where silent failure is unacceptable | Workflow API |
 
-## Best Practices
+## Best practices
 
 ### Idempotency
 
 Both methods support `idempotency_key`. Always use it for critical notifications to prevent duplicate sends on retries. SuprSend deduplicates requests with the same key for 24 hours.
 
-### Payload Validation
+### Payload validation
 
-Both event properties and workflow API payloads support runtime validation via [JSON schemas](https://docs.suprsend.com/reference/upsert-schema). Schema Validation catches payload mismatches at the API level before the workflow executes.
+Both event properties and workflow API payloads support runtime validation via [JSON schemas](/reference/upsert-schema). Schema Validation catches payload mismatches at the API level before the workflow executes.
 
 ### Testing
 
