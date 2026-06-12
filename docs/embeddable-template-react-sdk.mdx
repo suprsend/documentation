@@ -21,55 +21,114 @@ Import the CSS bundle for correct layout and styling.
   ```
 </CodeGroup>
 
----
-
-## Quick Start
-
-```tsx
-import {
-  SuprSendTemplateProvider,
-  TemplateEditor,
-  CommitButton,
-  TestButton,
-} from '@suprsend/react-editor';
-import '@suprsend/react-editor/styles.css';
-
-function App() {
-  return (
-    <SuprSendTemplateProvider
-      workspaceUid="your-workspace-uid"
-      templateSlug="order-confirmation"
-      variantId="default"
-      channels={['email', 'inbox', 'androidpush', 'webpush']}
-      tenantId={null}
-      locale="en"
-      accessToken="your-access-token"
-    >
-      <TemplateEditor onCommit={() => console.log('Committed!')} />
-    </SuprSendTemplateProvider>
-  );
-}
-```
-
 <Warning>
   You must import the stylesheet (`@suprsend/react-editor/styles.css`) for the components to render correctly.
 </Warning>
 
 ---
 
-## Supported Channels
+## Authentication
 
-| Channel          | ID            | Editor Functionality                                                          |
-| ---------------- | ------------- | ------------------------------------------------------------------------------- |
-| **Email**        | `email`       | 3 types of editor available: **Visual designer**, **raw HTML**, **plain text**. Users can switch between editors and see live preview while editing. |
-| **Slack**        | `slack`       | 2 types of editor available: **Plain text** for designing simple text based notifications and **Block Kit (JSON)** for advanced interactive messages.|
-| **MS Teams**     | `ms_teams`    | 2 types of editor available: **Markdown** for designing simple text based notifications and **Adaptive Cards** (JSON) for advanced interactive messages.|
-| **Android Push** | `androidpush` | Single Form editor with rich text messaging support (title, body, image, buttons). |
-| **iOS Push**     | `iospush`     | Single Form editor with rich text messaging support (title, body, image, action URL). |
-| **Web Push**     | `webpush`     | Single Form editor with support to add title, body, image, buttons. |
-| **In-app Inbox** | `inbox`       | Single Form editor with support for rich content, avatar, buttons, tags, expiry and Pinning.                 |
-| **SMS**          | `sms`         | Coming soon                                                                     |
-| **WhatsApp**     | `whatsapp`    | Coming soon                                                                     |
+Provide an `accessToken` and optionally a `refreshAccessToken` callback to handle token expiration.
+
+```tsx
+<SuprSendTemplateProvider
+  workspaceUid="ws_123"
+  accessToken={token}
+  refreshAccessToken={async (oldToken) => {
+    const response = await fetch('/api/refresh-token', {
+      method: 'POST',
+      body: JSON.stringify({ token: oldToken }),
+    });
+    const { newToken } = await response.json();
+    return newToken;
+  }}
+  // ...other props
+/>
+```
+
+When a `401` response is received, the SDK automatically calls `refreshAccessToken`, queues pending requests, and retries them with the new token.
+
+### Generating access token
+
+```python
+import time
+import jwt
+from typing import Dict, Any
+
+# ==================== CONFIGURATION ====================
+
+signing_key_uid = "signing_key_xxxxxx"
+
+# Private key in PEM format
+signing_private_key = """-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+-----END PRIVATE KEY-----"""
+
+# ==================== PAYLOAD ====================
+
+payload: Dict[str, Any] = {
+    "workspace_uid": "<ws_uid>",
+    "entity_type": "template",
+    "entity_id": "<template-slug>",          # Use "*" to allow access to all templates
+
+    "scope": {
+        # Template-level scope
+        "variant_scope": {                   # variant_scope: If missing, user can access all variants
+            "channels": ["email"],           # If missing, any channel can be accessed
+            "variant_id": "v1",              # If missing, any variant can be accessed
+            "tenant_id": "<tenant1>",        # If missing or null, variants of all tenants can be accessed
+            "locale": "en",                  # If missing, variants of all locales can be accessed
+
+            "conditions": [                  # If missing, variants of all conditions can be accessed
+                {
+                    "expression_v1": {
+                        "op": "AND",
+                        "args": [
+                            {"variable_ns": "", "variable": "age", "op": "==", "value": "18"},
+                            {"variable_ns": "", "variable": "age", "op": "==", "value": "18"}
+                        ]
+                    }
+                }
+            ],
+
+            "fallback_variant_id": "var_1"   # If the requested variant is not present,
+                                             # use content from this fallback variant
+        },
+
+        # Only the recipients mentioned below can be accessed
+        # (used for mock testing and variable fetching)
+        # If this key is missing, mock/variable functionality might not work properly
+        "recipients": [
+            {"distinct_id": "id1"},
+            {"distinct_id": "id2"}
+        ]
+    },
+
+    # Token expiration settings
+    "iat": int(time.time()),                    # Issued at (current time in unix seconds)
+    "exp": int(time.time()) + 3600              # Expiration time (add extra seconds as needed)
+}
+
+# ==================== JWT HEADER ====================
+
+header_dict = {
+    "alg": "ES256",
+    "kid": signing_key_id,
+    "typ": "JWT"
+}
+
+# ==================== GENERATE TOKEN ====================
+
+auth_token = jwt.encode(
+    payload=payload,
+    key=signing_private_key,
+    algorithm="ES256",
+    headers=header_dict
+)
+
+print(auth_token)
+```
 
 ---
 
@@ -100,23 +159,119 @@ The root context provider. Wrap your editor UI with this component. This is wher
 
 **Props**
 
-| Prop                   | Type                                    | Required | Default   | Description                                                  |
-| ---------------------- | --------------------------------------- | -------- | --------- | ------------------------------------------------------------ |
-| `workspaceUid`         | `string`                                | Yes      | —         | Your SuprSend workspace identifier                           |
-| `templateSlug`         | `string`                                | Yes      | —         | The template slug                                            |
-| `variantId`            | `string`                                | Yes      | —         | The variant identifier                                       |
-| `channels`             | `ChannelId[]`                           | Yes      | —         | Array of channels to enable in the editor                    |
-| `tenantId`             | `string \| null`                        | Yes      | —         | Tenant ID for multi-tenant workspaces (pass `null` if N/A)   |
-| `locale`               | `string`                                | Yes      | —         | Language/locale code (for example `"en"`)                           |
-| `conditions`           | `unknown`                               | No       | —         | Variant conditions configuration                             |
-| `accessToken`          | `string`                                | Yes      | —         | Authentication token                                         |
-| `refreshAccessToken`   | `(oldToken: string) => Promise<string>` | No       | —         | Callback to refresh an expired token                         |
-| `mode`                 | `'live' \| 'draft'`                     | No       | `'draft'` | Start in draft (editable) or live (read-only) mode           |
-| `theme`                | -                                       | No       | -         | Coming soon                                                  |
-| `themeOverrides`       | `ThemeOverrides`                        | No       | -         | Custom color and styling overrides (see [Theming](#theming)) |
-| `recipientDistinctId`  | `string`                                | No       | -         | Recipient ID for populating mock/preview data                |
-| `actorDistinctId`      | `string`                                | No       | -         | Actor ID for populating mock/preview data                    |
-| `notificationCategory` | `string`                                | No       | -         | Notification category for triggering test                    |
+| Prop                   | Type                                    | Description                                                  | Required | Default   |
+| ---------------------- | --------------------------------------- | ------------------------------------------------------------ | -------- | --------- |
+| `workspaceUid`         | `string`                                | Your SuprSend workspace identifier. You can find it on workspace settings                          | Yes      | —         |
+| `templateSlug`         | `string`                                | The template slug                                            | Yes      | —         |
+| `variantId`            | `string`                                | The variant identifier                                       | Yes      | —         |
+| `channels`             | `ChannelId[]`                           | Array of channels to enable in the editor                    | Yes      | —         |
+| `tenantId`             | `string \| null`                        | Tenant ID for multi-tenant workspaces (pass `null` if N/A)   | Yes      | —         |
+| `locale`               | `string`                                | Language/locale code (for example `"en"`)                    | Yes      | —         |
+| `conditions`           | `ConditionExpr[]`                       | Audience rules that select which variant to load (see [Conditions](#conditions)) | No       | —         |
+| `accessToken`          | `string`                                | Authentication token                                         | Yes      | —         |
+| `refreshAccessToken`   | `(oldToken: string) => Promise<string>` | Callback to refresh an expired token                         | No       | —         |
+| `mode`                 | `'live' \| 'draft'`                     | Start in draft (editable) or live (read-only) mode           | No       | `'draft'` |
+| `theme`                | -                                       | Coming soon                                                  | No       | -         |
+| `themeOverrides`       | `ThemeOverrides`                        | Custom color and styling overrides (see [Theming](#theming)) | No       | -         |
+| `recipientDistinctId`  | `string`                                | Recipient ID for populating mock/preview data                | No       | -         |
+| `actorDistinctId`      | `string`                                | Actor ID for populating mock/preview data                    | No       | -         |
+| `notificationCategory` | `string`                                | Notification category for triggering test                    | No       | -         |
+
+#### Conditions
+
+Use the `conditions` prop when you want to specify the variant based on conditions **other than** `tenantId` and `locale`. If your variant is identified solely by `tenantId` and `locale`, you don't need this prop.
+
+Conditions can be evaluated against the input payload, tenant, actor, and recipient properties to decide which variant applies. Passing `conditions` scopes the editor to the variant matching those rules.
+
+The shape follows the `variant_condition_expr_v1_def` definition in the [variant schema](https://schema.suprsend.com/template/v2/variant_schema.json). `conditions` is an **array** of expression objects, where each object has:
+
+| Field           | Type     | Description                                                                       |
+| --------------- | -------- | --------------------------------------------------------------------------------- |
+| `type`          | `string` | Always `"expression_v1"`                                                          |
+| `expression_v1` | `object` | The condition group. Has an `op` (always `"AND"`) and an `args` array of clauses  |
+
+Each clause in `args` is a single comparison:
+
+| Field         | Type             | Required | Description                                                                                          |
+| ------------- | ---------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `variable`    | `string`         | Yes      | The property on the left-hand side of the comparison                                                 |
+| `variable_ns` | `string \| null` | No       | Namespace of the variable — `""` for the input payload, or one of `"$tenant"`, `"$actor"`, `"$recipient"` |
+| `op`          | `string`         | Yes      | Comparison operator (see below)                                                                      |
+| `value`       | `string`         | Cond.    | Right-hand side value. Required for all operators except `EMPTY` and `NON_EMPTY`                     |
+
+All clauses inside a single `expression_v1.args` are combined with **AND**. The `conditions` array itself can hold multiple expression objects to express alternative (OR) audience groups.
+<br/>
+**Supported operators (`op`)**
+
+| Operator                                          | Description                                                             | Data Types          |
+| ------------------------------------------------- | ----------------------------------------------------------------------- | ------------------- |
+| `==` / `!=`                                       | Equal to / not equal to (case sensitive)                                | All                 |
+| `>` / `>=`                                        | Greater than / greater than or equal to                                 | Numbers, timestamps |
+| `<` / `<=`                                        | Less than / less than or equal to                                       | Numbers, timestamps |
+| `CONTAINS` / `NOT_CONTAINS`                       | Substring or array item match / no substring or array item match        | Strings, arrays     |
+| `EMPTY` / `NON_EMPTY`                             | Key is missing, empty or null / key is present, not empty or null       | All                 |
+| `ARRAY_INTERSECTS` / `NOT_ARRAY_INTERSECTS`       | Any array value matches / no array values match                         | Arrays              |
+| `DATETIME_EQUALS` / `DATETIME_LT` / `DATETIME_GT` | Datetime equal to / before / after                                      | Timestamps          |
+
+<Note>
+  If a key's data type doesn't match the operator (for example, using `>` on a string), the condition always evaluates to false.
+</Note>
+
+**Example** — each object in the `conditions` array is OR-ed, while the clauses inside one `expression_v1.args` are AND-ed. The variant below loads when **either** the order is high-priority for a Pro-plan tenant **OR** the acting user is an admin sending to a recipient in India:
+
+```tsx
+<SuprSendTemplateProvider
+  workspaceUid="ws_123"
+  templateSlug="order-update"
+  variantId="v1"
+  channels={['email']}
+  tenantId={null}
+  locale="en"
+  accessToken="your-access-token"
+  conditions={[
+    // Group 1 — high-priority order (input payload) from a Pro-plan tenant
+    {
+      type: 'expression_v1',
+      expression_v1: {
+        op: 'AND',
+        args: [
+          { variable_ns: '', variable: 'priority', op: '==', value: 'high' },
+          { variable_ns: '$tenant', variable: 'plan', op: '==', value: 'pro' },
+        ],
+      },
+    },
+    // OR Group 2 — admin actor sending to a recipient in India
+    {
+      type: 'expression_v1',
+      expression_v1: {
+        op: 'AND',
+        args: [
+          { variable_ns: '$actor', variable: 'role', op: '==', value: 'admin' },
+          { variable_ns: '$recipient', variable: 'country', op: '==', value: 'IN' },
+        ],
+      },
+    },
+  ]}
+>
+  {children}
+</SuprSendTemplateProvider>
+```
+----
+#### Supported Channels
+
+| Channel          | ID            | Editor Functionality                                                          |
+| ---------------- | ------------- | ------------------------------------------------------------------------------- |
+| **Email**        | `email`       | 3 types of editor available: **Visual designer**, **raw HTML**, **plain text**. Users can switch between editors and see live preview while editing. |
+| **Slack**        | `slack`       | 2 types of editor available: **Plain text** for designing simple text based notifications and **Block Kit (JSON)** for advanced interactive messages.|
+| **MS Teams**     | `ms_teams`    | 2 types of editor available: **Markdown** for designing simple text based notifications and **Adaptive Cards** (JSON) for advanced interactive messages.|
+| **Android Push** | `androidpush` | Single Form editor with rich text messaging support (title, body, image, buttons). |
+| **iOS Push**     | `iospush`     | Single Form editor with rich text messaging support (title, body, image, action URL). |
+| **Web Push**     | `webpush`     | Single Form editor with support to add title, body, image, buttons. |
+| **In-app Inbox** | `inbox`       | Single Form editor with support for rich content, avatar, buttons, tags, expiry and Pinning.                 |
+| **SMS**          | `sms`         | Coming soon                                                                     |
+| **WhatsApp**     | `whatsapp`    | Coming soon                                                                     |
+
+
 
 ---
 
@@ -142,6 +297,9 @@ The main editor component. Renders channel tabs, channel editor forms, and previ
 <Tip>
   When `hideActionButtons` is `true`, use the standalone `TestButton` and `CommitButton` components to place actions anywhere in your layout.
 </Tip>
+<Note>
+  Templates are updated via management API proxy. If you're on a self-hosted deployment, pass `host="self-host-management-api-path"` (your self-hosted management API URL) instead of the standard API reference path.
+</Note>
 
 ---
 
@@ -223,108 +381,3 @@ The `theme` prop (`light`, `dark`, `system`) is **coming soon**. Customize the l
 | `radius`                | Border radius (for example `"8px"`, `"0.5rem"`) |
 
 All CSS classes are scoped with a `suprsend-` prefix to prevent conflicts with your application's styles.
-
----
-
-## Authentication
-
-Provide an `accessToken` and optionally a `refreshAccessToken` callback to handle token expiration.
-
-```tsx
-<SuprSendTemplateProvider
-  workspaceUid="ws_123"
-  accessToken={token}
-  refreshAccessToken={async (oldToken) => {
-    const response = await fetch('/api/refresh-token', {
-      method: 'POST',
-      body: JSON.stringify({ token: oldToken }),
-    });
-    const { newToken } = await response.json();
-    return newToken;
-  }}
-  // ...other props
-/>
-```
-
-When a `401` response is received, the SDK automatically calls `refreshAccessToken`, queues pending requests, and retries them with the new token.
-
-### Generating access token
-
-```python
-import time
-import jwt
-from typing import Dict, Any
-
-# ==================== CONFIGURATION ====================
-
-signing_key_id = "signing_key_xxxxxx"
-
-# Private key in PEM format
-signing_private_key = """-----BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGxxxxxxxxxxxxxxxxxxxxxxxxxxxx
------END PRIVATE KEY-----"""
-
-# ==================== PAYLOAD ====================
-
-payload: Dict[str, Any] = {
-    "workspace_uid": "<ws_uid>",
-    "entity_type": "template",
-    "entity_id": "<template-slug>",          # Use "*" to allow access to all templates
-
-    "scope": {
-        # Template-level scope
-        "variant_scope": {                   # variant_scope: If missing, user can access all variants
-            "channels": ["email"],           # If missing, any channel can be accessed
-            "variant_id": "v1",              # If missing, any variant can be accessed
-            "tenant_id": "<tenant1>",        # If missing or null, variants of all tenants can be accessed
-            "locale": "en",                  # If missing, variants of all locales can be accessed
-
-            "conditions": [                  # If missing, variants of all conditions can be accessed
-                {
-                    "expression_v1": {
-                        "op": "AND",
-                        "args": [
-                            {"variable_ns": "", "variable": "age", "op": "==", "value": "18"},
-                            {"variable_ns": "", "variable": "age", "op": "==", "value": "18"}
-                        ]
-                    }
-                }
-            ],
-
-            "fallback_variant_id": "var_1"   # If the requested variant is not present,
-                                             # use content from this fallback variant
-        },
-
-        # Only the recipients mentioned below can be accessed
-        # (used for mock testing and variable fetching)
-        # If this key is missing, mock/variable functionality might not work properly
-        "recipients": [
-            {"distinct_id": "id1"},
-            {"distinct_id": "id2"}
-        ]
-    },
-
-    # Token expiration settings
-    "iat": int(time.time()),                    # Issued at (current time in unix seconds)
-    "exp": int(time.time()) + 3600              # Expiration time (add extra seconds as needed)
-}
-
-# ==================== JWT HEADER ====================
-
-header_dict = {
-    "alg": "ES256",
-    "kid": signing_key_id,
-    "typ": "JWT"
-}
-
-# ==================== GENERATE TOKEN ====================
-
-auth_token = jwt.encode(
-    payload=payload,
-    key=signing_private_key,
-    algorithm="ES256",
-    headers=header_dict
-)
-
-print(auth_token)
-```
