@@ -2182,6 +2182,13 @@ components:
             version_no:
               type: integer
               description: Version number of the template that was used to render the message.
+            variant_id:
+              type: string
+              description: ID of the template variant used to render the message. `default` for the base variant.
+        content:
+          type: object
+          additionalProperties: true
+          description: Rendered message content. Only present when `include_content=true` is passed as a query parameter.
         channel_identity:
           type: object
           additionalProperties: true
@@ -11504,6 +11511,12 @@ paths:
           schema:
             type: string
           description: Must be provided together with `object_id` to filter messages sent to an object. Will filter all message logs which were sent to recipients after object fanout.
+        - name: include_content
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Set `true` to include the rendered message content in each result object. When `false` (default), the `content` key is omitted from the response to keep payloads lightweight.
       responses:
         '200':
           description: Returns the paginated list of messages order by created_at desc.
@@ -11568,6 +11581,12 @@ paths:
                       name: "Order Confirmation"
                       slug: "order-confirmation"
                       version_no: 4
+                      variant_id: "default"
+                    content:
+                      header: "Your order #5678 is confirmed"
+                      body: "Hi Alex, we've received your order #5678. We'll notify you once it ships."
+                      schema_version: "1.0"
+                      templating_language: "handlebars"
                     channel_identity:
                       inbox: "user_123"
                     category: "transactional"
@@ -11612,9 +11631,67 @@ paths:
                       name: "Password Reset"
                       slug: "password-reset"
                       version_no: 2
+                      variant_id: "default"
+                    content:
+                      body: "Your password reset code is 482913. It expires in 10 minutes."
+                      schema_version: "1.0"
+                      templating_language: "handlebars"
                     channel_identity:
                       sms: "+15555550100"
                     category: "transactional"
+      deprecated: false
+
+  /v1/message/{message_id}/content:
+    get:
+      summary: Get Message Content
+      description: |
+        Retrieve the rendered content of a specific message. Returns the channel and the content object containing the rendered template output.
+      operationId: get-message-content
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the message whose content you want to retrieve.
+      responses:
+        '200':
+          description: Returns the channel and rendered content of the message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel:
+                    type: string
+                    description: Channel through which the message was sent.
+                    enum:
+                      - sms
+                      - email
+                      - whatsapp
+                      - inbox
+                      - androidpush
+                      - iospush
+                      - webpush
+                      - slack
+                      - ms_teams
+                  content:
+                    type: object
+                    additionalProperties: true
+                    description: Rendered message content. The keys vary by channel and template configuration.
+              example:
+                channel: "email"
+                content:
+                  header: "Your invoice for March is ready"
+                  body: "Hi Alex, your invoice #INV-2026-0042 for $1,200.00 is now available. You can view and download it from your billing dashboard."
+                  importance: "high"
+                  notification_category: "transactional"
+                  schema_version: "1.0"
+                  templating_language: "handlebars"
+        '404':
+          description: Message not found.
       deprecated: false
 
   /v1/bulk/message/:
