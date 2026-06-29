@@ -4,12 +4,12 @@ description: "Learn how user preferences work in SuprSend and how to capture per
 ---
 
 <Note>
-  **Before you start:** Make sure you've set up notification categories first. See [Manage Categories and Preferences](/docs/managing-notification-categories) for step-by-step instructions.
+  **Before you start:** Make sure you've set up preference categories first. See [Manage Categories and Preferences](/docs/managing-notification-categories) for step-by-step instructions.
 </Note>
 
 Preferences let users control which notifications they receive. Instead of an all-or-nothing approach, users can opt out of specific categories, choose preferred channels, and set notification frequency. This granular control reduces the chance that users disable all notifications from your platform.
 
-SuprSend provides [ready-made UI components](/docs/user-preferences#embed-in-your-product) and [APIs](/reference/overview) to build preference screens where users can opt in or opt out of different notification categories and channels. This works for both B2B and B2C applications.
+SuprSend provides [ready-made UI components](/docs/user-preferences#embed-in-your-product) and [APIs](/reference/overview) to build preference screens where users can opt in or opt out of different preference categories and channels. This works for both B2B and B2C applications.
 
 <CardGroup cols="2">
   <Card title="How It Works" icon="gears" iconType="solid">
@@ -127,6 +127,108 @@ This configuration gives you fine-grained control over which channels a user is 
 
 ---
 
+## Digest schedule and conditions
+
+Beyond on/off and channel preferences, a sub-category can carry two additional, optional settings that you configure when [managing categories](/docs/managing-notification-categories):
+
+- **Digest schedule** — lets users pick how often they receive batched notifications for a sub-category (for example, *Instant*, *Daily at 9 AM*, or *Weekly on Monday*) right from their preference page. You define the available cadence options; the option a user selects drives the workflow [Digest node](/docs/digest) at send time.
+- **Condition properties** — custom, configurable values you attach to a sub-category and then reference inside workflow [branch conditions](/docs/branch) or **trigger condition**. Use them to control *when* a category's notifications are sent — for example, a minimum severity, an alert threshold, or which user roles should be notified.
+
+Like other preferences, the resolved value follows the **User → Tenant → Category default** precedence: a user's selection wins, falling back to the tenant default, then the category default.
+
+For setup, see [Configuring digest schedule](/docs/managing-notification-categories#configuring-digest-schedule) and [Configuring condition properties](/docs/managing-notification-categories#configuring-condition-properties).
+
+### Digest schedule
+
+Each subcategory in the [preference API](/reference/get-user-full-preference) response includes `digest_schedule_options` (all available options for the preference UI) and `digest_schedule` (the resolved active schedule for the user).
+
+<CodeGroup>
+```json GET preference response
+{
+  "digest_schedule_options": {
+    "options": [
+      {
+        "id": "instant",
+        "label": "Instant",
+        "frequency": "instantly",
+        "is_default": true,
+        "is_user_selected": false
+      },
+      {
+        "id": "daily-summary",
+        "label": "Daily at 9:00 AM",
+        "frequency": "daily",
+        "interval": 1,
+        "time": {
+          "edit_policy": "editable",
+          "default_value": "09:00",
+          "value": ""
+        },
+        "is_default": false,
+        "is_user_selected": false
+      }
+    ]
+  },
+  "digest_schedule": {
+    "id": "instant",
+    "label": "Instant",
+    "frequency": "instantly",
+    "is_default": true,
+    "is_user_selected": false
+  }
+}
+```
+```json Update user preference
+// PATCH /v1/user/{distinct_id}/preference/category/{category_slug}/
+// Only pass id and fields with edit_policy: "editable"
+{
+  "digest_schedule": {
+    "id": "daily-summary",
+    "time": "10:00"
+  }
+}
+```
+</CodeGroup>
+
+Set `digest_schedule` to `null` in the update request to fall back to the tenant or category default. Only fields with `edit_policy: "editable"` can be overridden by the user.
+
+### Condition properties
+
+Each subcategory in the [preference API](/reference/get-user-full-preference) response includes a `properties` array with the configured condition properties and the user's current values.
+
+<CodeGroup>
+```json GET preference response
+{
+  "properties": [
+    {
+      "key": "threshold",
+      "label": "Minimum activity count",
+      "value_type": "integer",
+      "default_value": "100",
+      "is_optional": false,
+      "edit_policy": "editable",
+      "is_overridden": true,
+      "value": "500"
+    }
+  ]
+}
+```
+```json Update user preference
+// PATCH /v1/user/{distinct_id}/preference/category/{category_slug}/
+// Only pass key and value for properties with edit_policy: "editable"
+{
+  "properties": [
+    {
+      "key": "threshold",
+      "value": "500"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+---
+
 ## Capturing user preferences
 
 Users can set their preferences through one of the following methods:
@@ -172,14 +274,14 @@ Update your product preference page link on the tenant page and render it in tem
 It's always a good practice to show only the categories that are relevant to the user. There are two ways to achieve this:
 
 ### Hide categories for tenant users
-In a multi-tenant setup, tenants or admins can control which categories their users see. Setting `visible_to_subscriber: false` in [tenant preferences](/reference/update-tenant-default-preference) hides the category from tenant users' preference pages. Hidden categories won't send notifications to those users, even if they previously opted in.
+In a multi-tenant setup, tenants or admins can control which categories their users see. Setting `visible_to_subscriber: false` in [tenant preferences](/reference/update-tenant-preference-single-category) hides the category from tenant users' preference pages. Hidden categories won't send notifications to those users, even if they previously opted in.
 
 ### Filter categories with tags
 Use tags to show categories based on user roles, departments, or teams. Filter categories in the preference center using the `tags` query parameter.
 
 <Steps>
 <Step title="Setting Preference tags">
-Tags can be added to sections and sub-categories directly from **Developers → Notification Categories** in the SuprSend Console. When a tag is assigned at the section level, it automatically applies to all categories under that section-so filtering by a section tag also filters its child categories.
+Tags can be added to sections and sub-categories directly from **Developers → Preference Categories** in the SuprSend Console. When a tag is assigned at the section level, it automatically applies to all categories under that section-so filtering by a section tag also filters its child categories.
 <Frame>
   <img src="/images/preference-tag-changelog.png" alt="Tags Within Preference Categories" />
 </Frame>
@@ -306,7 +408,9 @@ In addition to the preference center within SuprSend, communication channels pro
 
 <AccordionGroup>
   <Accordion title="Can users control when they receive digest notifications?">
-    Users can opt in or opt out of digest notification categories using preference categories. To let users control the timing of digest notifications (for example, daily at 9 AM), store their preferred schedule as a custom property in their user profile and reference it in your workflow's digest node. Checkout the [digest dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference) documentation for more details.
+    Yes. The simplest way is to enable a **digest schedule** on the sub-category. Define cadence options (for example, Instant, Daily, Weekly), and users pick their preferred one from the preference page. In your workflow's [Digest node](/docs/digest), set the schedule type to `category_digest_schedule` and SuprSend sends each recipient's digest on the cadence they chose. See [Configuring digest schedule](/docs/managing-notification-categories#configuring-digest-schedule).
+
+    Alternatively, if you want full control over the schedule object passed at runtime, store the preferred schedule as a custom property in the user profile and reference it in a [dynamic digest schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference):
     ```json
     user.set({
       "digestSchedule": {
@@ -376,7 +480,7 @@ In addition to the preference center within SuprSend, communication channels pro
 
 ## Related documentation
 
-- [Notification Categories](/docs/notification-category) - Setting up categories & defaults
+- [Preference Categories](/docs/notification-category) - Setting up categories & defaults
 - [Manage Categories and Preferences](/docs/managing-notification-categories) - Complete guide to setting up and managing categories and preferences
 - [Tenant Preferences](/docs/tenant-preference) - Managing tenant-level preferences
 - [Preference Evaluation](/docs/preference-evaluation) - How SuprSend evaluates preferences at runtime

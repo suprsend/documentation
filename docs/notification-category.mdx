@@ -1,9 +1,11 @@
 ---
 title: "Overview"
-description: "Understand how notification categories in SuprSend drive user preferences, vendor selection, and latency rules during workflow execution."
+description: "Understand how preference categories in SuprSend drive user preferences, vendor selection, and latency rules during workflow execution."
 ---
 
-Notification categories define the classification your workflow belongs to. Each workflow can be either to a **root-category** (system, transactional, or promotional) or a **sub-category**. User Preference rules are applied at the sub-category level.
+Preference categories define the classification your workflow belongs to. Each workflow can either map to a **root-category** (system, transactional, or promotional) or a **sub-category**. User Preference rules are applied at the sub-category level.
+
+You can find and manage categories from the SuprSend dashboard under [Developers → Preference Categories](https://app.suprsend.com/en/staging/developers/preference-categories). You can also manage them programmatically via the [Management API](/reference/create-update-category) and push/pull catetories across workspaces using [SuprSend CLI](/reference/cli-category-overview). See [Manage Categories and Preferences](/docs/managing-notification-categories) for the full setup guide.
 
 Categories serve three main purposes:
 
@@ -12,6 +14,7 @@ Categories serve three main purposes:
     For Email and SMS channels, **vendor is configured at root-category level**. This is done to solve for the following use cases:
     - Many companies separate promotional and transactional traffic to ensure that opt-outs from promotional messages do not impact critical system notifications. 
     - SMS vendors may also expose different APIs for system messages (for example, OTPs) versus marketing messages.
+    When you send notification in a sub-category, vendor config is picked from the root-category that sub-category belongs to.
 
     <Note>
       For Email and SMS, ensure a vendor is configured for the category used in the workflow; otherwise, delivery will fail.
@@ -19,12 +22,12 @@ Categories serve three main purposes:
   </Accordion>
 
   <Accordion title="Picking the right notification queue">
-    We maintain separate notification queues for different notification categories to ensure that marketing and promotional notifications don't delay system or time-sensitive notifications.
+    We maintain separate notification queues for different preference categories to ensure that marketing and promotional notifications don't delay system or time-sensitive notifications.
   </Accordion>
 
-  <Accordion title="Setting category-level preferences per-user and tenant">
+  <Accordion title="Applying user or tenant preference">
     You can create sub-categories for different types of notifications and give your users and tenants the option to set their notification preferences at the category level.
-
+    When a workflow is executed, it resolves the final preference against the workflow category and sends the notification accordingly.
     See how to set it up in the next [document](/docs/managing-notification-categories).
   </Accordion>
 </AccordionGroup>
@@ -33,7 +36,7 @@ Categories serve three main purposes:
 
 ## Mental model
 
-Notification categories use a functional hierarchy:
+Preference categories use a functional hierarchy:
 
 **Root-category** → **Section** → **Sub-category**
 
@@ -41,7 +44,7 @@ Notification categories use a functional hierarchy:
   |-------|---------------------|
   | **Root-category** | Choose one of three: **System**, **Transactional**, or **Promotional**. This determines which notification queue or vendor to pick for the workflow. Preferences are not applied at the root-category level. You can't create new ones. |
   | **Sub-category** | Sub-categories are created inside a root-category to manage user preferences. When sub-category is assigned to the workflow, user preferences are evaluated before sending the notification. Sub-categories are what users see on preference / unsubscription page and can opt in/out of. |
-  | **Section** | Sections are optional UI groupings used to organize sub-categories on the preference page. |
+  | **Section** | Sections are optional UI groupings used to organize sub-categories on the preference page. Sections don't have any preferences.|
 
   **Example structure:**
 
@@ -85,7 +88,7 @@ Notification categories use a functional hierarchy:
   **Common examples:** Newsletters, Announcements, Product updates, Sales/events, Deals and discounts, Price drop alerts
 
   <Note>
-  Promotional notifications are sent in bulk and consume significant pipeline resources. To ensure that marketing notifications doesn't impact the latency of product alerts, always use the promotional category for bulk messages and broadcasts.
+  If you're sending a broadcast, send it in the promotional category so that these bulk notifications don't consume pipeline resources needed for product alerts. This keeps marketing notifications from impacting the latency of your transactional and product alerts.
   </Note>
 
   ---
@@ -122,6 +125,35 @@ Notification categories use a functional hierarchy:
   When using **Can't Unsubscribe**, channel-level opt-in/out still applies unless channels are marked mandatory.
 
   For detailed information on configuring default preferences, preference modes, and recommended defaults, see [Default Preferences](/docs/user-preferences#default-preferences).
+
+  ---
+
+  ## Digest schedule
+
+  A **digest schedule** lets users pick how often they receive batched notifications for a sub-category (for example, *Instant*, *Daily at 9 AM*, or *Weekly on Monday*) right from their preference page. You define the available cadence options; the option a user selects drives the workflow [Digest node](/docs/digest) at send time.
+
+  To send on the schedule a user picks, add a [Digest node](/docs/digest) in the workflow linked to this category and set its schedule type to `Preference Category` on UI and `category_digest_schedule` in management API. SuprSend batches notifications using the option the recipient selected (or the default), always in the recipient's timezone.
+
+  For the available options, edit policies, and full configuration, see the [Create/Update Category API](/reference/create-update-category) and the [Digest node guide](/docs/digest).
+
+  ---
+
+  ## Condition properties
+
+  **Condition properties** are custom, configurable values you attach to a sub-category and then reference inside workflow [branch conditions](/docs/branch) or **trigger condition**. Use them to control *when* a category's notifications are sent — for example, a minimum severity, an alert threshold, or which user roles should be notified.
+
+  Reference a property in a workflow as `$category.properties.<key>`. For example, to send only when a recipient's role matches the value configured on the category:
+
+  ```
+  $recipient.subscription.role == $category.properties.role
+  ```
+
+  **Common use cases:**
+  - Let users set a threshold so they're notified only when a value crosses a limit they choose.
+  - Let users pick a minimum priority or severity for the alerts they want to receive.
+  - Drive workflow branching from per-user, per-category settings without storing them on the user profile.
+
+  For the property schema and supported value types, see the [Create/Update Category API](/reference/create-update-category).
 
   ---
 
