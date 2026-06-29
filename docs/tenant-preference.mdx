@@ -11,7 +11,7 @@ Tenant preferences sit between global category defaults and user preferences. Th
 
 ## Platform admin: Controlling tenant access
 
-As a platform administrator, you can define which notification categories and channels are available to different tenants. For example, if you're a SaaS platform with paid features and some clients haven't subscribed to those features, you can hide notification categories related to the paid features for those tenants.
+As a platform administrator, you can define which preference categories and channels are available to different tenants. For example, if you're a SaaS platform with paid features and some clients haven't subscribed to those features, you can hide preference categories related to the paid features for those tenants.
 
 <Steps>
   <Step title="Access tenant settings">
@@ -31,7 +31,7 @@ As a platform administrator, you can define which notification categories and ch
 
 ## Tenant admin: Setting defaults for their users
 
-Tenant administrators can set [default preferences](/reference/update-tenant-default-preference) for their end users and hide categories that aren't applicable to their users. This gives tenant admins control over which notifications are sent to their users and which categories appear on their users' preference pages.
+Tenant administrators can set [default preferences](/reference/update-tenant-preference-single-category) for their end users and hide categories that aren't applicable to their users. This gives tenant admins control over which notifications are sent to their users and which categories appear on their users' preference pages.
 
 Tenant admins can override category defaults and hide categories that don't apply to their users. These overrides apply only to that tenant and don't change global category defaults.
 
@@ -43,12 +43,117 @@ Tenant admins can override category defaults and hide categories that don't appl
 You can set tenant defaults via API or through SuprSend dashboard.
 <CardGroup cols="2">
   <Card title="Via API" icon="code" iconType="solid">
-    Use the <a href="/reference/update-tenant-default-preference">tenant preference API</a> to programmatically manage preferences
+    Use the <a href="/reference/update-tenant-preference-single-category">tenant preference API</a> to programmatically manage preferences
   </Card>
   <Card title="Via Dashboard" icon="grid" iconType="solid">
     Configure from the <a href="https://app.suprsend.com/en/staging/tenants/default/tenant_preference">tenant details page → Tenant Preference tab</a>
   </Card>
 </CardGroup>
+
+### Overriding digest schedule and condition defaults
+
+If a sub-category has a [digest schedule](/docs/managing-notification-categories#configuring-digest-schedule) or [condition properties](/docs/managing-notification-categories#configuring-condition-properties), tenant admins can override their defaults for the tenant's users — for example, set a different default digest cadence or a different default condition value (such as a minimum severity) for everyone in the tenant.
+
+These values resolve with the same **User → Tenant → Category default** precedence: a user's own selection wins, then the tenant default, then the category default. The available options themselves are still defined on the category — a tenant can change the default, not add or remove options.
+
+#### Digest schedule
+
+The [tenant preference API](/reference/get-tenant-preference-single-category) response includes `digest_schedule.options` (tenant-overridden defaults) and `digest_schedule.original_options` (category-level originals). Tenants can change which option is the default and override editable field values like `time`, but cannot add or remove options.
+
+<CodeGroup>
+```json GET tenant preference response
+{
+  "digest_schedule": {
+    "options": [
+      {
+        "id": "daily-summary",
+        "label": "Daily summary at 9:00 AM",
+        "frequency": "daily",
+        "interval": 1,
+        "time": {
+          "edit_policy": "editable",
+          "default_value": "09:00"
+        },
+        "is_default": true
+      }
+    ],
+    "original_options": [
+      {
+        "id": "instant",
+        "label": "Instant",
+        "frequency": "instantly",
+        "is_default": true
+      },
+      {
+        "id": "daily-summary",
+        "label": "Daily summary at 9:00 AM",
+        "frequency": "daily",
+        "interval": 1,
+        "time": {
+          "edit_policy": "editable",
+          "default_value": "00:00"
+        },
+        "is_default": false
+      }
+    ]
+  }
+}
+```
+```json Update tenant preference
+// PATCH /v1/tenant/{tenant_id}/preference/category/{category_slug}/
+// Reference option by id, override default_value for editable fields
+{
+  "digest_schedule": {
+    "options": [
+      {
+        "id": "daily-summary",
+        "time": {
+          "default_value": "09:00"
+        },
+        "is_default": true
+      }
+    ]
+  }
+}
+```
+</CodeGroup>
+
+Set `digest_schedule` to `null` in the update request to reset to category defaults.
+
+#### Condition properties
+
+The [tenant preference API](/reference/get-tenant-preference-single-category) response includes the `properties` array with the tenant's overridden values. `is_overridden` indicates whether the tenant has set a custom value.
+
+<CodeGroup>
+```json GET tenant preference response
+{
+  "properties": [
+    {
+      "key": "threshold",
+      "label": "Minimum activity count",
+      "value_type": "integer",
+      "default_value": "10",
+      "is_optional": false,
+      "edit_policy": "editable",
+      "is_overridden": true,
+      "value": "100"
+    }
+  ]
+}
+```
+```json Update tenant preference
+// PATCH /v1/tenant/{tenant_id}/preference/category/{category_slug}/
+// Only pass key and value for properties with edit_policy: "editable"
+{
+  "properties": [
+    {
+      "key": "threshold",
+      "value": "100"
+    }
+  ]
+}
+```
+</CodeGroup>
 
 ## Controlling preference UI for users
 
@@ -61,7 +166,7 @@ Tenants can control which categories appear on their users' preference pages and
     - Tenants can't set preferences in categories disabled by the platform admin.
   </Tab>
   <Tab title="Tenant Admin Actions">
-    - Set `visible_to_subscriber: false` in [default tenant preferences](/reference/update-tenant-default-preference) to hide categories from tenant users' preference pages.
+    - Set `visible_to_subscriber: false` in [default tenant preferences](/reference/update-tenant-preference-single-category) to hide categories from tenant users' preference pages.
     - This allows tenant admins to further limit visibility beyond platform-level settings.
     - Hidden categories are removed from user preference APIs and UI view for that tenant's users.
   </Tab>

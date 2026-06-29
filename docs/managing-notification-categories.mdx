@@ -1,15 +1,15 @@
 ---
 title: "Manage Categories and Preferences"
-description: "Create notification categories, sections, and sub-categories in SuprSend to organize workflows and let users manage preferences across channels."
+description: "Create preference categories, sections, and sub-categories in SuprSend to organize workflows and let users manage preferences across channels."
 ---
 
-Categories are assigned to workflows and are used to manage notification preferences in SuprSend. For detailed concepts, see [Notification Categories](/docs/notification-category).
+Categories are assigned to workflows and are used to manage notification preferences in SuprSend. For detailed concepts, see [Preference Categories](/docs/notification-category).
 
 ---
 
 ## Creating sections and sub-categories
 
-Go to [Developers → Notification categories](https://app.suprsend.com/en/staging/developers/preference-categories) and select a root-category (System, Transactional, or Promotional).
+Go to [Developers → Preference categories](https://app.suprsend.com/en/staging/developers/preference-categories) and select a root-category (System, Transactional, or Promotional).
 - **System** is for critical account related notifications that users can't unsubscribe from.
 - **Transactional** is for notifications sent in response to user actions or transactions.
 - **Promotional** is for marketing notifications sent to promote products or re-engage users to your platform.
@@ -74,6 +74,74 @@ These defaults are recommendations-adjust them based on your product's requireme
 
 ---
 
+## Configuring digest schedule
+
+A **digest schedule** lets users pick how often they receive batched notifications for a sub-category (for example, *Instant*, *Daily at 9 AM*, or *Weekly on Monday*) right from their preference page. You define the available cadence options; the option a user selects drives the workflow [Digest node](/docs/digest) at send time.
+
+<Frame caption="Digest schedule settings">
+  <img src="/images/category-digest-setting.png" />
+</Frame>
+
+**To configure:**
+
+1. Select a sub-category and enable **Digest schedule**.
+2. Add one or more options. For each option, set:
+   - **Label** — what the user sees in the preference center (for example, "Daily").
+   - **Frequency** — `instantly`, `hourly`, `daily`, `weekly`, or `monthly`.
+   - **Interval** — recurrence multiplier (for example, interval =2 with weekly frequency means every 2 weeks).
+   - **Time / weekdays / month days** — when to send, depending on frequency. Each of these has an **edit policy**:
+     - **Editable** — the user can change the value in the preference center; the value you set is the default.
+     - **Locked** — the value is fixed and the user can't change it.
+3. Mark exactly one option as the **default** (used when a user hasn't chosen one).
+
+To send on the schedule a user picks, add a [Digest node](/docs/digest) in the workflow linked to this category and set its schedule type to `Preference Category` on UI and `category_digest_schedule` in management API. SuprSend batches notifications using the option the recipient selected (or the default), always in the recipient's timezone.
+
+<Note>
+  If digest schedule isn't enabled on the category, a digest node set to `category_digest_schedule` sends notifications immediately without batching.
+</Note>
+
+For the full field reference, see the [Create/Update Category API](/reference/create-update-category). To see how digest schedule appears in the user preference API response, see [Digest schedule in preference API](/docs/user-preferences#digest-schedule).
+
+---
+
+## Configuring condition properties
+
+**Condition properties** are custom, configurable values you attach to a sub-category and then reference inside workflow [branch conditions](/docs/branch) or **trigger condition**. Use them to control *when* a category's notifications are sent — for example, a minimum severity, an alert threshold, or which user roles should be notified.
+
+<Frame caption="Condition property settings">
+  <img src="/images/category-condition-setting.png" />
+</Frame>
+
+**To configure:**
+
+1. Select a sub-category and add a condition property (up to 25 per sub-category). For each property, set:
+   - **Key** — unique identifier used in workflows. Referenced as `$category.properties.<key>`.
+   - **Label** — display label shown in the preference center.
+   - **Value type** — `integer`, `string`, `string_choice` (single-select), `list_choice` (multi-select), `string_dynamic`, or `list_dynamic`.
+   - **Choices** — for `string_choice` / `list_choice`, the selectable options (`label` shown to the user, `value` used in the workflow).
+   - **Default value** — applied when no value is set. You can set a property optional to skip adding default value.
+   - **Edit policy or is_user_editable** — selected or `editable` means user can change it or unselected/`locked` means fixed.
+   - **is_optional** - you can mark the property as optional if it can have null default value.
+2. Reference the property inside a workflow [branch condition](/docs/branch) as `$category.properties.<key>`.
+
+For example, to send only when the recipient's role matches the value configured on the category:
+
+```
+$recipient.subscription.role == $category.properties.role
+```
+<Note>
+If you're triggering workflow on object with conditions on recipient property, always add `$recipient.$type == "object"` as OR condition to ensure that notification is always triggered on object as a user. Otherwise, if workflow trigger condition doesn't match for object as a user, user fanout on that object doesn't happen.
+</Note>
+
+**Common use cases:**
+- Send anomaly alerts only when an error rate crosses a user-defined threshold.
+- Deliver alerts only at or above a user-selected severity (for example, `High`).
+- Let admins choose which user roles receive a category's notifications.
+
+For the full field reference, see the [Create/Update Category API](/reference/create-update-category). To see how condition properties appear in the user preference API response, see [Condition properties in preference API](/docs/user-preferences#condition-properties).
+
+---
+
 ## Adding tags (Optional)
 
 Tags are used to filter categories on the preference page. **Common usecases** are to filter categories based on user role or department. They can be added to sections and sub-categories.
@@ -103,13 +171,18 @@ Before making your categories live, preview how they'll appear to users, then pu
 
 <Steps>
   <Step title="Preview">
-    Click **Preview** to see how categories will appear to users on the preference page.
+    Click **Preview** to see how categories will appear to users on the preference page. The preview renders the full preference experience, including:
+
+    - **Default preferences** — on/off toggle and can't-unsubscribe states
+    - **Channel preferences** — which channels are shown as opted in or mandatory
+    - **Digest schedule** — the cadence options users can choose from
+    - **Condition properties** — user-editable fields like thresholds or severity selectors
 
     <Frame>
       <img src="/images/pref-preview.png" />
     </Frame>
 
-    The preview will show how your categories are organized and displayed to users.
+    Use the preview to verify that all your preference settings are configured correctly before publishing.
 
     <Frame>
       <img src="/images/preview.png" />
@@ -141,7 +214,7 @@ If you choose to not create workflow on SuprSend dashboard and want to keep your
 
 <Tabs>
   <Tab title="Via Dashboard">
-    In workflow editor, select any delivery node and choose the relevant category from the **Notification Category** dropdown.
+    In workflow editor, select any delivery node and choose the relevant category from the **Preference Category** dropdown.
 
     <Frame caption="Assigning category to workflows">
   ![](/images/workflow-notification-category.png)
@@ -340,7 +413,7 @@ For more details on what it does and how it works, see [Overview of category tra
 
 ## Related documentation
 
-- [Notification Categories](/docs/notification-category) - Concepts and detailed explanations of notification categories
+- [Preference Categories](/docs/notification-category) - Concepts and detailed explanations of preference categories
 - [User Preferences](/docs/user-preferences) - Overview of how users can set their Preferences
 - [Tenant Preferences](/docs/tenant-preference) - How to apply admin-level preference settings to all users belonging to a tenant
 - [Preference Evaluation](/docs/preference-evaluation) - How SuprSend evaluates preferences at runtime
