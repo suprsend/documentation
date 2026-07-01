@@ -1,25 +1,74 @@
 ---
 title: "Segment"
-description: "Integrate Segment with SuprSend using webhook destinations to sync users and events, then trigger workflows from Segment track and identify calls."
+description: "Connect Segment to SuprSend with webhook destinations to sync users and events, then trigger workflows using the Segment events configured in your workflow trigger."
 ---
 
-The SuprSend segment integration enables you to sync users and events from Segment to SuprSend. This allows for seamless migration of users from Segment to SuprSend and the ability to use events from Segment to power automated workflows within SuprSend.
+If you already use Segment as your customer data platform, this integration lets you reuse that data to power notifications, so you don't have to rebuild your user base or event tracking from scratch. SuprSend automatically syncs your users and their events from Segment, keeping profiles up to date and letting you trigger SuprSend workflows directly from the events your product is already sending to Segment.
+
+The setup has two parts: 
+- First you define how Segment users and events map to SuprSend
+- Then you connect Segment to SuprSend as a webhook destination. Once live, your `identify` and `track` calls flow through automatically. *(Click any step below to jump to its section.)*
+
+**Setup flow**
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','fontFamily':'ui-sans-serif, system-ui, sans-serif','lineColor':'#9a9a9a'},'flowchart':{'padding':14,'nodeSpacing':45,'rankSpacing':45}}}%%
+flowchart LR
+    A["Enable connector<br/>on SuprSend"] --> B["Add SuprSend as Webhooks<br/>destination in Segment"] --> C["Send test event —<br/>if 200, save &amp; enable"]
+
+    click A href "#connector-setup-on-suprsend" "Connector setup on SuprSend"
+    click B href "#setting-up-data-sync-from-segment-to-suprsend" "Set up data sync"
+    click C href "#setting-up-data-sync-from-segment-to-suprsend" "Set up data sync"
+
+    classDef s1 fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
+    classDef s3 fill:transparent,stroke:#8a8a8a,stroke-width:1.4px;
+    classDef s5 fill:transparent,stroke:#4d4d4d,stroke-width:1.4px;
+    class A s1;
+    class B s3;
+    class C s5;
+```
+
+**How data flows from segment to SuprSend**
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','fontFamily':'ui-sans-serif, system-ui, sans-serif','lineColor':'#9a9a9a'},'flowchart':{'padding':14,'nodeSpacing':45,'rankSpacing':45}}}%%
+flowchart LR
+    F["Segment tracks &amp;<br/>sends event"] --> G{"Call<br/>type?"}
+    G -->|identify| H["Sync user<br/>profile"]
+    G -->|track| I["Record<br/>event"] --> J["Trigger<br/>workflow"] --> K["Notification<br/>sent"]
+
+    click H href "#2-user-mapping" "User channel & preference mapping"
+    click I href "#1-event-mapping" "Event tracking & prefixing"
+
+    classDef f1 fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
+    classDef f2 fill:transparent,stroke:#b0b0b0,stroke-width:1.4px;
+    classDef f3 fill:transparent,stroke:#8a8a8a,stroke-width:1.4px;
+    classDef f4 fill:transparent,stroke:#5f5f5f,stroke-width:1.4px;
+    classDef dec fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
+    class F f1;
+    class G dec;
+    class H,I f2;
+    class J f3;
+    class K f4;
+```
 
 ## Connector setup on SuprSend
 
-Login to SuprSend dashboard. Go to **Settings**-> **Connectors**. Select **"Segment"** from the connectors list. This is how segment integration page looks like.
+On SuprSend dashboard, Navigate to **Connectors** tab and Select **Segment** and enable it.
 
-<Frame>
-  <img src="/images/docs/4c4ce80-image.png" />
+<Frame caption="Segment integration settings on SuprSend">
+  <img src="/images/docs/segment-integration-settings.png" alt="Fill in the Segment integration settings" />
 </Frame>
 
-Before beginning the Segment integration, it is important to establish how Segment events and users will be mapped in SuprSend. The following form fields will assist in setting up the desired data mapping within SuprSend:
+Next setup how events and users will be mapped to segment events inside SuprSend.
 
-### 1. Add Prefix to track events
+### 1. Event mapping
 
-This option allows for distinguishing the events coming from multiple data sources such as SuprSend SDK and Segment, or any other connector. By enabling this feature, a prefix of **`segment : `**&#x77;ill be added to all event names coming from Segment. This is particularly useful for existing Segment and SuprSend users who are passing the same events from both SuprSend SDK and Segment. By default, SuprSend assumes that events coming from all sources are unique and does not add any prefix to the event name.
+By default, events sync to SuprSend exactly as they are named in your Segment `track` call — the event name is passed through unchanged. You don't need to configure anything here for events to flow through.
 
-For example- if the [segment track](https://segment.com/docs/connections/spec/track/) API call looks like this
+**Adding a prefix is an optional setting** (off by default). Turn it on only if you send the *same* event to SuprSend from more than one source — for example, from both the SuprSend SDK and Segment — and want to tell them apart. When enabled, SuprSend prepends `segment : ` to every event name coming from Segment.
+
+For example, given this [Segment track](https://segment.com/docs/connections/spec/track/) call:
 
 <CodeGroup>
   ```javascript javascript
@@ -34,136 +83,81 @@ For example- if the [segment track](https://segment.com/docs/connections/spec/tr
   ```
 </CodeGroup>
 
-associated event JSON at SuprSend with **add prefix enabled** will look like this
+Only the `event_name` changes — the properties are synced as-is either way:
 
 <CodeGroup>
-  ```javascript javascript
+  ```javascript Default (prefix off)
+  event_name = "User Registered"
+
+  properties = {
+    "plan": "Pro Annual",
+    "accountType" : "Facebook"
+  }
+  ```
+
+  ```javascript Prefix enabled
   event_name = "segment : User Registered"
 
   properties = {
-  	"plan": "Pro Annual",
-      "accountType" : "Facebook"
+    "plan": "Pro Annual",
+    "accountType" : "Facebook"
   }
   ```
 </CodeGroup>
 
-### 2. User preference mapping
+### 2. User mapping
 
-There are certain reserved properties in SuprSend user profile, such as language preference. In order to map these reserved properties, you have to define the trait in [Segment identify](https://segment.com/docs/connections/spec/identify/) call whose value should be mapped to the reserved property.
+Users are synced to SuprSend from your [Segment identify](https://segment.com/docs/connections/spec/identify/) calls. Every identify call **must include a `userId`** — it is mandatory. Segment's `userId` maps to the user's `distinct_id` in SuprSend and is what ties the profile (and its events) together, so calls without a `userId` can't be attributed to a user (see [Handling anonymous users](#handling-anonymous-users)).
 
-e.g.. if you define `language` as the mapping key for Preferred Language in SuprSend. The value passed against `language` trait in Segment identify call will be mapped as user preferred language in SuprSend.
-
-Example of Segment `identify` API call
+All properties inside `traits` are synced as user properties. For example, this Segment `identify` call:
 
 <CodeGroup>
-  ```javascript javascript
+  ```javascript Segment identify call
   {
     "type": "identify",
     "traits": {
       "name": "Peter Gibbons",
       "email": "peter@example.com",
       "language": "hi",
+      "timezone": "Asia/Kolkata",
       "plan": "premium",
       "logins": 5
     },
     "userId": "97980cfea0067"
   }
   ```
-</CodeGroup>
 
-associated user JSON at SuprSend will be.
-
-* Segment`userID`is used to map the`distinct_id`of user on SuprSend.
-
-* All properties inside`traits`are considered as user properties which can be further used to map user channels and preferences in SuprSend.
-
-<CodeGroup>
-  ```javascript javascript
+  ```javascript Synced user in SuprSend
   distinct_id = "97980cfea0067"
 
   properties = {
     "name": "Peter Gibbons",
     "email": "peter@example.com",
     "language": "hi",
+    "timezone": "Asia/Kolkata",
     "plan": "premium",
     "logins": 5
   }
   ```
 </CodeGroup>
 
-and with language set as mapping key, `hi` will be set as the preferred\_language in user profile
+By default, every trait syncs to SuprSend as a **custom property**. To set SuprSend's **reserved properties** — like `$locale`, `$timezone`, or channel values (`$email`, `$sms`, `$whatsapp`, …) — you map the corresponding Segment trait explicitly in the connector form fields:
 
-<Frame caption="Key mapping in Segment Connector Settings">
-  <img src="/images/docs/6695612-image.png" />
-</Frame>
+- **User preference mapping** — map traits to reserved profile fields such as **Locale** (`$locale`) and **Timezone** (`$timezone`). For example, mapping the `language` trait to Locale means the value in `language` (`hi` above) becomes the user's preferred language.
+- **User channel mapping** — map each SuprSend channel to the Segment trait that carries its value. Channels are **not** mapped automatically; you must define each one here for it to work. Use the channel keys below:
 
-<Frame caption="mapped value in user profile">
-  <img src="/images/docs/a92931f-image.png" />
+<Frame caption="Reserved property and channel mapping in Segment connector settings">
+  <img src="/images/docs/user-channel-reserved-property-mapping.png" alt="Reserved property and channel mapping in Segment connector settings" />
 </Frame>
 
 <Warning>
-  Language is stored in ISO 639-1 standard language codes. So, if you pass any value in language which is not in this format, it will be ignored. You can refer to all the [language codes here](https://github.com/suprsend/suprsend-py-sdk/blob/v0.12.0/src/suprsend/language_codes.py)
+  Locale is stored in ISO 639-1 standard language codes. If you pass a value that isn't in this format, it will be ignored. You can refer to all the [language codes here](https://github.com/suprsend/suprsend-py-sdk/blob/v0.12.0/src/suprsend/language_codes.py).
 </Warning>
 
-### 3. User channel mapping
-
-For existing segment users, you can use the same mapping that is used to track user channels in your segment identify call in SuprSend as well. Just map the channel keys in the [Segment identify](https://segment.com/docs/connections/spec/identify/) call with the corresponding communication channel in SuprSend interface.
-
-By default, the `email` trait in the Segment identify call is mapped to the Email channel in SuprSend, and the `phone` trait is mapped to the SMS channel. You can add the mapping of other channels in the similar way
-
-For new users setting up a fresh Segment integration, below table can be used as a reference for mapping user channels in both SuprSend and Segment:
-
-| SuprSend User Channel | Segment key       |
-| --------------------- | ----------------- |
-| Email                 | email             |
-| SMS                   | phone             |
-| Whatsapp              | whatsapp          |
-| Slack (Email)         | slackEmail        |
-| Slack (User ID)       | slackUserID       |
-| Androidpush (FCM)     | fcmAndroidpush    |
-| Androidpush (Xiaomi)  | xiaomiAndroidpush |
-| iospush (APNS)        | apnsIospush       |
-
-Example of Segment `identify` API call
-
-<CodeGroup>
-  ```javascript javascript
-  {
-    "type": "identify",
-    "traits": {
-      "name": "Peter Gibbons",
-      "email": "peter@example.com",
-      "phone":"+15555555555",
-      "slack_email":"peter@abccompany.com",
-      "language": "hi",
-      "plan": "premium",
-      "logins": 5
-    },
-    "userId": "97980cfea0067"
-  }
-  ```
-</CodeGroup>
-
-with below User Channel mapping
-
-<Frame>
-  <img src="/images/docs/421f348-image.png" />
-</Frame>
-
-Communication channels in user profile will look like this
-
-<Frame>
-  <img src="/images/docs/3bd2518-image.png" />
-</Frame>
-
-Click on **`Save Mapping`** to save the changes
-
 <Warning>
-  **Changes in mapping keys will be applied to future syncs**
+  **Mapping changes apply to future syncs only**
 
-  It's important to note that any changes made to channel or preference mapping will only be applied to future user syncs. If the mapping is changed, you'll have to replay all past user syncs in order to update the data in the user profile for existing users.
-
-  Also, we don't override channel information. So, if a user's email or any other channel value is changed in user profile, it will be appended to the user channel list and notification will be sent on both old and new email. This is to ensure that no communication is lost during the change and users can continue to receive notifications on their preferred channels.
+  Any changes to channel or preference mapping apply only to future user syncs — to update existing users, replay their past syncs. Channel values are never overridden: a changed email (or any channel) is appended to the user's channel list, and notifications go to both the old and new value so no communication is lost.
 </Warning>
 
 Now that the desired mapping of Segment events and users in SuprSend has been established, the next step is to start Segment integration.
@@ -289,5 +283,117 @@ Follow below steps to configure SuprSend Destination in Segment:
 </Steps>
 
 Your setup is now complete, enabling events and users data to flow from Segment to SuprSend. You can use this info to automatically power SuprSend workflows without making any changes in your codebase.
+
+### Handling anonymous users
+
+SuprSend's Segment integration requires a `userId` on every event. Segment's `userId` is what maps to the user's `distinct_id` in SuprSend, so events that carry only an `anonymousId` (anonymous `identify`, `track`, or `page` calls) can't be attributed to a user and aren't supported.
+
+The cleanest way to handle this is to stop anonymous events at Segment so they never reach SuprSend. There are two ways to do this, depending on your Segment plan.
+<br/>
+
+**Option 1: Add a trigger condition on the mapping (recommended, all plans)**
+
+This tells Segment to fire the SuprSend mapping only when a `userId` is present, so anonymous events are skipped before they're sent.
+
+<Steps>
+  <Step title="Open your SuprSend mapping">
+    In Segment, go to **Connections** → **Destinations** and select your SuprSend (Webhooks) destination. Open the **Mappings** tab and edit the mapping you created during setup.
+  </Step>
+
+  <Step title="Add a userId condition to the trigger">
+    In the **Select events to map and send** step (the event trigger), add a condition alongside your existing event-type condition:
+
+    > **Field:** `userId`
+    > <br /> **Condition:** `exists`
+
+    Your trigger should now read like: *Event Type is `track` or `identify`* **and** *`userId` exists*. Segment will only forward events that match, so anonymous (`anonymousId`-only) calls are dropped.
+  </Step>
+
+  <Step title="Test the condition">
+    Use **Load Test Event from Source** (or paste a sample) to confirm the condition matches the events you expect. Test with both an identified event and an anonymous one to verify the anonymous event no longer matches.
+  </Step>
+
+  <Step title="Save and enable">
+    **Save and enable** the mapping. The condition takes effect for events sent from this point onward.
+  </Step>
+</Steps>
+
+<Warning>
+  Trigger conditions are **case-sensitive** (`userId`, not `userid`).
+
+  If you're on a Segment **self-service** plan, a trigger supports a maximum of **2 conditions**. *Event Type is `identify`* + *`userId` exists* fits within that limit; if you need more conditions than your plan allows, use Option 2 instead.
+</Warning>
+
+
+**Option 2: Add a Destination Filter (Segment Business Tier)**
+
+A Destination Filter drops any event without a `userId` across all mappings on the SuprSend destination. This option is available only on Segment **Business Tier** workspaces.
+
+<Steps>
+  <Step title="Open the Filters tab">
+    Go to **Connections** → **Destinations**, select your SuprSend destination, and open the **Filters** tab. Click **+ New Filter**.
+  </Step>
+
+  <Step title="Configure the rule">
+    Set the filter to drop events that have no `userId`:
+
+    > **Condition:** `userId` `is null`
+    > <br /> **Action:** Drop the event
+
+    A missing `userId`, as on an anonymous call, evaluates as `null` and is dropped.
+  </Step>
+
+  <Step title="Test with a sample event">
+    Click **Load Sample Event** and paste an anonymous `identify` payload to confirm it gets filtered out:
+
+    <CodeGroup>
+      ```json anonymous identify theme={"system"}
+      {
+        "type": "identify",
+        "anonymousId": "507f191e810c19729de860ea",
+        "traits": {
+          "email": "peter@example.com"
+        },
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Name, enable, and save">
+    Click **Next Step**, name the filter (for example, *Drop events without userId*), toggle it **on**, and click **Save**.
+  </Step>
+</Steps>
+
+You can also create the same filter programmatically with the [Segment Public API](https://docs.segmentapis.com/tag/Destination-Filters/). The FQL condition `length( userId ) < 1` is slightly more robust than the UI's `is null` because it also drops events where `userId` is an empty string:
+
+<CodeGroup>
+  ```json destination filter API theme={"system"}
+  {
+    "sourceId": "<SOURCE_ID>",
+    "destinationId": "<SUPRSEND_DESTINATION_ID>",
+    "title": "Drop events without userId",
+    "description": "Anonymous users are not supported by SuprSend",
+    "if": "length( userId ) < 1",
+    "actions": [
+      { "type": "DROP" }
+    ],
+    "enabled": true
+  }
+  ```
+</CodeGroup>
+
+<Warning>
+  A few things to keep in mind with Destination Filters:
+
+  * Filters only apply to events sent **after** the filter is set up. Right after enabling, you may still see a few anonymous events arrive — these are retries of events that failed before the filter existed.
+  * Conditions are **case-sensitive**. Test before enabling.
+  * Filtered events appear on the schema page but aren't counted in the destination's event delivery graphs, so dropped anonymous events won't show up as failures.
+</Warning>
+
+
+**What happens if an anonymous event still reaches SuprSend**
+
+If an anonymous event is sent without being filtered, SuprSend rejects it with an HTTP **`400 Bad Request`** and an error message indicating that a `userId` is required. Segment records this as a **discarded** event and does **not** retry it, so a missing `userId` won't cause repeated failed deliveries. Filtering at the source (Option 1 or 2) is still recommended, as it keeps these events out of your delivery metrics entirely.
 
 ***
