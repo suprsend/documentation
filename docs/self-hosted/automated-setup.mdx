@@ -1,0 +1,518 @@
+---
+title: "Automated Setup"
+description: "Deploy SuprSend and all dependencies on two VMs using automated setup scripts covering PostgreSQL, Redis, ClickHouse, OpenSearch, Temporal, NATS, and SuprSend."
+---
+
+This guide walks you through deploying SuprSend and all its dependencies on your two VMs using the automated setup scripts. The scripts handle installation of PostgreSQL, Redis, ClickHouse, OpenSearch, Temporal, NATS, and SuprSend.
+
+<Info>
+**Prerequisites**
+- 2 VMs running **Ubuntu 24.04** on the same private network
+- The user running the scripts must have `sudo` privileges (do **not** run as root)
+- Firewall rules must be configured before running the scripts — see the table below
+</Info>
+
+## VM overview
+
+| VM | Specs | What gets installed |
+|----|-------|---------------------|
+| **Postgres VM** | 4+ vCPU, 16+ GB RAM | PostgreSQL 17, PgBouncer, Grafana, ClickHouse, Redis x2 |
+| **K8s VM** | 16+ vCPU, 32+ GB RAM | MicroK8s, OpenSearch, Temporal, NATS, SuprSend |
+
+## Firewall rules
+
+Ensure these ports are open between the VMs before starting:
+
+| From | To | Ports | Purpose |
+|------|----|-------|---------|
+| K8s VM | Postgres VM | 5432 | PostgreSQL |
+| K8s VM | Postgres VM | 6432 | PgBouncer |
+| K8s VM | Postgres VM | 6379, 6380 | Redis |
+| K8s VM | Postgres VM | 8123, 9000 | ClickHouse |
+| Your IP | Postgres VM | 22, 3000 | SSH and Grafana monitoring |
+| Your IP | K8s VM | 22 | SSH |
+
+---
+
+## Postgres VM setup
+
+### Step 1 — Download the setup package
+
+SSH into the **Postgres VM** and download the setup package:
+
+```bash
+curl -u 'user':'password' -o setup.zip https://byoc-docs.suprsend.com/setup.zip
+unzip setup.zip
+```
+
+This extracts a folder called `neom/` containing all setup scripts and configuration templates.
+
+<Tip>
+The `user` and `password` are the same as the ones used to access these docs.
+</Tip>
+
+---
+
+### Step 2 — Configure config.env
+
+Edit `config.env` inside the extracted folder:
+
+```bash
+cd neom
+nano config.env
+```
+
+Fill in the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `POSTGRES_VM_IP` | Private IP address of the Postgres VM |
+| `K8S_VM_IP` | Private IP address of the K8s VM |
+| `TIMEZONE` | Server timezone (e.g. `UTC`, `Asia/Kolkata`) |
+| `GRAFANA_ADMIN_PASSWORD` | Password for Grafana dashboard |
+| `PG_PASSWORD` | PostgreSQL superuser password |
+| `REDIS_SHARED_PASSWORD` | Redis cache password |
+| `REDIS_WORKFLOW_PASSWORD` | Redis workflow password |
+| `CLICKHOUSE_PASSWORD` | ClickHouse password |
+| `PATRONI_PASSWORD` | Patroni REST API password |
+| `ETCD_PASSWORD` | etcd auth password |
+
+<Tip>
+`ENABLE_BACKUP` is set to `false` by default. To enable cloud backups during setup, set it to `true` and also fill in the `BACKUP_OCI_*` fields:
+
+| Field | Description |
+|-------|-------------|
+| `BACKUP_OCI_ENDPOINT` | S3/OCI endpoint for database backups |
+| `BACKUP_OCI_REGION` | S3/OCI region for backups |
+| `BACKUP_OCI_BUCKET` | S3/OCI bucket for backups |
+| `BACKUP_OCI_ACCESS_KEY` | S3/OCI access key for backups |
+| `BACKUP_OCI_SECRET_KEY` | S3/OCI secret key for backups |
+
+To enable backups after the initial setup instead, see [Backups](#backups) at the bottom of this guide.
+</Tip>
+
+---
+
+### Step 3 — Run Postgres VM setup
+
+On the **Postgres VM**, run:
+
+```bash
+bash ~/neom/setup-postgres-vm.sh
+```
+
+<Info>
+The script runs as your current user — **do not prefix with sudo**. Individual commands that need elevated privileges call `sudo` internally.
+</Info>
+
+#### What gets installed on the Postgres VM
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **PostgreSQL 17** | Managed by Pigsty at `/pg/data` | 6 databases for SuprSend |
+| **PgBouncer** | Port 6432 | Connection pooler |
+| **Grafana** | Port 3000 | PostgreSQL monitoring dashboard |
+| **pgBackRest** | Configured via Pigsty | Automated PostgreSQL backups to S3 |
+| **Redis :6379** | `/data/redis-shared/` | Cache store for SuprSend |
+| **Redis :6380** | `/data/redis-workflow/` | Workflow state store |
+| **ClickHouse** | `/var/lib/clickhouse/` | Analytics database |
+
+#### Script stages
+
+The script runs 9 stages. It automatically skips stages that have already completed, so you can safely re-run it if something fails.
+
+| Stage | Duration | Description |
+|-------|----------|-------------|
+| 01 Prerequisites | 2 min | Installs system packages, sets timezone |
+| 02 Install Pigsty | 1 min | Downloads Pigsty v4.2.1 |
+| 03 Configure Pigsty | 1 min | Renders configuration from your `config.env` |
+| 04 Install pg_cron | 1 min | Installs pg_cron extension from PGDG |
+| 05 Deploy Pigsty | **10-15 min** | Installs PostgreSQL, PgBouncer, Grafana, pgBackRest |
+| 06 Deploy Redis | 2 min | Sets up two Redis instances and backup cron |
+| 07 Install ClickHouse | 3 min | Installs ClickHouse and sets up backup cron |
+| 08 Enable extensions | 1 min | Enables pg_cron, pgcrypto and other extensions |
+| 09 Verify | 1 min | Checks all services are running |
+
+When complete, you will see:
+
+```
+ Postgres VM setup complete!
+```
+
+#### Verify services manually (optional)
+
+```bash
+systemctl status patroni redis-shared redis-workflow clickhouse-server
+```
+
+---
+
+## K8s VM setup
+
+### Step 4 — Copy setup files to the K8s VM
+
+Copy the entire `neom/` folder from the Postgres VM to the K8s VM. This carries over `config.env` with the Postgres, Redis, and ClickHouse passwords already set:
+
+```bash
+scp -r ~/neom/ user@<K8S_VM_IP>:~/neom/
+```
+
+---
+
+### Step 5 — Complete config.env on the K8s VM
+
+Open `config.env` and fill in the remaining fields required by the K8s VM:
+
+```bash
+nano ~/neom/config.env
+```
+
+| Field | Description |
+|-------|-------------|
+| `YOUR_DOMAIN` | Your base domain (e.g. `notify.example.com`) |
+| `LICENSE_TOKEN` | Your SuprSend license token |
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP port (default: 587) |
+| `SMTP_USERNAME` | SMTP username |
+| `SMTP_PASSWORD` | SMTP password |
+| `OCI_ENDPOINT` | S3/OCI endpoint URL for file storage |
+| `OCI_REGION` | S3/OCI region |
+| `OCI_ACCESS_KEY` | S3/OCI access key |
+| `OCI_SECRET_KEY` | S3/OCI secret key |
+| `OCI_BUCKET_NAME` | Bucket name for SuprSend file uploads |
+| `HOST_ACCOUNT_EMAIL` | Admin login email for the SuprSend dashboard |
+| `ROOT_ACCOUNT_EMAIL` | Root account email |
+
+<Tip>
+SMTP_* is optional.
+
+For OCI Object Storage, the endpoint format is:
+`<namespace>.compat.objectstorage.<region>.oraclecloud.com`
+
+For AWS S3: `s3.<region>.amazonaws.com`
+</Tip>
+
+Next, generate the three cryptographic secrets and add them to `config.env`.
+
+#### Deployment secret
+
+Run the following command and paste the output as `DEPLOYMENT_SECRET`:
+
+```bash
+python3 -c 'import secrets; print("".join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)") for i in range(50)))'
+```
+
+#### AES encryption key and IV
+
+Run the following command and paste both values into `config.env`:
+
+```bash
+python3 -c "import os; k=os.urandom(32); iv=os.urandom(16); print('AES_SECRET_KEY:', k.hex()); print('AES_IV:', iv.hex())"
+```
+
+#### NATS NKey pair
+
+Install Go and the `nk` key generation tool:
+
+```bash
+# Install Go via snap
+sudo snap install go --classic
+
+# Install the nk tool
+go install github.com/nats-io/nkeys/nk@latest
+
+# Add Go binaries to your PATH
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+Generate the NATS key pair:
+
+```bash
+nk -gen user -pubout
+```
+
+The command prints two lines:
+- The line beginning with `SU...` → paste as `NATS_NKEY_PRIVATE`
+- The line beginning with `U...` → paste as `NATS_NKEY_PUBLIC`
+
+<Warning>
+Keep all generated values private. Do not commit `config.env` to version control.
+</Warning>
+
+---
+
+### Step 6 — Run K8s VM setup
+
+On the **K8s VM**, run:
+
+```bash
+bash ~/neom/setup-k8s-vm.sh
+```
+
+#### What gets installed on the K8s VM
+
+| Component | Namespace | Purpose |
+|-----------|-----------|---------|
+| **MicroK8s** | System | Kubernetes cluster |
+| **OpenSearch** | `suprsend` | In-app inbox search store |
+| **Temporal** | `suprsend` | Workflow engine |
+| **NATS** | `suprsend` | Messaging bus |
+| **SuprSend** | `suprsend` | ~25 microservices |
+| **cert-manager** | `cert-manager` | Automatic TLS certificates |
+| **nginx ingress** | System | Routes HTTPS traffic to services |
+
+#### Script stages
+
+| Stage | Duration | Description |
+|-------|----------|-------------|
+| 01 Prerequisites | 3 min | Installs packages, k9s, aws-cli |
+| 02 Connectivity test | 1 min | Verifies PG, Redis, ClickHouse are reachable — **fails fast if not** |
+| 03 Install MicroK8s | 3 min | Installs MicroK8s and enables addons |
+| 04 Create namespace | 1 min | Creates `suprsend` namespace |
+| 05 Deploy OpenSearch | 2 min | Deploys OpenSearch helm chart |
+| 06 Wait OpenSearch | up to 5 min | **Manual step** — see below |
+| 07 Deploy Temporal | 2 min | Deploys Temporal helm chart |
+| 08 Wait Temporal | up to 8 min | **Manual step** — see below |
+| 09 Temporal namespace | 1 min | Creates default namespace and search attributes |
+| 10 Create K8s secret | 1 min | Creates `suprsend-secrets` with all credentials |
+| 11 Deploy SuprSend | 3 min | Deploys SuprSend helm chart |
+| 12 Wait SuprSend | up to 10 min | **Manual step** — see below |
+| 13 Setup TLS | 2 min | Installs cert-manager and Let's Encrypt issuer |
+| 14 Setup kubectl | 1 min | Configures kubectl and k9s for your user |
+
+#### Manual confirmation steps
+
+The script pauses at three stages and asks you to confirm pods are running before continuing.
+
+**Stage 06 — After OpenSearch deploys:**
+
+```
+Please verify that opensearch pods are running.
+  Check with: microk8s kubectl get pods -n suprsend
+Press Enter once all pods are up and running...
+```
+
+Open a second terminal and check:
+```bash
+microk8s kubectl get pods -n suprsend
+```
+
+Wait until you see `opensearch-cluster-master-0` in `Running` state, then press **Enter** to continue.
+
+---
+
+**Stage 08 — After Temporal deploys:**
+
+```
+Please verify that Temporal pods are running.
+  Check with: microk8s kubectl get pods -n suprsend
+Press Enter once all pods are up and running...
+```
+
+Temporal runs database schema migrations on first install — this can take **5-8 minutes**. Wait until all temporal pods (frontend, history, matching, worker, web) show `Running` or `Completed`, then press **Enter**.
+
+---
+
+**Stage 12 — After SuprSend deploys:**
+
+```
+Please verify that all SuprSend pods are running.
+  Check with: microk8s kubectl get pods -n suprsend
+Press Enter once all pods are up and running...
+```
+
+SuprSend deploys ~25 microservices. Wait until all pods are in `Running` or `Completed` state. You can use **k9s** for a better view:
+
+```bash
+k9s
+```
+
+Navigate to the `suprsend` namespace with `:ns` then select `suprsend`.
+
+When all pods are healthy, press **Enter** to continue.
+
+---
+
+When complete, you will see:
+
+```
+ Kubernetes VM setup complete!
+```
+
+---
+
+## Step 7 — Configure DNS
+
+Create DNS records pointing to the **public IP of the K8s VM**. You can use a wildcard record or individual records:
+
+**Wildcard (recommended):**
+```
+*.YOUR_DOMAIN  A  <K8s VM public IP>
+```
+
+**Or individual records:**
+
+| Subdomain | Purpose |
+|-----------|---------|
+| `api.YOUR_DOMAIN` | SuprSend REST API |
+| `app.YOUR_DOMAIN` | Admin dashboard |
+| `inbox.YOUR_DOMAIN` | In-app inbox API |
+| `mgmt-api.YOUR_DOMAIN` | Management API |
+| `pronto.YOUR_DOMAIN` | Pronto service |
+| `goapi.YOUR_DOMAIN` | Go API |
+| `hub.YOUR_DOMAIN` | Hub service |
+| `jsonnet.YOUR_DOMAIN` | Template renderer |
+| `webhooks.YOUR_DOMAIN` | Outbound webhooks |
+| `preferences.YOUR_DOMAIN` | Hosted preferences |
+
+Once DNS propagates, cert-manager will automatically obtain TLS certificates from Let's Encrypt.
+
+---
+
+## Step 8 — Verify the deployment
+
+Run the verification script on the K8s VM:
+
+```bash
+bash ~/neom/verify.sh
+```
+
+This checks all services are reachable and returns a PASS/FAIL/WARN summary.
+
+Then open your dashboard:
+
+```
+https://app.YOUR_DOMAIN
+```
+
+Log in with the email you set as `HOST_ACCOUNT_EMAIL`.
+
+---
+
+## What gets deployed — summary
+
+### Postgres VM
+
+```
+/pg/data/                          PostgreSQL 17 data directory
+/pg/log/                           PostgreSQL and pgBackRest logs
+/etc/pgbouncer/                    PgBouncer configuration
+/data/redis-shared/                Redis cache data
+/data/redis-workflow/              Redis workflow state data
+/opt/redis-backup/                 Redis backup scripts and snapshots
+/opt/clickhouse-backup/            ClickHouse backup scripts
+/var/lib/clickhouse/               ClickHouse data
+Grafana → http://<POSTGRES_VM_IP>:3000
+```
+
+### K8s VM (all in `suprsend` namespace)
+
+```
+OpenSearch        → internal: opensearch-cluster-master:9200
+Temporal          → internal: temporal-frontend:7233
+NATS              → internal: my-suprsend-nats:4222
+SuprSend API      → https://api.YOUR_DOMAIN
+SuprSend App      → https://app.YOUR_DOMAIN
+Inbox API         → https://inbox.YOUR_DOMAIN
+Management API    → https://mgmt-api.YOUR_DOMAIN
+... and 6 more subdomains
+```
+
+---
+
+## Backups
+
+S3 backups for PostgreSQL, ClickHouse, and Redis are **disabled by default**.
+
+**To enable during initial setup:** Set `ENABLE_BACKUP=true` in `config.env` on the Postgres VM (Step 2) and fill in the `BACKUP_OCI_*` fields before running `setup-postgres-vm.sh`.
+
+**To enable after setup:** Follow the steps below on the Postgres VM.
+
+### 1. Fill in backup credentials
+
+Open `config.env` on the Postgres VM and fill in the `BACKUP_OCI_*` fields:
+
+```bash
+nano ~/neom/config.env
+```
+
+| Field | Description |
+|-------|-------------|
+| `BACKUP_OCI_ENDPOINT` | S3/OCI endpoint (e.g. `s3.ap-south-1.amazonaws.com`) |
+| `BACKUP_OCI_REGION` | S3/OCI region |
+| `BACKUP_OCI_BUCKET` | S3/OCI bucket name |
+| `BACKUP_OCI_ACCESS_KEY` | S3/OCI access key |
+| `BACKUP_OCI_SECRET_KEY` | S3/OCI secret key |
+
+### 2. Run the backup enablement script
+
+```bash
+bash ~/neom/enable-backup.sh
+```
+
+This script:
+- Reconfigures Pigsty with pgBackRest enabled
+- Restarts Patroni to apply `archive_mode`
+- Creates the pgBackRest stanza and runs the first full backup
+- Configures ClickHouse S3 backups
+- Configures Redis local snapshots
+
+### Backup schedule
+
+| Data | Schedule | Storage |
+|------|----------|---------|
+| PostgreSQL | Daily at 1AM (full) | S3: `<bucket>/pgbackrest/` |
+| ClickHouse | Daily at 2:20AM | S3: `<bucket>/clickhouse/backups/<dd-mm-yyyy>/` |
+| Redis workflow | Daily at 1:30AM | Local: `/opt/redis-backup/snapshots/` (last 7 kept) |
+
+---
+
+## Troubleshooting
+
+### Script fails midway
+
+Each script tracks completed stages. Simply fix the issue and re-run — completed stages are skipped automatically.
+
+To force a specific stage to re-run, delete its marker file:
+
+```bash
+# Example: re-run Pigsty deploy on Postgres VM
+rm ~/neom/progress-pg/05_deploy_pigsty
+bash ~/neom/setup-postgres-vm.sh
+```
+
+### Connectivity test fails (Stage 02 on K8s VM)
+
+This means the K8s VM cannot reach the Postgres VM. Check:
+1. Firewall / security group rules are configured
+2. The Postgres VM setup completed successfully
+3. IPs in `config.env` are correct private IPs
+
+### Pods stuck in `CrashLoopBackOff`
+
+Check the pod logs:
+```bash
+microk8s kubectl logs <pod-name> -n suprsend
+```
+
+### TLS certificates not issuing
+
+DNS must resolve before Let's Encrypt can issue certificates. Check:
+```bash
+microk8s kubectl get certificate -n suprsend
+dig app.YOUR_DOMAIN
+```
+
+### Viewing logs
+
+```bash
+# Setup logs
+cat ~/neom/pg-setup-*.log          # Postgres VM setup
+cat ~/neom/k8s-setup-*.log         # K8s VM setup
+
+# Service logs
+microk8s kubectl logs -n suprsend deploy/my-suprsend-suprsendapi -f
+
+# Use k9s for interactive log browsing
+k9s
+```

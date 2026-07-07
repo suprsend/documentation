@@ -40,7 +40,15 @@ Managed services simplify upgrades, backups, and high availability.
 ### AWS RDS / Aurora PostgreSQL
 1. Create a **PostgreSQL 17+** instance or cluster.
 2. In the **parameter group**, apply the configuration parameters above.
-3. Ensure `wal_level=logical` and configure replication if needed.
+3. Enable extensions (run per DB as admin):
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS pg_cron;
+   CREATE EXTENSION IF NOT EXISTS pgcrypto;
+   CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+   CREATE EXTENSION IF NOT EXISTS btree_gin;
+   CREATE EXTENSION IF NOT EXISTS btree_gist;
+   ```
+4. Ensure `wal_level=logical` and configure replication if needed.
 
 ### Google Cloud SQL for PostgreSQL
 1. Create a **PostgreSQL 17+** instance.
@@ -139,9 +147,22 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 ---
 
-## Database Access
+## Create Roles & Grant Access
 
-SuprSend requires a **superuser** role to operate correctly. Use the superuser credentials (username and password) when configuring SuprSend's database connection.
+Create an application role for SuprSend:
+
+```sql
+CREATE ROLE suprsend_app WITH LOGIN PASSWORD '<<strong-password>>';
+
+GRANT CONNECT ON DATABASE suprsend TO suprsend_app;
+\c suprsend
+GRANT USAGE ON SCHEMA public TO suprsend_app;
+GRANT CREATE, SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO suprsend_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO suprsend_app;
+```
+
+Repeat equivalent grants for other databases as needed.
 
 <Tip>
 For high concurrency, use **PgBouncer** in transaction pooling mode.
@@ -227,8 +248,8 @@ First, add the PostgreSQL-specific secrets to your [`suprsend-secrets.yaml`](/do
 # ============================================
 # PostgreSQL Configuration (this guide)
 # ============================================
-# username of the PostgreSQL database (superuser)
-pgDbUserKey: "YOUR_SUPERUSER_USERNAME"
+# username of the PostgreSQL database
+pgDbUserKey: "YOUR_USERNAME"
 # password of the PostgreSQL database
 pgDbPasswordKey: "YOUR_PASSWORD"
 ```
@@ -261,7 +282,7 @@ SuprSend will automatically connect to the required databases (`suprsend`, `pron
 ✅ Apply **configuration parameters**  
 ✅ Create **six databases**  
 ✅ Enable **required extensions**  
-✅ Configure **superuser access**  
+✅ Set up **roles and access**  
 ✅ Configure **replication & backups**  
 ✅ Run **validation checklist**
 
@@ -282,6 +303,6 @@ Once PostgreSQL is ready, proceed with deploying the rest of the SuprSend stack 
     Required for CDC, logical replication, and certain SuprSend data sync features.
   </Accordion>
   <Accordion title="What if a managed DB doesn't support pg_cron?">
-    `pg_cron` is mandatory for SuprSend - there is no fallback. If your managed provider does not support `pg_cron`, you will need to use a self-hosted PostgreSQL deployment instead.
+    You can use external schedulers (like CloudWatch, GCP Cloud Scheduler, or Kubernetes CronJobs) as a fallback.
   </Accordion>
 </AccordionGroup>
