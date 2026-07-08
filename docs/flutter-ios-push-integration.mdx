@@ -9,9 +9,7 @@ description: "Set up APNs iOS push notifications in your Flutter app with SuprSe
   If you are using an iOS version older than v1.0.0 and upgrading to the new version. Please ensure to use the latest integration steps, especially for below methods:
 
   1. [Adding Background mode capability](/docs/flutter-ios-push-integration#step-1-add-capabilities-in-ios-application)
-
   2. [Calling registerPush method](/docs/flutter-ios-push-integration#step-2-register-for-push-notification-in-appdelegateswift-file)
-
   3. [Tracking delivery methods](/docs/flutter-ios-push-integration#step-4-enable-sending-and-tracking-of-push-notifications)
 </Warning>
 
@@ -22,16 +20,16 @@ description: "Set up APNs iOS push notifications in your Flutter app with SuprSe
 ## Step 1: Add capabilities in iOS application
 
 1. Inside Targets select **signing and capabilities**
-
-2. Click on **+capabilities** and select **Push Notifications** and **Background Modes**
+2. Click on **\+capabilities** and select **Push Notifications** and **Background Modes**
 
 <Frame>
-  <img src="/images/docs/29bafbe-Screenshot_2022-05-19_at_5.48.52_PM.png" />
+  ![](/images/docs/29bafbe-Screenshot_2022-05-19_at_5.48.52_PM.png)
 </Frame>
+
 In Background Modes, select **Remote Notifications** option. We use background notifications to receive delivery reports when your app is in quit and background state. Refer [doc](https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/pushing_background_updates_to_your_app) to know more about background notification
 
 <Frame>
-  <img src="/images/docs/75c5310-Screenshot_2022-09-27_at_1.48.11_PM.png" />
+  ![](/images/docs/75c5310-Screenshot_2022-09-27_at_1.48.11_PM.png)
 </Frame>
 
 ## Step 2: Register for push notification in AppDelegate.swift file
@@ -39,23 +37,25 @@ In Background Modes, select **Remote Notifications** option. We use background n
 Call `registerForPushNotifications` method below the SuprSend SDK initialized code which will register the iOS device for push service
 
 <CodeGroup>
-  ```objectivec AppDelegate.swift
-  SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
-  var options: UNAuthorizationOptions = [.badge, .alert, .sound] // Add this
-  SuprSend.shared.registerForPushNotifications(options: options) // Add this
-  ```
+
+```objectivec AppDelegate.swift
+SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
+var options: UNAuthorizationOptions = [.badge, .alert, .sound] // Add this
+SuprSend.shared.registerForPushNotifications(options: options) // Add this
+```
+
 </CodeGroup>
 
 ## Step 3: Asking User to send push notifications
 
 There are 2 ways in which your app can prompt users to allow push notifications on their devices:
 
- ### Explicit Authorization
+### Explicit Authorization
 
 Explicit authorization allows you to display alerts, add a badge to the app icon, or play sounds whenever a notification is delivered. In this type of authorization, the request is made the first time user launches your app. If the user denies the request, you can't send subsequent prompts to send the notification.
 
 <Frame>
-  <img src="/images/docs/8538f91-app_permission.png" />
+  ![](/images/docs/8538f91-app_permission.png)
 </Frame>
 
 <Info>
@@ -67,56 +67,60 @@ Explicit authorization allows you to display alerts, add a badge to the app icon
 Provisional Authorization (Supported in iOS 12.0 and above) are sent quietly to the users -they don’t interrupt the user with a sound or banner. Also, they will not be shown when your app is in foreground. First time this type of notifications are sent, user is asked to "Keep" or "Turn off" the notifications. Further notifications continue to be sent if they click on "Keep".
 
 <Frame>
-  <img src="/images/docs/0367021-provisional.png" />
+  ![](/images/docs/0367021-provisional.png)
 </Frame>
 
 Add below code in `AppDelegate.swift` file for provisional authorization.
 
 <CodeGroup>
-  ```swift AppDelegate.swift
-  SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
-  var options: UNAuthorizationOptions = [.badge, .alert, .sound, .provisional] // Add this
-  SuprSend.shared.registerForPushNotifications(options: options) // Add this
-  ```
+
+```swift AppDelegate.swift
+SuprSend.shared.configureWith(configuration: suprSendConfiguration  , launchOptions: launchOptions) // init code which is already added at time of initialisation
+var options: UNAuthorizationOptions = [.badge, .alert, .sound, .provisional] // Add this
+SuprSend.shared.registerForPushNotifications(options: options) // Add this
+```
+
 </CodeGroup>
 
 ## Step 4: Enable sending and tracking of push notifications
 
-Receiving iOS APNS token sending to backend and listening for push notification and tracking user notification clicks can be done using the following snippet of code. Directly copy and paste it at end of the AppDelegate.swift file inside *AppDelegate* class.
+Receiving iOS APNS token sending to backend and listening for push notification and tracking user notification clicks can be done using the following snippet of code. Directly copy and paste it at end of the AppDelegate.swift file inside _AppDelegate_ class.
 
 <CodeGroup>
-  ```swift AppDelegate.swift
-  override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
-    let  token = tokenParts.joined()
-    SuprSend.shared.setPushNotificationToken(token: token)  // Send APNS Token to SuprSend
-  }
 
-  @available(iOS 10.0, *)
-  override func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    didReceive response: UNNotificationResponse,
-    withCompletionHandler completionHandler: @escaping () -> Void
-  ) {
-    if response.isSuprSendNotification() {
-      SuprSend.shared.userNotificationCenter(center, didReceive: response)
-    }
-    completionHandler()
-  }
+```swift AppDelegate.swift
+override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+  let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
+  let  token = tokenParts.joined()
+  SuprSend.shared.setPushNotificationToken(token: token)  // Send APNS Token to SuprSend
+}
 
-  override func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]){
-    SuprSend.shared.application(application, didReceiveRemoteNotification: userInfo)
+@available(iOS 10.0, *)
+override func userNotificationCenter(
+  _ center: UNUserNotificationCenter,
+  didReceive response: UNNotificationResponse,
+  withCompletionHandler completionHandler: @escaping () -> Void
+) {
+  if response.isSuprSendNotification() {
+    SuprSend.shared.userNotificationCenter(center, didReceive: response)
   }
+  completionHandler()
+}
 
-  @available(iOS 10.0, *)
-  override func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-    if #available(iOS 14.0, *) {
-      completionHandler([.banner, .badge, .sound])
-    } else {
-      completionHandler([.alert, .badge, .sound])
-    }
+override func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any]){
+  SuprSend.shared.application(application, didReceiveRemoteNotification: userInfo)
+}
+
+@available(iOS 10.0, *)
+override func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+  if #available(iOS 14.0, *) {
+    completionHandler([.banner, .badge, .sound])
+  } else {
+    completionHandler([.alert, .badge, .sound])
   }
-  ```
+}
+```
+
 </CodeGroup>
 
 <Warning>
@@ -134,175 +138,182 @@ For better notification status (delivered, seen) tracking this step is needed.
   </Step>
   <Step title="Name your Notification Service">
     Then in Next popup give a suitable name to your notification service, select your team, select swift language and click finish.
+
     <Frame>
-      <img src="/images/docs/2545534-Screenshot_2022-09-27_at_8.23.30_PM.png" />
+      ![](/images/docs/2545534-Screenshot_2022-09-27_at_8.23.30_PM.png)
     </Frame>
   </Step>
   <Step title="A folder will be created with your given product name.">
     After clicking on `Finish`, a folder will be created with your given product name. Inside that there will be **`NotificationService.swift`** file like below.
+
     <Frame>
-      <img src="/images/docs/507d91a-Screenshot_2022-09-27_at_8.30.25_PM.png" />
+      ![](/images/docs/507d91a-Screenshot_2022-09-27_at_8.30.25_PM.png)
     </Frame>
   </Step>
   <Step title="Rename and Run the pod install">
     In your project **`podFile`** add following snippet. Replace `<your notification service name>` with the name given in step 3. After that, run `pod install`.
+
     <CodeGroup>
-  ```yaml PodFile
-  target '<your notification service name>' do
-    use_frameworks!
 
-    pod 'SuprsendCore'
-    pod 'SuprSendSdk'
+    ```yaml PodFile
+    target '<your notification service name>' do
+      use_frameworks!
+    
+      pod 'SuprsendCore'
+      pod 'SuprSendSdk'
+    
+    end
+    ```
 
-  end
-  ```
-</CodeGroup>
+    </CodeGroup>
 
-<Frame>
-  <img src="/images/docs/8397e64-Screenshot_2024-08-14_at_4.34.21_PM.png" />
-</Frame>
+    <Frame>
+      ![](/images/docs/8397e64-Screenshot_2024-08-14_at_4.34.21_PM.png)
+    </Frame>
   </Step>
   <Step title="Replace values with your Workspace Key and Workspace Secret.">
     Replace the content in **`NotificationService.swift`** file with below code. In this snippet on line 11, 12 replace values with your workspace key and workspace secret.
+
     <CodeGroup>
-          ```swift NotificationService.swift
-          import UserNotifications
-          import UIKit
-          import SuprSendSdk
 
-          class NotificationService: UNNotificationServiceExtension {
-          var contentHandler: ((UNNotificationContent) -> Void)?
-          var modifiedNotificationContent: UNMutableNotificationContent?
-
-          private func track(request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-
-                  let suprSendConfiguration = SuprSendSDKConfiguration(
-                      withKey: "your workspace key",
-                      secret: "your workspace secret"
-                  )
-
-                  SuprSend.shared.configureWith(configuration: suprSendConfiguration , launchOptions: [:])
-                  SuprSend.shared.didReceive(request, withContentHandler: contentHandler)
-              }
-
-          override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-              self.contentHandler = contentHandler
-              modifiedNotificationContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
-
-               track(request: request, withContentHandler: contentHandler)
-
-              if let modifiedNotificationContent = modifiedNotificationContent {
-                  // Modify the notification content here...
-                  // 1
-                  guard let imageURLString =
-                          modifiedNotificationContent.userInfo["image_url"] as? String else {
-                      contentHandler(modifiedNotificationContent)
-                      return
-                  }
-
-                  getMediaAttachment(for: imageURLString) { [weak self] image in
-                      guard let self = self, let image = image, let fileURL = self.saveImageAttachment(
-                          image: image,
-                          forIdentifier: "attachment.png")
-                      else {
-                          contentHandler(modifiedNotificationContent)
-                          return
-                      }
-
-                      let imageAttachment = try? UNNotificationAttachment(
-                          identifier: "image",
-                          url: fileURL,
-                          options: nil)
-
-                      if let imageAttachment = imageAttachment {
-                          modifiedNotificationContent.attachments = [imageAttachment]
-                      }
-
-                      contentHandler(modifiedNotificationContent)
-                  }
-              }
-          }
-
-          override func serviceExtensionTimeWillExpire() {
-              // Called just before the extension will be terminated by the system.
-              // Use this as an opportunity to deliver your "best attempt" at modified content, otherwise the original push payload will be used.
-              if let contentHandler = contentHandler, let bestAttemptContent =  modifiedNotificationContent {
-                  contentHandler(bestAttemptContent)
-              }
-
-          }
-
-          }
-
-          extension NotificationService {
-
-          private func saveImageAttachment(image: UIImage, forIdentifier identifier: String
-          ) -> URL? {
-            let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory())
-            let directoryPath = tempDirectory.appendingPathComponent(
-              ProcessInfo.processInfo.globallyUniqueString,
-              isDirectory: true)
-
-            do {
-              try FileManager.default.createDirectory(
-                at: directoryPath,
-                withIntermediateDirectories: true,
-                attributes: nil)
-
-              let fileURL = directoryPath.appendingPathComponent(identifier)
-
-              guard let imageData = image.pngData() else {
-                return nil
-              }
-
-              try imageData.write(to: fileURL)
-                return fileURL
-              } catch {
-                return nil
+    ```swift NotificationService.swift
+    import UserNotifications
+    import UIKit
+    import SuprSendSdk
+    
+    class NotificationService: UNNotificationServiceExtension {
+    var contentHandler: ((UNNotificationContent) -> Void)?
+    var modifiedNotificationContent: UNMutableNotificationContent?
+    
+    private func track(request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+    
+            let suprSendConfiguration = SuprSendSDKConfiguration(
+                withKey: "your workspace key",
+                secret: "your workspace secret"
+            )
+    
+            SuprSend.shared.configureWith(configuration: suprSendConfiguration , launchOptions: [:])
+            SuprSend.shared.didReceive(request, withContentHandler: contentHandler)
+        }
+    
+    override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+        self.contentHandler = contentHandler
+        modifiedNotificationContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
+    
+         track(request: request, withContentHandler: contentHandler)
+    
+        if let modifiedNotificationContent = modifiedNotificationContent {
+            // Modify the notification content here...
+            // 1
+            guard let imageURLString =
+                    modifiedNotificationContent.userInfo["image_url"] as? String else {
+                contentHandler(modifiedNotificationContent)
+                return
             }
-          }
+    
+            getMediaAttachment(for: imageURLString) { [weak self] image in
+                guard let self = self, let image = image, let fileURL = self.saveImageAttachment(
+                    image: image,
+                    forIdentifier: "attachment.png")
+                else {
+                    contentHandler(modifiedNotificationContent)
+                    return
+                }
+    
+                let imageAttachment = try? UNNotificationAttachment(
+                    identifier: "image",
+                    url: fileURL,
+                    options: nil)
+    
+                if let imageAttachment = imageAttachment {
+                    modifiedNotificationContent.attachments = [imageAttachment]
+                }
+    
+                contentHandler(modifiedNotificationContent)
+            }
+        }
+    }
+    
+    override func serviceExtensionTimeWillExpire() {
+        // Called just before the extension will be terminated by the system.
+        // Use this as an opportunity to deliver your "best attempt" at modified content, otherwise the original push payload will be used.
+        if let contentHandler = contentHandler, let bestAttemptContent =  modifiedNotificationContent {
+            contentHandler(bestAttemptContent)
+        }
+    
+    }
+    
+    }
+    
+    extension NotificationService {
+    
+    private func saveImageAttachment(image: UIImage, forIdentifier identifier: String
+    ) -> URL? {
+      let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory())
+      let directoryPath = tempDirectory.appendingPathComponent(
+        ProcessInfo.processInfo.globallyUniqueString,
+        isDirectory: true)
+    
+      do {
+        try FileManager.default.createDirectory(
+          at: directoryPath,
+          withIntermediateDirectories: true,
+          attributes: nil)
+    
+        let fileURL = directoryPath.appendingPathComponent(identifier)
+    
+        guard let imageData = image.pngData() else {
+          return nil
+        }
+    
+        try imageData.write(to: fileURL)
+          return fileURL
+        } catch {
+          return nil
+      }
+    }
+    
+    private func getMediaAttachment(for urlString: String, completion: @escaping (UIImage?) -> Void
+    ) {
+        // 1
+        guard let url = URL(string: urlString) else {
+            completion(nil)
+            return
+        }
+    
+        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            if error != nil {
+                completion(nil)
+                return
+            }
+    
+            guard let data = data else {
+                completion(nil)
+                return
+            }
+    
+            guard let image = UIImage(data: data) else {
+                completion(nil)
+                return
+            }
+            completion(image)
+        }
+        task.resume()
+    }
+    }
+    ```
 
-          private func getMediaAttachment(for urlString: String, completion: @escaping (UIImage?) -> Void
-          ) {
-              // 1
-              guard let url = URL(string: urlString) else {
-                  completion(nil)
-                  return
-              }
+    </CodeGroup>
+  </Step>
+  <Step title="Final Step">
+    Runner Target inside Build Phases, drag **`Embedded Foundation Extensions`** section and drop it below the\*\*`Copy Bundle Resources`\*\* section like in image.
 
-              let task = URLSession.shared.dataTask(with: url) { data, response, error in
-                  if error != nil {
-                      completion(nil)
-                      return
-                  }
+    <Frame>
+      ![](/images/docs/d90e08d-Screenshot_2024-08-14_at_4.47.35_PM.png)
+    </Frame>
 
-                  guard let data = data else {
-                      completion(nil)
-                      return
-                  }
+    You are now all set to send push notifications. All you have to do is add iOS vendor configuration on SuprSend dashboard and your push notifications will be configured. Please refer [vendor integration guide](/docs/ios-push-vendor-integration) to integrate your apns push service.
 
-                  guard let image = UIImage(data: data) else {
-                      completion(nil)
-                      return
-                  }
-                  completion(image)
-              }
-              task.resume()
-          }
-          }
-          ```
-</CodeGroup>
-</Step>
-<Step title="Final Step">
-Runner Target inside Build Phases, drag **`Embedded Foundation Extensions`** section and drop it below th&#x65;**`Copy Bundle Resources`** section like in image.
-
-<Frame>
-  <img src="/images/docs/d90e08d-Screenshot_2024-08-14_at_4.47.35_PM.png" />
-</Frame>
-
-You are now all set to send push notifications. All you have to do is add iOS vendor configuration on SuprSend dashboard and your push notifications will be configured. Please refer [vendor integration guide](/docs/ios-push-vendor-integration) to integrate your apns push service.
-
-***
-</Step>
-
+    ---
+  </Step>
 </Steps>

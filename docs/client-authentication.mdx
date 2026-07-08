@@ -7,10 +7,10 @@ description: "Authenticate SuprSend client SDKs from web and mobile apps using p
   📘 Many of our mobile SDK's are under revamp stage. These SDK's still use workspace key and workspace secret authentication.
 </Check>
 
-SuprSend client SDK's use public API Keys to authenticate requests. You can find Public Keys in *SuprSend Dashboard -> Developers -> API Keys -> Public Keys*. You can generate new ones and delete or rotate existing keys.
+SuprSend client SDK's use public API Keys to authenticate requests. You can find Public Keys in _SuprSend Dashboard -\> Developers -\> API Keys -\> Public Keys_. You can generate new ones and delete or rotate existing keys.
 
 <Frame>
-  <img src="/images/docs/d44c8b5993f4dace694f63d10493f76c81814c25a23ddf5642d26e6d2253460a-Screenshot_2024-09-08_at_9.26.14_PM.png" />
+  ![](/images/docs/d44c8b5993f4dace694f63d10493f76c81814c25a23ddf5642d26e6d2253460a-Screenshot_2024-09-08_at_9.26.14_PM.png)
 </Frame>
 
 For production workspaces public API Keys alone isn't enough as they are insecure. To solve this enable enhanced secure mode switch which you can find beside Public Key (shown in above image). This mandates signed user token (a JWT token that identifies the user that is performing the request) to be sent along with client requests.
@@ -24,33 +24,32 @@ When enhanced security mode is on, user level authentication is performed for al
     You can generate Signing key from SuprSend Dashboard (below Public Keys section in API Keys page).
 
     <Frame>
-      <img src="/images/docs/ba1ee6d00d68bd97058f828c95bea3984e780e439ea47c8460d9c38a65bb13cb-Screenshot_2024-09-08_at_9.57.56_PM.png" />
+      ![](/images/docs/ba1ee6d00d68bd97058f828c95bea3984e780e439ea47c8460d9c38a65bb13cb-Screenshot_2024-09-08_at_9.57.56_PM.png)
     </Frame>
 
     Once signing key is generated it won't be shown again, so copy and store it securely. It contains 2 formats: (i.) **Base64 format:** This is single line text, suitable for storing as an environment variable. (ii.) **PEM format:** This is multiline text format string.
 
     You can use any of the above format. This key will be used as secret to generate JWT token as shown in below step.
   </Step>
-
   <Step title="Creating Signed User JWT Token">
     This should be created on your backend application only. You will need to sign the JWT token with the signing key from above step and expose this JWT token to your Frontend application.
 
-    * **JWT Algorithm:**&#x45;S256
-
-    * **JWT Secret:**&#x53;igning key in PEM format generated in step1. If you are using Base64 format, it should be converted in to PEM format.
-
-    * **JWT Payload:**
+    - \*\*JWT Algorithm:\*\*ES256
+    - \*\*JWT Secret:\*\*Signing key in PEM format generated in step1. If you are using Base64 format, it should be converted in to PEM format.
+    - **JWT Payload:**
 
     <CodeGroup>
-      ```json Payload
-      {
-        "entity_type": 'subscriber', // hardcode this value to subscriber
-        "entity_id": your_distinct_id, // replace this with your actual distinct id
-        "exp": 1725814228, // token expiry timestamp in seconds
-        "iat": 1725814228 // token issued timestamp in seconds.
-        "scope": { "tenant_id": "string" }
-      }
-      ```
+
+    ```json Payload
+    {
+      "entity_type": 'subscriber', // hardcode this value to subscriber
+      "entity_id": your_distinct_id, // replace this with your actual distinct id
+      "exp": 1725814228, // token expiry timestamp in seconds
+      "iat": 1725814228 // token issued timestamp in seconds.
+      "scope": { "tenant_id": "string" }
+    }
+    ```
+
     </CodeGroup>
 
     <Note>
@@ -64,32 +63,35 @@ When enhanced security mode is on, user level authentication is performed for al
     Create JWT token using above information:
 
     <CodeGroup>
-      ```javascript Node
-      import jwt from 'jsonwebtoken';
 
-      const payload  = { entity_type:'subscriber', entity_id:"johndoe", exp:1725814228 };
+    ```javascript Node
+    import jwt from 'jsonwebtoken';
+    
+    const payload  = { entity_type:'subscriber', entity_id:"johndoe", exp:1725814228 };
+    
+    const secret = 'your PEM format signing key';
+    
+    // if base64 signing key format is used use below code to convert to PEM format.
+    const secret = Buffer.from('your_base64_signingKey', 'base64').toString('utf-8')
+    
+    const signedUserToken = jwt.sign(payload, secret,{ algorithm: 'ES256' })
+    ```
 
-      const secret = 'your PEM format signing key';
-
-      // if base64 signing key format is used use below code to convert to PEM format.
-      const secret = Buffer.from('your_base64_signingKey', 'base64').toString('utf-8')
-
-      const signedUserToken = jwt.sign(payload, secret,{ algorithm: 'ES256' })
-      ```
     </CodeGroup>
   </Step>
-
   <Step title="Using signed user token in client">
     After creating user token on backend send it to your Frontend application to be used in SuprSend SDK as user token.
 
     <CodeGroup>
-      ```javascript Javascript
-      import SuprSend from '@suprsend/web-sdk';
 
-      const suprSendClient = new SuprSend(publicApiKey: string);
+    ```javascript Javascript
+    import SuprSend from '@suprsend/web-sdk';
+    
+    const suprSendClient = new SuprSend(publicApiKey: string);
+    
+    const authResponse = await suprSendClient.identify(user.id, user.userToken);
+    ```
 
-      const authResponse = await suprSendClient.identify(user.id, user.userToken);
-      ```
     </CodeGroup>
   </Step>
 </Steps>
@@ -99,13 +101,15 @@ When enhanced security mode is on, user level authentication is performed for al
 To handle cases of token expiry our client SDK's have **Refresh User Token callback** as parameter in identify method which gets called to get new user token when existing token is expired.
 
 <CodeGroup>
-  ```javascript Javascript
-  const authResponse = await suprSendClient.identify(user.id, user.userToken,
-    { refreshUserToken: (oldUserToken, tokenPayload) => {
-       //.... write your logic to get new token by making API call to your server...
-       // return new token
-    }});
-  ```
+
+```javascript Javascript
+const authResponse = await suprSendClient.identify(user.id, user.userToken,
+  { refreshUserToken: (oldUserToken, tokenPayload) => {
+     //.... write your logic to get new token by making API call to your server...
+     // return new token
+  }});
+```
+
 </CodeGroup>
 
-***
+---
