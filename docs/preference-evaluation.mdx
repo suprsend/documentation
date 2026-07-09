@@ -1,13 +1,25 @@
 ---
 title: "Preference Evaluation"
-description: "Understand how SuprSend evaluates user, tenant, and category preferences during workflow runs to decide whether to send each notification through a channel."
+description: "Understand how SuprSend evaluates user, tenant, and category preferences at trigger time and at delivery nodes to decide whether to send each notification through a channel."
 ---
 
 This guide explains how preferences are evaluated when workflows trigger notifications. For an overview of preferences, see [User Preferences](/docs/user-preferences).
 
-## How preferences are evaluated
+## When are preferences evaluated?
 
-When a workflow triggers, SuprSend evaluates preferences for each recipient before each delivery node.
+SuprSend evaluates category-level preference opt-outs **at trigger time** — before the workflow run starts. If a user has opted out of the preference category linked to the workflow, the workflow is not executed for that user, avoiding unnecessary workflow runs and saving compute.
+
+**Channel-level preferences** (which specific channels the user has opted into within a category) are still evaluated at each delivery node, since the workflow needs to reach the send step to determine eligible channels.
+
+<Note>
+**Workflows with side effects keep the check at the delivery node.** If a workflow contains a [webhook](/docs/webhook) node (external API call) or a data update node ([update user profile](/docs/update-user-profile), [add/remove user from list](/docs/add-user-to-list), [subscribe/unsubscribe to object](/docs/subscribe-to-object)), the category opt-out check remains at the delivery node instead of the trigger. This ensures that side effects like API calls and data updates still execute even when the user has opted out of receiving notifications.
+</Note>
+
+<Note>
+**Test triggers from the dashboard check preferences at the send node.** When you test a workflow using the **Test** button in the workflow editor on the SuprSend dashboard, the category opt-out check happens at the delivery node instead of the trigger. This lets you run the entire workflow logic end-to-end and verify that every step executes correctly, including preference evaluation at each send node, without the workflow being short-circuited at the trigger.
+</Note>
+
+## How preferences are resolved
 
 <Steps>
   <Step title="Evaluating Recipient preferences">
@@ -26,9 +38,12 @@ The order of precedence is always `user > tenant > category default`. However, i
 
   </Step>
 
-  <Step title="Debugging preference evaluation in workflow runs">
+  <Step title="Debugging preference evaluation">
 
-User preferences may change over time. When debugging a workflow run, you can inspect the exact preferences that were active at that moment. You can view this using the step-by-step debugger in [workflow executions](https://app.suprsend.com/en/demo/logs/executions/?last_n_minutes=1440).
+User preferences may change over time. When debugging, you can inspect the exact preferences that were active at that moment.
+
+- **Trigger-level opt-out**: If a user was opted out at trigger time, the workflow execution log will show that the workflow was skipped due to category preference opt-out.
+- **Delivery-node-level check**: For channel-level preferences or workflows with side effects, you can view the preference evaluation using the step-by-step debugger in [workflow executions](https://app.suprsend.com/en/demo/logs/executions/?last_n_minutes=1440).
 
 <Frame>
   <img src="/images/pref-workflow.png" />
