@@ -1,128 +1,108 @@
 ---
-title: "Manage Lists"
-description: "Create and manage SuprSend subscriber lists from the dashboard to group users, run bulk notifications, send broadcasts, and target marketing campaigns."
+title: "Lists"
+description: "Group users into a List to send broadcasts and trigger workflows when users enters or exits the list."
 ---
 
-List is a group of subscribers or recipients to whom bulk messages can be sent. For example, you can create a list of users who signed up in the last 30 days. You can now manage subscriber lists in SuprSend and send campaigns or [broadcasts](/docs/broadcast) to pre-created lists of users without the need to add each user individually when making the API call.
+A **List** is a group of users you maintain in SuprSend to notify as a single audience — for example, everyone who signed up in the last 30 days. You can send a one-off [broadcast](/docs/broadcast) to the entire list, or [trigger a workflow](/docs/design-workflow#1-trigger-node) for individual users as they enter or exit the list — a welcome flow when someone joins, or a win-back flow when they drop off.
 
-By default, SuprSend creates a list named `all_users`, which automatically includes all users available in your workspace. You can use this list to send campaigns like newsletters and product updates.
+Every workspace gets an `all_users` list by default, which contains every user in the workspace. Use it for newsletters and product-wide announcements.
+
+## How it works
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','fontFamily':'ui-sans-serif, system-ui, sans-serif','lineColor':'#9a9a9a'},'flowchart':{'padding':14,'nodeSpacing':40,'rankSpacing':40}}}%%
+flowchart LR
+    A["Users in your<br/>workspace"] --> B["List<br/>(membership)"]
+    B --> C["Broadcast<br/>(send to everyone)"]
+    B --> D["List entry / exit<br/>event"]
+    D --> E["Workflow<br/>(re-engage, welcome)"]
+
+    classDef s1 fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
+    classDef s2 fill:transparent,stroke:#b0b0b0,stroke-width:1.4px;
+    classDef s3 fill:transparent,stroke:#8a8a8a,stroke-width:1.4px;
+    class A s1;
+    class B s2;
+    class C,D,E s3;
+```
+
+You put users into a list once, and then use the list two ways: send a **broadcast** to everyone in it, or **trigger workflows** when users enter or leave.
 
 ## Creating lists
 
-You can create lists using one of the following methods:
-
-<Accordion title="Programmatically using SDK / API">
-  This is the most flexible way of updating users in a list. This way, you can keep the list updated in real-time. You can use [API](/reference/overview) or update it using backend SDK
-
-  <CardGroup cols="4">
-    <Card title="Python SDK" icon="python" iconType="solid" href="/docs/python-lists">
-
-    </Card>
-    <Card title="Node SDK" icon="js" iconType="solid" href="/docs/node-lists">
-
-    </Card>
-    <Card title="Java SDK" icon="java" iconType="solid" href="/docs/lists-java">
-
-    </Card>
-    <Card title="Go SDK" icon="golang" iconType="solid" href="/docs/lists-go">
-
-    </Card>
-  </CardGroup>
-</Accordion>
-
-<Accordion title="Using third party data platforms">
-  SuprSend supports integration with third-party platforms to sync user and event data. You can also sync user cohorts from these platforms into lists and run campaigns on those user segments from SuprSend. We currently have integration support for below connectors:
-
-  <Card title="Mixpanel" href="/docs/mixpanel">
-
-  </Card>
-  Need support for another connector? [Let us know](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ)
-</Accordion>
-
-<Accordion title="From UI via CSV upload">
-  You can also update List directly from the SuprSend dashboard. This way, marketing or product teams can send broadcasts directly from the dashboard without any tech involvement. Recommended for cases when you want to send a one-off campaign and only need the list temporarily.
-
-  <Warning>
-    This will only sync existing users in SuprSend database. It doesn't create new user profiles. [Refer docs](/docs/users#creating-user-profile-on-suprsend) to create user profiles
-  </Warning>
-  You'll find the option to create the list and update users on the List Tab.
-
-  <Steps>
-  <Step title='Create List'>
-  - **To create a list**, click on the `+ New List` button and add the relevant information. `List ID` is the unique identifier for the list. `Name` and `Description` are just for reference so that you know what this list represents.
-
-  <Frame>
-    <img src="/images/docs/d3d88c5-image.png" />
-  </Frame>
-
-  You can also modify list `Name` and `Description` later by clicking on `Modify List` option available in the right side Kebab menu on a list.
-  </Step>
-  <Step title='Update Users in the list'>
-  - Click on the `Update Users` option available in the right side Kebab menu on a list. It will open a dialog like the one shown below
-
-  <Frame>
-    <img src="/images/docs/a501c88-image.png" />
-  </Frame>
-
-  Follow below steps to update users in the list -
-    <Steps>
-      <Step title="Choose the Update Function">
-        - Choose `Add` to add more users to an existing list of users. for example, if you are adding today's sign ups in the new sign ups list every day
-        - Opt for `Replace` to replace the current list with a completely new set of users. This is handy in situations where you need to update the list with all users who fit a criteria (like users subscribed to a topic), without needing to track individual additions.
-      </Step>
-      <Step title="Upload CSV">
-        Upload a CSV file containing the distinct_id of the users. Make sure that the column is labeled as `distinct_id`
-
-        <Frame>
-          <img src="https://files.readme.io/bfd7943-ezgif.com-gif-maker_7.gif" />
-        </Frame>
-
-        Click on `Update Users` button. You can check the update progress in `Import logs`.
-      </Step>
-    </Steps>
-  </Step>
-  </Steps>
-
-</Accordion>
-
-<Accordion title="Automate list sync using database connector">
-  You can automate your list update using data directly by writing SQL query on your database. This allows your data, product and growth teams to completely own product and engagement notifications without any development effort.
-
-  You can also use it to sync user profiles and send personalized broadcasts to users using their profile properties. See how to setup database sync [here](/docs/list-sync-via-database).
-
-  <Frame>
-    <img src="/images/docs/1edccb7-image.png" />
-  </Frame>
-</Accordion>
-
-## Configure list events
-
-You can configure events when a user enters or exits a list. for example - you have a list of users **"Active on the platform in last 7 days"**. Whenever a user exists this list, you might want to send a notification to re-engage the users. You can do so using list events. There are 2 types of list events that you can configure
-
-- **User Entry**- This will trigger a bulk event `$USER_ENTERED_LIST - <list_id>` for all new users added to the list whenever a list is updated.
-- **User Exit**- This will trigger a bulk event `$USER_EXITED_LIST - <list_id>` for all new users removed from the list whenever a list is updated.
-
-<Note>
-  **Existing users won't trigger workflows**
-
-  When you create a workflow that listens to `$USER_ENTERED_LIST`, it only triggers for users added to the list **after** the workflow becomes active. Users already in the list won't trigger it.
-
-  Need to notify existing users? Use [Broadcast](/docs/broadcast) to send to everyone in the list.
-</Note>
-
-List events is a list property and can be updated using `Modify List` option on [SuprSend dashboard -> List page](https://app.suprsend.com/en/staging/lists) or using the [list API](/reference/create-list). Event tracking is set as false by default.
+You can create a list via the **+ New List** button on the dashboard, or via the [Create List API](/reference/create-list). In the create-list modal, set a `list_id` (required — unique within the workspace; lowercase letters, digits, and underscores only), plus an optional display name and description.
 
 <Frame>
-  <img src="/images/lists.png" />
+  <img src="/images/list-create-modal.png" alt="New List modal with list_id, name, and description fields" />
 </Frame>
 
-## Sending notification to list users
+Then choose how you'd want to sync users into the list:
 
-- You can either setup individual workflows for list users based on [list events](/docs/lists#configure-list-events). For example, if you want to notify job seekers who were active on the platform in the last 7 days but left today.
-- The most recommended way to send notification to list users is via [Broadcast](/docs/broadcast). You can schedule broadcast on this list from the dashboard by clicking on "**Run Broadcast**" option or trigger it programmatically via API.We recommend sending broadcasts using promotional category so you don't end up overloading transactional and system queues. Learn more about how to choose the right preference category [here](/docs/notification-category).
+<CardGroup cols={1}>
+  <Card title="Segment List" icon="wand-magic-sparkles" href="/docs/segment-lists">
+    Filter users by their properties or the events they've performed — for example, *users on the Growth plan who haven't logged in for 30 days*. Membership keeps itself up to date: users join the list the moment they meet the criteria and drop off as soon as they no longer qualify.
+  </Card>
+  <Card title="Database sync" icon="database" href="/docs/list-sync-via-database">
+    Connect your data warehouse and sync users by writing a SQL query. It can also create users who don't yet exist in SuprSend and sync additional user properties you'd want to reference in a broadcast or workflow as `$recipient.<key>`.
+  </Card>
+  <Card title="CSV upload" icon="file-arrow-up" href="/docs/list-sync-via-csv">
+    Upload a fixed set of known users from the dashboard — a snapshot you re-upload to refresh. Good for one-off campaigns with no engineering involvement.
+  </Card>
+  <Card title="SDK / API" icon="code" href="/docs/node-lists">
+    Add and remove users in real time from your backend, using an [SDK](/docs/node-lists) ([Node](/docs/node-lists), [Python](/docs/python-lists), [Java](/docs/lists-java), [Go](/docs/lists-go)) or the [HTTP API](/reference/add-user-to-list) directly.
+  </Card>
+  <Card title="Third-party sync" icon="plug" href="/docs/mixpanel">
+    Pull cohorts already defined in an analytics tool like Mixpanel through a connector — no SQL required.
+  </Card> 
+</CardGroup>
+
+<Tip>
+  To build an audience from a rule like *"Enterprise users in the US with 3+ orders in the last 60 days"*, use a [Segment List](/docs/segment-lists) if those properties and events are already synced into SuprSend, or [database sync](/docs/list-sync-via-database) if that data lives outside SuprSend in your data warehouse. For a fixed set of IDs you already have, a CSV upload is simplest.
+</Tip>
+
+## Sending notifications to list users
+
+Two paths, depending on whether you're firing on membership change or sending to the whole list at once.
+
+- **Broadcast** — the recommended way to send to a whole list. Schedule from the dashboard with **Run Broadcast**, or trigger via the [Broadcast API](/docs/broadcast). Use a promotional preference category so the send doesn't compete with transactional traffic; see [choosing a preference category](/docs/notification-category).
+- **Workflow on list entry / exit** — fire a workflow when a user joins or leaves the list, e.g. re-engaging job seekers who dropped out of "active in the last 7 days." Set this up in the workflow itself: add a **List entry / exit** [trigger node](/docs/design-workflow#1-trigger-node) and select the list. The `$USER_ENTERED_LIST` / `$USER_EXITED_LIST` events then fire automatically as users join or leave — which in turn triggers the workflow.
 
 <Warning>
-  Avoid using individual workflows on a consecutive list update of more than 1000 users. It can add a delay in your notification queue.
+  Avoid triggering individual workflows on a single list update that touches more than 1,000 users at once — it can back up your notification queue. For bulk sends, use a broadcast.
 </Warning>
 
----
+## Lists vs Objects
+
+Both group recipients together, but they're different kinds of things. 
+- A **List** is simply a group of users you notify in bulk. 
+- An **Object** is an entity in its own right — with its own properties, channels, and preferences — that users *subscribe* to. 
+- Reach for a List when you already know the set of users to send to; reach for an Object when you know the *group* a workflow should target but not the individual users, which makes objects a natural fit for modeling company or team structure (e.g. a team's `#devs` Slack channel).
+
+| Parameter | List | [Object](/docs/objects) |
+|---|---|---|
+| **Best for** | An audience for a one-shot **broadcast** | A reusable topic users **subscribe to** |
+| **Membership** | Managed centrally (uploaded, synced, or queried) | Users (or nested objects) opt in via subscriptions; each subscription can carry **subscription properties** — a relationship between the object and that user |
+| **How to notify** | Broadcast to the whole list, or a workflow when users enter or exit | Send to all of the object's subscribers, optionally filtered by their subscription properties |
+| **Hierarchy** | Flat structure — you create a separate list for every combination you need | Supports a parent–child hierarchy: one object can subscribe to another, so a notification sent to a parent also reaches everyone subscribed to its children. For example, *team* objects can subscribe to a *company* object, and anything sent to the company also reaches users subscribed to each team under it |
+| **Standard throughput** | 1,000/s | 500/s |
+| **Channels & preferences** | Has none of its own — notifications use each user's own channels and preferences | Has its own channels (e.g. a Slack channel or webhook) and its own preferences, so you can notify the object directly on top of reaching its subscribers |
+| **Use when** | *"Send Q1 recap to everyone on the Growth plan"* | *"Notify the #incidents Slack channel"* or *"Notify everyone watching this project"* |
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Why isn't my workflow firing on list entry?">
+    Most likely the workflow was created *after* those users were added, so they don't count as new entries — list entry/exit events only fire for users who join or leave *after* the workflow's [trigger node](/docs/design-workflow#1-trigger-node) is active. Add the users again, or run a [broadcast](/docs/broadcast) to reach existing members.
+  </Accordion>
+  <Accordion title="Does CSV upload create user profiles?">
+    No. CSV upload only maps existing users to the list. Identify users first via the [SDK](/docs/users#creating-user-profile-on-suprsend) or [API](/reference/create-a-subscriber-event), then upload the CSV.
+  </Accordion>
+  <Accordion title="Can I delete a list that's in use?">
+    Deletion is blocked while a workflow or scheduled broadcast references the list. Remove those references first.
+  </Accordion>
+  <Accordion title="What are the rules for list_id?">
+    Unique within the workspace, lowercase letters, digits, and underscores only. It's the stable identifier you'll pass to the API and reference from workflows.
+  </Accordion>
+  <Accordion title="How do I keep a list fresh without uploading a CSV every day?">
+    Use a dynamic list. [Segment Lists](/docs/segment-lists) query your live `users` and `events` data; [database sync](/docs/list-sync-via-database) refreshes from your warehouse on a schedule; the [SDK](/docs/node-lists) lets you keep it up to date in real time from your backend.
+  </Accordion>
+</AccordionGroup>
