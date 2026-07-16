@@ -1,0 +1,215 @@
+---
+title: "String search and matching functions"
+description: "String search and pattern-matching functions in SuprSend Segment List SQL — token, multi-search, and n-gram matching."
+---
+
+
+Functions for locating tokens, substrings, subsequences, and regex or fuzzy matches inside a text field. These complement `like`/`ilike`/`~` (documented on the String functions page) when you need multi-needle, token-aware, or similarity-based matching.
+
+## hasToken
+
+Checks whether `haystack` contains `token` as a whole token. A token is a maximal run of alphanumeric characters, so the token must be surrounded by non-alphanumeric delimiters to match (an underscore acts as a separator). `token` must be a constant string.
+
+**Syntax**
+
+```sql
+hasToken(haystack, token)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `token` — the constant token to look for, delimited by non-alphanumeric characters.
+
+**Returned value**
+
+- `UInt8`: `1` if the token is present, otherwise `0`.
+
+**Example**
+
+```sql Find users whose bio contains the word "engineer" as a token
+SELECT distinct_id FROM users
+WHERE hasToken(user_properties ->> 'bio', 'engineer') = 1
+```
+
+## hasTokenCaseInsensitive
+
+Case-insensitive variant of `hasToken`. Checks whether `haystack` contains `token` as a whole token, ignoring case. `token` must be a constant string.
+
+**Syntax**
+
+```sql
+hasTokenCaseInsensitive(haystack, token)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `token` — the constant token to look for, matched case-insensitively.
+
+**Returned value**
+
+- `UInt8`: `1` if the token is present regardless of case, otherwise `0`.
+
+**Example**
+
+```sql Match "Engineer", "ENGINEER", or "engineer" as a token in the bio
+SELECT distinct_id FROM users
+WHERE hasTokenCaseInsensitive(user_properties ->> 'bio', 'Engineer') = 1
+```
+
+## multiSearchAny
+
+Checks whether `haystack` contains at least one of the supplied needles as a literal substring (case-sensitive).
+
+**Syntax**
+
+```sql
+multiSearchAny(haystack, [needle1, needle2, ...])
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `[needle1, needle2, ...]` — an array of literal substrings to look for.
+
+**Returned value**
+
+- `UInt8`: `1` if any needle is found as a substring, otherwise `0`.
+
+**Example**
+
+```sql Match bios mentioning any leadership title
+SELECT distinct_id FROM users
+WHERE multiSearchAny(user_properties ->> 'bio', ['founder', 'ceo', 'cto']) = 1
+```
+
+## multiSearchAnyCaseInsensitive
+
+Case-insensitive variant of `multiSearchAny`. Checks whether `haystack` contains at least one of the supplied needles as a literal substring, ignoring case.
+
+**Syntax**
+
+```sql
+multiSearchAnyCaseInsensitive(haystack, [needle1, needle2, ...])
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `[needle1, needle2, ...]` — an array of literal substrings, matched case-insensitively.
+
+**Returned value**
+
+- `UInt8`: `1` if any needle is found regardless of case, otherwise `0`.
+
+**Example**
+
+```sql Match bios mentioning a leadership title in any casing
+SELECT distinct_id FROM users
+WHERE multiSearchAnyCaseInsensitive(user_properties ->> 'bio', ['Founder', 'CEO', 'CTO']) = 1
+```
+
+## multiMatchAny
+
+Checks whether `haystack` matches at least one of the supplied regular expressions. Patterns use RE2 syntax; common patterns behave the same as PostgreSQL POSIX ERE, but exotic POSIX-only constructs may diverge.
+
+**Syntax**
+
+```sql
+multiMatchAny(haystack, [pattern1, pattern2, ...])
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `[pattern1, pattern2, ...]` — an array of RE2 regular expression patterns.
+
+**Returned value**
+
+- `UInt8`: `1` if any pattern matches, otherwise `0`.
+
+**Example**
+
+```sql Match users on a Gmail or Yahoo email domain
+SELECT distinct_id FROM users
+WHERE multiMatchAny(user_properties ->> 'email', ['@gmail\.com$', '@yahoo\.com$']) = 1
+```
+
+## hasSubsequence
+
+Checks whether `needle` appears as a subsequence of `haystack` — its characters occur in order, but not necessarily contiguously (ClickHouse only).
+
+**Syntax**
+
+```sql
+hasSubsequence(haystack, needle)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `needle` — the string whose characters must appear in order within `haystack`.
+
+**Returned value**
+
+- `UInt8`: `1` if `needle` is a subsequence of `haystack`, otherwise `0`.
+
+**Example**
+
+```sql Match emails whose local part contains the ordered letters "abc"
+SELECT distinct_id FROM users
+WHERE hasSubsequence(user_properties ->> 'email', 'abc') = 1
+```
+
+## ngramSearch
+
+Computes a non-symmetric 4-gram similarity ratio of `needle` within `haystack`. Higher values indicate that more of `needle` is present, making it useful for ranking fuzzy matches (ClickHouse only).
+
+**Syntax**
+
+```sql
+ngramSearch(haystack, needle)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `needle` — the string to look for.
+
+**Returned value**
+
+- `Float32` in the range `[0, 1]`. Values closer to `1` indicate that `needle` is more present in `haystack`.
+
+**Example**
+
+```sql Rank bios by how strongly they resemble "developer"
+SELECT distinct_id FROM users
+WHERE ngramSearch(user_properties ->> 'bio', 'developer') > 0.5
+```
+
+## ngramDistance
+
+Computes the 4-gram edit distance between `haystack` and `needle`, based on the symmetric difference of their n-gram multisets. Useful for fuzzy matching and typo tolerance (ClickHouse only).
+
+**Syntax**
+
+```sql
+ngramDistance(haystack, needle)
+```
+
+**Arguments**
+
+- `haystack` — the string to compare.
+- `needle` — the string to compare against.
+
+**Returned value**
+
+- `Float32` in the range `[0, 1]`. A value of `0` means the strings are identical; smaller values indicate greater similarity.
+
+**Example**
+
+```sql Find bios that are a close fuzzy match to "software engineer"
+SELECT distinct_id FROM users
+WHERE ngramDistance(user_properties ->> 'bio', 'software engineer') < 0.5
+```

@@ -1,0 +1,417 @@
+---
+title: "Window functions"
+description: "Window functions in SuprSend Segment List SQL — ranking, offsets, and windowed aggregates over partitions."
+---
+
+
+Window functions compute a value across a set of rows related to the current row, defined by an `OVER (...)` clause. Unlike aggregate functions, they run over a partition without collapsing it, so every input row is preserved in the output. Because the window value appears alongside each row rather than reducing the result, you typically compute it inside a subquery and then filter on it in the outer query to build a Segment List. Most examples below partition by user with `OVER (PARTITION BY distinct_id ORDER BY requested_at)` so the window spans a single user's timeline.
+
+## row_number
+
+Returns a unique sequential number for each row within its partition, starting at 1, in the order defined by `ORDER BY`. Unlike `rank`, tied rows still receive distinct numbers.
+
+**Syntax**
+
+```sql
+row_number() OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- None.
+
+**Returned value**
+
+- The sequential position of the row, as an integer starting at 1.
+
+**Example**
+
+```sql Keep only each user's most recent event
+SELECT distinct_id FROM (
+  SELECT distinct_id, event_name, requested_at,
+         row_number() OVER (PARTITION BY distinct_id ORDER BY requested_at DESC) AS rn
+  FROM events
+) t
+WHERE rn = 1
+```
+
+## rank
+
+Returns the rank of the current row within its partition, with gaps. Rows that tie on the `ORDER BY` value share a rank, and the next rank skips ahead by the number of tied rows.
+
+**Syntax**
+
+```sql
+rank() OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- None. Ranks are computed over the `ORDER BY` inside `OVER`.
+
+**Returned value**
+
+- The rank of the row, as an integer starting at 1.
+
+**Example**
+
+```sql Rank each user's events from most to least recent
+SELECT DISTINCT distinct_id FROM (
+  SELECT distinct_id,
+         rank() OVER (PARTITION BY distinct_id ORDER BY requested_at DESC) AS recency_rank
+  FROM events
+) t
+WHERE recency_rank = 1
+```
+
+## dense_rank
+
+Returns the rank of the current row within its partition, with no gaps in the ranking sequence. Rows that tie on the `ORDER BY` value share a rank, and the next distinct value gets the immediately following rank.
+
+**Syntax**
+
+```sql
+dense_rank() OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- None. The ordering that ranks are computed over comes from the `ORDER BY` inside `OVER`.
+
+**Returned value**
+
+- The rank of the row, as an integer starting at 1.
+
+**Example**
+
+```sql Rank each user's events by recency, no gaps on ties
+SELECT DISTINCT distinct_id FROM (
+  SELECT distinct_id,
+         dense_rank() OVER (PARTITION BY distinct_id ORDER BY requested_at DESC) AS recency_rank
+  FROM events
+) t
+WHERE recency_rank = 1
+```
+
+## lag
+
+Returns the value of the expression evaluated at the row a given number of positions before the current row within the partition. Rows with no such preceding row return the default (NULL if unspecified).
+
+**Syntax**
+
+```sql
+lag(expr [, offset [, default]]) OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- `expr` — the expression to read from the earlier row.
+- `offset` — how many rows back to look. Optional; defaults to 1.
+- `default` — the value returned when the offset falls outside the partition. Optional; defaults to NULL.
+
+**Returned value**
+
+- The value of `expr` from the preceding row (or `default`); its type matches `expr`.
+
+**Example**
+
+```sql Time since each user's previous event, in seconds
+SELECT DISTINCT distinct_id FROM (
+  SELECT distinct_id,
+         date_diff('second',
+                   lag(requested_at) OVER (PARTITION BY distinct_id ORDER BY requested_at),
+                   requested_at) AS seconds_since_prev
+  FROM events
+) t
+WHERE seconds_since_prev > 3600
+```
+
+## lead
+
+Returns the value of the expression evaluated at the row a given number of positions after the current row within the partition. Rows with no such following row return the default (NULL if unspecified).
+
+**Syntax**
+
+```sql
+lead(expr [, offset [, default]]) OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- `expr` — the expression to read from the later row.
+- `offset` — how many rows forward to look. Optional; defaults to 1.
+- `default` — the value returned when the offset falls outside the partition. Optional; defaults to NULL.
+
+**Returned value**
+
+- The value of `expr` from the following row (or `default`); its type matches `expr`.
+
+**Example**
+
+```sql Each event alongside the user's next event name
+SELECT DISTINCT distinct_id FROM (
+  SELECT distinct_id, event_name,
+         lead(event_name) OVER (PARTITION BY distinct_id ORDER BY requested_at) AS next_event
+  FROM events
+) t
+WHERE event_name = 'ADD_TO_CART' AND next_event = 'CHECKOUT_STARTED'
+```
+
+## first_value
+
+Returns the value of the given expression evaluated at the first row of the window frame.
+
+**Syntax**
+
+```sql
+first_value(expr) OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- `expr` — the expression whose value is taken from the first row of the frame.
+
+**Returned value**
+
+- The value of `expr` at the first row of the frame; its type matches `expr`.
+
+**Example**
+
+```sql Users whose first-ever event was a signup
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id,
+         first_value(event_name) OVER (PARTITION BY distinct_id ORDER BY requested_at) AS first_event
+  FROM events
+) t
+WHERE first_event = 'SIGNED_UP'
+```
+
+## last_value
+
+Returns the value of the given expression evaluated at the last row of the window frame. Note that the default frame ends at the current row, so to read the true last row of the partition you must widen the frame with `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`.
+
+**Syntax**
+
+```sql
+last_value(expr) OVER (
+  PARTITION BY ... ORDER BY ...
+  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+)
+```
+
+**Arguments**
+
+- `expr` — the expression whose value is taken from the last row of the frame.
+
+**Returned value**
+
+- The value of `expr` at the last row of the frame; its type matches `expr`.
+
+**Example**
+
+```sql Users whose most recent event was a cancellation
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id,
+         last_value(event_name) OVER (
+           PARTITION BY distinct_id ORDER BY requested_at
+           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+         ) AS last_event
+  FROM events
+) t
+WHERE last_event = 'SUBSCRIPTION_CANCELLED'
+```
+
+## count(*) over ()
+
+Used as a window function, `count(*)` counts rows across the window instead of collapsing them into one row. With an empty `OVER ()` it returns the grand total for the whole result, with `PARTITION BY` it returns a per-partition total, and adding `ORDER BY` turns it into a running count.
+
+**Syntax**
+
+```sql
+count(*) OVER ()
+count(*) OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- None. The window is defined entirely by the `OVER` clause.
+
+**Returned value**
+
+- The count of rows in the window frame, as an integer.
+
+**Example**
+
+```sql Keep users with more than 100 total events
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id,
+         count(*) OVER (PARTITION BY distinct_id) AS event_count
+  FROM events
+) t
+WHERE event_count > 100
+```
+
+## ntile
+
+Divides the rows of each partition into a given number of ranked buckets as evenly as possible, and returns the bucket number the current row falls into. When the row count does not divide evenly, earlier buckets receive one extra row.
+
+**Syntax**
+
+```sql
+ntile(num_buckets) OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- `num_buckets` — the number of buckets to distribute rows into.
+
+**Returned value**
+
+- The bucket number, as an integer from 1 to `num_buckets`.
+
+**Example**
+
+```sql Split each user's events into activity quartiles
+SELECT DISTINCT distinct_id FROM (
+  SELECT distinct_id,
+         ntile(4) OVER (PARTITION BY distinct_id ORDER BY requested_at) AS quartile
+  FROM events
+) t
+WHERE quartile = 4
+```
+
+## nth_value
+
+Returns the value of the given expression evaluated at the nth row of the window frame (counting from 1). Returns NULL if the frame has fewer than n rows. As with `last_value`, the default frame ends at the current row, so to read the nth row of the whole partition you must widen the frame with `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`.
+
+**Syntax**
+
+```sql
+nth_value(expr, n) OVER (
+  PARTITION BY ... ORDER BY ...
+  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+)
+```
+
+**Arguments**
+
+- `expr` — the expression whose value is taken from the nth row.
+- `n` — the 1-based position within the frame to read.
+
+**Returned value**
+
+- The value of `expr` at the nth row of the frame, or NULL if it does not exist; its type matches `expr`.
+
+**Example**
+
+```sql Users whose second event was adding an item to cart
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id,
+         nth_value(event_name, 2) OVER (
+           PARTITION BY distinct_id ORDER BY requested_at
+           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+         ) AS second_event
+  FROM events
+) t
+WHERE second_event = 'ADD_TO_CART'
+```
+
+## percent_rank
+
+Returns the relative rank of the current row within its partition, computed as `(rank() - 1) / (total_rows - 1)`. The first row is always 0 and the last is always 1; a partition with a single row returns 0.
+
+**Syntax**
+
+```sql
+percent_rank() OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- None.
+
+**Returned value**
+
+- The relative rank as a fraction, as a floating-point number in the range 0 through 1.
+
+**Example**
+
+```sql Events in the earliest 25% of each user's timeline
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id,
+         percent_rank() OVER (PARTITION BY distinct_id ORDER BY requested_at) AS pr
+  FROM events
+) t
+WHERE pr <= 0.25
+```
+
+## cume_dist
+
+Returns the cumulative distribution of the current row within its partition: the number of rows ordered at or before the current row, divided by the total number of rows in the partition. Values range from just above 0 up to 1.
+
+**Syntax**
+
+```sql
+cume_dist() OVER (PARTITION BY ... ORDER BY ...)
+```
+
+**Arguments**
+
+- None.
+
+**Returned value**
+
+- The relative position of the row as a fraction, as a floating-point number in the range greater than 0 through 1.
+
+**Example**
+
+```sql Events in the final 10% of each user's timeline
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id,
+         cume_dist() OVER (PARTITION BY distinct_id ORDER BY requested_at) AS position
+  FROM events
+) t
+WHERE position >= 0.9
+```
+
+## Window frames (ROWS BETWEEN)
+
+A frame clause restricts an aggregate window function to a sliding subset of rows relative to the current row, letting you compute running totals and moving windows. `ROWS BETWEEN <start> AND <end>` counts a physical number of rows, where each bound is `UNBOUNDED PRECEDING`, `N PRECEDING`, `CURRENT ROW`, `N FOLLOWING`, or `UNBOUNDED FOLLOWING`. Any aggregate (such as `count`, `sum`, or `avg`) can be paired with a frame.
+
+**Syntax**
+
+```sql
+count(*) OVER (
+  PARTITION BY ... ORDER BY ...
+  ROWS BETWEEN <start> AND <end>
+)
+```
+
+**Arguments**
+
+- `<start>` — the first row of the frame, relative to the current row.
+- `<end>` — the last row of the frame, relative to the current row.
+
+**Returned value**
+
+- The aggregate computed over the rows in the frame; its type matches the aggregate used.
+
+**Example**
+
+```sql Rolling count of each user's last 3 events, current row included
+SELECT DISTINCT distinct_id FROM (
+  SELECT distinct_id,
+         count(*) OVER (
+           PARTITION BY distinct_id ORDER BY requested_at
+           ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+         ) AS rolling_event_count
+  FROM events
+) t
+WHERE rolling_event_count = 3
+```

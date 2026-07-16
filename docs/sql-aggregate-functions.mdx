@@ -1,0 +1,813 @@
+---
+title: "Aggregate functions"
+description: "Aggregate functions supported in SuprSend Segment List SQL — count, sum, avg, quantiles, arg_max, and more — for filtering users by aggregated behavior."
+---
+
+
+Aggregate functions collapse many rows into a single value per group. In Segment Lists you typically pair them with `GROUP BY distinct_id` and a `HAVING` clause so the list keeps only the users whose aggregated activity matches your criteria.
+
+## count / count(distinct)
+
+`count(*)` counts all rows in the group, `count(col)` counts non-null values, and `count(distinct col)` counts distinct non-null values (exact).
+
+**Syntax**
+
+```sql
+count(*)
+count(col)
+count(distinct col)
+```
+
+**Arguments**
+
+- `col` — the expression to count; omit (use `*`) to count rows.
+
+**Returned value**
+
+- The count, as an integer.
+
+**Example**
+
+```sql Total and distinct event counts per active user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING count(*) > 10 AND count(distinct event_name) >= 3
+```
+
+## sum
+
+Returns the sum of the non-null numeric input values.
+
+**Syntax**
+
+```sql
+sum(col)
+```
+
+**Arguments**
+
+- `col` — the numeric expression to add up.
+
+**Returned value**
+
+- The sum; its type follows the input's numeric type.
+
+**Example**
+
+```sql High-spend users
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING sum((properties->>'amount')::float) > 1000
+```
+
+## avg
+
+Returns the arithmetic mean of the non-null numeric input values.
+
+**Syntax**
+
+```sql
+avg(col)
+```
+
+**Arguments**
+
+- `col` — the numeric expression to average.
+
+**Returned value**
+
+- The mean, as a floating-point number.
+
+**Example**
+
+```sql Users with a high average order value
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING avg((properties->>'amount')::float) > 100
+```
+
+## max / min
+
+Return the maximum and minimum values in the group. Both work on numeric, string, and date/time types.
+
+**Syntax**
+
+```sql
+max(col)
+min(col)
+```
+
+**Arguments**
+
+- `col` — the expression to reduce.
+
+**Returned value**
+
+- The largest or smallest value; the type matches `col`.
+
+**Example**
+
+```sql First and last activity timestamps per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING min(requested_at) >= '2026-01-01' AND max(requested_at) >= '2026-07-01'
+```
+
+## avg_if / count_if / max_if / min_if / sum_if / uniq_if
+
+Conditional aggregates that apply their base aggregate only to the rows where the boolean condition is true. `count_if` takes just the condition; `uniq_if` returns an approximate distinct count.
+
+**Syntax**
+
+```sql
+avg_if(col, cond)
+count_if(cond)
+max_if(col, cond)
+min_if(col, cond)
+sum_if(col, cond)
+uniq_if(col, cond)
+```
+
+**Arguments**
+
+- `col` — the expression to aggregate over the matching rows.
+- `cond` — the boolean condition that selects which rows are included.
+
+**Returned value**
+
+- The result of the base aggregate computed over the matching rows only; the type matches the corresponding unconditional aggregate.
+
+**Example**
+
+```sql Delivered order counts and value per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING count_if(status = 'delivered') >= 5
+       AND sum_if((properties->>'amount')::float, status = 'delivered') > 500
+       AND avg_if((properties->>'amount')::float, status = 'delivered') > 100
+```
+
+## median
+
+Returns the median (the 0.5 quantile) of a numeric column.
+
+**Syntax**
+
+```sql
+median(col)
+```
+
+**Arguments**
+
+- `col` — the numeric expression to summarize.
+
+**Returned value**
+
+- The median, as a floating-point number.
+
+**Example**
+
+```sql Median order value per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING median((properties->>'amount')::float) > 50
+```
+
+
+## arg_min / arg_max
+
+`arg_max(arg, val)` returns the value of `arg` from the row where `val` is maximal; `arg_min(arg, val)` returns it from the row where `val` is minimal.
+
+**Syntax**
+
+```sql
+arg_min(arg, val)
+arg_max(arg, val)
+```
+
+**Arguments**
+
+- `arg` — the expression whose value is returned.
+- `val` — the expression that is minimized or maximized to select the row.
+
+**Returned value**
+
+- The value of `arg` at the selected row; its type matches `arg`.
+
+**Example**
+
+```sql Each user's first and most recent event name
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING arg_max(event_name, requested_at) = 'ORDER_PLACED'
+       AND arg_min(event_name, requested_at) = 'SIGNED_UP'
+```
+
+## array_agg
+
+Collects input values into an array. The order of elements is not guaranteed unless the input is explicitly ordered.
+
+**Syntax**
+
+```sql
+array_agg(col)
+```
+
+**Arguments**
+
+- `col` — the expression whose values are collected.
+
+**Returned value**
+
+- An array of the input values.
+
+**Example**
+
+```sql Collect every event name per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING 'ORDER_PLACED' = ANY(array_agg(event_name))
+```
+
+## groupUniqArray
+
+Collects the distinct values of an expression into an array. The order of elements is not guaranteed.
+
+**Syntax**
+
+```sql
+groupUniqArray(col)
+```
+
+**Arguments**
+
+- `col` — the expression whose distinct values are collected.
+
+**Returned value**
+
+- An array of the distinct input values.
+
+**Example**
+
+```sql Distinct statuses seen per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING length(groupUniqArray(status)) > 1
+```
+
+## string_agg / string_agg(distinct)
+
+Concatenate non-null string values into a single string separated by a delimiter. The `distinct` form deduplicates values before concatenating.
+
+**Syntax**
+
+```sql
+string_agg(col, delimiter)
+string_agg(distinct col, delimiter)
+```
+
+**Arguments**
+
+- `col` — the string expression to concatenate.
+- `delimiter` — the separator placed between values.
+
+**Returned value**
+
+- A single concatenated string.
+
+**Example**
+
+```sql Comma-separated event names per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING string_agg(distinct event_name, ', ') LIKE '%ORDER_PLACED%'
+```
+## json_agg
+
+Aggregates the input values into a JSON array.
+
+**Syntax**
+
+```sql
+json_agg(col)
+```
+
+**Arguments**
+
+- `col` — the expression whose values are collected into the array.
+
+**Returned value**
+
+- A JSON array.
+
+**Example**
+
+```sql Collect event names into a JSON array per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING json_array_length(json_agg(event_name)) > 5
+```
+
+## json_object_agg
+
+Aggregates key/value pairs into a JSON object.
+
+**Syntax**
+
+```sql
+json_object_agg(key, value)
+```
+
+**Arguments**
+
+- `key` — the expression used as each object key.
+- `value` — the expression used as each object value.
+
+**Returned value**
+
+- A JSON object.
+
+**Example**
+
+```sql Count of each status as a JSON object per user
+SELECT distinct_id
+FROM (
+  SELECT distinct_id, status, count(*) AS cnt
+  FROM events
+  GROUP BY distinct_id, status
+) t
+GROUP BY distinct_id
+HAVING (json_object_agg(status, cnt) ->> 'delivered')::int > 5
+```
+
+## uniqExact
+
+Returns the exact number of distinct non-null values, in contrast to the approximate `approx_distinct`.
+
+**Syntax**
+
+```sql
+uniqExact(col)
+```
+
+**Arguments**
+
+- `col` — the expression whose distinct values are counted.
+
+**Returned value**
+
+- The exact number of distinct values, as an integer.
+
+**Example**
+
+```sql Exact number of distinct event types per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING uniqExact(event_name) >= 5
+```
+
+## percentile_cont / percentile_disc
+
+Ordered-set aggregates that compute a percentile of an ordered column. `percentile_cont` interpolates a continuous value at the requested fraction; `percentile_disc` returns the first actual input value whose cumulative position reaches the fraction.
+
+**Syntax**
+
+```sql
+percentile_cont(fraction) WITHIN GROUP (ORDER BY col)
+percentile_disc(fraction) WITHIN GROUP (ORDER BY col)
+```
+
+**Arguments**
+
+- `fraction` — the percentile as a fraction in the range `[0, 1]`.
+- `col` — the numeric ordering expression.
+
+**Returned value**
+
+- `percentile_cont` returns an interpolated floating-point value; `percentile_disc` returns an actual input value whose type matches `col`.
+
+**Example**
+
+```sql Median and 90th-percentile order value per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING percentile_cont(0.5) WITHIN GROUP (ORDER BY (properties->>'amount')::float) > 50
+       AND percentile_disc(0.9) WITHIN GROUP (ORDER BY (properties->>'amount')::float) > 500
+```
+
+## topK
+
+Returns an array of the `n` approximately most frequent values, in descending order of frequency. It uses the Filtered Space-Saving algorithm and does not guarantee exact results. (ClickHouse only)
+
+**Syntax**
+
+```sql
+topK(n, col)
+```
+
+**Arguments**
+
+- `n` — the number of values to return (maximum 65536).
+- `col` — the expression whose frequent values are found.
+
+**Returned value**
+
+- An array of up to `n` values, ordered from most to least frequent.
+
+**Example**
+
+```sql Three most frequent events per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING has(topK(3, event_name), 'ORDER_PLACED')
+```
+
+## retention
+
+Evaluates a list of conditions per row and returns an array of 0/1 flags where the first element equals `cond1`, and each later element is 1 only when both `cond1` and that condition are met. Summing the arrays element-wise across a cohort produces a retention curve. (ClickHouse only)
+
+**Syntax**
+
+```sql
+retention(cond1, cond2, ..., condN)
+```
+
+**Arguments**
+
+- `cond1 ... condN` — up to 32 boolean conditions, evaluated per row.
+
+**Returned value**
+
+- An `array<uint8>` of 0/1 flags, one per condition.
+
+**Example**
+
+```sql Day-0, day-1, and day-7 retention flags per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING retention(
+         requested_at >= '2026-07-01' AND requested_at < '2026-07-02',
+         requested_at >= '2026-07-02' AND requested_at < '2026-07-03',
+         requested_at >= '2026-07-08' AND requested_at < '2026-07-09'
+       )[3] = 1
+```
+
+## windowFunnel
+
+Searches for an ordered event chain within a sliding time window and returns the maximum number of consecutive conditions satisfied, starting from the first. The timestamp must be an unsigned integer, `Date`, or `DateTime`; wrap `DateTime64` columns with `unix_timestamp()`. (ClickHouse only)
+
+**Syntax**
+
+```sql
+windowFunnel(window, timestamp, cond1, ..., condN)
+```
+
+**Arguments**
+
+- `window` — the length of the sliding window, in the timestamp's units.
+- `timestamp` — the ordering column for the event chain.
+- `cond1 ... condN` — the ordered event conditions.
+
+**Returned value**
+
+- The funnel depth reached, an integer from 0 to N.
+
+**Example**
+
+```sql Deepest step reached in a view, cart, purchase funnel (7-day window)
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING windowFunnel(604800,
+         unix_timestamp(requested_at),
+         event_name = 'PRODUCT_VIEWED',
+         event_name = 'ADDED_TO_CART',
+         event_name = 'ORDER_PLACED'
+       ) >= 3
+```
+## quantile / quantileExact / quantileTDigest
+
+Compute the value at a given quantile level of a numeric column. `quantile` is a fast approximate quantile, `quantileExact` computes the exact quantile (at higher memory cost), and `quantileTDigest` uses the t-digest algorithm for an approximate quantile with a strong precision-to-memory ratio.
+
+**Syntax**
+
+```sql
+quantile(level, col)
+quantileExact(level, col)
+quantileTDigest(level, col)
+```
+
+**Arguments**
+
+- `level` — the quantile level as a fraction in the range `[0, 1]` (for example, `0.95`).
+- `col` — the numeric expression to summarize.
+
+**Returned value**
+
+- The quantile value, as a floating-point number: approximate for `quantile` and `quantileTDigest`, exact for `quantileExact`.
+
+**Example**
+
+```sql Approximate, exact, and t-digest 95th percentile per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING quantile(0.95, (properties->>'amount')::float) > 500
+       AND quantileExact(0.95, (properties->>'amount')::float) > 500
+       AND quantileTDigest(0.95, (properties->>'amount')::float) > 500
+```
+
+## approx_distinct
+
+Returns an approximate count of distinct non-null values. Trades exactness for speed and low memory, which makes it well-suited to high-cardinality columns.
+
+**Syntax**
+
+```sql
+approx_distinct(col)
+```
+
+**Arguments**
+
+- `col` — the expression whose distinct values are counted.
+
+**Returned value**
+
+- The approximate number of distinct values, as an integer.
+
+**Example**
+
+```sql Users who triggered many distinct event types
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING approx_distinct(event_name) >= 5
+```
+
+
+
+## bool_and / bool_or
+
+`bool_and` returns true when every non-null input is true; `bool_or` returns true when at least one non-null input is true.
+
+**Syntax**
+
+```sql
+bool_and(col)
+bool_or(col)
+```
+
+**Arguments**
+
+- `col` — the boolean expression to reduce.
+
+**Returned value**
+
+- A boolean.
+
+**Example**
+
+```sql Users whose every order was delivered
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING bool_and(status = 'delivered')
+```
+
+## mode
+
+Returns the most frequently occurring value in the group. Ties are broken by the ordering of the input.
+
+**Syntax**
+
+```sql
+mode() WITHIN GROUP (ORDER BY col)
+```
+
+**Arguments**
+
+- `col` — the expression whose most frequent value is returned.
+
+**Returned value**
+
+- The most common value; the type matches `col`.
+
+**Example**
+
+```sql Most common event per user
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING mode() WITHIN GROUP (ORDER BY event_name) = 'ORDER_PLACED'
+```
+
+## approx_percentile_cont
+
+Returns an approximate, interpolated value at the requested percentile of a numeric column.
+
+**Syntax**
+
+```sql
+approx_percentile_cont(col, level)
+```
+
+**Arguments**
+
+- `col` — the numeric expression to summarize.
+- `level` — the percentile as a fraction in the range `[0, 1]` (for example, `0.9` for the 90th percentile).
+
+**Returned value**
+
+- The approximate percentile value, as a floating-point number.
+
+**Example**
+
+```sql Approximate 90th-percentile order value per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING approx_percentile_cont((properties->>'amount')::float, 0.9) > 500
+```
+
+## stddev_pop / stddev_samp
+
+Return the population and sample standard deviation of a numeric column. `STDDEV` is an alias for `stddev_samp`.
+
+**Syntax**
+
+```sql
+stddev_pop(col)
+stddev_samp(col)
+```
+
+**Arguments**
+
+- `col` — the numeric expression to summarize.
+
+**Returned value**
+
+- The standard deviation, as a floating-point number.
+
+**Example**
+
+```sql Spread of order values per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING stddev_pop((properties->>'amount')::float) > 20
+       AND stddev_samp((properties->>'amount')::float) > 20
+```
+
+## var_pop / var_samp / variance
+
+Return the population and sample variance of a numeric column. `variance` is an alias for `var_samp`.
+
+**Syntax**
+
+```sql
+var_pop(col)
+var_samp(col)
+variance(col)
+```
+
+**Arguments**
+
+- `col` — the numeric expression to summarize.
+
+**Returned value**
+
+- The variance, as a floating-point number.
+
+**Example**
+
+```sql Variance of order values per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING var_pop((properties->>'amount')::float) > 400
+       AND var_samp((properties->>'amount')::float) > 400
+```
+
+## corr
+
+Returns the Pearson correlation coefficient between two numeric expressions, computed over rows where both are non-null.
+
+**Syntax**
+
+```sql
+corr(y, x)
+```
+
+**Arguments**
+
+- `y` — the first numeric expression.
+- `x` — the second numeric expression.
+
+**Returned value**
+
+- The correlation coefficient in the range `[-1, 1]`, as a floating-point number.
+
+**Example**
+
+```sql Correlation between order amount and item count per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING corr((properties->>'amount')::float, (properties->>'items')::float) > 0.5
+```
+
+## covar_pop / covar_samp
+
+Return the population and sample covariance between two numeric expressions, over rows where both are non-null.
+
+**Syntax**
+
+```sql
+covar_pop(y, x)
+covar_samp(y, x)
+```
+
+**Arguments**
+
+- `y` — the first numeric expression.
+- `x` — the second numeric expression.
+
+**Returned value**
+
+- The covariance, as a floating-point number.
+
+**Example**
+
+```sql Sample covariance of amount and item count per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING covar_samp((properties->>'amount')::float, (properties->>'items')::float) > 0
+```
+
+## regr_avgx / regr_avgy / regr_count / regr_intercept / regr_r2 / regr_slope / regr_sxx / regr_sxy / regr_syy
+
+Linear-regression aggregates over a dependent variable `y` and an independent variable `x`, computed across rows where both are non-null.
+
+**Syntax**
+
+```sql
+regr_count(y, x)
+regr_avgy(y, x)
+regr_avgx(y, x)
+regr_slope(y, x)
+regr_intercept(y, x)
+regr_r2(y, x)
+regr_sxx(y, x)
+regr_syy(y, x)
+regr_sxy(y, x)
+```
+
+**Arguments**
+
+- `y` — the dependent-variable numeric expression.
+- `x` — the independent-variable numeric expression.
+
+**Returned value**
+
+- `regr_count` returns the number of non-null `(y, x)` pairs as an integer. The others return floating-point numbers: `regr_avgy` and `regr_avgx` the means of `y` and `x`; `regr_slope` and `regr_intercept` the slope and y-intercept of the least-squares-fit line; `regr_r2` the coefficient of determination; `regr_sxx` and `regr_syy` the sums of squares of `x` and of `y`, and `regr_sxy` the sum of products of `x` and `y`.
+
+**Example**
+
+```sql Trend of order amount against item count per user
+SELECT distinct_id
+FROM events
+WHERE event_name = 'ORDER_PLACED'
+GROUP BY distinct_id
+HAVING regr_slope((properties->>'amount')::float, (properties->>'items')::float) > 0
+       AND regr_r2((properties->>'amount')::float, (properties->>'items')::float) > 0.5
+       AND regr_count((properties->>'amount')::float, (properties->>'items')::float) >= 10
+```
+

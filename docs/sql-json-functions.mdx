@@ -1,0 +1,709 @@
+---
+title: "JSON and map functions"
+description: "JSON and map functions and operators in SuprSend Segment List SQL — extract, containment, path checks, and map access."
+---
+
+
+Read, test, and reshape JSON values such as the `user_properties` column on `users` and the `properties` column on `events`, plus ClickHouse `Map` values extracted from them.
+
+## ->> (get text)
+
+Extracts a value from a JSON object by key (or from a JSON array by index) and returns it as text, which is what you usually want for filtering or display.
+
+**Syntax**
+
+```sql
+json ->> key
+```
+
+**Arguments**
+
+- `json` — the JSON value to read from.
+- `key` — the object key (text) or array index (integer) to extract.
+
+**Returned value**
+
+- The extracted value as text, or `NULL` if the key or index is absent. Text.
+
+**Example**
+
+```sql Users on the pro plan
+SELECT distinct_id
+FROM users
+WHERE user_properties ->> 'plan' = 'pro'
+```
+
+## -> (get JSON)
+
+Extracts a value from a JSON object by key (or from a JSON array by index), returning it as a JSON value so it can be chained for nested lookups.
+
+**Syntax**
+
+```sql
+json -> key
+```
+
+**Arguments**
+
+- `json` — the JSON value to read from.
+- `key` — the object key (text) or array index (integer) to extract.
+
+**Returned value**
+
+- The extracted value as JSON, or `NULL` if the key or index is absent. JSON.
+
+**Example**
+
+```sql Country from a nested address object
+SELECT distinct_id
+FROM users
+WHERE user_properties -> 'address' ->> 'country' = 'US'
+```
+
+## @> (contains)
+
+Tests whether the left JSON value contains the right JSON value — every key/value pair (or array element) on the right must be present on the left.
+
+**Syntax**
+
+```sql
+json @> subset
+```
+
+**Arguments**
+
+- `json` — the JSON value to search within.
+- `subset` — a JSON value that must be contained; supply it as a JSON-formatted string literal.
+
+**Returned value**
+
+- `true` if `json` contains `subset`, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Users whose properties include plan pro
+SELECT distinct_id
+FROM users
+WHERE user_properties @> '{"plan": "pro"}'
+```
+
+<Note>An explicit `::jsonb` cast on either side — `user_properties::jsonb @> '{"plan": "pro"}'::jsonb` — behaves identically; the redundant cast is stripped.</Note>
+
+## = ANY (JSON array)
+
+Tests whether a scalar value equals any element of a JSON array. It is the common way to check membership in a JSON array stored on a property.
+
+**Syntax**
+
+```sql
+value = ANY(json_array)
+```
+
+**Arguments**
+
+- `value` — the scalar to look for.
+- `json_array` — a JSON array value, such as `user_properties -> 'tags'`.
+
+**Returned value**
+
+- `true` if `value` matches at least one element, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Users tagged vip
+SELECT distinct_id
+FROM users
+WHERE 'vip' = ANY(user_properties -> 'tags')
+```
+
+## @? (path exists)
+
+Tests whether a JSON path exists within a JSON value.
+
+**Syntax**
+
+```sql
+json @? path
+```
+
+**Arguments**
+
+- `json` — the JSON value to test.
+- `path` — a JSON path string, such as `'$.plan'`.
+
+**Returned value**
+
+- `true` if the path matches something in `json`, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Users who have a plan property set
+SELECT distinct_id
+FROM users
+WHERE user_properties @? '$.plan'
+```
+
+## jsonExtractInt
+
+Extracts the value at a key from a JSON value as a signed integer.
+
+**Syntax**
+
+```sql
+jsonExtractInt(json, key)
+```
+
+**Arguments**
+
+- `json` — the JSON value to read from.
+- `key` — the object key to extract.
+
+**Returned value**
+
+- The value as a signed integer; `0` if the key is absent or not numeric. Integer.
+
+**Example**
+
+```sql Users with a negative account balance
+SELECT distinct_id
+FROM users
+WHERE jsonExtractInt(user_properties, 'balance') < 0
+```
+
+## jsonExtractFloat
+
+Extracts the value at a key from a JSON value as a floating-point number.
+
+**Syntax**
+
+```sql
+jsonExtractFloat(json, key)
+```
+
+**Arguments**
+
+- `json` — the JSON value to read from.
+- `key` — the object key to extract.
+
+**Returned value**
+
+- The value as a float; `0` if the key is absent or not numeric. Float.
+
+**Example**
+
+```sql Users with a lifetime value above 500
+SELECT distinct_id
+FROM users
+WHERE jsonExtractFloat(user_properties, 'ltv') > 500
+```
+
+## jsonExtractBool
+
+Extracts the value at a key from a JSON value as a boolean.
+
+**Syntax**
+
+```sql
+jsonExtractBool(json, key)
+```
+
+**Arguments**
+
+- `json` — the JSON value to read from.
+- `key` — the object key to extract.
+
+**Returned value**
+
+- The value as a boolean; `false` if the key is absent or not a boolean. Boolean.
+
+**Example**
+
+```sql Users flagged as verified
+SELECT distinct_id
+FROM users
+WHERE jsonExtractBool(user_properties, 'verified')
+```
+
+## jsonExtractUInt
+
+Extracts the value at a key from a JSON value as an unsigned integer.
+
+**Syntax**
+
+```sql
+jsonExtractUInt(json, key)
+```
+
+**Arguments**
+
+- `json` — the JSON value to read from.
+- `key` — the object key to extract.
+
+**Returned value**
+
+- The value as an unsigned integer; `0` if the key is absent or not numeric. Unsigned integer.
+
+**Example**
+
+```sql Users with at least ten logins
+SELECT distinct_id
+FROM users
+WHERE jsonExtractUInt(user_properties, 'login_count') >= 10
+```
+
+## is_json_valid
+
+Tests whether a string is well-formed JSON.
+
+**Syntax**
+
+```sql
+is_json_valid(text)
+```
+
+**Arguments**
+
+- `text` — the string to validate.
+
+**Returned value**
+
+- `true` if the string parses as valid JSON, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Events with a well-formed properties payload
+SELECT distinct_id
+FROM events
+WHERE is_json_valid(properties)
+```
+
+## is_json_object
+
+Tests whether a JSON value is an object (rather than an array, string, number, or scalar).
+
+**Syntax**
+
+```sql
+is_json_object(json)
+```
+
+**Arguments**
+
+- `json` — the JSON value to inspect.
+
+**Returned value**
+
+- `true` if the value is a JSON object, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Rows where the address property is an object
+SELECT distinct_id
+FROM users
+WHERE is_json_object(user_properties -> 'address')
+```
+
+## json_path_exists
+
+Tests whether a JSON path exists within a JSON value. It is the function form of the `@?` operator.
+
+**Syntax**
+
+```sql
+json_path_exists(json, path)
+```
+
+**Arguments**
+
+- `json` — the JSON value to test.
+- `path` — a JSON path string, such as `'$.address.country'`.
+
+**Returned value**
+
+- `true` if the path matches something in `json`, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Users with a country in their address
+SELECT distinct_id
+FROM users
+WHERE json_path_exists(user_properties, '$.address.country')
+```
+
+## json_has_any
+
+Tests whether a JSON object contains any of the given top-level keys.
+
+**Syntax**
+
+```sql
+json_has_any(json, keys)
+```
+
+**Arguments**
+
+- `json` — the JSON object to inspect.
+- `keys` — an array of key names to look for.
+
+**Returned value**
+
+- `true` if at least one of `keys` is present as a top-level key, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Users with a plan or tier property
+SELECT distinct_id
+FROM users
+WHERE json_has_any(user_properties, ['plan', 'tier'])
+```
+
+## jsonb_array_length
+
+Returns the number of elements in a JSON array.
+
+**Syntax**
+
+```sql
+jsonb_array_length(json_array)
+```
+
+**Arguments**
+
+- `json_array` — the JSON array to measure.
+
+**Returned value**
+
+- The element count. Integer.
+
+**Example**
+
+```sql Users with more than three tags
+SELECT distinct_id
+FROM users
+WHERE jsonb_array_length(user_properties -> 'tags') > 3
+```
+
+## jsonb_object_keys
+
+Expands the top-level keys of a JSON object into a set of rows, one key per row.
+
+**Syntax**
+
+```sql
+jsonb_object_keys(json)
+```
+
+**Arguments**
+
+- `json` — the JSON object whose keys to list.
+
+**Returned value**
+
+- A set of rows, each carrying one top-level key as text. Set of text values.
+
+**Example**
+
+```sql One row per property key per user
+SELECT distinct_id
+FROM users
+WHERE 'plan' IN (SELECT jsonb_object_keys(user_properties))
+```
+
+## jsonb_array_elements_text
+
+Expands a JSON array into a set of rows, one per element, with each element returned as text.
+
+**Syntax**
+
+```sql
+jsonb_array_elements_text(json_array)
+```
+
+**Arguments**
+
+- `json_array` — the JSON array to expand.
+
+**Returned value**
+
+- A set of rows, each carrying one array element as text. Set of text values.
+
+**Example**
+
+```sql One row per tag per user
+SELECT distinct_id
+FROM users
+WHERE 'vip' IN (SELECT jsonb_array_elements_text(user_properties -> 'tags'))
+```
+
+## jsonb_build_object
+
+Builds a JSON object from alternating key and value arguments.
+
+**Syntax**
+
+```sql
+jsonb_build_object(key1, value1 [, key2, value2, ...])
+```
+
+**Arguments**
+
+- `key1, key2, ...` — object keys (text).
+- `value1, value2, ...` — the value paired with each preceding key.
+
+**Returned value**
+
+- A JSON object built from the key/value pairs. JSON.
+
+**Example**
+
+```sql Repackage plan and country into an object
+SELECT distinct_id
+FROM users
+WHERE jsonb_build_object('plan', user_properties ->> 'plan', 'country', user_properties -> 'address' ->> 'country') @> '{"plan": "pro"}'
+```
+
+## jsonb_build_array
+
+Builds a JSON array from the given arguments, in order.
+
+**Syntax**
+
+```sql
+jsonb_build_array(value1 [, value2, ...])
+```
+
+**Arguments**
+
+- `value1, value2, ...` — the values to place into the array, in order.
+
+**Returned value**
+
+- A JSON array containing the arguments. JSON.
+
+**Example**
+
+```sql A JSON array of a user's plan and country
+SELECT distinct_id
+FROM users
+WHERE jsonb_build_array(user_properties ->> 'plan', user_properties -> 'address' ->> 'country') @> '["pro"]'
+```
+
+## ::jsonb
+
+Casts an expression to the `jsonb` type. It is most often used to give a string literal an explicit JSON type in a containment test.
+
+**Syntax**
+
+```sql
+expression::jsonb
+```
+
+**Arguments**
+
+- `expression` — the value to cast, typically a JSON-formatted string literal or a JSON column.
+
+**Returned value**
+
+- The value as `jsonb`. JSON.
+
+**Example**
+
+```sql Cast a literal for a containment test
+SELECT distinct_id
+FROM users
+WHERE user_properties @> '{"plan": "pro"}'::jsonb
+```
+
+<Note>On ClickHouse the `::jsonb` cast is a no-op on a String-JSON column and resolves to the same path as a bare `->>`.</Note>
+
+## mapContains
+
+Tests whether a map contains a given key.
+
+**Syntax**
+
+```sql
+mapContains(map, key)
+```
+
+**Arguments**
+
+- `map` — the map to inspect.
+- `key` — the key to look for.
+
+**Returned value**
+
+- `1` if the map contains `key`, otherwise `0`.
+
+**Example**
+
+```sql Users whose metrics map tracks logins
+SELECT distinct_id
+FROM users
+WHERE mapContains(JSONExtract(user_properties, 'metrics', 'Map(String, Float64)'), 'logins')
+```
+
+## mapKeys
+
+Returns the keys of a map as an array (ClickHouse only).
+
+**Syntax**
+
+```sql
+mapKeys(map)
+```
+
+**Arguments**
+
+- `map` — the map to read.
+
+**Returned value**
+
+- An array of the map's keys. Array.
+
+**Example**
+
+```sql The set of metric names per user
+SELECT distinct_id
+FROM users
+WHERE has(mapKeys(JSONExtract(user_properties, 'metrics', 'Map(String, Float64)')), 'logins')
+```
+
+## mapValues
+
+Returns the values of a map as an array (ClickHouse only).
+
+**Syntax**
+
+```sql
+mapValues(map)
+```
+
+**Arguments**
+
+- `map` — the map to read.
+
+**Returned value**
+
+- An array of the map's values. Array.
+
+**Example**
+
+```sql All metric values per user
+SELECT distinct_id
+FROM users
+WHERE arraySum(mapValues(JSONExtract(user_properties, 'metrics', 'Map(String, Float64)'))) > 1000
+```
+
+## mapAdd
+
+Merges two maps, summing the values of any keys they share. Keys present in only one map are carried through unchanged. Both maps must have numeric values (ClickHouse only).
+
+**Syntax**
+
+```sql
+mapAdd(map1, map2)
+```
+
+**Arguments**
+
+- `map1` — the first map with numeric values.
+- `map2` — the second map with numeric values.
+
+**Returned value**
+
+- A map whose values are the per-key sums. Map.
+
+**Example**
+
+```sql Combine two quarterly usage maps
+SELECT distinct_id
+FROM users
+WHERE mapAdd(
+        JSONExtract(user_properties, 'q1_usage', 'Map(String, Int64)'),
+        JSONExtract(user_properties, 'q2_usage', 'Map(String, Int64)')
+      )['api_calls'] > 100
+```
+
+## mapSubtract
+
+Merges two maps, subtracting the second map's values from the first for any keys they share. Both maps must have numeric values (ClickHouse only).
+
+**Syntax**
+
+```sql
+mapSubtract(map1, map2)
+```
+
+**Arguments**
+
+- `map1` — the map to subtract from.
+- `map2` — the map of values to subtract.
+
+**Returned value**
+
+- A map whose values are the per-key differences. Map.
+
+**Example**
+
+```sql Change in usage from Q1 to Q2
+SELECT distinct_id
+FROM users
+WHERE mapSubtract(
+        JSONExtract(user_properties, 'q2_usage', 'Map(String, Int64)'),
+        JSONExtract(user_properties, 'q1_usage', 'Map(String, Int64)')
+      )['api_calls'] < 0
+```
+
+## mapPopulateSeries
+
+Fills the gaps in a map with integer keys, inserting missing consecutive keys with a zero value up to a given maximum. It is useful for turning a sparse counter map into a dense one (ClickHouse only).
+
+**Syntax**
+
+```sql
+mapPopulateSeries(map [, max])
+```
+
+**Arguments**
+
+- `map` — a map with integer keys and numeric values.
+- `max` — optional highest key to fill up to; defaults to the map's largest key.
+
+**Returned value**
+
+- A map with every integer key from the smallest key up to `max`, gaps filled with zero. Map.
+
+**Example**
+
+```sql Dense day-of-week login counts up to day 7
+SELECT distinct_id
+FROM users
+WHERE mapPopulateSeries(JSONExtract(user_properties, 'daily_logins', 'Map(Int64, Int64)'), 7)[7] = 0
+```
+
+## jsonb_strip_nulls
+
+Returns a copy of a JSON value with every object field whose value is JSON `null` removed. Null array elements are left untouched (PostgreSQL only).
+
+**Syntax**
+
+```sql
+jsonb_strip_nulls(json)
+```
+
+**Arguments**
+
+- `json` — the JSON value to clean.
+
+**Returned value**
+
+- The JSON value with null-valued object fields removed. JSON.
+
+**Example**
+
+```sql Drop null-valued properties
+SELECT distinct_id
+FROM users
+WHERE jsonb_strip_nulls(user_properties) @> '{"plan": "pro"}'
+```

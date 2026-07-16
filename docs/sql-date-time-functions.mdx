@@ -1,0 +1,848 @@
+---
+title: "Date and time functions"
+description: "Date and time functions in SuprSend Segment List SQL — intervals, truncation, extraction, and timestamp arithmetic."
+---
+
+
+Operators and functions for shifting, truncating, extracting from, and formatting the `timestamp` columns on your data, such as `events.requested_at` and `users.created_at` / `users.updated_at`. Unless noted otherwise, each entry works on both the PostgreSQL and ClickHouse backends.
+
+## timestamp ± INTERVAL
+
+Add or subtract a fixed span of time to or from a timestamp using an interval literal. This is the most portable way to express relative time windows.
+
+**Syntax**
+
+```sql
+timestamp + INTERVAL 'quantity unit'
+timestamp - INTERVAL 'quantity unit'
+```
+
+**Arguments**
+
+- `timestamp` — the timestamp (or date) to shift.
+- `quantity unit` — an interval literal such as `'30 days'`, `'6 hours'`, or `'1 month'`.
+
+**Returned value**
+
+- A timestamp shifted forward (for `+`) or backward (for `-`) by the interval.
+
+**Example**
+
+```sql Events in the last 30 days
+SELECT distinct_id
+FROM events
+WHERE requested_at >= now() - INTERVAL '30 days';
+```
+
+## now
+
+Returns the current date and time.
+
+**Syntax**
+
+```sql
+now()
+```
+
+**Returned value**
+
+- The current timestamp.
+
+**Example**
+
+```sql Events in the last hour
+SELECT distinct_id
+FROM events
+WHERE requested_at >= now() - INTERVAL '1 hour';
+```
+
+## current_date
+
+Returns the current date, with no time component.
+
+**Syntax**
+
+```sql
+current_date
+```
+
+**Returned value**
+
+- The current date.
+
+**Example**
+
+```sql Users created today
+SELECT distinct_id
+FROM users
+WHERE toDate(created_at) = current_date;
+```
+
+## date_diff
+
+Counts the number of unit boundaries crossed between a start and an end timestamp.
+
+**Syntax**
+
+```sql
+date_diff('unit', startdate, enddate)
+```
+
+**Arguments**
+
+- `unit` — the unit to count, one of `day`, `hour`, `minute`, `second`, `week`, `month`, `quarter`, or `year`.
+- `startdate` — the earlier timestamp.
+- `enddate` — the later timestamp.
+
+**Returned value**
+
+- The whole number of units between `startdate` and `enddate`.
+
+**Example**
+
+```sql Days since each user signed up
+SELECT distinct_id
+FROM users
+WHERE date_diff('day', created_at, now()) <= 30;
+```
+
+## date_trunc
+
+Truncates a timestamp down to the start of the specified unit.
+
+**Syntax**
+
+```sql
+date_trunc('unit', timestamp)
+```
+
+**Arguments**
+
+- `unit` — the precision to truncate to, one of `day`, `hour`, `minute`, `week`, `month`, `quarter`, or `year`.
+- `timestamp` — the timestamp to truncate.
+
+**Returned value**
+
+- The timestamp truncated to the start of the given unit.
+
+**Example**
+
+```sql Event counts by month
+SELECT distinct_id
+FROM events
+WHERE date_trunc('month', requested_at) = date_trunc('month', now());
+```
+
+## extract
+
+Extracts a single field, such as the year or day of week, from a timestamp.
+
+**Syntax**
+
+```sql
+extract(field FROM timestamp)
+```
+
+**Arguments**
+
+- `field` — the field to extract, one of `YEAR`, `MONTH`, `DAY`, `HOUR`, `MINUTE`, `SECOND`, `QUARTER`, `DOW`, `ISODOW`, `DOY`, `WEEK`, or `EPOCH`.
+- `timestamp` — the timestamp to read from.
+
+**Returned value**
+
+- The numeric value of the requested field.
+
+**Example**
+
+```sql Events grouped by hour of day
+SELECT distinct_id
+FROM events
+WHERE extract(HOUR FROM requested_at) = 9;
+```
+
+## toStartOfMinute / toStartOfFiveMinutes / toStartOfTenMinutes / toStartOfFifteenMinutes / toStartOfHour / toStartOfDay
+
+Round a timestamp down to the start of a fixed-length time bucket, from one minute up to a full day.
+
+**Syntax**
+
+```sql
+toStartOfMinute(datetime)
+toStartOfFiveMinutes(datetime)
+toStartOfTenMinutes(datetime)
+toStartOfFifteenMinutes(datetime)
+toStartOfHour(datetime)
+toStartOfDay(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to round.
+
+**Returned value**
+
+- The timestamp rounded down to the start of the chosen bucket.
+
+**Example**
+
+```sql Event volume per 15-minute bucket
+SELECT distinct_id
+FROM events
+WHERE toStartOfFifteenMinutes(requested_at) = toStartOfFifteenMinutes(now());
+```
+
+## toStartOfWeek / toStartOfMonth / toStartOfQuarter / toStartOfYear
+
+Round a timestamp down to the start of a calendar period. `toStartOfWeek` uses a Monday-start week.
+
+**Syntax**
+
+```sql
+toStartOfWeek(datetime)
+toStartOfMonth(datetime)
+toStartOfQuarter(datetime)
+toStartOfYear(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to round.
+
+**Returned value**
+
+- The date at the start of the enclosing week, month, quarter, or year.
+
+**Example**
+
+```sql New users per month
+SELECT distinct_id
+FROM users
+WHERE toStartOfMonth(created_at) = toStartOfMonth(now());
+```
+
+## toDate
+
+Truncates a timestamp to its date component, dropping the time of day.
+
+**Syntax**
+
+```sql
+toDate(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to truncate.
+
+**Returned value**
+
+- The date portion of the input.
+
+**Example**
+
+```sql Distinct active days per event
+SELECT distinct_id
+FROM events
+GROUP BY distinct_id
+HAVING count(DISTINCT toDate(requested_at)) >= 5;
+```
+
+## timestamp subtraction
+
+Subtracts one timestamp from another to measure the elapsed time between them.
+
+**Syntax**
+
+```sql
+timestamp - timestamp
+```
+
+**Arguments**
+
+- `timestamp` — the two timestamps to subtract; the second is subtracted from the first.
+
+**Returned value**
+
+- An interval representing the elapsed time between the two timestamps.
+
+**Example**
+
+```sql Time between account creation and last update
+SELECT distinct_id
+FROM users
+WHERE updated_at - created_at > INTERVAL '30 days';
+```
+
+## timestampadd / timestampsub
+
+Add or subtract a whole number of calendar units to or from a timestamp. Equivalent to adding or subtracting an interval, but the unit and count are passed as arguments.
+
+**Syntax**
+
+```sql
+timestampadd(unit, count, timestamp)
+timestampsub(unit, count, timestamp)
+```
+
+**Arguments**
+
+- `unit` — the calendar unit to add or subtract, such as `day`, `hour`, `minute`, `second`, `week`, `month`, `quarter`, or `year`.
+- `count` — the whole number of units to add (`timestampadd`) or subtract (`timestampsub`).
+- `timestamp` — the timestamp to shift.
+
+**Returned value**
+
+- The shifted timestamp.
+
+**Example**
+
+```sql Users created within 90 days
+SELECT distinct_id
+FROM users
+WHERE created_at >= timestampsub(day, 90, now());
+```
+
+## add_months
+
+Shifts a date or timestamp by a whole number of months, clamping to the last valid day when the target month is shorter.
+
+**Syntax**
+
+```sql
+add_months(datetime, num_months)
+```
+
+**Arguments**
+
+- `datetime` — the date or timestamp to shift.
+- `num_months` — the number of months to add; negative values shift backward.
+
+**Returned value**
+
+- The date or timestamp moved by `num_months` months.
+
+**Example**
+
+```sql Users whose trial converts three months after signup
+SELECT distinct_id
+FROM users
+WHERE add_months(created_at, 3) <= now();
+```
+
+## addDays / addHours / addMinutes / addSeconds / addWeeks / addQuarters / addYears
+
+Add a whole number of a single time unit to a date or timestamp. Each function targets one unit.
+
+**Syntax**
+
+```sql
+addDays(datetime, n)
+addHours(datetime, n)
+addMinutes(datetime, n)
+addSeconds(datetime, n)
+addWeeks(datetime, n)
+addQuarters(datetime, n)
+addYears(datetime, n)
+```
+
+**Arguments**
+
+- `datetime` — the date or timestamp to shift.
+- `n` — the whole number of units to add.
+
+**Returned value**
+
+- The date or timestamp shifted forward by `n` of the given unit.
+
+**Example**
+
+```sql Expiry 14 days after an event
+SELECT distinct_id
+FROM events
+WHERE addDays(requested_at, 14) <= now();
+```
+
+## subtractDays / subtractHours / subtractMinutes / subtractSeconds / subtractWeeks / subtractMonths / subtractQuarters / subtractYears
+
+Subtract a whole number of a single time unit from a date or timestamp. Each function targets one unit.
+
+**Syntax**
+
+```sql
+subtractDays(datetime, n)
+subtractHours(datetime, n)
+subtractMinutes(datetime, n)
+subtractSeconds(datetime, n)
+subtractWeeks(datetime, n)
+subtractMonths(datetime, n)
+subtractQuarters(datetime, n)
+subtractYears(datetime, n)
+```
+
+**Arguments**
+
+- `datetime` — the date or timestamp to shift.
+- `n` — the whole number of units to subtract.
+
+**Returned value**
+
+- The date or timestamp shifted backward by `n` of the given unit.
+
+**Example**
+
+```sql Events in the last week
+SELECT distinct_id
+FROM events
+WHERE requested_at >= subtractWeeks(now(), 1);
+```
+
+## at time zone
+
+Reinterprets a timestamp in a named time zone. Applied to a timestamp without time zone, it produces the corresponding instant; applied to a timestamp with time zone, it shows the wall-clock time in that zone.
+
+**Syntax**
+
+```sql
+timestamp AT TIME ZONE 'zone'
+```
+
+**Arguments**
+
+- `timestamp` — the timestamp to reinterpret.
+- `zone` — an IANA time-zone name such as `'America/New_York'` or `'UTC'`.
+
+**Returned value**
+
+- The timestamp converted to the specified time zone.
+
+**Example**
+
+```sql Event time in New York local time
+SELECT distinct_id
+FROM events
+WHERE toDate(requested_at AT TIME ZONE 'America/New_York') = current_date;
+```
+
+## to_char
+
+Formats a timestamp into a string using a format template.
+
+**Syntax**
+
+```sql
+to_char(timestamp, format)
+```
+
+**Arguments**
+
+- `timestamp` — the timestamp to format.
+- `format` — the format template, for example `'YYYY-MM-DD'` or `'HH24:MI:SS'`.
+
+**Returned value**
+
+- The formatted string.
+
+**Example**
+
+```sql Format the signup date as a string
+SELECT distinct_id
+FROM users
+WHERE to_char(created_at, 'YYYY-MM-DD') = '2026-01-01';
+```
+
+## make_date
+
+Builds a date from separate year, month, and day fields.
+
+**Syntax**
+
+```sql
+make_date(year, month, day)
+```
+
+**Arguments**
+
+- `year` — the year (integer).
+- `month` — the month, 1 through 12.
+- `day` — the day of month.
+
+**Returned value**
+
+- The constructed date.
+
+**Example**
+
+```sql Events on or after the start of the fiscal year
+SELECT distinct_id
+FROM events
+WHERE toDate(requested_at) >= make_date(2026, 4, 1);
+```
+
+## toYYYYMM / toYYYYMMDD / toYYYYMMDDhhmmss
+
+Encode a timestamp as a numeric key at month, day, or second precision. Useful for compact grouping and ordering.
+
+**Syntax**
+
+```sql
+toYYYYMM(datetime)
+toYYYYMMDD(datetime)
+toYYYYMMDDhhmmss(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to encode.
+
+**Returned value**
+
+- An integer encoding the timestamp: `YYYYMM` (for example `202607`), `YYYYMMDD` (for example `20260716`), or `YYYYMMDDhhmmss`.
+
+**Example**
+
+```sql Events grouped by month key
+SELECT distinct_id
+FROM events
+WHERE toYYYYMM(requested_at) = toYYYYMM(now());
+```
+
+## unix_timestamp
+
+Converts a timestamp to the number of seconds since the Unix epoch.
+
+**Syntax**
+
+```sql
+unix_timestamp(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to convert.
+
+**Returned value**
+
+- The number of seconds since 1970-01-01 00:00:00 UTC, as an integer.
+
+**Example**
+
+```sql Epoch seconds for each signup
+SELECT distinct_id
+FROM users
+WHERE unix_timestamp(created_at) >= 1735689600;
+```
+
+## to_timestamp
+
+Converts a Unix epoch value (seconds since 1970-01-01 00:00:00 UTC) into a timestamp.
+
+**Syntax**
+
+```sql
+to_timestamp(unix_seconds)
+```
+
+**Arguments**
+
+- `unix_seconds` — the number of seconds since the Unix epoch.
+
+**Returned value**
+
+- The corresponding timestamp.
+
+**Example**
+
+```sql Convert a stored epoch property to a timestamp
+SELECT distinct_id
+FROM users
+WHERE to_timestamp(CAST(user_properties ->> 'signup_epoch' AS DOUBLE PRECISION)) >= now() - INTERVAL '30 days';
+```
+
+## dateName
+
+Returns the name of a specified part of a date or timestamp as a string.
+
+**Syntax**
+
+```sql
+dateName(datepart, datetime)
+```
+
+**Arguments**
+
+- `datepart` — the part to name, such as `'year'`, `'quarter'`, `'month'`, `'week'`, `'dayofyear'`, `'day'`, `'weekday'`, `'hour'`, `'minute'`, or `'second'`.
+- `datetime` — the date or timestamp to read from.
+
+**Returned value**
+
+- The name of the requested part as a string, for example `'Monday'` or `'April'`.
+
+**Example**
+
+```sql Events grouped by weekday name
+SELECT distinct_id
+FROM events
+WHERE dateName('weekday', requested_at) = 'Monday';
+```
+
+## monthName
+
+Returns the full English name of the month for a date or timestamp.
+
+**Syntax**
+
+```sql
+monthName(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the date or timestamp to read from.
+
+**Returned value**
+
+- The full month name as a string, for example `'January'`.
+
+**Example**
+
+```sql Events grouped by month name
+SELECT distinct_id
+FROM events
+WHERE monthName(requested_at) = 'January';
+```
+
+## timeSlot
+
+Rounds a timestamp down to the start of its half-hour slot.
+
+**Syntax**
+
+```sql
+timeSlot(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to round.
+
+**Returned value**
+
+- The timestamp rounded down to the nearest 30-minute boundary.
+
+**Example**
+
+```sql Event volume per half-hour slot
+SELECT distinct_id
+FROM events
+WHERE timeSlot(requested_at) = timeSlot(now());
+```
+
+## timeZoneOffset
+
+Returns the offset from UTC, in seconds, for a timestamp, accounting for daylight saving time.
+
+**Syntax**
+
+```sql
+timeZoneOffset(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to evaluate.
+
+**Returned value**
+
+- The offset from UTC in seconds.
+
+**Example**
+
+```sql UTC offset at event time
+SELECT distinct_id
+FROM events
+WHERE timeZoneOffset(requested_at) = 0;
+```
+
+## toISOWeek / toISOYear
+
+Return the ISO 8601 week number and week-numbering year for a timestamp. Under ISO rules, a week belongs to the year that contains its Thursday.
+
+**Syntax**
+
+```sql
+toISOWeek(datetime)
+toISOYear(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to evaluate.
+
+**Returned value**
+
+- `toISOWeek` returns the ISO week number, 1 through 53. `toISOYear` returns the ISO week-numbering year.
+
+**Example**
+
+```sql Events grouped by ISO week
+SELECT distinct_id
+FROM events
+WHERE toISOWeek(requested_at) = toISOWeek(now()) AND toISOYear(requested_at) = toISOYear(now());
+```
+
+## toWeek / toYearWeek
+
+Return the week number, and the combined year-and-week, for a timestamp using ISO week numbering.
+
+**Syntax**
+
+```sql
+toWeek(datetime)
+toYearWeek(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to evaluate.
+
+**Returned value**
+
+- `toWeek` returns the week number. `toYearWeek` returns an integer combining the year and week as `YYYYWW`.
+
+**Example**
+
+```sql Events per year-week
+SELECT distinct_id
+FROM events
+WHERE toYearWeek(requested_at) = toYearWeek(now());
+```
+
+## toLastDayOfMonth / toLastDayOfWeek
+
+Return the last day of the calendar period containing a timestamp. `toLastDayOfWeek` uses a Monday-start week, so it returns the Sunday.
+
+**Syntax**
+
+```sql
+toLastDayOfMonth(datetime)
+toLastDayOfWeek(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to evaluate.
+
+**Returned value**
+
+- The date of the last day of the enclosing month or week.
+
+**Example**
+
+```sql Month-end date for each signup
+SELECT distinct_id
+FROM users
+WHERE toLastDayOfMonth(created_at) = toLastDayOfMonth(now());
+```
+
+## toUnixTimestamp64Milli
+
+Converts a high-precision timestamp to the number of milliseconds since the Unix epoch.
+
+**Syntax**
+
+```sql
+toUnixTimestamp64Milli(datetime)
+```
+
+**Arguments**
+
+- `datetime` — the timestamp to convert.
+
+**Returned value**
+
+- The number of milliseconds since 1970-01-01 00:00:00 UTC, as a 64-bit integer.
+
+**Example**
+
+```sql Epoch milliseconds for each event
+SELECT distinct_id
+FROM events
+WHERE toUnixTimestamp64Milli(requested_at) >= 1735689600000;
+```
+
+## yesterday
+
+Returns the date of the day before today.
+
+**Syntax**
+
+```sql
+yesterday()
+```
+
+**Returned value**
+
+- Yesterday's date, with no time component.
+
+**Example**
+
+```sql Events that happened yesterday
+SELECT distinct_id
+FROM events
+WHERE toDate(requested_at) = yesterday();
+```
+
+## from_utc_timestamp / to_utc_timestamp
+
+Convert a timestamp between UTC and a named time zone. `from_utc_timestamp` reads the input as UTC and returns the wall-clock time in the target zone; `to_utc_timestamp` reads the input as local to the target zone and returns the equivalent UTC time.
+
+**Syntax**
+
+```sql
+from_utc_timestamp(timestamp, timezone)
+to_utc_timestamp(timestamp, timezone)
+```
+
+**Arguments**
+
+- `timestamp` — the timestamp to convert.
+- `timezone` — an IANA time-zone name such as `'America/New_York'`.
+
+**Returned value**
+
+- The converted timestamp.
+
+**Example**
+
+```sql Show event time in the user's local zone
+SELECT distinct_id
+FROM events
+WHERE toDate(from_utc_timestamp(requested_at, 'America/New_York')) = current_date;
+```
+
+## age
+
+Returns the symbolic difference between two timestamps as years, months, and days. With a single argument, the difference is measured from the current date at midnight (PostgreSQL only).
+
+**Syntax**
+
+```sql
+age(timestamp)
+age(timestamp, timestamp)
+```
+
+**Arguments**
+
+- `timestamp` — with two arguments, the second is subtracted from the first. With one argument, the timestamp is subtracted from `current_date`.
+
+**Returned value**
+
+- An interval expressed in years, months, and days.
+
+**Example**
+
+```sql Account age as years and months
+SELECT distinct_id
+FROM users
+WHERE age(now(), created_at) > INTERVAL '1 year';
+```
