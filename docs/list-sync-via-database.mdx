@@ -1,9 +1,9 @@
 ---
 title: "Database sync"
-description: "Sync a SuprSend List from your data warehouse by writing SQL — on a schedule you set, with the option to update user profile properties and channels at the same time."
+description: "Sync a SuprSend List from your data warehouse by writing SQL — on a schedule you set, with the option to create users and update their profile properties and channels at the same time."
 ---
 
-Connect your data warehouse to SuprSend and sync a [List's](/docs/lists) membership by writing a SQL query. The query runs on the schedule you choose, so the list stays in sync with your source of truth without any code — and you can update user profile properties and channels in the same pass to power personalized broadcasts.
+Connect your data warehouse to SuprSend and sync a [List's](/docs/lists) membership by writing a SQL query. The query runs on the schedule you choose, so the list stays in sync with your source of truth without any code. In the same pass, you can also create users who don't yet exist in SuprSend and update their profile properties or channels — powering personalized broadcasts and workflows.
 
 <Note>
   Database sync needs an active database connection. If you haven't added one, see [Setup database connection](/docs/database) first.
@@ -17,7 +17,7 @@ flowchart LR
     A["Your data<br/>warehouse"] --> B["SQL query<br/>(sync task)"]
     B --> C["Scheduled run"]
     C --> D["List membership<br/>updated"]
-    C --> E["User profile<br/>properties + channels"]
+    C --> E["Create / update<br/>user profiles"]
 
     classDef s1 fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
     classDef s2 fill:transparent,stroke:#b0b0b0,stroke-width:1.4px;
@@ -27,33 +27,35 @@ flowchart LR
     class D,E s3;
 ```
 
-A sync task is a SQL query plus a schedule. When the schedule fires, SuprSend runs the query, adds or replaces the list membership from the result, and — if you enable it — updates each user's profile properties and channels from other columns your query returns.
+A sync task is a SQL query plus a schedule. When the schedule fires, SuprSend runs the query, adds or replaces the list membership from the result, and — if you enable it — creates any users who don't yet exist and updates each user's profile properties and channels from other columns your query returns.
 
 ## Setting up the sync
 
-<Steps>
-  <Step title="Create a sync task">
-    Open the list from the Lists page and click **Update Users**, or click **New task** on the **Sync tasks** tab. Lists whose source is a database connector open the sync task editor directly on **Update Users**; other list types fall back to the sync tasks tab.
+### 1. Create the list
 
-    <Frame caption="Open the sync task editor from the list details page.">
-      <img src="/images/database-list-details-page.png" alt="List details page with the Update Users option to launch the database sync task editor" />
-    </Frame>
+Go to **Lists → + New List** and set a `list_id` (required — unique within the workspace; lowercase letters, digits, and underscores only), plus an optional name and description.
 
-    Set a task name and pick the list to sync into. The list must already exist — [create one](/docs/lists#creating-lists) first if it doesn't.
-  </Step>
+### 2. Write the SQL query
 
-  <Step title="Write the SQL query">
-    Pick your database connection, then write the query that returns the users to sync. If you haven't added a connection yet, add it from this screen — see [database connection](/docs/database) for the setup.
+Open the list from the Lists page. On the **User Sync Query** tab, click **Setup Sync** to launch the query editor.
 
-    <Frame>
-      <img src="/images/database-list-query-editor.png" alt="Query editor for a database sync task with SQL input and preview panel" />
-    </Frame>
+<Frame caption="Empty User Sync Query tab — click Setup Sync to start.">
+  <img src="/images/database-list-details-page.png" alt="List details page for a database_sync list with the Setup Sync button on the User Sync Query tab" />
+</Frame>
 
-    Your `SELECT` must return a `distinct_id` column — that's how SuprSend identifies each user. Every additional column can be mapped to a user property or channel in the next step.
+Pick your database connection from the dropdown at the top of the editor, then write the query that returns the users to sync. If you haven't added a connection yet, add it from this screen — see [database connection](/docs/database) for the setup.
 
-    Click **Run** to preview the first 10 rows and confirm the query pulls what you expect.
+<Frame caption="Query editor with connection selector, SQL input, and preview panel.">
+  <img src="/images/database-list-query-editor.png" alt="User sync task query editor showing a Postgres connection, a SELECT statement, and the Run and Save Query buttons" />
+</Frame>
 
-    Return only the rows and columns you need. Avoid `SELECT *` in the committed query — the preview limits to 10 rows, but the live sync doesn't. If you're mapping channels, format each column so the values are ready to use as-is:
+Keep these rules in mind as you write the query:
+
+- **Return `distinct_id`** — your `SELECT` must include this column; it's how SuprSend identifies each user. Any additional columns can be mapped to a user property or channel in the next step.
+- **Preview, then save** — click **Run** to preview the first 10 rows and confirm the query pulls what you expect, then click **Save Query** to persist the draft.
+- **Select only what you need** — avoid `SELECT *` in the committed query. The preview limits to 10 rows, but the live sync would return all rows and columns and can take longer to run.
+- **Mind column-name case** — mappings are case-sensitive, so `Email`, `email`, and `EMAIL` are three different columns. Pick one form and stick with it.
+- **Format channel columns** - make sure that you format the channel values correctly otherwise they'd be dropped while syncing in user profile.
 
     | Channel | Required format |
     |---|---|
@@ -64,52 +66,71 @@ A sync task is a SQL query plus a schedule. When the schedule fires, SuprSend ru
     - **PostgreSQL** — `SELECT '+91' || phone_number AS phone FROM users`
     - **MySQL** — `SELECT CONCAT('+91', phone_number) AS phone FROM users`
 
-    <Warning>
-      Column names are case-sensitive when mapping to user properties or channels. `Email`, `email`, and `EMAIL` are treated as three different columns — pick one form and stick with it.
-    </Warning>
+#### Incremental syncs with `{{last_sync_time}}`
 
-    ### Incremental syncs with `{{last_sync_time}}`
+For recurring syncs, use the `{{last_sync_time}}` template variable to fetch only rows that changed since the previous successful run. This keeps queries fast and avoids re-processing the same rows on every sync.
 
-    For recurring syncs, use the `{{last_sync_time}}` template variable to fetch only rows that changed since the previous successful run. This keeps queries fast and avoids re-processing the same rows every interval.
+`{{last_sync_time}}` is an ISO 8601 timestamp. Add a `WHERE` clause against an indexed "last updated" column in your source table, and cast the variable if your column uses a different format.
 
-    `{{last_sync_time}}` is an ISO 8601 timestamp. Add a `WHERE` clause against an indexed "last updated" column in your source table, and cast the variable if your column uses a different format.
+```sql
+SELECT distinct_id, email, plan
+FROM users
+WHERE updated_at > '{{last_sync_time}}';
+```
 
-    ```sql
-    SELECT distinct_id, email, plan
-    FROM users
-    WHERE updated_at > '{{last_sync_time}}';
-    ```
+### 3. Configure the sync settings
+
+Once the preview looks right, click **Update Sync Settings and Commit**.
+
+<Steps>
+  <Step title="Choose the update type">
+    Pick how users returned by the query merge with the current list membership on every run.
+
+    <Frame caption="Step 1 — choose Add or Replace for how the list membership is updated.">
+      <img src="/images/database-list-sync-setting-screen1.png" alt="Sync Settings modal step 1 with Add and Replace options for how users are updated on subsequent runs" />
+    </Frame>
+
+    | Option | When to use |
+    |---|---|
+    | **Add** | Appends only new `distinct_id`s to the list; existing users are never removed. Use when the list is additive — membership only ever accumulates. For example, *users who signed up* or *users who ever made a purchase*. |
+    | **Replace** | Swaps the current membership for exactly the rows the query returns. Use when the query is the full definition of the audience — e.g. *"last 30 days active users"*, *"newsletter subscribers"*. |
   </Step>
 
-  <Step title="Configure the sync settings">
-    Once the preview looks right, **Save query** and click **Commit changes**. You'll be walked through the sync settings.
+  <Step title="Choose the update frequency">
+    Set how often the sync runs.
 
-    <Frame caption="Sync settings on commit — update type, schedule, and user profile mapping.">
-      <img src="/images/database-list-sync-setting-screen1.png" alt="Sync settings modal shown after committing the query, with update type and schedule options" />
+    <Frame caption="Step 2 — pick One-time or Recurring, then set the interval.">
+      <img src="/images/database-list-sync-frequency-setting.png" alt="Sync Settings modal step 2 with One-time and Recurring frequency options and Every / days / hours / minutes selectors" />
     </Frame>
+
+    | Option | Description |
+    |---|---|
+    | **One-time** | Runs the query exactly once, either immediately after commit or at a later timestamp. |
+    | **Recurring** | Repeats on a schedule — either an interval you build from the **Every / days / hours / minutes** selectors (e.g. every 1 day, every 6 hours, every 30 minutes), or a **cron expression** for more precise timing (e.g. `0 9 * * 1` for every Monday at 9:00 am). |
+  </Step>
+
+  <Step title="Map columns to user profile">
+    Turn on **Create / Update user profile** to create users who don't yet exist in SuprSend and to sync your extra columns as user properties or channels. Reference the properties later in templates as `{{$recipient.<property_key>}}`.
+
+    <Frame caption="Step 3 — map query output columns to user properties and channels.">
+      <img src="/images/database-list-user-profile-sync-screen.png" alt="Sync Settings modal step 3 with the Create / Update user profile toggle on and a mapping table for columns, channels, property keys, and merge behavior" />
+    </Frame>
+
+    Add one row per column you want to sync:
 
     | Field | Description |
     |---|---|
-    | **Update type** | **Add** — append the query result to the existing list. Use when the query returns *new* users only (e.g. today's signups). **Replace** — swap the current membership for exactly the rows the query returns. Use when the query is the full definition of the audience (e.g. *"users who purchased in the last 30 days"*). |
-    | **Schedule** | **One-time** for a single run; **Recurring** for a repeating sync on an interval (every N minutes / hours / days) or a cron expression like `every monday at 9:00 am`. |
-    | **Create / Update user profile** | Turn on to sync additional columns as user properties and channels. Reference the properties later in templates as `{{$user.<property_key>}}`. |
-    | **Column header** | The exact column name (case-sensitive) from your query output. |
-    | **Is channel?** | Enable if the column value is a channel (`email`, `sms`, `whatsapp`). Phone columns must be in E.164 format. |
-    | **User property** | The property key to store the value under — can differ from the column name. For channels, pick from the list of available channels. |
-    | **Manage existing property** | **Override** — replace the value on every sync. **Don't Override** — set only if the property isn't already set (useful for one-time properties like `signup_date`). **Append** — build up an array across syncs. Channel columns are always appended. |
+    | **Column name** | The exact column name (case-sensitive) from your query output. |
+    | **Is channel?** | Toggle on if the column value is a channel (`email`, `sms`, `whatsapp`). Phone columns must be in E.164 format. |
+    | **User property key** | The property key to store the value under — can differ from the column name. For channels, pick from the list of available channels. |
+    | **Manage existing property** | **Override** — replace the value on every sync.<br/> **Don't Override** — set only if the property isn't already set (useful for one-time properties like `signup_date`). **Append** — build up an array across syncs. Channel columns are always appended. |
+  </Step>
 
-    <Frame caption="Set sync frequency — one-time, recurring on an interval, or a cron expression.">
-      <img src="/images/database-list-sync-frequency-setting.png" alt="Sync frequency settings with one-time, recurring, and cron expression options" />
-    </Frame>
+  <Step title="Commit changes">
+    Add a description so the change is easy to identify in version history, then click **Commit Changes**.
 
-    <Frame caption="Map query columns to user properties and channels for the profile sync.">
-      <img src="/images/database-list-user-profile-sync-screen.png" alt="User profile sync mapping screen linking query columns to properties and channels" />
-    </Frame>
-
-    Click **Next**, add a commit description so the change is easy to identify in version history, and confirm.
-
-    <Frame caption="Add a commit description to record what changed in this version.">
-      <img src="/images/list-commit-modal-database-sync-list.png" alt="Commit modal for a database sync list with a description field for the version note" />
+    <Frame caption="Step 4 — describe what changed in this version and commit.">
+      <img src="/images/list-commit-modal-database-sync-list.png" alt="Sync Settings modal step 4 with a Description field and the Commit Changes button" />
     </Frame>
 
     <Check>
@@ -120,27 +141,41 @@ A sync task is a SQL query plus a schedule. When the schedule fires, SuprSend ru
 
 ## Enable or disable a sync
 
-A sync is enabled the moment you commit it. Toggle it off from the switch next to the edit button — the query stops running but the sync configuration stays intact, so you can turn it back on later. On re-enable, the next run picks up from `{{last_sync_time}}` of the previous successful run, so it processes everything that changed while the sync was off.
+A sync is enabled the moment you commit it. Toggle it off from the switch next to the edit button — the query stops running but the sync configuration stays intact, so you can turn it back on later.
 
 <Frame>
-  <img src="/images/docs/a27a8d1-image.png" alt="Enable / disable toggle next to the sync task edit button" />
+  <img src="/images/database-list-enable-button.png" alt="User sync task header with the Enable toggle next to the Edit and Sync Now buttons" />
 </Frame>
+
+## Run a sync on demand
+
+Click **Sync Now** in the user sync task header to trigger an immediate run outside the scheduled interval — useful for testing a new query, backfilling after fixing a source-data issue, or refreshing the list before a broadcast. The manual run uses the currently committed query and settings, honours `{{last_sync_time}}` from the previous successful run, and appears in **Sync Logs** like any other run.
 
 ## Sync logs
 
-Every run appears in **Lists → Logs**. Filter by source type to see only database syncs. Each row shows when the sync ran, who last edited it, and the outcome.
+Every run appears on the **Sync Logs** tab of the list. Each row shows when the sync was queued, the source task, who last edited it, the status, and a summary with `Total` and `Added` counts.
 
 <Frame>
-  <img src="/images/docs/28f4dbf-image.png" alt="Sync logs listing with source type filter and per-row status" />
+  <img src="/images/sync-log-tab.png" alt="Sync Logs tab with columns for queued time, source task, editor, status, and a Total / Added summary per run" />
 </Frame>
 
 | Status | Meaning |
 |---|---|
 | **Created** | The run is queued but hasn't started yet. |
 | **In progress** | Users are being added to the list. You'll see a `% progress` on the row. |
-| **Success** | The run completed. You'll see `Total` (rows the query returned), `Processed` (rows attempted), and `Added` (users actually added to the list). `Added` can be lower than `Total` if some users were already in the list, or if some `distinct_id`s don't exist in SuprSend — enable **Create / Update user profile** to auto-create missing users. |
+| **Success** | The run completed. The summary shows `Total` and `Added` — see below for how they differ. |
 | **Ignored** | Skipped because the previous run was still in progress when this one was due to start. |
 | **Failed** | The run couldn't complete — usually a query error, a missing `distinct_id` column, or an empty result set. Hover the status or open the sync to see the error, or filter to **Show only error logs**. |
+
+### Total vs. Added
+
+- **Total** — the number of users the query returned in this run.
+- **Added** — the number of users actually added to the list after the run finished.
+
+`Added` can be lower than `Total` for two reasons:
+
+- **The user is already in the list.** Duplicate `distinct_id`s from earlier runs aren't added again, so they count toward `Total` but not `Added`.
+- **The user doesn't exist in SuprSend and user sync is off.** When **Create / Update user profile** is off in sync settings, rows whose `distinct_id` doesn't already exist in SuprSend are skipped. Turn it on to auto-create those users so `Added` matches `Total`.
 
 <Frame>
   <img src="/images/docs/59235f7-image.png" alt="Failed sync log expanded to show the underlying query error" />
@@ -179,16 +214,10 @@ Every change to the query or settings is saved as a draft first. Only **Commit c
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Setup database connection" icon="database" href="/docs/database">
-    Add your warehouse credentials before creating a sync task.
-  </Card>
   <Card title="Send a Broadcast" icon="bullhorn" href="/docs/broadcast">
     Use the synced list as the audience for a broadcast.
   </Card>
-  <Card title="Segment Lists" icon="wand-magic-sparkles" href="/docs/segment-lists">
-    Skip the warehouse — write SQL directly against SuprSend's user and event data.
-  </Card>
-  <Card title="List entry / exit triggers" icon="workflow" href="/docs/design-workflow#1-trigger-node">
+  <Card title="Setup Workflow on List entry/exit" icon="diagram-project" href="/docs/design-workflow#1-trigger-node">
     Trigger a workflow when users enter or exit the list.
   </Card>
 </CardGroup>

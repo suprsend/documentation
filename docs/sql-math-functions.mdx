@@ -1,0 +1,894 @@
+---
+title: "Arithmetic and math functions"
+description: "Arithmetic and mathematical functions supported in SuprSend Segment List SQL — rounding, powers, logs, trigonometry, and numeric helpers."
+---
+
+
+Numeric operators and mathematical functions for computing over user and event properties. Unless noted otherwise, each function works on both the PostgreSQL and ClickHouse backends.
+
+## % / mod
+
+Modulo: the remainder left after dividing one number by another. `%` is the operator form and `mod` is the equivalent function.
+
+**Syntax**
+
+```sql
+a % b
+mod(a, b)
+```
+
+**Arguments**
+
+- `a` — the dividend.
+- `b` — the divisor.
+
+**Returned value**
+
+- The remainder of `a` divided by `b`. The result takes the sign of the dividend `a` (truncated division). Dividing by zero raises an error.
+
+**Example**
+
+```sql Bucket users into 10 groups by a numeric id
+SELECT distinct_id
+FROM users
+WHERE CAST(user_properties ->> 'account_id' AS DOUBLE PRECISION) % 10 = 0;
+```
+
+## abs
+
+Returns the absolute (non-negative) value of a number.
+
+**Syntax**
+
+```sql
+abs(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+
+**Returned value**
+
+- The absolute value of `x`, in the same numeric domain as the input.
+
+**Example**
+
+```sql Distance of lifetime value from a target
+SELECT distinct_id
+FROM users
+WHERE abs(CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) - 500) <= 50;
+```
+
+## floor / ceil / round / trunc
+
+Rounding functions. `floor` rounds down, `ceil` rounds up, `round` rounds to the nearest value (ties away from zero), and `trunc` truncates toward zero. `round` and `trunc` optionally take a number of decimal places.
+
+**Syntax**
+
+```sql
+floor(x)
+ceil(x)
+round(x [, n])
+trunc(x [, n])
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+- `n` — (optional, for `round` and `trunc`) the number of decimal places to keep. Defaults to `0`.
+
+**Returned value**
+
+- The rounded value of `x`. `floor` returns the largest integer not greater than `x`; `ceil` the smallest integer not less than `x`; `round` the nearest value at `n` decimals; `trunc` the value with digits beyond `n` decimals dropped.
+
+**Example**
+
+```sql Rounding a value four ways
+SELECT distinct_id
+FROM users
+WHERE floor(2.7) = 2 AND ceil(2.1) = 3 AND round(2.345, 2) = 2.35 AND trunc(2.789, 1) = 2.7;
+```
+
+## greatest / least
+
+Return the largest or smallest value among their arguments.
+
+**Syntax**
+
+```sql
+greatest(x1, x2, ...)
+least(x1, x2, ...)
+```
+
+**Arguments**
+
+- `x1, x2, ...` — two or more comparable values.
+
+**Returned value**
+
+- `greatest`: the maximum of the arguments. `least`: the minimum of the arguments.
+
+**Example**
+
+```sql Clamp lifetime value to at least 0
+SELECT distinct_id
+FROM users
+WHERE greatest(CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION), 0) >= 100;
+```
+
+## power
+
+Raises a base to an exponent.
+
+**Syntax**
+
+```sql
+power(a, b)
+```
+
+**Arguments**
+
+- `a` — the base.
+- `b` — the exponent.
+
+**Returned value**
+
+- `a` raised to the power `b`, as a floating-point number.
+
+**Example**
+
+```sql Two raised to the tenth power
+SELECT distinct_id
+FROM users
+WHERE power(2, 10) = 1024;
+```
+
+## sqrt / cbrt
+
+`sqrt` returns the square root and `cbrt` the cube root of a number.
+
+**Syntax**
+
+```sql
+sqrt(x)
+cbrt(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value. For `sqrt`, `x` must be non-negative.
+
+**Returned value**
+
+- The square root (`sqrt`) or cube root (`cbrt`) of `x`, as a floating-point number.
+
+**Example**
+
+```sql Square root and cube root
+SELECT distinct_id
+FROM users
+WHERE sqrt(16) = 4 AND cbrt(27) = 3;
+```
+
+## sign
+
+Returns the sign of a number.
+
+**Syntax**
+
+```sql
+sign(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+
+**Returned value**
+
+- `-1` for negative, `0` for zero, and `1` for positive `x`.
+
+**Example**
+
+```sql Sign of a value
+SELECT distinct_id
+FROM users
+WHERE sign(-42.5) = -1;
+```
+
+## negate
+
+Returns the argument with its sign flipped, equivalent to the unary minus.
+
+**Syntax**
+
+```sql
+negate(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+
+**Returned value**
+
+- The value `-x`, always signed.
+
+**Example**
+
+```sql Negate a number
+SELECT distinct_id
+FROM users
+WHERE negate(7) = -7;
+```
+
+## max2 / min2
+
+Return the larger or smaller of exactly two numbers.
+
+**Syntax**
+
+```sql
+max2(a, b)
+min2(a, b)
+```
+
+**Arguments**
+
+- `a`, `b` — numeric values.
+
+**Returned value**
+
+- `max2`: the greater of `a` and `b`. `min2`: the lesser of `a` and `b`. Returned as a floating-point number.
+
+**Example**
+
+```sql Larger and smaller of two numbers
+SELECT distinct_id
+FROM users
+WHERE max2(3, 9) = 9 AND min2(3, 9) = 3;
+```
+
+## moduloOrZero
+
+Like `mod`, but returns `0` instead of raising an error when the divisor is zero.
+
+**Syntax**
+
+```sql
+moduloOrZero(a, b)
+```
+
+**Arguments**
+
+- `a` — the dividend.
+- `b` — the divisor.
+
+**Returned value**
+
+- The remainder of `a` divided by `b`, or `0` when `b` is `0`.
+
+**Example**
+
+```sql Safe modulo
+SELECT distinct_id
+FROM users
+WHERE moduloOrZero(17, 0) = 0;
+```
+
+## positiveModulo
+
+Returns the remainder of a division, always as a non-negative number.
+
+**Syntax**
+
+```sql
+positiveModulo(a, b)
+```
+
+**Arguments**
+
+- `a` — the dividend.
+- `b` — the divisor.
+
+**Returned value**
+
+- The non-negative remainder of `a` divided by `b`. For example, `positiveModulo(-7, 3)` is `2` rather than `-1`.
+
+**Example**
+
+```sql Always-positive remainder
+SELECT distinct_id
+FROM users
+WHERE positiveModulo(-7, 3) = 2;
+```
+
+## intDiv / intDivOrZero
+
+Integer division. `intDiv` returns the whole-number quotient; `intDivOrZero` behaves the same but yields `0` on division by zero (or when dividing the minimum negative value by `-1`) instead of raising an error.
+
+**Syntax**
+
+```sql
+intDiv(a, b)
+intDivOrZero(a, b)
+```
+
+**Arguments**
+
+- `a` — the dividend.
+- `b` — the divisor.
+
+**Returned value**
+
+- The integer part of `a` divided by `b`. `intDiv` raises an error when `b` is `0`; `intDivOrZero` returns `0` in that case.
+
+**Example**
+
+```sql Integer division
+SELECT distinct_id
+FROM users
+WHERE intDiv(17, 5) = 3 AND intDivOrZero(17, 0) = 0;
+```
+
+## hypot
+
+Returns the length of the hypotenuse of a right triangle given the two other sides, that is, the Euclidean distance from the origin.
+
+**Syntax**
+
+```sql
+hypot(a, b)
+```
+
+**Arguments**
+
+- `a`, `b` — numeric values representing the two legs.
+
+**Returned value**
+
+- The square root of `a² + b²`, as a floating-point number.
+
+**Example**
+
+```sql Hypotenuse of a 3-4-5 triangle
+SELECT distinct_id
+FROM users
+WHERE hypot(3, 4) = 5;
+```
+
+## exp / exp2 / exp10
+
+Exponential functions. `exp` uses base e, `exp2` uses base 2, and `exp10` uses base 10.
+
+**Syntax**
+
+```sql
+exp(x)
+exp2(x)
+exp10(x)
+```
+
+**Arguments**
+
+- `x` — the exponent, a numeric value.
+
+**Returned value**
+
+- `exp`: e raised to `x`. `exp2`: 2 raised to `x`. `exp10`: 10 raised to `x`. All returned as floating-point numbers.
+
+**Example**
+
+```sql Exponentials of a value
+SELECT distinct_id
+FROM users
+WHERE exp2(10) = 1024 AND exp10(3) = 1000 AND exp(1) > 2.7;
+```
+
+## ln / log10 / log / log2 / log1p
+
+Logarithms. `ln` is the natural logarithm (base e); `log10` and `log` are both base-10; `log2` is base-2; `log1p` computes `ln(1 + x)` with extra precision near zero.
+
+**Syntax**
+
+```sql
+ln(x)
+log10(x)
+log(x)
+log2(x)
+log1p(x)
+```
+
+**Arguments**
+
+- `x` — a positive numeric value (for `log1p`, `x` must be greater than `-1`).
+
+**Returned value**
+
+- The logarithm of `x` in the corresponding base, as a floating-point number. Note that `log(x)` is base-10 (matching PostgreSQL), not the natural logarithm.
+
+**Example**
+
+```sql Logarithms of a value
+SELECT distinct_id
+FROM users
+WHERE log10(1000) = 3 AND log(1000) = 3 AND log2(8) = 3 AND ln(2.718281828) > 0.99 AND log1p(0.001) > 0;
+```
+
+## sin / cos / tan
+
+Trigonometric functions taking an angle in radians.
+
+**Syntax**
+
+```sql
+sin(x)
+cos(x)
+tan(x)
+```
+
+**Arguments**
+
+- `x` — an angle in radians.
+
+**Returned value**
+
+- The sine, cosine, or tangent of `x`, as a floating-point number.
+
+**Example**
+
+```sql Trig functions
+SELECT distinct_id
+FROM users
+WHERE sin(0) = 0 AND cos(0) = 1 AND tan(0) = 0;
+```
+
+## asin / acos / atan
+
+Inverse trigonometric functions, returning an angle in radians.
+
+**Syntax**
+
+```sql
+asin(x)
+acos(x)
+atan(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value. For `asin` and `acos`, `x` must be in the range −1 to 1.
+
+**Returned value**
+
+- The arcsine, arccosine, or arctangent of `x`, in radians, as a floating-point number.
+
+**Example**
+
+```sql Inverse trig functions
+SELECT distinct_id
+FROM users
+WHERE acos(1) = 0 AND asin(1) > 1.57 AND atan(1) > 0.78;
+```
+
+## atan2
+
+Returns the angle, in radians, between the positive x-axis and the point `(x, y)`, using the signs of both arguments to determine the correct quadrant.
+
+**Syntax**
+
+```sql
+atan2(y, x)
+```
+
+**Arguments**
+
+- `y` — the ordinate (y-coordinate).
+- `x` — the abscissa (x-coordinate).
+
+**Returned value**
+
+- The angle of the point `(x, y)` in radians, as a floating-point number.
+
+**Example**
+
+```sql Angle of a point
+SELECT distinct_id
+FROM users
+WHERE atan2(1, 1) > 0.78;
+```
+
+## sinh / cosh / tanh
+
+Hyperbolic functions.
+
+**Syntax**
+
+```sql
+sinh(x)
+cosh(x)
+tanh(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+
+**Returned value**
+
+- The hyperbolic sine, cosine, or tangent of `x`, as a floating-point number.
+
+**Example**
+
+```sql Hyperbolic functions
+SELECT distinct_id
+FROM users
+WHERE cosh(1) > 1.5 AND sinh(1) > 1.1 AND tanh(1) < 1;
+```
+
+## asinh / acosh / atanh
+
+Inverse hyperbolic functions.
+
+**Syntax**
+
+```sql
+asinh(x)
+acosh(x)
+atanh(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value. `acosh` requires `x` ≥ 1; `atanh` requires `x` in the open interval between −1 and 1.
+
+**Returned value**
+
+- The inverse hyperbolic sine, cosine, or tangent of `x`, as a floating-point number.
+
+**Example**
+
+```sql Inverse hyperbolic functions
+SELECT distinct_id
+FROM users
+WHERE acosh(1) = 0 AND asinh(1) > 0.88 AND atanh(0.5) > 0.54;
+```
+
+## degrees / radians
+
+Convert between radians and degrees. `degrees` converts radians to degrees; `radians` converts degrees to radians.
+
+**Syntax**
+
+```sql
+degrees(x)
+radians(x)
+```
+
+**Arguments**
+
+- `x` — an angle: in radians for `degrees`, in degrees for `radians`.
+
+**Returned value**
+
+- The converted angle, as a floating-point number.
+
+**Example**
+
+```sql Convert between radians and degrees
+SELECT distinct_id
+FROM users
+WHERE degrees(pi()) = 180 AND radians(180) > 3.14;
+```
+
+## pi
+
+Returns the mathematical constant π.
+
+**Syntax**
+
+```sql
+pi()
+```
+
+**Returned value**
+
+- The value of π (approximately 3.14159), as a floating-point number.
+
+**Example**
+
+```sql Value of pi
+SELECT distinct_id
+FROM users
+WHERE pi() > 3.14;
+```
+
+## e
+
+Returns Euler's number, the base of the natural logarithm.
+
+**Syntax**
+
+```sql
+e()
+```
+
+**Returned value**
+
+- The value of e (approximately 2.71828), as a floating-point number.
+
+**Example**
+
+```sql Value of e
+SELECT distinct_id
+FROM users
+WHERE e() > 2.71;
+```
+
+## factorial
+
+Returns the factorial of a non-negative integer.
+
+**Syntax**
+
+```sql
+factorial(n)
+```
+
+**Arguments**
+
+- `n` — a non-negative integer.
+
+**Returned value**
+
+- `n!`, the product of all positive integers up to `n` (with `factorial(0)` equal to `1`).
+
+**Example**
+
+```sql Factorial of 5
+SELECT distinct_id
+FROM users
+WHERE factorial(5) = 120;
+```
+
+## gcd / lcm
+
+`gcd` returns the greatest common divisor and `lcm` the least common multiple of two integers.
+
+**Syntax**
+
+```sql
+gcd(a, b)
+lcm(a, b)
+```
+
+**Arguments**
+
+- `a`, `b` — integer values.
+
+**Returned value**
+
+- `gcd`: the largest integer that divides both `a` and `b`. `lcm`: the smallest positive integer that is a multiple of both `a` and `b`.
+
+**Example**
+
+```sql GCD and LCM of two integers
+SELECT distinct_id
+FROM users
+WHERE gcd(24, 36) = 12 AND lcm(4, 6) = 12;
+```
+
+## intExp2 / intExp10
+
+Integer exponentials. `intExp2` returns 2 raised to `x` and `intExp10` returns 10 raised to `x`, both as integers.
+
+**Syntax**
+
+```sql
+intExp2(x)
+intExp10(x)
+```
+
+**Arguments**
+
+- `x` — the exponent, a non-negative integer.
+
+**Returned value**
+
+- `intExp2`: 2 raised to `x` as an integer. `intExp10`: 10 raised to `x` as an integer.
+
+**Example**
+
+```sql Integer powers of 2 and 10
+SELECT distinct_id
+FROM users
+WHERE intExp2(8) = 256 AND intExp10(4) = 10000;
+```
+
+## roundBankers
+
+Rounds a number to the nearest value, breaking ties by rounding to the nearest even digit (banker's rounding). This avoids the upward bias of always rounding halves away from zero.
+
+**Syntax**
+
+```sql
+roundBankers(x [, n])
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+- `n` — (optional) the number of decimal places to keep. Defaults to `0`.
+
+**Returned value**
+
+- `x` rounded to `n` decimals, with halfway cases rounded to the nearest even digit. For example, `roundBankers(2.5)` is `2` and `roundBankers(3.5)` is `4`.
+
+**Example**
+
+```sql Banker's rounding of halves
+SELECT distinct_id
+FROM users
+WHERE roundBankers(2.5) = 2 AND roundBankers(3.5) = 4;
+```
+
+## width_bucket
+
+Returns the index of the histogram bucket that a value falls into, given an equal-width partitioning of a range into a number of buckets.
+
+**Syntax**
+
+```sql
+width_bucket(operand, low, high, count)
+```
+
+**Arguments**
+
+- `operand` — the value to bucket.
+- `low` — the lower bound of the range.
+- `high` — the upper bound of the range.
+- `count` — the number of equal-width buckets to divide the range into.
+
+**Returned value**
+
+- An integer bucket index from `1` to `count` for values within the range; `0` for values below `low`, and `count + 1` for values at or above `high`.
+
+**Example**
+
+```sql Bucket lifetime value into 4 bands from 0 to 1000
+SELECT distinct_id
+FROM users
+WHERE width_bucket(CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION), 0, 1000, 4) = 4;
+```
+
+## random
+
+Returns a pseudo-random floating-point number.
+
+**Syntax**
+
+```sql
+random()
+```
+
+**Returned value**
+
+- A pseudo-random floating-point value in the range from `0.0` (inclusive) to `1.0` (exclusive).
+
+**Example**
+
+```sql A random 10% sample of users
+SELECT distinct_id
+FROM users
+WHERE random() < 0.1;
+```
+
+## isFinite / isInfinite / isNaN
+
+Test the classification of a floating-point number.
+
+**Syntax**
+
+```sql
+isFinite(x)
+isInfinite(x)
+isNaN(x)
+```
+
+**Arguments**
+
+- `x` — a floating-point value.
+
+**Returned value**
+
+- `1` if the condition holds, otherwise `0`. `isFinite` is true for ordinary finite numbers; `isInfinite` is true for positive or negative infinity; `isNaN` is true for "not a number".
+
+**Example**
+
+```sql Classify a computed value
+SELECT distinct_id
+FROM users
+WHERE isFinite(1.0) = 1 AND isInfinite(1.0 / 0) = 1 AND isNaN(0.0 / 0) = 1;
+```
+
+## ifNotFinite
+
+Returns a value if it is finite, otherwise returns a fallback. Useful for replacing infinities and NaN results from a computation.
+
+**Syntax**
+
+```sql
+ifNotFinite(x, alt)
+```
+
+**Arguments**
+
+- `x` — the value to check.
+- `alt` — the fallback returned when `x` is not finite (infinity or NaN).
+
+**Returned value**
+
+- `x` when `x` is finite, otherwise `alt`.
+
+**Example**
+
+```sql Guard against a non-finite ratio
+SELECT distinct_id
+FROM users
+WHERE ifNotFinite(1.0 / 0, 0) = 0;
+```
+
+## erf / erfc
+
+The Gauss error function and its complement. `erf(x)` gives the probability that a normally distributed variable falls within `x` standard deviations of the mean (scaled); `erfc(x)` is `1 - erf(x)`, computed with better precision for large `x`.
+
+**Syntax**
+
+```sql
+erf(x)
+erfc(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+
+**Returned value**
+
+- `erf`: the error function of `x`. `erfc`: the complementary error function of `x`. Both are floating-point numbers.
+
+**Example**
+
+```sql Error function and its complement
+SELECT distinct_id
+FROM users
+WHERE erf(1) > 0.84 AND erfc(1) < 0.16;
+```
+
+## lgamma / tgamma
+
+Gamma functions, available on ClickHouse only. `tgamma(x)` is the gamma function Γ(x), which generalizes the factorial (Γ(n) equals (n−1)! for positive integers). `lgamma(x)` is the natural logarithm of the absolute value of Γ(x), useful when Γ(x) would overflow.
+
+**Syntax**
+
+```sql
+tgamma(x)
+lgamma(x)
+```
+
+**Arguments**
+
+- `x` — a numeric value.
+
+**Returned value**
+
+- `tgamma`: the gamma function Γ(x). `lgamma`: the natural log of the absolute value of Γ(x). Both are floating-point numbers.
+
+**Example**
+
+```sql Gamma function and log-gamma
+SELECT distinct_id
+FROM users
+WHERE tgamma(5) = 24 AND lgamma(5) > 3.17;
+```

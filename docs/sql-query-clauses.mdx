@@ -1,0 +1,321 @@
+---
+title: "Query clauses and features"
+description: "SQL query clauses and features in SuprSend Segment List SQL — CTEs, joins, grouping, set operations, and subqueries."
+---
+
+
+Clauses and query constructs you can use to shape a segment query. Every segment query must return a `distinct_id` column.
+
+## WHERE / ORDER BY / LIMIT / OFFSET
+
+The core row-shaping clauses. WHERE filters rows before grouping, ORDER BY sorts the result, LIMIT caps the number of rows returned, and OFFSET skips a number of leading rows (useful with ORDER BY for paging).
+
+**Syntax**
+
+```sql
+SELECT ...
+FROM ...
+WHERE condition
+ORDER BY expression [ASC | DESC]
+LIMIT count
+OFFSET start
+```
+
+**Example**
+
+```sql Most recent purchasers in the last 30 days
+SELECT distinct_id
+FROM events
+WHERE event_name = 'PURCHASE'
+  AND requested_at >= now() - interval '30 days'
+ORDER BY requested_at DESC
+LIMIT 100
+OFFSET 0
+```
+
+## GROUP BY ... HAVING
+
+Aggregates rows into groups and then filters those groups with a HAVING condition. Unlike WHERE, HAVING can reference aggregate results such as `count(*)`.
+
+**Syntax**
+
+```sql
+SELECT ...
+FROM ...
+GROUP BY column_list
+HAVING aggregate_condition
+```
+
+**Example**
+
+```sql Users with more than three failed payments
+SELECT distinct_id
+FROM events
+WHERE event_name = 'PAYMENT_FAILED'
+GROUP BY distinct_id
+HAVING count(*) > 3
+```
+
+## IN (subquery)
+
+Keeps rows whose value appears in the result of a subquery. A common way to include users who match a condition captured in another table.
+
+**Syntax**
+
+```sql
+SELECT ...
+WHERE column IN (SELECT ... FROM ...)
+```
+
+**Example**
+
+```sql Users who have triggered a purchase
+SELECT distinct_id
+FROM users
+WHERE distinct_id IN (
+  SELECT distinct_id
+  FROM events
+  WHERE event_name = 'PURCHASE'
+)
+```
+
+## JOIN / LEFT JOIN
+
+Combines rows from two tables on a join condition. A plain (inner) JOIN keeps only matching rows; a LEFT JOIN keeps every row from the left table and fills unmatched right-side columns with NULL, which is useful for building anti-joins.
+
+**Syntax**
+
+```sql
+SELECT ...
+FROM left_table
+[LEFT] JOIN right_table ON join_condition
+```
+
+**Example**
+
+```sql Pro-plan users who opened the app (inner join)
+SELECT DISTINCT u.distinct_id
+FROM users u
+JOIN events e ON e.distinct_id = u.distinct_id
+WHERE u.user_properties->>'plan' = 'pro'
+  AND e.event_name = 'APP_OPENED'
+```
+
+```sql Users who never made a purchase (left-join anti-join)
+SELECT u.distinct_id
+FROM users u
+LEFT JOIN events e
+  ON e.distinct_id = u.distinct_id
+  AND e.event_name = 'PURCHASE'
+WHERE e.distinct_id IS NULL
+```
+
+## Derived table (subquery in FROM)
+
+A subquery placed in the FROM clause and given an alias, so you can filter or aggregate over its result as if it were a table.
+
+**Syntax**
+
+```sql
+SELECT ...
+FROM (SELECT ...) AS alias
+```
+
+**Example**
+
+```sql Users with at least ten logins
+SELECT distinct_id
+FROM (
+  SELECT distinct_id, count(*) AS logins
+  FROM events
+  WHERE event_name = 'LOGIN'
+  GROUP BY distinct_id
+) AS login_stats
+WHERE logins >= 10
+```
+
+## CTE (WITH ... AS)
+
+A common table expression defines a named, temporary result set that you can reference later in the same query. Use it to break a complex segment into readable, composable steps.
+
+**Syntax**
+
+```sql
+WITH cte_name AS (
+  SELECT ...
+)
+SELECT ... FROM cte_name
+```
+
+**Example**
+
+```sql Users with more than five purchases
+WITH purchase_counts AS (
+  SELECT distinct_id, count(*) AS purchases
+  FROM events
+  WHERE event_name = 'PURCHASE'
+  GROUP BY distinct_id
+)
+SELECT distinct_id
+FROM purchase_counts
+WHERE purchases > 5
+```
+
+## DISTINCT
+
+Removes duplicate rows from the result set, returning each unique combination of the selected columns once.
+
+**Syntax**
+
+```sql
+SELECT DISTINCT column_list
+FROM ...
+```
+
+**Example**
+
+```sql Unique users who opened the app
+SELECT DISTINCT distinct_id
+FROM events
+WHERE event_name = 'APP_OPENED'
+```
+
+## UNION / UNION ALL
+
+Combines the rows of two or more queries with matching columns. UNION removes duplicate rows (it is treated as UNION DISTINCT on ClickHouse), while UNION ALL keeps every row, including duplicates.
+
+**Syntax**
+
+```sql
+SELECT ...
+UNION [ALL]
+SELECT ...
+```
+
+**Example**
+
+```sql Users who purchased or started a subscription
+SELECT distinct_id
+FROM events
+WHERE event_name = 'PURCHASE'
+UNION
+SELECT distinct_id
+FROM events
+WHERE event_name = 'SUBSCRIPTION_STARTED'
+```
+
+## DISTINCT ON
+
+Returns the first row for each distinct value of the given expressions. Pair it with ORDER BY to control which row is kept per group (for example, the most recent event per user).
+
+**Syntax**
+
+```sql
+SELECT DISTINCT ON (expression) column_list
+FROM ...
+ORDER BY expression, sort_key
+```
+
+**Example**
+
+```sql One row per user, keyed to their latest event
+SELECT DISTINCT ON (distinct_id) distinct_id
+FROM events
+ORDER BY distinct_id, requested_at DESC
+```
+
+## GROUP BY CUBE
+
+Produces grouping sets for every combination of the listed expressions, including subtotal rows where a grouped expression is rolled up to NULL. Filter with HAVING to keep only the rows you want in the segment.
+
+**Syntax**
+
+```sql
+SELECT ...
+FROM ...
+GROUP BY CUBE (expression_1, expression_2)
+```
+
+**Example**
+
+```sql Users grouped across page dimensions, keeping per-user rows
+SELECT DISTINCT distinct_id
+FROM events
+WHERE event_name = 'PAGE_VIEW'
+GROUP BY CUBE (distinct_id, properties->>'page')
+HAVING distinct_id IS NOT NULL
+```
+
+## GROUP BY ROLLUP
+
+Produces grouping sets in a hierarchy from most to least detailed, adding subtotal rows as each trailing expression is rolled up to NULL. Filter with HAVING to keep only the rows you want in the segment.
+
+**Syntax**
+
+```sql
+SELECT ...
+FROM ...
+GROUP BY ROLLUP (expression_1, expression_2)
+```
+
+**Example**
+
+```sql Users grouped by purchase category, keeping per-user rows
+SELECT DISTINCT distinct_id
+FROM events
+WHERE event_name = 'PURCHASE'
+GROUP BY ROLLUP (distinct_id, properties->>'category')
+HAVING distinct_id IS NOT NULL
+```
+
+## EXISTS (correlated subquery)
+
+Tests whether a correlated subquery returns at least one row, letting you keep users who have a related event. The subquery references the outer query, so it is evaluated per outer row (PostgreSQL only).
+
+**Syntax**
+
+```sql
+SELECT ...
+WHERE EXISTS (
+  SELECT 1 FROM ... WHERE correlated_condition
+)
+```
+
+**Example**
+
+```sql Users who have at least one purchase
+SELECT distinct_id
+FROM users u
+WHERE EXISTS (
+  SELECT 1
+  FROM events e
+  WHERE e.distinct_id = u.distinct_id
+    AND e.event_name = 'PURCHASE'
+)
+```
+
+## NOT EXISTS
+
+The negation of EXISTS: keeps users for whom the correlated subquery returns no rows. Ideal for exclusion segments such as users who never performed an action (PostgreSQL only).
+
+**Syntax**
+
+```sql
+SELECT ...
+WHERE NOT EXISTS (
+  SELECT 1 FROM ... WHERE correlated_condition
+)
+```
+
+**Example**
+
+```sql Users who have never made a purchase
+SELECT distinct_id
+FROM users u
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM events e
+  WHERE e.distinct_id = u.distinct_id
+    AND e.event_name = 'PURCHASE'
+)
+```

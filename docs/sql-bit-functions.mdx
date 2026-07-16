@@ -1,0 +1,359 @@
+---
+title: "Bit and bitmap functions"
+description: "Bitwise and roaring-bitmap functions supported in SuprSend Segment List SQL."
+---
+
+
+Bitwise operators work on integers and are available on both backends. Bitmap functions operate on compressed roaring bitmaps (sets of `UInt32` values) and are an advanced, ClickHouse-only feature: a bitmap is created with `bitmapBuild` and exported back to a normal array with `bitmapToArray`, so the aggregate/transform functions below are typically wrapped in `bitmapToArray(...)` to return a usable result.
+
+## bitAnd, bitOr, bitXor
+
+Bitwise AND, OR, and XOR of two integers, applied bit by bit.
+
+**Syntax**
+
+```sql
+bitAnd(a, b)
+bitOr(a, b)
+bitXor(a, b)
+```
+
+**Arguments**
+
+- `a` — first integer operand.
+- `b` — second integer operand.
+
+**Returned value**
+
+- The bitwise combination of `a` and `b`, as an integer.
+
+**Example**
+
+```sql Combine flag bits
+SELECT distinct_id FROM users WHERE bitAnd(CAST(user_properties ->> 'flags' AS INT), 4) = 4
+```
+
+## bitNot, bitShiftLeft, bitShiftRight
+
+Bitwise NOT (one's complement) of an integer, and logical shifts of an integer's bits left or right by `n` positions.
+
+**Syntax**
+
+```sql
+bitNot(a)
+bitShiftLeft(a, n)
+bitShiftRight(a, n)
+```
+
+**Arguments**
+
+- `a` — the integer operand.
+- `n` — number of bit positions to shift by (shift functions only).
+
+**Returned value**
+
+- The complemented or shifted integer.
+
+**Example**
+
+```sql Invert and shift bits
+SELECT distinct_id FROM users WHERE bitShiftLeft(CAST(user_properties ->> 'level' AS INT), 1) > 8
+```
+
+## bitCount, bitTest
+
+`bitCount` returns how many bits are set to 1 in the binary representation of a number (its population count). `bitTest` returns the value (0 or 1) of the bit at a given position, counting from the least significant bit at position 0.
+
+**Syntax**
+
+```sql
+bitCount(x)
+bitTest(a, i)
+```
+
+**Arguments**
+
+- `x` — the integer whose set bits are counted.
+- `a` — the integer to inspect.
+- `i` — zero-based bit position to test, from the least significant bit.
+
+**Returned value**
+
+- `bitCount` returns the number of set bits, as an integer.
+- `bitTest` returns `1` if the bit at position `i` is set, otherwise `0`.
+
+**Example**
+
+```sql Count and test bits
+SELECT distinct_id FROM users WHERE bitCount(CAST(user_properties ->> 'flags' AS INT)) >= 3
+```
+
+Both are type-width dependent in ClickHouse: negative inputs, small integer types, and over-width bit indexes can diverge from PostgreSQL's fixed 64-bit idiom.
+
+## bitRotateLeft, bitRotateRight
+
+Rotate the bits of an integer left or right by `n` positions, wrapping bits shifted off one end back around to the other. Unlike shifts, no bits are lost (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitRotateLeft(a, n)
+bitRotateRight(a, n)
+```
+
+**Arguments**
+
+- `a` — the unsigned integer to rotate (`UInt8` / `UInt16` / `UInt32` / `UInt64`).
+- `n` — number of bit positions to rotate by.
+
+**Returned value**
+
+- The rotated integer, of the same width as `a`.
+
+**Example**
+
+```sql Rotate an 8-bit value
+SELECT distinct_id FROM users WHERE bitRotateLeft(CAST(user_properties ->> 'flags' AS INT), 1) > 0
+```
+
+The result depends on the operand's bit width. These functions are ClickHouse only because PostgreSQL has no unsigned integer types.
+
+## bitmapBuild, bitmapToArray
+
+`bitmapBuild` constructs a roaring bitmap from an array of unsigned integers. `bitmapToArray` converts a bitmap back into a sorted `Array(UInt32)`, and is used to export the result of any bitmap operation (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapBuild(array)
+bitmapToArray(bitmap)
+```
+
+**Arguments**
+
+- `array` — an array of `UInt*` values to load into the bitmap (`bitmapBuild`).
+- `bitmap` — a roaring bitmap to export (`bitmapToArray`).
+
+**Returned value**
+
+- `bitmapBuild` returns a bitmap object.
+- `bitmapToArray` returns an `Array(UInt32)` of the bitmap's elements in ascending order.
+
+**Example**
+
+```sql Round-trip an array through a bitmap
+SELECT distinct_id FROM users WHERE bitmapToArray(bitmapBuild([1, 2, 3, 5, 8])) = [1, 2, 3, 5, 8]
+```
+
+## bitmapCardinality
+
+Returns the number of elements stored in a bitmap (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapCardinality(bitmap)
+```
+
+**Arguments**
+
+- `bitmap` — the roaring bitmap to measure.
+
+**Returned value**
+
+- The element count, as a `UInt64`.
+
+**Example**
+
+```sql Count elements in a bitmap
+SELECT distinct_id FROM users WHERE bitmapCardinality(bitmapBuild([1, 2, 3, 5, 8])) >= 3
+```
+
+## bitmapMin, bitmapMax
+
+Return the smallest and largest element in a bitmap (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapMin(bitmap)
+bitmapMax(bitmap)
+```
+
+**Arguments**
+
+- `bitmap` — the roaring bitmap to inspect.
+
+**Returned value**
+
+- The smallest (`bitmapMin`) or largest (`bitmapMax`) element, as a `UInt64`. For an empty bitmap, `bitmapMin` returns the maximum unsigned value and `bitmapMax` returns `0`.
+
+**Example**
+
+```sql Smallest and largest elements
+SELECT distinct_id FROM users WHERE bitmapMin(bitmapBuild([3, 1, 8, 5])) = 1
+```
+
+## bitmapContains
+
+Tests whether a bitmap contains a specific value (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapContains(bitmap, value)
+```
+
+**Arguments**
+
+- `bitmap` — the roaring bitmap to search.
+- `value` — the `UInt32` element to look for.
+
+**Returned value**
+
+- `1` if `bitmap` contains `value`, otherwise `0`.
+
+**Example**
+
+```sql Check membership
+SELECT distinct_id FROM users WHERE bitmapContains(bitmapBuild([1, 5, 7, 9]), 5) = 1
+```
+
+## bitmapHasAll, bitmapHasAny
+
+Compare two bitmaps for containment. `bitmapHasAll` checks whether the first bitmap contains every element of the second; `bitmapHasAny` checks whether they share at least one element (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapHasAll(bitmap1, bitmap2)
+bitmapHasAny(bitmap1, bitmap2)
+```
+
+**Arguments**
+
+- `bitmap1` — the first roaring bitmap.
+- `bitmap2` — the second roaring bitmap.
+
+**Returned value**
+
+- `bitmapHasAll` returns `1` if every element of `bitmap2` is present in `bitmap1`, otherwise `0`.
+- `bitmapHasAny` returns `1` if the two bitmaps have any element in common, otherwise `0`.
+
+**Example**
+
+```sql Containment and overlap checks
+SELECT distinct_id FROM users WHERE bitmapHasAll(bitmapBuild([1, 2, 3, 4]), bitmapBuild([2, 3])) = 1
+```
+
+## bitmapAnd, bitmapOr, bitmapXor, bitmapAndnot
+
+Set operations on two bitmaps: intersection (`bitmapAnd`), union (`bitmapOr`), symmetric difference (`bitmapXor`), and difference (`bitmapAndnot`, elements in the first bitmap but not the second). Each returns a bitmap, so wrap it in `bitmapToArray` to export the result (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapAnd(bitmap1, bitmap2)
+bitmapOr(bitmap1, bitmap2)
+bitmapXor(bitmap1, bitmap2)
+bitmapAndnot(bitmap1, bitmap2)
+```
+
+**Arguments**
+
+- `bitmap1` — the first roaring bitmap.
+- `bitmap2` — the second roaring bitmap.
+
+**Returned value**
+
+- A new bitmap holding the combined elements.
+
+**Example**
+
+```sql Intersection, union, and difference of two bitmaps
+SELECT distinct_id FROM users WHERE bitmapCardinality(bitmapAnd(bitmapBuild([1, 2, 3]), bitmapBuild([2, 3, 4]))) = 2
+```
+
+## bitmapAndCardinality, bitmapOrCardinality, bitmapXorCardinality, bitmapAndnotCardinality
+
+Return the element count of a set operation on two bitmaps without materializing the resulting bitmap: the size of the intersection, union, symmetric difference, and difference respectively (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapAndCardinality(bitmap1, bitmap2)
+bitmapOrCardinality(bitmap1, bitmap2)
+bitmapXorCardinality(bitmap1, bitmap2)
+bitmapAndnotCardinality(bitmap1, bitmap2)
+```
+
+**Arguments**
+
+- `bitmap1` — the first roaring bitmap.
+- `bitmap2` — the second roaring bitmap.
+
+**Returned value**
+
+- The number of elements in the corresponding set operation's result, as a `UInt64`.
+
+**Example**
+
+```sql Sizes of set operations
+SELECT distinct_id FROM users WHERE bitmapAndCardinality(bitmapBuild([1, 2, 3]), bitmapBuild([2, 3, 4])) = 2
+```
+
+## bitmapSubsetInRange, bitmapSubsetLimit, subBitmap
+
+Extract a subset of a bitmap. `bitmapSubsetInRange` keeps elements whose value falls in the half-open range `[range_start, range_end)`. `bitmapSubsetLimit` keeps up to `cardinality_limit` elements whose value is at least `range_start`. `subBitmap` skips `offset` elements (by position) and then keeps up to `cardinality_limit` of the remaining elements. Each returns a bitmap, so wrap it in `bitmapToArray` to export (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapSubsetInRange(bitmap, range_start, range_end)
+bitmapSubsetLimit(bitmap, range_start, cardinality_limit)
+subBitmap(bitmap, offset, cardinality_limit)
+```
+
+**Arguments**
+
+- `bitmap` — the source roaring bitmap.
+- `range_start` — inclusive lower bound on element value.
+- `range_end` — exclusive upper bound on element value (`bitmapSubsetInRange`).
+- `cardinality_limit` — maximum number of elements to keep.
+- `offset` — number of leading elements to skip, by position, zero-based (`subBitmap`).
+
+**Returned value**
+
+- A new bitmap containing the selected subset.
+
+**Example**
+
+```sql Range, value-limit, and positional subsets
+SELECT distinct_id FROM users WHERE bitmapCardinality(bitmapSubsetInRange(bitmapBuild([1, 5, 10, 15, 20]), 5, 15)) = 2
+```
+
+## bitmapTransform
+
+Replaces specified elements of a bitmap with new values, according to matching `from_array` and `to_array` mappings. Returns a bitmap, so wrap it in `bitmapToArray` to export (ClickHouse only).
+
+**Syntax**
+
+```sql
+bitmapTransform(bitmap, from_array, to_array)
+```
+
+**Arguments**
+
+- `bitmap` — the source roaring bitmap.
+- `from_array` — array of existing element values to replace.
+- `to_array` — array of replacement values, positionally matched to `from_array`.
+
+**Returned value**
+
+- A new bitmap with the mapped elements substituted.
+
+**Example**
+
+```sql Remap two elements
+SELECT distinct_id FROM users WHERE bitmapToArray(bitmapTransform(bitmapBuild([1, 2, 3, 4]), [2, 4], [20, 40])) = [1, 3, 20, 40]
+```

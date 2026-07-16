@@ -3599,7 +3599,7 @@ paths:
       summary: Create a List
       security:
         - BearerAuth: []
-      description: API to create / manage lists to send notification to a bulk list of users.
+      description: "API to create / manage lists to send notification to a bulk list of users. To create a [Segment List](/docs/segment-lists) — a list whose membership is driven by a SQL query against your `users` and `events` tables — pass `list_type: dynamic_list` along with the `query`."
       operationId: create-list
       requestBody:
         content:
@@ -3611,23 +3611,36 @@ paths:
               properties:
                 list_id:
                   type: string
-                  description: Unique string identifier of the list. Add an id which defines the type of users who are part of the list
+                  description: Unique string identifier of the list. Add an id which defines the type of users who are part of the list.
                   default: _list_id_
                 list_name:
                   type: string
-                  description: Name of the List. Add a name which defines the type of users in the list
+                  description: Name of the List. Add a name which defines the type of users in the list.
                   default: _list_name_
                 list_description:
                   type: string
                   description: Brief description of the list and the type of users in it.
                   default: _some sample description_
+                list_type:
+                  type: string
+                  description: Type of the list. Use `dynamic_list` to create a [Segment List](/docs/segment-lists) whose membership is driven by a SQL query. Defaults to `static_list`.
+                  enum: ["static_list", "dynamic_list"]
+                  default: "static_list"
+                query:
+                  type: string
+                  description: "SQL query defining the segment. **Required when `list_type: dynamic_list`.** Must return a `distinct_id` column and reference only the `users` and `events` tables. See the [Segment Lists doc](/docs/segment-lists) for the full dialect reference."
+                  example: "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500"
+                is_enabled:
+                  type: boolean
+                  description: Only applies to `dynamic_list`. When `true`, the segment starts syncing immediately after create. When `false`, the query is saved but the segment does not refresh until you enable it.
+                  default: true
       responses:
         '201':
           description: '201'
           content:
             application/json:
               examples:
-                Result:
+                Static list:
                   value: {
                     "list_id": "product_updates",
                     "list_name": "Product Update",
@@ -3643,6 +3656,39 @@ paths:
                     "created_at": "2024-02-21T19:10:01.906000Z",
                     "updated_at": "2025-04-04T07:25:43.186475Z",
                     "drafts": null
+                  }
+                Segment (dynamic) list:
+                  value: {
+                    "list_id": "high_ltv_q1",
+                    "list_name": "High LTV Q1",
+                    "list_description": "Users with lifetime value >= 2500",
+                    "list_type": "dynamic_list",
+                    "subscribers_count": 30,
+                    "source": "suprsend",
+                    "is_readonly": false,
+                    "is_enabled": true,
+                    "query": "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500",
+                    "status": "active",
+                    "track_user_entry": false,
+                    "track_user_exit": false,
+                    "requested_for_delete": false,
+                    "created_at": "2026-07-14T13:25:07.883000Z",
+                    "updated_at": "2026-07-14T13:28:33.405495Z",
+                    "drafts": null,
+                    "sync_task": {
+                      "id": "01KXGCBW5W29TC5FJ47JPA982W",
+                      "name": "high_ltv_q1-01KXGCBW5G9WA1D6Y6081KGCMF",
+                      "is_enabled": true,
+                      "auto_refresh": true,
+                      "refresh_interval": null,
+                      "draft_version": null,
+                      "active_version": {
+                        "id": "st_v_01KXGCR07KCG2PS48PRYJ5EPQP",
+                        "query_text": "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500",
+                        "version_no": 1,
+                        "ai_description": "Users whose lifetime value is at least 2500."
+                      }
+                    }
                   }
               schema:
                 type: object
@@ -3662,7 +3708,7 @@ paths:
                   list_type:
                     type: string
                     description: Type of the list.
-                    enum: ["static_list", "query_based"]
+                    enum: ["static_list", "dynamic_list"]
                   subscribers_count:
                     type: integer
                     description: number of users in the list
@@ -3674,6 +3720,14 @@ paths:
                     type: boolean
                     description: Indicates whether the list is read-only.
                     example: false
+                  is_enabled:
+                    type: boolean
+                    description: For `dynamic_list` only. Whether the segment is actively refreshing.
+                    example: true
+                  query:
+                    type: string
+                    description: For `dynamic_list` only. The committed SQL query that defines the segment.
+                    example: "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500"
                   status:
                     type: string
                     description: Current status of the list (active or draft).
@@ -3702,6 +3756,60 @@ paths:
                     type: string
                     nullable: true
                     description: would show the draft list created to replace list users.
+                  sync_task:
+                    type: object
+                    nullable: true
+                    description: For `dynamic_list` only. Metadata about the sync task that runs the segment query, including the currently active version and any uncommitted draft.
+                    properties:
+                      id:
+                        type: string
+                        description: Sync task identifier.
+                      name:
+                        type: string
+                        description: Sync task name (derived from `list_id`).
+                      is_enabled:
+                        type: boolean
+                        description: Whether the sync task is currently running.
+                      auto_refresh:
+                        type: boolean
+                        description: Whether the segment refreshes automatically as data changes.
+                      refresh_interval:
+                        type: string
+                        nullable: true
+                        description: Refresh cadence, if configured.
+                      draft_version:
+                        type: object
+                        nullable: true
+                        description: The uncommitted draft version, if any. Populated when a new query has been saved but not yet committed.
+                        properties:
+                          id:
+                            type: string
+                            description: Unique identifier of the draft version.
+                          query_text:
+                            type: string
+                            description: SQL query text saved in this draft.
+                          ai_description:
+                            type: string
+                            nullable: true
+                            description: AI-generated natural-language summary of what the draft query matches.
+                      active_version:
+                        type: object
+                        nullable: true
+                        description: The currently live (committed) version of the segment query that drives list membership.
+                        properties:
+                          id:
+                            type: string
+                            description: Unique identifier of the active version.
+                          query_text:
+                            type: string
+                            description: SQL query text currently committed and used to compute list membership.
+                          version_no:
+                            type: integer
+                            description: Monotonically increasing version number of the active query. Increments each time a new version is committed.
+                          ai_description:
+                            type: string
+                            nullable: true
+                            description: AI-generated natural-language summary of what the active query matches.
         '400':
           description: '400'
           content:
@@ -3722,6 +3830,176 @@ paths:
               schema:
                 type: object
                 description: error code and related message detailing out the error
+      deprecated: false
+  /v1/subscriber_list/~/dry_run/:
+    post:
+      summary: Dry-run a segment query (sample rows)
+      security:
+        - BearerAuth: []
+      description: Preview the rows a [Segment List](/docs/segment-lists) SQL query would match, without committing it to a list. Returns up to the top 10 matched rows for the columns selected. Use this to spot-check a query before creating a Segment List or committing a new version.
+      operationId: segment-dry-run
+      x-codeSamples:
+        - lang: cURL
+          label: Dry-run (sample rows)
+          source: |
+            curl -X POST "https://hub.suprsend.com/v1/subscriber_list/~/dry_run/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "query_text": "SELECT distinct_id, active_emails FROM users LIMIT 40"
+              }'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query_text
+              properties:
+                query_text:
+                  type: string
+                  description: The SQL query to preview. Must return a `distinct_id` column and reference only the `users` and `events` tables. See the [Segment Lists doc](/docs/segment-lists) for the dialect, available columns, and query rules.
+                  example: "SELECT distinct_id, active_emails FROM users LIMIT 40"
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "data": [
+                      { "distinct_id": "01KN7Q7NS31C01S6CR4Y9EDKPX", "active_emails": [] },
+                      { "distinct_id": "01KN7Q7NS31C01S6CR4Y9EDKPT", "active_emails": [] },
+                      { "distinct_id": "01KRWTYB7MX8B7HTK619XHMHJK", "active_emails": [] }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    description: Up to the top 10 matched rows, each containing `distinct_id` and any additional columns you selected.
+                    items:
+                      type: object
+                      properties:
+                        distinct_id:
+                          type: string
+                          description: The user identifier.
+                      additionalProperties: true
+        '400':
+          description: '400'
+          content:
+            application/json:
+              examples:
+                Schema error:
+                  value: {
+                    "code": 400,
+                    "error_code": "error",
+                    "type": "ValidationError",
+                    "message": "{\"query_text\": \"Schema error: No field named name. Valid fields are users.distinct_id, users.created_at, users.updated_at, users.language, users.locale, users.timezone, users.user_properties, users.active_channels, users.active_emails, users.active_phone_numbers\"}",
+                    "detail": {
+                      "query_text": "Schema error: No field named name. Valid fields are users.distinct_id, users.created_at, users.updated_at, users.language, users.locale, users.timezone, users.user_properties, users.active_channels, users.active_emails, users.active_phone_numbers"
+                    }
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  error_code:
+                    type: string
+                    example: "error"
+                  type:
+                    type: string
+                    example: "ValidationError"
+                  message:
+                    type: string
+                    description: Human-readable error message. Common causes — column doesn't exist, missing `distinct_id` in the SELECT, referencing a table other than `users` or `events`, or missing a bounded time filter on `events.requested_at`.
+                  detail:
+                    type: object
+                    description: Structured error detail keyed by field.
+      deprecated: false
+  /v1/subscriber_list/~/dry_run/count/:
+    post:
+      summary: Dry-run a segment query (count only)
+      security:
+        - BearerAuth: []
+      description: Return the total number of users a [Segment List](/docs/segment-lists) SQL query would match, without returning the rows. Use this when you only need to size the audience.
+      operationId: segment-dry-run-count
+      x-codeSamples:
+        - lang: cURL
+          label: Dry-run (count only)
+          source: |
+            curl -X POST "https://hub.suprsend.com/v1/subscriber_list/~/dry_run/count/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "query_text": "SELECT distinct_id FROM users WHERE user_properties ->> '\''plan'\'' = '\''enterprise'\''"
+              }'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query_text
+              properties:
+                query_text:
+                  type: string
+                  description: The SQL query to count. Must return a `distinct_id` column and reference only the `users` and `events` tables.
+                  example: "SELECT distinct_id FROM users WHERE user_properties ->> 'plan' = 'enterprise'"
+      responses:
+        '200':
+          description: '200'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "count": 4812
+                  }
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Number of distinct users matched by the query.
+                    example: 4812
+        '400':
+          description: '400'
+          content:
+            application/json:
+              examples:
+                Schema error:
+                  value: {
+                    "code": 400,
+                    "error_code": "error",
+                    "type": "ValidationError",
+                    "message": "{\"query_text\": \"Schema error: No field named name. Valid fields are users.distinct_id, users.created_at, users.updated_at, users.language, users.locale, users.timezone, users.user_properties, users.active_channels, users.active_emails, users.active_phone_numbers\"}",
+                    "detail": {
+                      "query_text": "Schema error: No field named name. Valid fields are users.distinct_id, users.created_at, users.updated_at, users.language, users.locale, users.timezone, users.user_properties, users.active_channels, users.active_emails, users.active_phone_numbers"
+                    }
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  error_code:
+                    type: string
+                    example: "error"
+                  type:
+                    type: string
+                    example: "ValidationError"
+                  message:
+                    type: string
+                    description: Human-readable error message.
+                  detail:
+                    type: object
+                    description: Structured error detail keyed by field.
       deprecated: false
   /{workspace_key}/trigger/:
     post:
@@ -4492,7 +4770,7 @@ paths:
       summary: Get List configuration
       security:
         - BearerAuth: []
-      description: API to fetch list metadata like list type, count, source, and status. Doesn't include users in the list.
+      description: "API to fetch list metadata like list type, count, source, and status. Doesn't include users in the list. For [Segment Lists](/docs/segment-lists) (`list_type: dynamic_list`), the response also includes the committed `query` and the `sync_task` block with the live version."
       operationId: get-list
       parameters:
         - name: list_id
@@ -4508,7 +4786,7 @@ paths:
           content:
             application/json:
               examples:
-                Result:
+                Static list:
                   value: {
                     "list_id": "product_updates",
                     "list_name": "Product Update",
@@ -4524,6 +4802,39 @@ paths:
                     "created_at": "2024-02-21T19:10:01.906000Z",
                     "updated_at": "2025-04-04T07:25:43.186475Z",
                     "drafts": null
+                  }
+                Segment (dynamic) list:
+                  value: {
+                    "list_id": "high_ltv_q1",
+                    "list_name": "High LTV Q1",
+                    "list_description": "Users with lifetime value >= 2500",
+                    "list_type": "dynamic_list",
+                    "subscribers_count": 30,
+                    "source": "suprsend",
+                    "is_readonly": false,
+                    "is_enabled": true,
+                    "query": "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500",
+                    "status": "active",
+                    "track_user_entry": false,
+                    "track_user_exit": false,
+                    "requested_for_delete": false,
+                    "created_at": "2026-07-14T13:25:07.883000Z",
+                    "updated_at": "2026-07-14T13:28:33.405495Z",
+                    "drafts": null,
+                    "sync_task": {
+                      "id": "01KXGCBW5W29TC5FJ47JPA982W",
+                      "name": "high_ltv_q1-01KXGCBW5G9WA1D6Y6081KGCMF",
+                      "is_enabled": true,
+                      "auto_refresh": true,
+                      "refresh_interval": null,
+                      "draft_version": null,
+                      "active_version": {
+                        "id": "st_v_01KXGCR07KCG2PS48PRYJ5EPQP",
+                        "query_text": "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500",
+                        "version_no": 1,
+                        "ai_description": "Users whose lifetime value is at least 2500."
+                      }
+                    }
                   }
               schema:
                 type: object
@@ -4543,7 +4854,7 @@ paths:
                   list_type:
                     type: string
                     description: Type of the list.
-                    enum: ["static_list", "query_based"]
+                    enum: ["static_list", "dynamic_list"]
                   subscribers_count:
                     type: integer
                     description: number of users in the list
@@ -4555,6 +4866,14 @@ paths:
                     type: boolean
                     description: Indicates whether the list is read-only.
                     example: false
+                  is_enabled:
+                    type: boolean
+                    description: For `dynamic_list` only. Whether the segment is actively refreshing.
+                    example: true
+                  query:
+                    type: string
+                    description: For `dynamic_list` only. The committed SQL query that defines the segment.
+                    example: "SELECT distinct_id FROM users WHERE CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 2500"
                   status:
                     type: string
                     description: Current status of the list (active or draft).
@@ -4583,6 +4902,60 @@ paths:
                     type: string
                     nullable: true
                     description: would show the draft list created to replace list users.
+                  sync_task:
+                    type: object
+                    nullable: true
+                    description: For `dynamic_list` only. Metadata about the sync task that runs the segment query, including the currently active version and any uncommitted draft.
+                    properties:
+                      id:
+                        type: string
+                        description: Sync task identifier.
+                      name:
+                        type: string
+                        description: Sync task name (derived from `list_id`).
+                      is_enabled:
+                        type: boolean
+                        description: Whether the sync task is currently running.
+                      auto_refresh:
+                        type: boolean
+                        description: Whether the segment refreshes automatically as data changes.
+                      refresh_interval:
+                        type: string
+                        nullable: true
+                        description: Refresh cadence, if configured.
+                      draft_version:
+                        type: object
+                        nullable: true
+                        description: The uncommitted draft version, if any. Populated when a new query has been saved but not yet committed.
+                        properties:
+                          id:
+                            type: string
+                            description: Unique identifier of the draft version.
+                          query_text:
+                            type: string
+                            description: SQL query text saved in this draft.
+                          ai_description:
+                            type: string
+                            nullable: true
+                            description: AI-generated natural-language summary of what the draft query matches.
+                      active_version:
+                        type: object
+                        nullable: true
+                        description: The currently live (committed) version of the segment query that drives list membership.
+                        properties:
+                          id:
+                            type: string
+                            description: Unique identifier of the active version.
+                          query_text:
+                            type: string
+                            description: SQL query text currently committed and used to compute list membership.
+                          version_no:
+                            type: integer
+                            description: Monotonically increasing version number of the active query. Increments each time a new version is committed.
+                          ai_description:
+                            type: string
+                            nullable: true
+                            description: AI-generated natural-language summary of what the active query matches.
         '404':
           description: '404'
           content:

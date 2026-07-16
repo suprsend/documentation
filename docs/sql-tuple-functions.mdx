@@ -1,0 +1,180 @@
+---
+title: "Tuple functions"
+description: "Tuple functions in SuprSend Segment List SQL."
+---
+
+
+The tuple functions build fixed-length, ordered groups of values and operate on them element-wise. They are ClickHouse only, and tuple literals are written with `struct(...)` (re-cased to `tuple(...)` when the query runs on ClickHouse); PostgreSQL has no equivalent and rejects them.
+
+## struct
+
+Constructs a tuple literal from one or more values, letting you carry several columns as a single ordered value. This is the constructor you use everywhere a tuple is expected. There is no separate `row(...)` constructor — always write tuple literals as `struct(...)` (ClickHouse only).
+
+**Syntax**
+
+```sql
+struct(x1 [, x2, ...])
+```
+
+**Arguments**
+
+- `x1, x2, …` — one or more values of any type. Element order is preserved.
+
+**Returned value**
+
+- A tuple of the supplied values, `Tuple(T1, T2, …)`. Extract a single element with `tupleElement` to export it as a scalar.
+
+**Example**
+
+```sql Build a tuple and read one element
+SELECT distinct_id FROM users WHERE tupleElement(struct('active', 42), 2) = 42
+```
+
+## tupleElement
+
+Returns the n-th element (1-based) of a tuple (ClickHouse only).
+
+**Syntax**
+
+```sql
+tupleElement(tuple, index)
+```
+
+**Arguments**
+
+- `tuple` — the tuple to read from, e.g. built with `struct(...)`.
+- `index` — the 1-based position of the element to return (constant integer).
+
+**Returned value**
+
+- The element at the given position; its type is the type of that tuple member.
+
+**Example**
+
+```sql Read the second element
+SELECT distinct_id FROM users WHERE tupleElement(struct(10, 20, 30), 2) = 20
+```
+
+## tuplePlus
+
+Performs element-wise addition of two numeric tuples of equal length (ClickHouse only).
+
+**Syntax**
+
+```sql
+tuplePlus(t1, t2)
+```
+
+**Arguments**
+
+- `t1` — the first numeric tuple.
+- `t2` — the second numeric tuple; must be the same length as `t1`.
+
+**Returned value**
+
+- A tuple of the element-wise sums. Wrap it in `tupleElement` to export a single result as a scalar.
+
+**Example**
+
+```sql Element-wise addition
+SELECT distinct_id FROM users WHERE tupleElement(tuplePlus(struct(1, 2), struct(10, 20)), 1) = 11
+```
+
+## tupleMinus
+
+Performs element-wise subtraction of two numeric tuples of equal length (ClickHouse only).
+
+**Syntax**
+
+```sql
+tupleMinus(t1, t2)
+```
+
+**Arguments**
+
+- `t1` — the minuend tuple (numeric elements).
+- `t2` — the subtrahend tuple; must be the same length as `t1`.
+
+**Returned value**
+
+- A tuple of the element-wise differences. Wrap it in `tupleElement` to export a single result as a scalar.
+
+**Example**
+
+```sql Element-wise subtraction
+SELECT distinct_id FROM users WHERE tupleElement(tupleMinus(struct(10, 20), struct(1, 2)), 1) = 9
+```
+
+## tupleMultiply
+
+Performs element-wise multiplication of two numeric tuples of equal length (ClickHouse only).
+
+**Syntax**
+
+```sql
+tupleMultiply(t1, t2)
+```
+
+**Arguments**
+
+- `t1` — the first numeric tuple.
+- `t2` — the second numeric tuple; must be the same length as `t1`.
+
+**Returned value**
+
+- A tuple of the element-wise products. Wrap it in `tupleElement` to export a single result as a scalar.
+
+**Example**
+
+```sql Element-wise multiplication
+SELECT distinct_id FROM users WHERE tupleElement(tupleMultiply(struct(2, 3), struct(4, 5)), 2) = 15
+```
+
+## tupleNegate
+
+Negates each element of a numeric tuple (ClickHouse only).
+
+**Syntax**
+
+```sql
+tupleNegate(t)
+```
+
+**Arguments**
+
+- `t` — a numeric tuple.
+
+**Returned value**
+
+- A tuple with each element negated. Wrap it in `tupleElement` to export a single result as a scalar.
+
+**Example**
+
+```sql Negate each element
+SELECT distinct_id FROM users WHERE tupleElement(tupleNegate(struct(5, -7)), 2) = 7
+```
+
+## tupleHammingDistance
+
+Counts the number of positions at which two tuples of equal length differ (ClickHouse only).
+
+**Syntax**
+
+```sql
+tupleHammingDistance(t1, t2)
+```
+
+**Arguments**
+
+- `t1` — the first tuple.
+- `t2` — the second tuple; must be the same length as `t1`.
+
+**Returned value**
+
+- The count of positions where the two tuples differ, as `UInt64`.
+
+**Example**
+
+```sql Count differing positions
+SELECT distinct_id FROM users WHERE tupleHammingDistance(struct(1, 2, 3), struct(1, 5, 3)) = 1
+```

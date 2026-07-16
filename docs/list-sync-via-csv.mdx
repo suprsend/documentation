@@ -1,41 +1,106 @@
 ---
-title: "CSV upload from the dashboard"
-description: "Create a list and upload a fixed set of users from a CSV in the SuprSend dashboard — best for one-off campaigns run without engineering involvement."
+title: "Manual (CSV upload)"
+description: "Upload a fixed set of users to a SuprSend List from a CSV in the dashboard — best for one-off campaigns run without engineering involvement."
 ---
 
-Best for one-off campaigns run by marketing or product teams without engineering involvement. The list is a snapshot at upload time — you re-upload to update it.
+Upload a CSV of `distinct_id`s to a [List](/docs/lists) from the SuprSend dashboard. The list is a snapshot at upload time — re-upload to update it, or [switch to database sync](/docs/list-sync-via-database) if you want it to refresh automatically.
+
+<Note>
+  CSV upload only adds users that already exist in SuprSend — it can't create new user profiles or update user properties and channels. See [Creating user profiles](/docs/users#creating-user-profile-on-suprsend) to identify users first, or use [database sync](/docs/list-sync-via-database) which can create users during the sync.
+</Note>
+
+## Setting up the upload
+
+### 1. Create the list
+
+Go to **Lists → + New List** and fill in:
+
+| Field | Rules |
+|---|---|
+| `list_id` | Required. Unique identifier within the workspace. Use lowercase letters, digits, and underscores. |
+| Name | Optional. Display name for the list. |
+| Description | Optional. Additional context to help you understand the list's purpose or the users it contains. |
+
+You can edit the name and description later from the **List Settings** button on the list.
+
+<Frame>
+  <img src="/images/list-create-modal.png" alt="New List modal with list_id, name, and description fields" />
+</Frame>
+
+### 2. Upload the CSV
+
+Select **Update Users** inside the list details page. Pick how to apply the CSV, upload the file, then click **Update Users**.
+
+<Frame>
+  <img src="/images/upload-list-users-via-csv-modal.png" alt="Update Users dialog with Add / Replace options and file picker" />
+</Frame>
+
+| Update type | When to use |
+|---|---|
+| **Add** | Appends new users to the existing membership. Use for a rolling list you keep adding to — *e.g. today's signups*. |
+| **Replace** | Swaps the current membership for exactly the users in the CSV. Use when the CSV is the full definition of the audience — *e.g. "attendees of the July 2026 webinar"*. |
+
+**CSV format**
+
+| Requirement | Value |
+|---|---|
+| Column | Exactly one column labeled `distinct_id` (case-sensitive). Extra columns are ignored. |
+| Header row | Required — the file's first row must contain `distinct_id`. |
+| Delimiter | Comma. |
+| Encoding | UTF-8. Save as "CSV UTF-8" from Excel, or export from Google Sheets. |
 
 <Warning>
-  CSV upload only syncs users that already exist in SuprSend. It does not create new user profiles. See [Creating user profiles](/docs/users#creating-user-profile-on-suprsend) to identify users first.
+  CSV upload can't update user properties or channels. If you need to sync additional profile data alongside the list, use [database sync](/docs/list-sync-via-database) instead.
 </Warning>
 
-<Steps>
-  <Step title="Create the list">
-    Go to **Lists → + New List** and fill in:
+## Import logs
 
-    | Field | Rules |
-    |---|---|
-    | `list_id` | Required. Unique identifier within the workspace. Use lowercase letters, digits, and underscores. |
-    | Name | Optional. Display name — defaults to `list_id` if omitted. |
-    | Description | Optional. Free-form. |
+Every upload appears on the **Import Logs** tab of the list. Each row shows when the file was uploaded, who uploaded it, the outcome, and a summary of how many users were added.
 
-    You can edit the name and description later from the kebab menu (**Modify List**).
+<Frame>
+  <img src="/images/docs/28f4dbf-image.png" alt="Import Logs tab on a list showing upload rows with status and count breakdown" />
+</Frame>
 
-    <Frame>
-      <img src="/images/list-create-modal.png" alt="New List modal with list_id, name, and description fields" />
-    </Frame>
-  </Step>
+| Status | Meaning |
+|---|---|
+| **In progress** | The CSV is being read and applied to the list. |
+| **Success** | The upload completed. See the count breakdown below. |
+| **Failed** | The upload couldn't complete — usually a missing `distinct_id` column, malformed CSV, or file too large. Hover the status or open the log row to see the exact error. |
 
-  <Step title="Upload users">
-    Open the kebab menu on the list and select **Update Users**. Pick how to apply the CSV:
+### Total vs. Added
 
-    - **Add** — append new users to the existing membership. Use this to keep adding to a rolling list (e.g. today's signups).
-    - **Replace** — swap the current membership out for exactly the users in the CSV. Use this when the CSV is your new source of truth.
+- **Total** — rows in the CSV, excluding the header row.
+- **Added** — users actually added to the list after the upload finished.
 
-    <Frame>
-      <img src="/images/upload-list-users-via-csv-modal.png" alt="Update Users dialog with Add / Replace options and file picker" />
-    </Frame>
+`Added` can be lower than `Total` for two reasons:
 
-    Upload a CSV where the user column is labeled **`distinct_id`**, then click **Update Users**. Track progress under **Import logs**.
-  </Step>
-</Steps>
+- **The user is already in the list.** Duplicate `distinct_id`s — either within the CSV or from a previous upload — aren't added again; they count toward `Total` but not `Added`.
+- **The user doesn't exist in SuprSend.** CSV upload can't create users, so rows whose `distinct_id` isn't already a user in SuprSend are skipped.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Upload failed: 'distinct_id column is missing'">
+    The header row must contain a column named exactly `distinct_id` (lowercase, with no leading or trailing spaces). If your source spreadsheet uses a different header — or the header has stray whitespace around it — rename or trim it before exporting. Also check the `distinct_id` values themselves for leading or trailing spaces, since a padded ID won't match the user in SuprSend.
+  </Accordion>
+  <Accordion title="`Added` is lower than `Total` — users aren't landing in the list">
+    Either the users are already in the list (safe to ignore) or their `distinct_id`s don't exist in SuprSend. CSV upload can't create users — [create them first](/docs/users#creating-user-profile-on-suprsend), or use [database sync](/docs/list-sync-via-database) which can create users on the fly.
+  </Accordion>
+  <Accordion title="File upload rejected as too large">
+    Split the CSV into smaller batches and upload them one after another. Each batch appears as its own row in Import Logs.
+  </Accordion>
+  <Accordion title="Special characters showing as garbled text on the user record">
+    Save the CSV as UTF-8. Excel defaults to a locale-specific encoding on export — use **Save As → CSV UTF-8**, or export from Google Sheets which is UTF-8 by default.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Send a Broadcast" icon="bullhorn" href="/docs/broadcast">
+    Use the uploaded list as the audience for a broadcast.
+  </Card>
+  <Card title="Setup Workflow on List entry/exit" icon="diagram-project" href="/docs/design-workflow#1-trigger-node">
+    Trigger a workflow when users enter or exit the list.
+  </Card>
+</CardGroup>

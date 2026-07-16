@@ -1,0 +1,202 @@
+---
+title: "Geo functions"
+description: "Geospatial functions in SuprSend Segment List SQL — distances, H3 cells, and point-in-polygon tests."
+---
+
+
+Geo functions compute distances, angles, spatial containment, and H3 grid indexes from latitude/longitude coordinates. These functions run on ClickHouse only and are rejected on PostgreSQL.
+
+## greatCircleDistance
+
+Returns the distance between two points on the surface of the Earth, in meters, using the great-circle (spherical) model. Faster but slightly less accurate than `geoDistance` (ClickHouse only).
+
+**Syntax**
+
+```sql
+greatCircleDistance(lon1Deg, lat1Deg, lon2Deg, lat2Deg)
+```
+
+**Arguments**
+
+- `lon1Deg`, `lon2Deg` — Longitude of each point, in degrees, in the range \[-180, 180].
+- `lat1Deg`, `lat2Deg` — Latitude of each point, in degrees, in the range \[-90, 90].
+
+**Returned value**
+
+- The distance between the two points, in meters (Float64). Roughly 111,195 m per degree of latitude.
+
+**Example**
+
+```sql Users within 50 km of a city center
+SELECT distinct_id
+FROM users
+WHERE greatCircleDistance(
+  CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
+  CAST(user_properties ->> 'lat' AS DOUBLE PRECISION),
+  -0.1276,
+  51.5072
+) <= 50000
+```
+
+## geoDistance
+
+Returns the geodesic distance between two points on the WGS-84 ellipsoid, in meters. This is more accurate than `greatCircleDistance` for real-world distances (ClickHouse only).
+
+**Syntax**
+
+```sql
+geoDistance(lon1Deg, lat1Deg, lon2Deg, lat2Deg)
+```
+
+**Arguments**
+
+- `lon1Deg`, `lon2Deg` — Longitude of each point, in degrees, in the range \[-180, 180].
+- `lat1Deg`, `lat2Deg` — Latitude of each point, in degrees, in the range \[-90, 90].
+
+**Returned value**
+
+- The distance between the two points, in meters (Float64).
+
+**Example**
+
+```sql Distance from each user to a fixed store
+SELECT distinct_id
+FROM users
+WHERE geoDistance(
+  CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
+  CAST(user_properties ->> 'lat' AS DOUBLE PRECISION),
+  -122.4194,
+  37.7749
+) < 50000
+```
+
+## pointInPolygon
+
+Returns whether a point lies inside a polygon defined by its vertices. Behavior on the polygon boundary is undefined (ClickHouse only).
+
+**Syntax**
+
+```sql
+pointInPolygon((x, y), [(a, b), (c, d), ...])
+```
+
+**Arguments**
+
+- `(x, y)` — The point to test, as a tuple of coordinates (Tuple).
+- `[(a, b), (c, d), ...]` — The polygon, as an array of vertex tuples forming a closed ring (Array of Tuple).
+
+**Returned value**
+
+- 1 if the point is inside the polygon, 0 otherwise (UInt8).
+
+**Example**
+
+```sql Users inside a bounding-box polygon
+SELECT distinct_id
+FROM users
+WHERE pointInPolygon(
+  (
+    CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
+    CAST(user_properties ->> 'lat' AS DOUBLE PRECISION)
+  ),
+  [(-0.51, 51.28), (0.33, 51.28), (0.33, 51.69), (-0.51, 51.69)]
+) = 1
+```
+
+## greatCircleAngle
+
+Returns the central angle between two points on a sphere, in degrees, using the great-circle (haversine) formula (ClickHouse only).
+
+**Syntax**
+
+```sql
+greatCircleAngle(lon1Deg, lat1Deg, lon2Deg, lat2Deg)
+```
+
+**Arguments**
+
+- `lon1Deg`, `lon2Deg` — Longitude of each point, in degrees.
+- `lat1Deg`, `lat2Deg` — Latitude of each point, in degrees.
+
+**Returned value**
+
+- The central angle between the two points, in degrees (Float64).
+
+**Example**
+
+```sql Central angle between two coordinates
+SELECT distinct_id
+FROM users
+WHERE greatCircleAngle(
+  CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
+  CAST(user_properties ->> 'lat' AS DOUBLE PRECISION),
+  0.0,
+  0.0
+) < 1.0
+```
+
+## geoToH3
+
+Returns the H3 cell index for the given latitude, longitude, and resolution. H3 is a hierarchical hexagonal geospatial grid, useful for bucketing points into cells (ClickHouse only).
+
+Argument order is `(lat, lon, resolution)` on ClickHouse v25.5 and later; earlier versions took `(lon, lat, resolution)`.
+
+**Syntax**
+
+```sql
+geoToH3(lat, lon, resolution)
+```
+
+**Arguments**
+
+- `lat` — Latitude of the point, in degrees (Float64).
+- `lon` — Longitude of the point, in degrees (Float64).
+- `resolution` — H3 grid resolution, in the range \[0, 15], where 0 is coarsest and 15 is finest (UInt8).
+
+**Returned value**
+
+- The H3 cell index (UInt64), or 0 on error.
+
+**Example**
+
+```sql Bucket users into H3 cells at resolution 7
+SELECT distinct_id
+FROM users
+WHERE geoToH3(
+  CAST(user_properties ->> 'lat' AS DOUBLE PRECISION),
+  CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
+  7
+) = 617439712828686335
+```
+
+## h3IsValid
+
+Returns whether the given number is a valid H3 cell index (ClickHouse only).
+
+**Syntax**
+
+```sql
+h3IsValid(h3index)
+```
+
+**Arguments**
+
+- `h3index` — The H3 cell index to check (UInt64).
+
+**Returned value**
+
+- 1 if the value is a valid H3 index, 0 otherwise (UInt8).
+
+**Example**
+
+```sql Keep only valid H3 cells
+SELECT distinct_id
+FROM users
+WHERE h3IsValid(
+  geoToH3(
+    CAST(user_properties ->> 'lat' AS DOUBLE PRECISION),
+    CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
+    7
+  )
+) = 1
+```

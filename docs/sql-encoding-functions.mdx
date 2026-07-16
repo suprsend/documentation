@@ -1,0 +1,247 @@
+---
+title: "Encoding, hashing, and UUID functions"
+description: "Encoding, hashing, and UUID functions in SuprSend Segment List SQL — base64, hex, md5, and UUID conversion."
+---
+
+
+Functions for Base64 and hexadecimal encoding or decoding, computing hashes, and parsing strings into UUIDs.
+
+## md5
+
+Computes the MD5 hash of a string.
+
+**Syntax**
+
+```sql
+md5(s)
+```
+
+**Arguments**
+
+- `s` — the string to hash.
+
+**Returned value**
+
+- The raw 128-bit MD5 digest as a 16-byte binary value. Wrap it in `hex()` — or `lower(hex(...))` to match PostgreSQL's lowercase output — to render it as a hexadecimal string, as shown in the example.
+
+**Example**
+
+```sql Hash a user's email
+SELECT distinct_id FROM users WHERE lower(hex(md5(user_properties ->> 'email'))) = 'd41d8cd98f00b204e9800998ecf8427e'
+```
+
+## base64Encode
+
+Encodes a string as Base64, following RFC 4648.
+
+**Syntax**
+
+```sql
+base64Encode(plaintext)
+```
+
+**Arguments**
+
+- `plaintext` — the string to encode.
+
+**Returned value**
+
+- The Base64-encoded value as a string.
+
+**Example**
+
+```sql Encode a string as Base64
+SELECT distinct_id FROM users WHERE base64Encode(user_properties ->> 'email') = 'U3VwclNlbmQ='
+```
+
+## base64Decode
+
+Decodes a Base64-encoded string back to its original value, following RFC 4648. Raises an error if the input is not valid Base64.
+
+**Syntax**
+
+```sql
+base64Decode(encoded)
+```
+
+**Arguments**
+
+- `encoded` — the Base64-encoded string to decode.
+
+**Returned value**
+
+- The decoded value as a string.
+
+**Example**
+
+```sql Decode a Base64 string
+SELECT distinct_id FROM users WHERE base64Decode(user_properties ->> 'token_b64') = 'expected'
+```
+
+## hex
+
+Returns the hexadecimal representation of the argument, using uppercase letters `A`-`F` and no `0x` prefix. For string inputs, every byte is encoded as two hexadecimal digits and leading zero bytes are preserved. For numeric inputs, the output starts at the most significant non-zero byte, so leading zero bytes are omitted.
+
+**Syntax**
+
+```sql
+hex(x)
+```
+
+**Arguments**
+
+- `x` — the value to encode. Accepts a string or a numeric value.
+
+**Returned value**
+
+- The uppercase hexadecimal representation as a string.
+
+**Example**
+
+```sql Hex-encode a string
+SELECT distinct_id FROM users WHERE hex(user_properties ->> 'code') = '616263'
+```
+
+## unhex
+
+Performs the inverse of `hex`: interprets each pair of hexadecimal digits as a byte and returns the decoded value. The input is case-insensitive.
+
+**Syntax**
+
+```sql
+unhex(s)
+```
+
+**Arguments**
+
+- `s` — a string of hexadecimal digits.
+
+**Returned value**
+
+- The decoded value as a string.
+
+**Example**
+
+```sql Decode a hex string
+SELECT distinct_id FROM users WHERE unhex(user_properties ->> 'code_hex') = 'abc'
+```
+
+## to_hex
+
+Returns the hexadecimal representation of an integer. The output is lowercase and leading zeros are stripped, matching PostgreSQL's `to_hex`.
+
+**Syntax**
+
+```sql
+to_hex(n)
+```
+
+**Arguments**
+
+- `n` — the integer to convert.
+
+**Returned value**
+
+- The lowercase hexadecimal representation as a string, without leading zeros.
+
+**Example**
+
+```sql Convert an integer to hex
+SELECT distinct_id FROM users WHERE to_hex((user_properties ->> 'user_id')::int) = '7fffffff'
+```
+
+## toUUID
+
+Parses a string into a UUID value. Raises an error if the string is not a valid UUID.
+
+**Syntax**
+
+```sql
+toUUID(s)
+```
+
+**Arguments**
+
+- `s` — a string containing a UUID in the standard 8-4-4-4-12 hyphenated form.
+
+**Returned value**
+
+- The parsed value as a UUID.
+
+**Example**
+
+```sql Parse a string into a UUID
+SELECT distinct_id FROM users WHERE toUUID(user_properties ->> 'external_id') = toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0')
+```
+
+## cityHash64
+
+Computes a fast, non-cryptographic 64-bit CityHash of its arguments. Useful for bucketing or sampling, not for security. When multiple arguments are passed, their hashes are combined (ClickHouse only).
+
+**Syntax**
+
+```sql
+cityHash64(arg1[, arg2, ...])
+```
+
+**Arguments**
+
+- `arg1[, arg2, ...]` — one or more values of any type to hash.
+
+**Returned value**
+
+- The 64-bit hash as a UInt64.
+
+**Example**
+
+```sql Bucket users into 10 groups by hash
+SELECT distinct_id FROM users WHERE cityHash64(distinct_id) % 10 = 0
+```
+
+## touuidornull
+
+Parses a string into a UUID, returning NULL instead of raising an error when the input is not a valid UUID (ClickHouse only).
+
+**Syntax**
+
+```sql
+touuidornull(s)
+```
+
+**Arguments**
+
+- `s` — a string that may or may not contain a valid UUID.
+
+**Returned value**
+
+- The parsed value as a UUID, or NULL if the input is not a valid UUID.
+
+**Example**
+
+```sql Safely parse a possibly-invalid UUID
+SELECT distinct_id FROM users WHERE touuidornull(user_properties ->> 'external_id') = toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0')
+```
+
+## trybase64decode
+
+Decodes a Base64-encoded string, returning an empty string instead of raising an error when the input is not valid Base64 (ClickHouse only).
+
+**Syntax**
+
+```sql
+trybase64decode(encoded)
+```
+
+**Arguments**
+
+- `encoded` — the string to decode.
+
+**Returned value**
+
+- The decoded value as a string, or an empty string if the input is not valid Base64.
+
+**Example**
+
+```sql Safely decode a possibly-invalid Base64 string
+SELECT distinct_id FROM users WHERE trybase64decode(user_properties ->> 'token_b64') = 'expected'
+```

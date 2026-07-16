@@ -1,0 +1,1051 @@
+---
+title: "String functions"
+description: "String functions in SuprSend Segment List SQL — case, trim, split, replace, pad, regex replace, and concatenation."
+---
+
+
+Functions for building, measuring, searching, transforming, and splitting text. Most operate on values you pull out of JSON, such as `user_properties ->> 'email'` or `user_properties ->> 'country'`, and on the `event_name` column of `events`. Unless noted, every function below works on both PostgreSQL and ClickHouse.
+
+## lower / upper / lowerUTF8 / upperUTF8
+
+Convert a string to lower or upper case. The `UTF8` variants case-fold multi-byte Unicode characters correctly rather than only ASCII letters.
+
+**Syntax**
+
+```sql
+lower(s)
+upper(s)
+lowerUTF8(s)
+upperUTF8(s)
+```
+
+**Arguments**
+
+- `s` — the input string.
+
+**Returned value**
+
+- The case-converted string.
+
+**Example**
+
+```sql Normalize email to lower case for matching
+SELECT distinct_id FROM users WHERE lower(user_properties ->> 'email') LIKE '%@acme.com'
+```
+
+## || (concatenation)
+
+Joins two or more string values end to end into a single string.
+
+**Syntax**
+
+```sql
+a || b [|| c ...]
+```
+
+**Arguments**
+
+- `a`, `b`, ... — the string values to join, evaluated left to right.
+
+**Returned value**
+
+- The concatenated string.
+
+**Example**
+
+```sql Build a display label from first and last name
+SELECT distinct_id FROM users WHERE (user_properties ->> 'first_name') || ' ' || (user_properties ->> 'last_name') = 'John Doe'
+```
+
+Use `\|\|` when you want to concatenate; each side is coerced to text first.
+
+## like / ilike
+
+Pattern-matching operators that test a string against a pattern using `%` (any sequence of characters) and `_` (any single character). `like` is case-sensitive; `ilike` is case-insensitive.
+
+**Syntax**
+
+```sql
+string LIKE pattern
+string ILIKE pattern
+```
+
+**Arguments**
+
+- `string` — the value to test.
+- `pattern` — the pattern, using `%` and `_` wildcards.
+
+**Returned value**
+
+- A boolean: true when the string matches the pattern.
+
+**Example**
+
+```sql Match users on educational email domains
+SELECT distinct_id FROM users WHERE user_properties ->> 'email' ILIKE '%.edu'
+```
+
+## ~ / ~* (regex match)
+
+POSIX regular-expression match operators. `~` is case-sensitive; `~*` is case-insensitive. The pattern matches anywhere in the string unless anchored with `^` or `$`.
+
+**Syntax**
+
+```sql
+string ~ pattern
+string ~* pattern
+```
+
+**Arguments**
+
+- `string` — the value to test.
+- `pattern` — the POSIX regular expression.
+
+**Returned value**
+
+- A boolean: true when the pattern matches.
+
+**Example**
+
+```sql Match names beginning with a vowel, ignoring case
+SELECT distinct_id FROM users WHERE user_properties ->> 'name' ~* '^[aeiou]'
+```
+
+## position / strpos / locate
+
+Return the 1-based position of the first occurrence of a substring within a string, or `0` if it is not found. In the SQL-standard `position(needle in haystack)` form the needle comes first; in the two-argument function forms `strpos(haystack, needle)`, `position(haystack, needle)`, and `locate(haystack, needle)` the haystack comes first.
+
+**Syntax**
+
+```sql
+position(needle in haystack)
+strpos(haystack, needle)
+position(haystack, needle)
+locate(haystack, needle)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `needle` — the substring to look for.
+
+**Returned value**
+
+- The 1-based index of the first match, or `0` if not found (integer).
+
+**Example**
+
+```sql Find where the domain starts in an email
+SELECT distinct_id FROM users WHERE position('@' in (user_properties ->> 'email')) > 0
+```
+
+## substring / substringUTF8
+
+Extracts a portion of a string starting at a 1-based offset for an optional length. `substringUTF8` counts offsets and lengths in Unicode code points.
+
+**Syntax**
+
+```sql
+substring(s, offset [, length])
+substringUTF8(s, offset [, length])
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `offset` — the 1-based start position.
+- `length` — optional number of characters to return; without it, the rest of the string is returned.
+
+**Returned value**
+
+- The extracted substring.
+
+**Example**
+
+```sql Take the first three letters of a country
+SELECT distinct_id FROM users WHERE substring(user_properties ->> 'country', 1, 3) = 'Uni'
+```
+
+## split_part
+
+Splits a string on a delimiter and returns the field at a given 1-based position.
+
+**Syntax**
+
+```sql
+split_part(string, delimiter, n)
+```
+
+**Arguments**
+
+- `string` — the input string.
+- `delimiter` — the substring to split on.
+- `n` — the 1-based index of the field to return.
+
+**Returned value**
+
+- The nth field as a string, or an empty string if there is no such field.
+
+**Example**
+
+```sql Extract the domain from an email
+SELECT distinct_id FROM users WHERE split_part(user_properties ->> 'email', '@', 2) = 'acme.com'
+```
+
+## replace / replaceAll
+
+Replace occurrences of a literal substring with another string. `replace` and `replaceAll` both replace every occurrence.
+
+**Syntax**
+
+```sql
+replace(haystack, pattern, replacement)
+replaceAll(haystack, pattern, replacement)
+```
+
+**Arguments**
+
+- `haystack` — the input string.
+- `pattern` — the literal substring to find.
+- `replacement` — the string to substitute in.
+
+**Returned value**
+
+- The string with all matches replaced.
+
+**Example**
+
+```sql Mask the domain separator in an email
+SELECT distinct_id FROM users WHERE replace(user_properties ->> 'email', '@', ' at ') = 'john at acme.com'
+```
+
+## concat
+
+Concatenates all of its arguments into one string. Unlike `\|\|`, it accepts a variable number of arguments in a single call.
+
+**Syntax**
+
+```sql
+concat(s1, s2 [, ...])
+```
+
+**Arguments**
+
+- `s1, s2, ...` — the values to join, in order.
+
+**Returned value**
+
+- The concatenated string.
+
+**Example**
+
+```sql Combine name and country into one string
+SELECT distinct_id FROM users WHERE concat(user_properties ->> 'name', ' (', user_properties ->> 'country', ')') = 'John (India)'
+```
+
+## concat_ws
+
+Concatenates its arguments using a separator inserted between each pair of values.
+
+**Syntax**
+
+```sql
+concat_ws(separator, s1, s2 [, ...])
+```
+
+**Arguments**
+
+- `separator` — the string placed between each joined value.
+- `s1, s2, ...` — the values to join.
+
+**Returned value**
+
+- The joined string with `separator` between elements.
+
+**Example**
+
+```sql Join address parts with a comma
+SELECT distinct_id FROM users WHERE concat_ws(', ', user_properties ->> 'city', user_properties ->> 'country') = 'Mumbai, India'
+```
+
+## starts_with / ends_with
+
+Test whether a string begins or ends with a given substring.
+
+**Syntax**
+
+```sql
+starts_with(s, prefix)
+ends_with(s, suffix)
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `prefix` / `suffix` — the substring to test for.
+
+**Returned value**
+
+- A boolean: true when the string starts (or ends) with the given substring.
+
+**Example**
+
+```sql Find users with a Gmail address
+SELECT distinct_id FROM users WHERE ends_with(user_properties ->> 'email', '@gmail.com')
+```
+
+## left / right
+
+Return the leftmost or rightmost `n` characters of a string. A negative `n` counts from the other end, returning all but the last (or first) `n` characters.
+
+**Syntax**
+
+```sql
+left(s, n)
+right(s, n)
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `n` — the number of characters to return.
+
+**Returned value**
+
+- The extracted substring.
+
+**Example**
+
+```sql Extract the top-level domain from an email
+SELECT distinct_id FROM users WHERE right(user_properties ->> 'email', 3) = 'com'
+```
+
+## ltrim / rtrim / btrim / trim
+
+Remove leading, trailing, or both leading and trailing characters from a string. `ltrim` trims the left side, `rtrim` the right, and `btrim` / `trim` both sides. Without a `characters` argument, whitespace is removed.
+
+**Syntax**
+
+```sql
+ltrim(s [, characters])
+rtrim(s [, characters])
+btrim(s [, characters])
+trim(s)
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `characters` — optional set of characters to strip; any character in the set is removed from the relevant end(s).
+
+**Returned value**
+
+- The trimmed string.
+
+**Example**
+
+```sql Strip surrounding whitespace from a name
+SELECT distinct_id FROM users WHERE btrim(user_properties ->> 'name') = 'John Doe'
+```
+
+## length / lengthUTF8
+
+`length` returns the number of bytes in a string; `lengthUTF8` returns the number of Unicode code points, which is the correct count for text containing multi-byte characters.
+
+**Syntax**
+
+```sql
+length(s)
+lengthUTF8(s)
+```
+
+**Arguments**
+
+- `s` — the input string.
+
+**Returned value**
+
+- The length as an integer.
+
+**Example**
+
+```sql Count characters in each user's name
+SELECT distinct_id FROM users WHERE lengthUTF8(user_properties ->> 'name') > 10
+```
+
+## lpad / rpad
+
+Pad a string to a target length by adding fill characters on the left (`lpad`) or right (`rpad`). If the string is already longer than the target, it is truncated to that length.
+
+**Syntax**
+
+```sql
+lpad(s, length [, fill])
+rpad(s, length [, fill])
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `length` — the target length in characters.
+- `fill` — optional padding string; defaults to a space.
+
+**Returned value**
+
+- The padded (or truncated) string.
+
+**Example**
+
+```sql Right-pad country codes to a fixed width
+SELECT distinct_id FROM users WHERE rpad(user_properties ->> 'country', 10, '.') = 'IN........'
+```
+
+## leftPadUTF8 / rightPadUTF8
+
+Unicode-aware padding: like `lpad` / `rpad`, but the target length is measured in Unicode code points rather than bytes.
+
+**Syntax**
+
+```sql
+leftPadUTF8(s, length [, fill])
+rightPadUTF8(s, length [, fill])
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `length` — the target length in code points.
+- `fill` — optional padding string; defaults to a space.
+
+**Returned value**
+
+- The padded (or truncated) string.
+
+**Example**
+
+```sql Left-pad a name to ten code points
+SELECT distinct_id FROM users WHERE leftPadUTF8(user_properties ->> 'name', 10, '*') = '******John'
+```
+
+## regexp_replace / replaceRegexpOne / replaceRegexpAll
+
+Replace text matched by a regular expression. `replaceRegexpOne` replaces only the first match; `replaceRegexpAll` replaces every match. `regexp_replace` replaces the first match by default, or all matches when the `g` flag is passed.
+
+**Syntax**
+
+```sql
+regexp_replace(source, pattern, replacement [, flags])
+replaceRegexpOne(haystack, pattern, replacement)
+replaceRegexpAll(haystack, pattern, replacement)
+```
+
+**Arguments**
+
+- `source` / `haystack` — the input string.
+- `pattern` — the regular expression to match.
+- `replacement` — the replacement string; may reference capture groups.
+- `flags` — optional `regexp_replace` flags, such as `g` for global replacement.
+
+**Returned value**
+
+- The string with matches replaced.
+
+**Example**
+
+```sql Strip all digits from a phone number
+SELECT distinct_id FROM users WHERE replaceRegexpAll(user_properties ->> 'phone', '[0-9]', '') = ''
+```
+
+## regexp_count
+
+Counts the number of times a regular expression matches within a string, optionally starting from a given position.
+
+**Syntax**
+
+```sql
+regexp_count(string, pattern [, start [, flags]])
+```
+
+**Arguments**
+
+- `string` — the input string.
+- `pattern` — the regular expression to match.
+- `start` — optional 1-based position to begin searching from.
+- `flags` — optional matching flags, such as `i` for case-insensitive.
+
+**Returned value**
+
+- The number of matches (integer).
+
+**Example**
+
+```sql Count vowels in a name
+SELECT distinct_id FROM users WHERE regexp_count(user_properties ->> 'name', '[aeiou]', 1, 'i') > 3
+```
+
+## extractAll / regexpExtract
+
+`extractAll` returns every non-overlapping match of a regular expression as an array. `regexpExtract` returns a single match: with an index argument it returns that capture group (index `0` returns the whole match).
+
+**Syntax**
+
+```sql
+extractAll(haystack, pattern)
+regexpExtract(haystack, pattern [, index])
+```
+
+**Arguments**
+
+- `haystack` — the input string.
+- `pattern` — the regular expression to match.
+- `index` — for `regexpExtract`, the capture group to return; `0` (the default) returns the entire match.
+
+**Returned value**
+
+- `extractAll` returns an array of strings; `regexpExtract` returns a single string.
+
+**Example**
+
+```sql Pull all digit groups out of a phone number
+SELECT distinct_id FROM users WHERE length(extractAll(user_properties ->> 'phone', '[0-9]+')) > 1
+```
+
+## initcap
+
+Capitalizes the first letter of each word and lower-cases the rest. Word boundaries are non-alphanumeric characters.
+
+**Syntax**
+
+```sql
+initcap(s)
+```
+
+**Arguments**
+
+- `s` — the input string.
+
+**Returned value**
+
+- The title-cased string.
+
+**Example**
+
+```sql Title-case a user's name
+SELECT distinct_id FROM users WHERE initcap(user_properties ->> 'name') = 'John Doe'
+```
+
+## reverse / reverseUTF8
+
+Reverses the order of characters in a string. `reverse` operates on bytes; `reverseUTF8` reverses whole Unicode code points.
+
+**Syntax**
+
+```sql
+reverse(s)
+reverseUTF8(s)
+```
+
+**Arguments**
+
+- `s` — the input string.
+
+**Returned value**
+
+- The reversed string.
+
+**Example**
+
+```sql Reverse a country code
+SELECT distinct_id FROM users WHERE reverse(user_properties ->> 'country') = 'NI'
+```
+
+## translate / translateUTF8
+
+Replace individual characters according to a from/to mapping: each character in `from` is replaced by the character at the same position in `to`. `translateUTF8` maps whole Unicode code points.
+
+**Syntax**
+
+```sql
+translate(s, from, to)
+translateUTF8(s, from, to)
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `from` — the set of characters to replace.
+- `to` — the replacement characters, positionally aligned with `from`.
+
+**Returned value**
+
+- The translated string.
+
+**Example**
+
+```sql Transliterate vowels in a name
+SELECT distinct_id FROM users WHERE translate(user_properties ->> 'name', 'aeiou', '@3!0u') = 'J0hn'
+```
+
+## overlay
+
+Replaces a portion of a string with another string, starting at a given position for an optional length.
+
+**Syntax**
+
+```sql
+overlay(string placing substring from start [for length])
+```
+
+**Arguments**
+
+- `string` — the input string.
+- `substring` — the replacement text inserted at `start`.
+- `start` — the 1-based position where replacement begins.
+- `length` — optional number of characters to replace; defaults to the length of `substring`.
+
+**Returned value**
+
+- The modified string.
+
+**Example**
+
+```sql Mask the start of a country code
+SELECT distinct_id FROM users WHERE overlay(user_properties ->> 'country' placing 'XX' from 1 for 2) = 'XXdia'
+```
+
+## repeat
+
+Builds a string by repeating the input a given number of times.
+
+**Syntax**
+
+```sql
+repeat(s, n)
+```
+
+**Arguments**
+
+- `s` — the string to repeat.
+- `n` — the number of repetitions.
+
+**Returned value**
+
+- The repeated string.
+
+**Example**
+
+```sql Repeat a separator character
+SELECT distinct_id FROM users WHERE user_properties ->> 'divider' = repeat('-', 20)
+```
+
+## ascii / chr
+
+`ascii` returns the numeric code of the first character of a string. `chr` is the inverse: it returns the single-character string for a given code point.
+
+**Syntax**
+
+```sql
+ascii(s)
+chr(n)
+```
+
+**Arguments**
+
+- `s` — for `ascii`, the input string.
+- `n` — for `chr`, the character code.
+
+**Returned value**
+
+- `ascii` returns an integer code; `chr` returns a one-character string.
+
+**Example**
+
+```sql Get the code of the first letter of a country
+SELECT distinct_id FROM users WHERE ascii(user_properties ->> 'country') = 73
+```
+
+## positionCaseInsensitive / positionUTF8
+
+Variants of `position` that ignore case (`positionCaseInsensitive`) or count the returned position in Unicode code points rather than bytes (`positionUTF8`).
+
+**Syntax**
+
+```sql
+positionCaseInsensitive(haystack, needle)
+positionUTF8(haystack, needle)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `needle` — the substring to look for.
+
+**Returned value**
+
+- The 1-based index of the first match, or `0` if not found (integer).
+
+**Example**
+
+```sql Case-insensitively locate a country name
+SELECT distinct_id FROM users WHERE positionCaseInsensitive(user_properties ->> 'country', 'india') > 0
+```
+
+## countSubstrings / countSubstringsCaseInsensitive
+
+Count how many times a literal substring occurs in a string. `countSubstringsCaseInsensitive` ignores case.
+
+**Syntax**
+
+```sql
+countSubstrings(haystack, needle)
+countSubstringsCaseInsensitive(haystack, needle)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `needle` — the literal substring to count.
+
+**Returned value**
+
+- The number of non-overlapping occurrences (integer).
+
+**Example**
+
+```sql Count dots in an email address
+SELECT distinct_id FROM users WHERE countSubstrings(user_properties ->> 'email', '.') > 1
+```
+
+## countMatches / countMatchesCaseInsensitive
+
+Count how many times a regular expression matches in a string. `countMatchesCaseInsensitive` matches without regard to case.
+
+**Syntax**
+
+```sql
+countMatches(haystack, pattern)
+countMatchesCaseInsensitive(haystack, pattern)
+```
+
+**Arguments**
+
+- `haystack` — the string to search within.
+- `pattern` — the regular expression to match.
+
+**Returned value**
+
+- The number of non-overlapping matches (integer).
+
+**Example**
+
+```sql Count digit groups in a phone number
+SELECT distinct_id FROM users WHERE countMatches(user_properties ->> 'phone', '[0-9]+') > 2
+```
+
+## string_to_array
+
+Splits a string on a delimiter and returns all fields as an array (PostgreSQL only).
+
+**Syntax**
+
+```sql
+string_to_array(string, delimiter [, null_string])
+```
+
+**Arguments**
+
+- `string` — the input string.
+- `delimiter` — the substring to split on.
+- `null_string` — optional; fields equal to this value become `NULL`.
+
+**Returned value**
+
+- An array of strings.
+
+**Example**
+
+```sql Split an email into local part and domain
+SELECT distinct_id FROM users WHERE (string_to_array(user_properties ->> 'email', '@'))[2] = 'acme.com'
+```
+
+## splitByChar / splitByString
+
+Split a string into an array of substrings. `splitByChar` splits on a single-character separator; `splitByString` splits on a multi-character separator.
+
+**Syntax**
+
+```sql
+splitByChar(separator, s [, max_substrings])
+splitByString(separator, s [, max_substrings])
+```
+
+**Arguments**
+
+- `separator` — the separator to split on (a single character for `splitByChar`).
+- `s` — the string to split.
+- `max_substrings` — optional cap on the number of returned elements.
+
+**Returned value**
+
+- An array of strings.
+
+**Example**
+
+```sql Split an email on the @ sign
+SELECT distinct_id FROM users WHERE splitByChar('@', user_properties ->> 'email')[2] = 'acme.com'
+```
+
+## splitByRegexp
+
+Splits a string into an array of substrings using a regular expression as the separator.
+
+**Syntax**
+
+```sql
+splitByRegexp(regexp, s [, max_substrings])
+```
+
+**Arguments**
+
+- `regexp` — the regular expression separator.
+- `s` — the string to split.
+- `max_substrings` — optional cap on the number of returned elements.
+
+**Returned value**
+
+- An array of strings.
+
+**Example**
+
+```sql Split a name on any run of whitespace or punctuation
+SELECT distinct_id FROM users WHERE length(splitByRegexp('[\\s,]+', user_properties ->> 'name')) > 2
+```
+
+## splitByWhitespace / splitByNonAlpha
+
+Split a string into an array of substrings. `splitByWhitespace` splits on runs of whitespace; `splitByNonAlpha` splits on runs of non-alphanumeric characters.
+
+**Syntax**
+
+```sql
+splitByWhitespace(s [, max_substrings])
+splitByNonAlpha(s [, max_substrings])
+```
+
+**Arguments**
+
+- `s` — the string to split.
+- `max_substrings` — optional cap on the number of returned elements.
+
+**Returned value**
+
+- An array of strings.
+
+**Example**
+
+```sql Split a full name into words
+SELECT distinct_id FROM users WHERE length(splitByWhitespace(user_properties ->> 'name')) = 2
+```
+
+## alphaTokens
+
+Splits a string into an array of runs of consecutive alphabetic (a–z, A–Z) characters, discarding everything else.
+
+**Syntax**
+
+```sql
+alphaTokens(s [, max_substrings])
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `max_substrings` — optional cap on the number of returned elements.
+
+**Returned value**
+
+- An array of alphabetic substrings.
+
+**Example**
+
+```sql Extract the alphabetic words from an email
+SELECT distinct_id FROM users WHERE length(alphaTokens(user_properties ->> 'email')) > 1
+```
+
+## tokens
+
+Splits a string into an array of tokens. By default it tokenizes on non-alphanumeric separators, which is useful for turning free text into searchable terms.
+
+**Syntax**
+
+```sql
+tokens(s)
+```
+
+**Arguments**
+
+- `s` — the input string.
+
+**Returned value**
+
+- An array of token strings.
+
+**Example**
+
+```sql Tokenize a user's name
+SELECT distinct_id FROM users WHERE length(tokens(user_properties ->> 'name')) > 1
+```
+
+## appendTrailingCharIfAbsent
+
+Appends a character to the end of a string only if the string does not already end with it. Useful for ensuring a value has a trailing separator.
+
+**Syntax**
+
+```sql
+appendTrailingCharIfAbsent(s, c)
+```
+
+**Arguments**
+
+- `s` — the input string.
+- `c` — the single character to append if absent.
+
+**Returned value**
+
+- The string, guaranteed to end with `c`.
+
+**Example**
+
+```sql Ensure a path value ends with a slash
+SELECT distinct_id FROM users WHERE appendTrailingCharIfAbsent(user_properties ->> 'path', '/') = '/home/'
+```
+
+## bar
+
+Renders a numeric value as a horizontal bar drawn with Unicode block characters, scaled between a minimum and maximum. Handy for quick inline visualizations in query output.
+
+**Syntax**
+
+```sql
+bar(x, min, max [, width])
+```
+
+**Arguments**
+
+- `x` — the value to render.
+- `min` — the value mapped to an empty bar.
+- `max` — the value mapped to a full-width bar.
+- `width` — optional bar width in characters; defaults to 80.
+
+**Returned value**
+
+- A string of block characters representing `x` on the scale.
+
+**Example**
+
+```sql Visualize a score on a 0-to-100 scale
+SELECT distinct_id FROM users WHERE length(bar((user_properties ->> 'score')::int, 0, 100, 20)) > 10
+```
+
+## formatReadableSize / formatReadableDecimalSize
+
+Render a byte count as a human-readable size string. `formatReadableSize` uses binary units (KiB, MiB, ...); `formatReadableDecimalSize` uses decimal units (KB, MB, ...).
+
+**Syntax**
+
+```sql
+formatReadableSize(value [, precision])
+formatReadableDecimalSize(value [, precision])
+```
+
+**Arguments**
+
+- `value` — the size in bytes.
+- `precision` — optional number of decimal digits; defaults to 2.
+
+**Returned value**
+
+- A formatted size string with a unit suffix.
+
+**Example**
+
+```sql Show storage used per user in readable units
+SELECT distinct_id FROM users WHERE formatReadableSize((user_properties ->> 'storage_bytes')::bigint) = '1.00 GiB'
+```
+
+## formatReadableQuantity
+
+Renders a number as a human-readable quantity with a word suffix, such as "thousand" or "million".
+
+**Syntax**
+
+```sql
+formatReadableQuantity(value [, precision])
+```
+
+**Arguments**
+
+- `value` — the number to format.
+- `precision` — optional number of decimal digits; defaults to 2.
+
+**Returned value**
+
+- A formatted quantity string.
+
+**Example**
+
+```sql Format a follower count for display
+SELECT distinct_id FROM users WHERE formatReadableQuantity((user_properties ->> 'followers')::bigint) = '1.00 million'
+```
+
+## formatReadableTimeDelta
+
+Renders a number of seconds as a human-readable duration, such as "1 hour 1 minute".
+
+**Syntax**
+
+```sql
+formatReadableTimeDelta(seconds [, maximum_unit [, minimum_unit]])
+```
+
+**Arguments**
+
+- `seconds` — the duration in seconds.
+- `maximum_unit` — optional largest unit to display; defaults to years.
+- `minimum_unit` — optional smallest unit to display; defaults to seconds.
+
+**Returned value**
+
+- A formatted duration string.
+
+**Example**
+
+```sql Show session length in readable form
+SELECT distinct_id FROM users WHERE formatReadableTimeDelta((user_properties ->> 'session_seconds')::bigint) = '1 hour'
+```
+
+## similar to
+
+Tests a string against a SQL-standard regular expression pattern, which blends `LIKE` wildcards with regular-expression constructs such as `|`, `*`, and `+`.
+
+**Syntax**
+
+```sql
+string SIMILAR TO pattern
+```
+
+**Arguments**
+
+- `string` — the value to test.
+- `pattern` — the SQL regular-expression pattern.
+
+**Returned value**
+
+- A boolean: true when the whole string matches the pattern.
+
+**Example**
+
+```sql Match users in India or the US
+SELECT distinct_id FROM users WHERE user_properties ->> 'country' SIMILAR TO 'India|United States'
+```

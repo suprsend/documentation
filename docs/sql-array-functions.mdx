@@ -1,0 +1,894 @@
+---
+title: "Array functions"
+description: "Array functions in SuprSend Segment List SQL — membership, length, lambda operations, and transforms over channel and tag arrays."
+---
+
+
+Test, transform, and aggregate over array values — the `active_channels`, `active_emails`, and `active_phone_numbers` columns on `users`, and JSON arrays like `user_properties -> 'tags'`. Lambda-based functions take an `x -> expression` argument that runs once per element.
+
+## = ANY (array)
+
+Tests whether a scalar value equals any element of an array. It is the most common way to check array membership in a `WHERE` clause.
+
+**Syntax**
+
+```sql
+value = ANY(array)
+```
+
+**Arguments**
+
+- `value` — the scalar to look for.
+- `array` — the array (or JSON array) to search.
+
+**Returned value**
+
+- `true` if `value` matches at least one element, otherwise `false`. Boolean.
+
+**Example**
+
+```sql Users with email as an active channel
+SELECT distinct_id
+FROM users
+WHERE 'email' = ANY(active_channels)
+```
+
+## array_length
+
+Returns the number of elements in the given dimension of an array.
+
+**Syntax**
+
+```sql
+array_length(arr, dimension)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `dimension` — the array dimension to measure; use `1` for a flat array.
+
+**Returned value**
+
+- The element count for that dimension. Integer.
+
+**Example**
+
+```sql Users with at least one active email
+SELECT distinct_id
+FROM users
+WHERE array_length(active_emails, 1) > 0
+```
+
+## cardinality
+
+Returns the number of elements in an array.
+
+**Syntax**
+
+```sql
+cardinality(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- The element count. Integer.
+
+**Example**
+
+```sql Users active on two or more channels
+SELECT distinct_id
+FROM users
+WHERE cardinality(active_channels) >= 2
+```
+
+## hasAll
+
+Tests whether an array contains every element of a second array.
+
+**Syntax**
+
+```sql
+hasAll(set, subset)
+```
+
+**Arguments**
+
+- `set` — the array to search within.
+- `subset` — the array whose elements must all be present.
+
+**Returned value**
+
+- `1` if `set` contains all elements of `subset`, otherwise `0`. An empty `subset` returns `1`.
+
+**Example**
+
+```sql Users active on both email and sms
+SELECT distinct_id
+FROM users
+WHERE hasAll(active_channels, ['email', 'sms'])
+```
+
+## hasAny
+
+Tests whether two arrays share at least one common element.
+
+**Syntax**
+
+```sql
+hasAny(arr1, arr2)
+```
+
+**Arguments**
+
+- `arr1` — the first array.
+- `arr2` — the second array.
+
+**Returned value**
+
+- `1` if the arrays have any element in common, otherwise `0`.
+
+**Example**
+
+```sql Users active on whatsapp or sms
+SELECT distinct_id
+FROM users
+WHERE hasAny(active_channels, ['whatsapp', 'sms'])
+```
+
+## arrayExists
+
+Returns whether at least one element satisfies a lambda condition.
+
+**Syntax**
+
+```sql
+arrayExists(x -> condition, arr)
+```
+
+**Arguments**
+
+- `x -> condition` — a lambda returning a boolean for each element `x`.
+- `arr` — the array to test.
+
+**Returned value**
+
+- `1` if the condition holds for any element, otherwise `0`.
+
+**Example**
+
+```sql Users with an Acme work email
+SELECT distinct_id
+FROM users
+WHERE arrayExists(x -> x LIKE '%@acme.co', active_emails)
+```
+
+## arrayFilter
+
+Returns the elements of an array for which a lambda condition is true.
+
+**Syntax**
+
+```sql
+arrayFilter(x -> condition, arr)
+```
+
+**Arguments**
+
+- `x -> condition` — a lambda returning a boolean for each element `x`.
+- `arr` — the array to filter.
+
+**Returned value**
+
+- An array of the elements that satisfy the condition. Array.
+
+**Example**
+
+```sql Keep only Acme email addresses
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayFilter(x -> x LIKE '%@acme.co', active_emails), 1) > 0
+```
+
+## arrayMap
+
+Applies a lambda to each element and returns the resulting array.
+
+**Syntax**
+
+```sql
+arrayMap(x -> expression, arr)
+```
+
+**Arguments**
+
+- `x -> expression` — a lambda producing a new value for each element `x`.
+- `arr` — the input array.
+
+**Returned value**
+
+- An array of the transformed elements, same length as the input. Array.
+
+**Example**
+
+```sql Uppercase each active channel
+SELECT distinct_id
+FROM users
+WHERE 'EMAIL' = ANY(arrayMap(x -> upper(x), active_channels))
+```
+
+## array_position
+
+Returns the 1-based index of the first element equal to the given value.
+
+**Syntax**
+
+```sql
+array_position(arr, value)
+```
+
+**Arguments**
+
+- `arr` — the array to search.
+- `value` — the element to locate.
+
+**Returned value**
+
+- The 1-based position of the first match, or `NULL` if the value is not present. Integer.
+
+**Example**
+
+```sql Position of email in each channel list
+SELECT distinct_id
+FROM users
+WHERE array_position(active_channels, 'email') > 0
+```
+
+## arrayUniq
+
+Returns the number of distinct elements in an array.
+
+**Syntax**
+
+```sql
+arrayUniq(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- The count of distinct elements. Integer.
+
+**Example**
+
+```sql Count of distinct active channels
+SELECT distinct_id
+FROM users
+WHERE arrayUniq(active_channels) >= 2
+```
+
+## arraySort
+
+Returns the array sorted in ascending order.
+
+**Syntax**
+
+```sql
+arraySort(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- The array sorted ascending. Array.
+
+**Example**
+
+```sql Channels sorted alphabetically
+SELECT distinct_id
+FROM users
+WHERE arraySort(active_channels)[1] = 'email'
+```
+
+## arrayConcat
+
+Combines several arrays into one, preserving order and duplicates.
+
+**Syntax**
+
+```sql
+arrayConcat(arr1, arr2 [, ...])
+```
+
+**Arguments**
+
+- `arr1, arr2, ...` — two or more arrays of a compatible element type.
+
+**Returned value**
+
+- A single array with the elements of all inputs, in argument order. Array.
+
+**Example**
+
+```sql All contact strings on the profile
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayConcat(active_emails, active_phone_numbers), 1) > 0
+```
+
+## arrayDistinct
+
+Returns the distinct elements of an array, dropping duplicates.
+
+**Syntax**
+
+```sql
+arrayDistinct(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- An array containing each distinct element once. Array.
+
+**Example**
+
+```sql Distinct active channels per user
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayDistinct(active_channels), 1) >= 2
+```
+
+## array_append
+
+Appends a value to the end of an array.
+
+**Syntax**
+
+```sql
+array_append(arr, value)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `value` — the element to append; must match the array's element type.
+
+**Returned value**
+
+- A new array with `value` added as the last element. Array.
+
+**Example**
+
+```sql Add in_app to the active channel list
+SELECT distinct_id
+FROM users
+WHERE array_length(array_append(active_channels, 'in_app'), 1) > 1
+```
+
+## arrayIntersect
+
+Returns the distinct elements present in every one of the given arrays.
+
+**Syntax**
+
+```sql
+arrayIntersect(arr1, arr2 [, ...])
+```
+
+**Arguments**
+
+- `arr1, arr2, ...` — two or more arrays.
+
+**Returned value**
+
+- An array of distinct elements common to all inputs. Array.
+
+**Example**
+
+```sql Which of email/sms a user has active
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayIntersect(active_channels, ['email', 'sms']), 1) > 0
+```
+
+## arraySlice
+
+Returns a contiguous slice of an array.
+
+**Syntax**
+
+```sql
+arraySlice(arr, offset [, length])
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `offset` — 1-based start index; a negative offset counts from the end.
+- `length` — optional number of elements to return; omitted means to the end of the array.
+
+**Returned value**
+
+- The selected sub-array. Array.
+
+**Example**
+
+```sql First two active emails
+SELECT distinct_id
+FROM users
+WHERE array_length(arraySlice(active_emails, 1, 2), 1) = 2
+```
+
+## arrayReverse
+
+Returns the array with its elements in reverse order.
+
+**Syntax**
+
+```sql
+arrayReverse(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- An array of the same length with the element order reversed. Array.
+
+**Example**
+
+```sql Channels in reverse order
+SELECT distinct_id
+FROM users
+WHERE arrayReverse(active_channels)[1] = 'sms'
+```
+
+## arrayPushBack
+
+Appends a value to the end of an array.
+
+**Syntax**
+
+```sql
+arrayPushBack(arr, value)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `value` — the element to append; must match the array's element type.
+
+**Returned value**
+
+- A new array with `value` as the last element. Array.
+
+**Example**
+
+```sql Append in_app to the channel list
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayPushBack(active_channels, 'in_app'), 1) > 1
+```
+
+## arrayPushFront
+
+Prepends a value to the start of an array.
+
+**Syntax**
+
+```sql
+arrayPushFront(arr, value)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `value` — the element to prepend; must match the array's element type.
+
+**Returned value**
+
+- A new array with `value` as the first element. Array.
+
+**Example**
+
+```sql Prepend the primary channel
+SELECT distinct_id
+FROM users
+WHERE arrayPushFront(active_channels, 'in_app')[1] = 'in_app'
+```
+
+## arrayPopBack
+
+Removes the last element of an array.
+
+**Syntax**
+
+```sql
+arrayPopBack(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- A copy of the array without its last element. Array.
+
+**Example**
+
+```sql All but the most recently added email
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayPopBack(active_emails), 1) > 0
+```
+
+## arrayPopFront
+
+Removes the first element of an array.
+
+**Syntax**
+
+```sql
+arrayPopFront(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- A copy of the array without its first element. Array.
+
+**Example**
+
+```sql All but the first email
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayPopFront(active_emails), 1) > 0
+```
+
+## arrayAvg
+
+Returns the arithmetic mean of a numeric array, optionally over a lambda applied to each element.
+
+**Syntax**
+
+```sql
+arrayAvg(arr)
+arrayAvg(x -> expression, arr)
+```
+
+**Arguments**
+
+- `x -> expression` — optional lambda evaluated per element to produce the numbers to average.
+- `arr` — the input array.
+
+**Returned value**
+
+- The average of the (mapped) elements. Float.
+
+**Example**
+
+```sql Average email length per user
+SELECT distinct_id
+FROM users
+WHERE arrayAvg(x -> length(x), active_emails) > 20
+```
+
+## arraySum
+
+Returns the sum of a numeric array, optionally over a lambda applied to each element.
+
+**Syntax**
+
+```sql
+arraySum(arr)
+arraySum(x -> expression, arr)
+```
+
+**Arguments**
+
+- `x -> expression` — optional lambda evaluated per element to produce the numbers to sum.
+- `arr` — the input array.
+
+**Returned value**
+
+- The sum of the (mapped) elements. Numeric.
+
+**Example**
+
+```sql Total characters across all emails
+SELECT distinct_id
+FROM users
+WHERE arraySum(x -> length(x), active_emails) > 100
+```
+
+## arrayMin
+
+Returns the smallest element of an array, optionally over a lambda applied to each element.
+
+**Syntax**
+
+```sql
+arrayMin(arr)
+arrayMin(x -> expression, arr)
+```
+
+**Arguments**
+
+- `x -> expression` — optional lambda evaluated per element.
+- `arr` — the input array.
+
+**Returned value**
+
+- The minimum of the (mapped) elements. Same type as the elements.
+
+**Example**
+
+```sql Shortest phone number length per user
+SELECT distinct_id
+FROM users
+WHERE arrayMin(x -> length(x), active_phone_numbers) >= 10
+```
+
+## arrayMax
+
+Returns the largest element of an array, optionally over a lambda applied to each element.
+
+**Syntax**
+
+```sql
+arrayMax(arr)
+arrayMax(x -> expression, arr)
+```
+
+**Arguments**
+
+- `x -> expression` — optional lambda evaluated per element.
+- `arr` — the input array.
+
+**Returned value**
+
+- The maximum of the (mapped) elements. Same type as the elements.
+
+**Example**
+
+```sql Longest email length per user
+SELECT distinct_id
+FROM users
+WHERE arrayMax(x -> length(x), active_emails) > 30
+```
+
+## countEqual
+
+Returns how many elements of an array equal a given value.
+
+**Syntax**
+
+```sql
+countEqual(arr, value)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `value` — the value to count occurrences of.
+
+**Returned value**
+
+- The number of elements equal to `value`. Integer.
+
+**Example**
+
+```sql How many times email appears in the channel list
+SELECT distinct_id
+FROM users
+WHERE countEqual(active_channels, 'email') > 0
+```
+
+## arrayWithConstant
+
+Builds an array of a given length where every element is the same value.
+
+**Syntax**
+
+```sql
+arrayWithConstant(length, value)
+```
+
+**Arguments**
+
+- `length` — the number of elements to produce.
+- `value` — the fill value; the result preserves this value's type.
+
+**Returned value**
+
+- An array of `length` copies of `value`. Array.
+
+**Example**
+
+```sql A placeholder array of two sms entries
+SELECT distinct_id
+FROM users
+WHERE active_channels = arrayWithConstant(2, 'sms')
+```
+
+## array_to_string
+
+Joins array elements into a single string using a separator.
+
+**Syntax**
+
+```sql
+array_to_string(arr, separator)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `separator` — the string placed between elements.
+
+**Returned value**
+
+- The concatenated string. String.
+
+**Example**
+
+```sql Channels as a comma-separated string
+SELECT distinct_id
+FROM users
+WHERE array_to_string(active_channels, ', ') LIKE '%email%'
+```
+
+## unnest
+
+Expands an array into a set of rows, one row per element.
+
+**Syntax**
+
+```sql
+unnest(arr)
+```
+
+**Arguments**
+
+- `arr` — the array to expand.
+
+**Returned value**
+
+- A set of rows, each carrying one element of the array. Set of values.
+
+**Example**
+
+```sql One row per active channel per user
+SELECT distinct_id
+FROM users
+WHERE 'email' IN (SELECT unnest(active_channels))
+```
+
+## range
+
+Produces an array of consecutive integers over a half-open interval (ClickHouse only).
+
+**Syntax**
+
+```sql
+range([start, ] end [, step])
+```
+
+**Arguments**
+
+- `start` — optional first integer; defaults to `0`.
+- `end` — the exclusive upper bound.
+- `step` — optional increment; defaults to `1`.
+
+**Returned value**
+
+- An array of integers over `[start, end)`. Array.
+
+**Example**
+
+```sql Integers 0 through 4
+SELECT distinct_id
+FROM users
+WHERE cardinality(active_channels) = ANY(range(0, 5))
+```
+
+## generate_series
+
+Produces an inclusive array of consecutive integers between two bounds (ClickHouse only).
+
+**Syntax**
+
+```sql
+generate_series(start, stop)
+```
+
+**Arguments**
+
+- `start` — the first integer in the series.
+- `stop` — the last integer in the series (inclusive).
+
+**Returned value**
+
+- An array of integers from `start` to `stop` inclusive. Array.
+
+**Example**
+
+```sql Integers 1 through 5
+SELECT distinct_id
+FROM users
+WHERE cardinality(active_channels) = ANY(generate_series(1, 5))
+```
+
+## array_compact
+
+Removes consecutive duplicate elements from an array. Non-adjacent duplicates are kept (ClickHouse only).
+
+**Syntax**
+
+```sql
+arrayCompact(arr)
+```
+
+**Arguments**
+
+- `arr` — the input array.
+
+**Returned value**
+
+- An array with runs of consecutive equal elements collapsed to a single element. Array.
+
+**Example**
+
+```sql Collapse repeated adjacent channels
+SELECT distinct_id
+FROM users
+WHERE array_length(arrayCompact(active_channels), 1) < array_length(active_channels, 1)
+```
+
+## array_resize
+
+Changes the length of an array, truncating from the end or padding with a fill value (ClickHouse only).
+
+**Syntax**
+
+```sql
+arrayResize(arr, size [, extender])
+```
+
+**Arguments**
+
+- `arr` — the input array.
+- `size` — the target length.
+- `extender` — optional value used to pad when growing; defaults to the element type's zero value.
+
+**Returned value**
+
+- An array of exactly `size` elements. Array.
+
+**Example**
+
+```sql Normalize email lists to length 3
+SELECT distinct_id
+FROM users
+WHERE arrayResize(active_emails, 3, '')[3] <> ''
+```

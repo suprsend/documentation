@@ -1,0 +1,325 @@
+---
+title: "Conditional and null-handling functions"
+description: "Conditional and null-handling functions in SuprSend Segment List SQL — CASE, if, multiIf, coalesce, nullif, and casts."
+---
+
+
+Branch on conditions, substitute defaults for missing values, and convert between types when building segment definitions. Unless noted otherwise, each function works on both the PostgreSQL and ClickHouse backends.
+
+## CASE WHEN
+
+Evaluates conditions in order and returns the value for the first one that is true, with an optional ELSE fallback.
+
+**Syntax**
+
+```sql
+CASE
+  WHEN condition THEN result
+  [WHEN ...]
+  [ELSE default]
+END
+```
+
+**Arguments**
+
+- `condition` — a boolean expression tested in order.
+- `result` — value returned when its WHEN condition is the first true one.
+- `default` — value returned when no condition matches; NULL if the ELSE branch is omitted.
+
+**Returned value**
+
+- The result of the first matching branch, otherwise the ELSE value (or NULL).
+
+**Example**
+
+```sql Bucket users by lifetime value
+SELECT distinct_id
+FROM users
+WHERE CASE
+    WHEN CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 1000 THEN 'high'
+    WHEN CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 100 THEN 'medium'
+    ELSE 'low'
+  END = 'high';
+```
+
+## coalesce
+
+Returns the first non-NULL argument, evaluating them left to right.
+
+**Syntax**
+
+```sql
+coalesce(expr1, expr2, ...)
+```
+
+**Arguments**
+
+- `expr1, expr2, ...` — one or more expressions of compatible types.
+
+**Returned value**
+
+- The first non-NULL argument, or NULL if every argument is NULL.
+
+**Example**
+
+```sql Fall back to a default plan
+SELECT distinct_id
+FROM users
+WHERE coalesce(user_properties ->> 'plan', 'free') = 'free';
+```
+
+## if
+
+Returns one of two values depending on a boolean condition.
+
+**Syntax**
+
+```sql
+if(condition, then, else)
+```
+
+**Arguments**
+
+- `condition` — a boolean expression.
+- `then` — value returned when `condition` is true.
+- `else` — value returned when `condition` is false.
+
+**Returned value**
+
+- `then` when `condition` is true, otherwise `else`.
+
+**Example**
+
+```sql Flag high-value users
+SELECT distinct_id
+FROM users
+WHERE if(CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 1000, 'vip', 'standard') = 'vip';
+```
+
+## multiIf
+
+Evaluates condition/value pairs in order and returns the value for the first true condition, with a final default. A compact alternative to CASE WHEN.
+
+**Syntax**
+
+```sql
+multiIf(condition1, value1, condition2, value2, ..., default)
+```
+
+**Arguments**
+
+- `condition1, condition2, ...` — boolean expressions tested in order.
+- `value1, value2, ...` — value returned for the corresponding condition.
+- `default` — value returned when no condition is true.
+
+**Returned value**
+
+- The value of the first true condition, otherwise `default`.
+
+**Example**
+
+```sql Bucket users by lifetime value
+SELECT distinct_id
+FROM users
+WHERE multiIf(
+    CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 1000, 'high',
+    CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) >= 100, 'medium',
+    'low'
+  ) = 'high';
+```
+
+## transform
+
+Maps a value against parallel "from" and "to" arrays — an inline lookup table. If the value isn't found, it returns the default (4-argument form) or the value unchanged (3-argument form).
+
+**Syntax**
+
+```sql
+transform(expr, from_array, to_array, default)
+transform(expr, from_array, to_array)
+```
+
+**Arguments**
+
+- `expr` — the value to map.
+- `from_array` — array of source values to match `expr` against.
+- `to_array` — array of replacement values, matched by position to `from_array`.
+- `default` — value returned when `expr` matches nothing. Omit it (3-argument form) to return `expr` unchanged on no match.
+
+**Returned value**
+
+- The mapped value, or the default / original value when there's no match.
+
+**Example**
+
+```sql Users whose plan maps to a paid tier
+SELECT distinct_id
+FROM users
+WHERE transform(user_properties ->> 'plan', ['growth', 'enterprise'], ['paid', 'paid'], 'free') = 'paid';
+```
+
+## nullif
+
+Returns NULL when the two arguments are equal, otherwise returns the first argument. Handy for guarding against division by zero or blanking sentinel values.
+
+**Syntax**
+
+```sql
+nullif(expr1, expr2)
+```
+
+**Arguments**
+
+- `expr1` — the value returned when the two differ.
+- `expr2` — the value compared against `expr1`.
+
+**Returned value**
+
+- NULL when `expr1 = expr2`, otherwise `expr1`.
+
+**Example**
+
+```sql Blank out empty plan strings
+SELECT distinct_id
+FROM users
+WHERE nullif(user_properties ->> 'plan', '') IS NOT NULL;
+```
+
+## :: (cast)
+
+Converts a value from one data type to another. `::` is the PostgreSQL-style cast operator; `CAST(expr AS type)` is the equivalent standard SQL form.
+
+**Syntax**
+
+```sql
+expr::type
+CAST(expr AS type)
+```
+
+**Arguments**
+
+- `expr` — the value or expression to convert.
+- `type` — the target data type, for example `DOUBLE PRECISION`, `INTEGER`, or `TEXT`.
+
+**Returned value**
+
+- `expr` converted to `type`. Returns NULL when `expr` is NULL.
+
+**Example**
+
+```sql Cast JSON properties with both forms
+SELECT distinct_id
+FROM users
+WHERE (user_properties ->> 'age')::INTEGER >= 18
+  AND CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) > 0;
+```
+
+## ifnull
+
+Returns the first argument if it is not NULL, otherwise the second. Equivalent to a two-argument `coalesce`.
+
+**Syntax**
+
+```sql
+ifnull(expr, alt)
+```
+
+**Arguments**
+
+- `expr` — the expression to test.
+- `alt` — value returned when `expr` is NULL.
+
+**Returned value**
+
+- `expr` when it is non-NULL, otherwise `alt`.
+
+**Example**
+
+```sql Default a missing plan to free
+SELECT distinct_id
+FROM users
+WHERE ifnull(user_properties ->> 'plan', 'free') = 'free';
+```
+
+## assumeNotNull
+
+Tells the query engine that an expression is never NULL, turning a nullable type into a non-nullable one. Use it only when you are certain no NULLs are present.
+
+**Syntax**
+
+```sql
+assumeNotNull(expr)
+```
+
+**Arguments**
+
+- `expr` — a possibly-nullable expression.
+
+**Returned value**
+
+- The same value with a non-nullable type. Behavior is undefined if `expr` is actually NULL.
+
+**Example**
+
+```sql Treat a filtered column as non-null
+SELECT distinct_id
+FROM users
+WHERE user_properties ->> 'plan' IS NOT NULL
+  AND assumeNotNull(user_properties ->> 'plan') = 'pro';
+```
+
+## toNullable
+
+Converts an expression to a nullable type without changing its value. The inverse of `assumeNotNull`.
+
+**Syntax**
+
+```sql
+toNullable(expr)
+```
+
+**Arguments**
+
+- `expr` — any expression.
+
+**Returned value**
+
+- The same value carried in a nullable type.
+
+**Example**
+
+```sql Make a column nullable
+SELECT distinct_id
+FROM users
+WHERE toNullable(user_properties ->> 'plan') = 'pro';
+```
+
+## xor
+
+Logical exclusive OR. Returns true when exactly one of the two boolean arguments is true.
+
+**Syntax**
+
+```sql
+xor(a, b)
+```
+
+**Arguments**
+
+- `a` — a boolean expression.
+- `b` — a boolean expression.
+
+**Returned value**
+
+- Boolean true when exactly one of `a` and `b` is true, otherwise false.
+
+**Example**
+
+```sql Users on trial or with spend, but not both
+SELECT distinct_id
+FROM users
+WHERE xor(
+  user_properties ->> 'plan' = 'trial',
+  CAST(user_properties ->> 'lifetime_value' AS DOUBLE PRECISION) > 0
+);
+```

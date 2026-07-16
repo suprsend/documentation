@@ -1,0 +1,220 @@
+---
+title: "URL functions"
+description: "URL functions in SuprSend Segment List SQL — extract domain, path, query string, and other URL components."
+---
+
+
+Parse URLs stored in your JSON properties into their component parts (host, path, port, query string, and more) so you can segment users by where they came from or where they went.
+
+## domain
+
+Extracts the hostname from a URL.
+
+**Syntax**
+
+```sql
+domain(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The hostname as a string, or an empty string if the URL cannot be parsed.
+
+<Note>Edge divergence: on ClickHouse `domain()` returns an empty string for URLs that contain userinfo (`user:pass@host`), whereas the PostgreSQL idiom extracts the host. Use URLs without userinfo for cross-backend parity.</Note>
+
+**Example**
+
+```sql Group users by the host of their website
+SELECT distinct_id
+FROM users
+WHERE domain(user_properties ->> 'website') = 'acme.com';
+```
+
+## domainWithoutWWW
+
+Returns the hostname of a URL with any leading `www.` removed.
+
+**Syntax**
+
+```sql
+domainWithoutWWW(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The hostname without a leading `www.` as a string, or an empty string if the URL cannot be parsed.
+
+**Example**
+
+```sql Normalize the referrer host across www and non-www
+SELECT distinct_id
+FROM users
+WHERE domainWithoutWWW(user_properties ->> 'referrer') = 'acme.com';
+```
+
+## path
+
+Returns the path of a URL, without the query string.
+
+**Syntax**
+
+```sql
+path(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The path as a string (for example `/docs/lists`). Empty if the URL has no path.
+
+**Example**
+
+```sql Count events by the page path that was visited
+SELECT distinct_id
+FROM users
+WHERE path(user_properties ->> 'website') = '/pricing';
+```
+
+## queryString
+
+Returns the query string of a URL, without the leading `?` and without any `#` fragment.
+
+**Syntax**
+
+```sql
+queryString(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The query string as a string (for example `utm_source=newsletter&plan=pro`), without the leading `?`. Empty if the URL has no query string.
+
+**Example**
+
+```sql Inspect the tracking parameters on referrer URLs
+SELECT distinct_id
+FROM users
+WHERE queryString(user_properties ->> 'referrer') <> '';
+```
+
+## protocol
+
+Extracts the protocol (scheme) from a URL.
+
+**Syntax**
+
+```sql
+protocol(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The protocol as a string (for example `https`, `http`, `ftp`, `mailto`). Empty if it cannot be determined.
+
+**Example**
+
+```sql Segment users whose website is served over HTTPS
+SELECT distinct_id
+FROM users
+WHERE protocol(user_properties ->> 'website') = 'https';
+```
+
+## port
+
+Returns the port of a URL.
+
+**Syntax**
+
+```sql
+port(url [, default_port])
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+- `default_port` — optional value returned when the URL has no port; defaults to `0`.
+
+**Returned value**
+
+- The port number as an integer, or `default_port` (or `0`) when the URL contains no port or cannot be parsed.
+
+<Note>Edge divergence: on ClickHouse `port()` returns `0` for URLs that contain userinfo (`user:pass@host:port`), whereas the PostgreSQL idiom extracts the port correctly. Use URLs without userinfo for cross-backend parity.</Note>
+
+**Example**
+
+```sql Find users whose website URL specifies a non-standard port
+SELECT distinct_id
+FROM users
+WHERE port(user_properties ->> 'website') <> 0;
+```
+
+## topLevelDomain
+
+Extracts the top-level domain (TLD) from a URL.
+
+**Syntax**
+
+```sql
+topLevelDomain(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The top-level domain as a string (for example `com`, `io`), or an empty string if the URL cannot be parsed.
+
+**Example**
+
+```sql Group users by the top-level domain of their website
+SELECT distinct_id
+FROM users
+WHERE topLevelDomain(user_properties ->> 'website') = 'com';
+```
+
+## fragment
+
+Returns the fragment identifier of a URL (the part after `#`), without the leading hash.
+
+**Syntax**
+
+```sql
+fragment(url)
+```
+
+**Arguments**
+
+- `url` — the URL to parse, as a string.
+
+**Returned value**
+
+- The fragment as a string, without the leading `#`. Empty if the URL has no fragment.
+
+**Example**
+
+```sql Find users whose landing URL points at a specific section
+SELECT distinct_id
+FROM users
+WHERE fragment(user_properties ->> 'website') = 'pricing';
+```
