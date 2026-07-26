@@ -17,8 +17,8 @@ Each tenant can have its own properties, preferences, vendors, and custom templa
 - **[Route via tenant vendors](/docs/tenant-vendor)** - Send notifications through your customers' own email domain, SMS sender ID, or WhatsApp provider instead of yours. If no tenant vendor is set, the default vendor is used.
 - **[Scope in-app feeds](/docs/react-customising-feed)** - Show a separate notification inbox per tenant so users only see what's relevant to their current context. Messages are tagged with `tenant_id`; badge counts are scoped automatically.
 - **[Block preference categories](/docs/tenant-preference#platform-admin-controlling-tenant-access)** - Block certain paid features / modules or channels for a tenant as they have not subscribed to them.
-- **Custom template content** - Tenants can modify template content or have the option to add new notifications for their end users. (coming soon)
-- **Per-tenant user properties or channel identities** - Users can have different roles per project or have different push tokens for different applications of your product. (coming soon)
+- **[Custom template content per tenant](/docs/template-variants)** - Go beyond variable substitution and give a tenant its own template content, layout, or channels. Create a [template variant](/docs/template-variants) with a `tenant_id` condition — SuprSend picks the matching variant at send time and falls back to the default template for tenants without one.
+- **[Per-tenant user properties or channel identities](/docs/user-tenant-mapping)** - Users can have different roles per project or different push tokens, Slack tokens, or emails per app. Set per-tenant overrides on top of the user's global profile; SuprSend merges them at send time.
 
 A single user can belong to multiple tenants and have different notification preferences for each.
 
@@ -30,13 +30,38 @@ Every workspace includes a `default` tenant that represents your own organizatio
 
 By default, tenancy is a trigger-time concept. You pass `tenant_id` at trigger time and SuprSend applies that tenant's configuration at runtime to your notifications.
 
-When a workflow is triggered with a `tenant_id`, SuprSend will:
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','fontFamily':'ui-sans-serif, system-ui, sans-serif','lineColor':'#9a9a9a'},'flowchart':{'padding':14,'nodeSpacing':40,'rankSpacing':40}}}%%
+flowchart LR
+    T["Workflow trigger<br/>tenant_id: acme-corp"] --> R["Resolve tenant<br/>configuration"]
+    R --> TV["Template variant<br/>matching tenant_id"]
+    R --> B["Branding<br/>$brand.* / $tenant.*"]
+    R --> P["Preferences<br/>admin defaults +<br/>per-user overrides"]
+    R --> U["User profile<br/>per-tenant channels<br/>& properties"]
+    R --> V["Vendors<br/>tenant's email, SMS,<br/>Slack, etc."]
+    TV --> D["Notification delivered<br/>tagged with tenant_id"]
+    B --> D
+    P --> D
+    U --> D
+    V --> D
 
-1. Resolve the tenant's branding properties and replace `$tenant.*` variable in workflows or `$brand.*` variable in your templates with tenant properties.
-2. Evaluate tenant-level admin preferences and default preference settings.
-3. Apply per-user, per-tenant preferences if the user has them set for that tenant.
-4. Route the notification through the tenant's configured vendor, falling back to the default vendor if none is set. If no tenant vendor is set, the default vendor is used.
-5. Tag the message with the `tenant_id` so in-app inbox feeds can be scoped per tenant.
+    classDef s1 fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
+    classDef s2 fill:transparent,stroke:#b0b0b0,stroke-width:1.4px;
+    classDef s3 fill:transparent,stroke:#8a8a8a,stroke-width:1.4px;
+    class T s1;
+    class R,TV,B,P,U,V s2;
+    class D s3;
+```
+
+When a workflow is triggered with a `tenant_id`, SuprSend layers the tenant's configuration onto the send:
+
+1. Select the [template variant](/docs/template-variants) whose condition matches the `tenant_id`, falling back to the default template if no variant matches — this is how a tenant gets its own content, layout, or channels rather than only variable substitution.
+2. Resolve the tenant's branding properties and replace `$tenant.*` variables in workflows or `$brand.*` variables in your templates with tenant properties.
+3. Evaluate tenant-level admin preferences and default preference settings.
+4. Apply per-user, per-tenant preferences if the user has them set for that tenant.
+5. Shallow-merge the recipient's **[per-tenant user profile](/docs/user-tenant-mapping)** on top of their global profile — per-tenant channel identities (push tokens, Slack tokens, email) and properties (`role`, `plan`) win for this send.
+6. Route the notification through the tenant's configured vendor, falling back to the default vendor if none is set. If no tenant vendor is set, the default vendor is used.
+7. Tag the message with the `tenant_id` so in-app inbox feeds can be scoped per tenant.
 
 ## Real-world examples
 <CardGroup cols="1">
@@ -58,7 +83,7 @@ When a workflow is triggered with a `tenant_id`, SuprSend will:
   <Card title="Multiple apps with per-app user identities" icon="mobile-screen" iconType="solid">
   Your company has multiple product lines and the same user has different push tokens, Slack tokens, or email addresses across each app. Notifications need to route to the right identity for the right app.
   
-  **In SuprSend:** Each app or product line is a tenant. Store tenant-specific channel identities (push tokens, Slack tokens, email) per user so notifications always deliver to the correct app. _This feature is coming soon._
+  **In SuprSend:** Each app or product line is a tenant. Use [user-tenant mapping](/docs/user-tenant-mapping) to store tenant-specific channel identities (push tokens, Slack tokens, email) and properties per user, so notifications always deliver to the correct app.
 </Card>
 </CardGroup>
 
@@ -70,7 +95,7 @@ When a workflow is triggered with a `tenant_id`, SuprSend will:
   </Accordion>
 
   <Accordion title="Can a user belong to multiple tenants?">
-    Right now, there is no explicit relation between a user and a tenant. Tenant is a trigger-time concept, which applies per-tenant user preferences, tenant specific branding or vendor routing at the time of sending. We're working on a feature to allow users to be associated with multiple tenants. Here, user's channel identities or properties can be different for each tenant.
+    Yes. With [user-tenant mapping](/docs/user-tenant-mapping), you can associate a single `distinct_id` with any number of tenants and store a different set of properties and channel identities per tenant. At send time, SuprSend shallow-merges the user's global profile with the per-tenant override for the triggering `tenant_id`. Workspaces can also be set to `exclusive` mode to restrict a user to at most one tenant.
   </Accordion>
 
   <Accordion title="What happens if I don't pass a tenant_id?">
@@ -95,6 +120,22 @@ When a workflow is triggered with a `tenant_id`, SuprSend will:
 
 <Accordion title="Can I update a tenant's branding and use custom properties in templates?">
   Yes. You can update tenant properties (logo, colors, social links, and any custom properties) at any time via the dashboard, SDKs, or API. Use `$brand.<property>` variables in your templates to render them dynamically. See [Tenant Templates](/docs/tenant-templates) for details.
+</Accordion>
+
+<Accordion title="Can I create completely different template content per tenant?">
+  Yes. Use [template variants](/docs/template-variants) with a `tenant_id` condition to give a tenant its own subject line, body, layout, or even a different set of channels enabled — anything variable substitution alone can't cover. At send time, SuprSend picks the variant whose condition matches the trigger's `tenant_id`; tenants without a matching variant fall through to the default template.
+</Accordion>
+
+<Accordion title="When should I use `$brand.*` variables versus a template variant?">
+  Reach for `$brand.*` variables when the *content is the same* and only tenant-specific values change (logo, primary color, product name, support email) — one shared template stays maintainable and every new tenant just needs its properties populated. Reach for a [template variant](/docs/template-variants) when the *content itself differs* — a different CTA, an extra section, a tenant-specific layout, or a legal footer only one tenant needs. Most workspaces use variables broadly and reserve variants for the handful of tenants that need genuinely different content.
+</Accordion>
+
+<Accordion title="What happens if a tenant doesn't have a matching template variant?">
+  SuprSend evaluates variants top-to-bottom and picks the first one whose condition matches. If no variant matches, the default template is used — so you can add a variant for one specific tenant without affecting anyone else.
+</Accordion>
+
+<Accordion title="Can template variants combine tenant conditions with other conditions like language or plan?">
+  Yes. A variant's condition can reference `tenant_id`, the user's `$preferred_language`, trigger data properties, or any combination. Common pattern: one variant per tenant for content differences, plus multi-lingual [translations](/docs/multi-lingual-template) inside each variant for language differences.
 </Accordion>
 
 <Accordion title="Is multi-tenancy available on all plans?">
@@ -123,5 +164,8 @@ When a workflow is triggered with a `tenant_id`, SuprSend will:
   </Card>
   <Card title="Tenant Vendors" icon="envelope" iconType="solid" href="/docs/tenant-vendor">
     Route notifications through each tenant's own email/SMS providers.
+  </Card>
+  <Card title="User-Tenant Mapping" icon="users" iconType="solid" href="/docs/user-tenant-mapping">
+    Give a user different properties and channel identities per tenant.
   </Card>
 </CardGroup>

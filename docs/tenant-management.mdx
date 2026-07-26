@@ -3,6 +3,10 @@ title: "Managing Tenants"
 description: "Create, update, view, and delete tenants in SuprSend using the dashboard, MCP server, or backend SDK code, with examples and tenant property reference."
 ---
 
+<Note>
+  Every workspace ships with a **`default`** tenant representing your own organization. Triggers that don't pass a `tenant_id` resolve against it, so branding, admin preferences, and default vendors on the `default` tenant apply to any un-tenanted send. You can update the default tenant's properties like any other tenant — its ID can't be changed.
+</Note>
+
 ## Creating a Tenant
 
 <Tabs>
@@ -332,9 +336,27 @@ if err != nil {
 ```
 </CodeGroup>
 
+## Associating users with a tenant
+
+Associating a user to a tenant is **optional**. For most setups, you don't need to — passing `tenant_id` at trigger time is enough for SuprSend to apply that tenant's branding, admin preferences, vendors, and inbox scoping. Every user's single global profile is used as-is.
+
+Explicitly associate a user to a tenant when you need one of:
+
+- **Different channel identities per tenant** — the same user needs a different push token per app, a different Slack workspace token per project, or a different email per business line.
+- **Different properties per tenant** — the user's `role` or `plan` differs per customer org, and templates or workflow conditions branch on it.
+- **Isolation between tenants** — in a B2B SaaS, users must never leak across customer orgs. Set `user_tenancy_mode: exclusive` and each user is scoped to one tenant.
+
+The workspace-level `user_tenancy_mode` setting controls the model:
+
+- **`exclusive`** — one user belongs to at most one tenant. The default for new workspaces and the standard B2B multi-tenancy model.
+- **`shared`** — one user can belong to multiple tenants, with per-tenant overrides for channel identities and properties. Per-tenant values shallow-merge on top of the user's global profile at send time. Default for existing workspaces.
+
+See [User-Tenant Mapping](/docs/user-tenant-mapping) for the user tenancy mode, merge semantics, and how to associate users to tenants via API / SDK / dashboard.
+
 ## Next Steps
 
-* **[Tenant Templates](/docs/tenant-templates)** - Use tenant properties in templates
+* **[User-Tenant Mapping](/docs/user-tenant-mapping)** - Give a user different properties and channel identities per tenant
+* **[Tenant Templates](/docs/tenant-templates)** - Use tenant properties in templates, or create tenant-specific content with [template variants](/docs/template-variants)
 * **[Tenant Workflows](/docs/tenant-workflows)** - Trigger notifications with tenant context
 * **[Tenant Vendors](/docs/tenant-vendor)** - Configure tenant-specific vendor routing
 * **[Tenant Preferences](/docs/tenant-preference)** - Set tenant-level notification preferences
