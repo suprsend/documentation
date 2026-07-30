@@ -411,6 +411,14 @@ components:
                   $locale:
                     type: string
                     example: "en_GB"
+                  $context:
+                    type: object
+                    description: "Scoping context for the inline profile fields on this recipient. Use `$context.tenant_id` when you want the properties and channels passed in this recipient object to be written against a specific tenant's per-tenant profile instead of the user's global profile. See [User-Tenant Mapping](/docs/user-tenant-mapping)."
+                    properties:
+                      tenant_id:
+                        type: string
+                        description: "Tenant to scope inline profile updates to. When set, must equal the top-level `tenant_id` on the trigger — mismatched values reject the request and the workflow does not run."
+                        example: "acme-corp"
               - type: object
                 title: "Notify object"
                 required: [id,object_type]
@@ -436,6 +444,14 @@ components:
               type: string
               description: unique identifier of the actor who performed the action
               default: id1
+            $context:
+              type: object
+              description: "Scoping context for the inline profile fields on the actor. Use `$context.tenant_id` to write actor properties and channels against a specific tenant's per-tenant profile. See [User-Tenant Mapping](/docs/user-tenant-mapping)."
+              properties:
+                tenant_id:
+                  type: string
+                  description: "Tenant to scope inline actor updates to. When set, must equal the top-level `tenant_id` on the trigger — mismatched values reject the request and the workflow does not run."
+                  example: "acme-corp"
           additionalProperties:
             type: string
             description: You can pass additional actor properties as `"user_prop1":"value1"` . Extra properties will be update in user profile which can then be used in the template as `$actor.<property>`.
@@ -485,7 +501,7 @@ components:
             type: string
         tenant_id:
           type: string
-          description: string identifier of the tenant/tenant this workflow is associated with. Used to trigger [multi-tenant](https://docs.suprsend.com/docs/tenant-workflows) notifications
+          description: "Tenant context for this trigger. Applies the tenant's branding, admin preferences, and vendor routing, and — for users with a [per-tenant profile](/docs/user-tenant-mapping) — resolves recipients against the merged (global + per-tenant) profile."
         $idempotency_key:
           type: string
           description: Idempotency_key (valid for 24hrs)
@@ -2439,6 +2455,91 @@ components:
           nullable: true
           description: Optional workspace description.
           example: "Testing workspace API"
+
+    WorkspaceConfig:
+      type: object
+      description: Workspace-level configuration flags.
+      properties:
+        user_inbox_preference_enabled:
+          type: boolean
+          description: If you are using the Inbox channel, enable this to show the Inbox channel in the preference centre.
+          example: true
+        sms_vendor_type:
+          type: string
+          enum: [basic, dlt]
+          description: SMS delivery mode for the workspace. Use `dlt` for India DLT-compliant sends; `basic` for standard sends.
+          example: "basic"
+        user_tenancy_mode:
+          type: string
+          enum: [shared, exclusive]
+          description: |
+            Constraint on user-tenant associations for this workspace.
+            - `shared` — a user can belong to any number of tenants.
+            - `exclusive` — a user can belong to at most one tenant. The associate call rejects users that already have a mapping.
+
+            New workspaces default to `exclusive`; workspaces that existed before this setting was introduced default to `shared`.
+          example: "exclusive"
+        user_tenancy_channel_fallback_mode:
+          type: string
+          enum: [all, allowlist]
+          description: |
+            Controls which channels a tenant-scoped profile is allowed to inherit from the user's global profile when the tenant has no override for that channel.
+            - `all` — every channel falls back to global (default; reproduces a straight shallow merge).
+            - `allowlist` — only the channels listed in `user_tenancy_channel_fallback` fall back; every other channel is dropped from the send when the tenant has no override for it. Prevents identities like `$androidpush` or `$slack` from leaking across tenants.
+          example: "all"
+        user_tenancy_channel_fallback:
+          type: array
+          items:
+            type: string
+          description: |
+            Channel keys allowed to fall back from the global profile when `user_tenancy_channel_fallback_mode = allowlist`. Ignored when the mode is `all`.
+
+            Typical setup: `["$email", "$sms", "$whatsapp"]` — safe to fall back — while excluding `$androidpush`, `$iospush`, `$webpush`, `$inbox`, and `$slack`.
+          example: ["$email", "$sms", "$whatsapp"]
+        user_tenancy_channel_fallback_applies_to_default_tenant:
+          type: boolean
+          default: false
+          description: |
+            Whether the fallback rule above also governs sends that carry no `tenant_id` (the default-tenant path).
+            - `false` (default) — the default-tenant path always falls back for every channel, regardless of the allowlist.
+            - `true` — the default-tenant path follows the same `user_tenancy_channel_fallback_mode` + `user_tenancy_channel_fallback` rule as other tenants.
+          example: false
+
+    WorkspaceConfigUpdateRequest:
+      type: object
+      description: |
+        Body for `PATCH /v1/{workspace}/config/`. Include only the fields you want to change — omitted fields are left untouched.
+      properties:
+        user_inbox_preference_enabled:
+          type: boolean
+          description: If you are using the Inbox channel, enable this to show the Inbox channel in the preference centre.
+          example: true
+        sms_vendor_type:
+          type: string
+          enum: [basic, dlt]
+          description: Switch the workspace's SMS delivery mode. Confirm with your SMS provider before switching to or from `dlt`.
+          example: "basic"
+        user_tenancy_mode:
+          type: string
+          enum: [shared, exclusive]
+          description: |
+            Change how users are constrained across tenants. See [User-tenant mapping](/docs/user-tenant-mapping) for the effects of switching this value.
+          example: "shared"
+        user_tenancy_channel_fallback_mode:
+          type: string
+          enum: [all, allowlist]
+          description: Switch between `all` (every channel falls back from global) and `allowlist` (only channels in `user_tenancy_channel_fallback` fall back).
+          example: "allowlist"
+        user_tenancy_channel_fallback:
+          type: array
+          items:
+            type: string
+          description: Channel keys allowed to fall back when `user_tenancy_channel_fallback_mode = allowlist`. Ignored otherwise.
+          example: ["$email", "$sms", "$whatsapp"]
+        user_tenancy_channel_fallback_applies_to_default_tenant:
+          type: boolean
+          description: When true, the fallback rule above also governs sends with no `tenant_id`.
+          example: false
 
     ManagementWorkspaceApiKey:
       type: object
@@ -14237,8 +14338,19 @@ paths:
       summary: List Users
       security:
         - BearerAuth: []
-      description: API to list cursor-based paginated list of users in your workspace.
+      description: |
+        API to list cursor-based paginated list of users in your workspace.
+
+        Pass the optional `tenant_id` query parameter to list only users associated with that tenant. When the filter is applied, each user object in the response also carries a `tenant` block containing the tenant-scoped property and channel overrides for that user.
       operationId: list-users
+      parameters:
+        - name: tenant_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter users associated with the given tenant. When set, each result includes the tenant-scoped `properties` and channel overrides applied for this user under that tenant.
+          example: acme-corp
       responses:
         '200':
           description: '200'
@@ -14263,6 +14375,56 @@ paths:
                         },
                         "created_at": "2025-04-04T21:37:36.712496+00:00",
                         "updated_at": "2025-04-04T21:37:36.743167+00:00"
+                      }
+                    ]
+                  }
+                Filtered by tenant:
+                  value: {
+                    "meta": {
+                      "count": 1,
+                      "limit": 10,
+                      "has_prev": false,
+                      "before": null,
+                      "has_next": false,
+                      "after": null
+                    },
+                    "results": [
+                      {
+                        "distinct_id": "user@example.com",
+                        "properties": {
+                          "name": "Marge Simpson",
+                          "role": "admin"
+                        },
+                        "created_at": "2025-04-04T21:37:36.712496+00:00",
+                        "updated_at": "2026-07-21T09:49:36.383794+00:00",
+                        "$email": [
+                          {
+                            "value": "marge@example.com",
+                            "status": "active",
+                            "perma_status": "active"
+                          }
+                        ],
+                        "$androidpush": [
+                          {
+                            "value": "fcm_token_global_abc",
+                            "id_provider": "fcm",
+                            "status": "active",
+                            "perma_status": "active"
+                          }
+                        ],
+                        "tenant": {
+                          "tenant_id": "acme-corp",
+                          "properties": {
+                            "role": "viewer"
+                          },
+                          "$email": [
+                            {
+                              "value": "marge@acme.com",
+                              "status": "active",
+                              "perma_status": "active"
+                            }
+                          ]
+                        }
                       }
                     ]
                   }
@@ -14693,6 +14855,531 @@ paths:
                             type: string
                             description: Error message describing the issue.
                             example: "user [distinct_id: 'user1'] not found"
+      deprecated: false
+  /v1/user/{distinct_id}/tenant/{tenant_id}/:
+    post:
+      summary: Upsert User Tenant Profile
+      security:
+        - BearerAuth: []
+      description: "Adds or updates the per-tenant profile for a user. Fields you set here override the user's global profile when the workflow is triggered with `tenant_id`. Body accepts the same shape as [Create / Update Users](/reference/create-update-users)."
+      operationId: upsert-user-tenant-profile
+      x-codeSamples:
+        - lang: cURL
+          label: Upsert user tenant profile
+          source: |
+            curl -X POST "https://hub.suprsend.com/v1/user/user@example.com/tenant/acme-corp/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "$email": ["user@acme-corp.com"],
+                "$slack": [{ "email": "user@acme-corp.com", "access_token": "xoxb-XXXXXXXX" }],
+                "$timezone": "America/New_York",
+                "$preferred_language": "en",
+                "role": "admin"
+              }'
+      parameters:
+        - name: distinct_id
+          in: path
+          description: Unique identifier of the user in your system. The user's global profile must exist before you upsert a per-tenant profile.
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: path
+          description: Tenant to scope the profile update to. Tenant must exist in the workspace.
+          schema:
+            type: string
+          required: true
+      requestBody:
+        content:
+          application/json:
+            example:
+              $email: ["user@acme-corp.com"]
+              $sms: ["+1234567890"]
+              $whatsapp: ["+1234567890"]
+              $inbox: ["4nlPk4XXLcDxxxHQ70xx2Cx24"]
+              $webpush:
+                - token: "webpush_token_abc123"
+                  endpoint: "https://fcm.googleapis.com/fcm/send/abc123"
+                  keys:
+                    p256dh: "BNJxwH..."
+                    auth: "tBH..."
+              $androidpush: ["android_push_token_xyz987"]
+              $iospush: ["ios_push_token_lmn456"]
+              $slack:
+                - email: "user@acme-corp.com"
+                  access_token: "xoxb-XXXXXXXX"
+              $timezone: "America/New_York"
+              $preferred_language: "en"
+              role: "admin"
+            schema:
+              type: object
+              description: "Per-tenant profile payload. Same channel and property keys as [Create / Update Users](/reference/create-update-users). Any key set here becomes the per-tenant override; keys omitted here fall through to the global profile at send time."
+              properties:
+                $email:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+                  description: List of email addresses to set on the per-tenant profile.
+                $sms:
+                  type: array
+                  items:
+                    type: string
+                  description: List of phone numbers for SMS on the per-tenant profile.
+                $whatsapp:
+                  type: array
+                  items:
+                    type: string
+                  description: List of phone numbers for WhatsApp on the per-tenant profile.
+                $inbox:
+                  type: array
+                  items:
+                    type: string
+                  description: List of inbox identifiers on the per-tenant profile.
+                $androidpush:
+                  type: array
+                  items:
+                    type: string
+                  description: Android push tokens on the per-tenant profile. Use this to isolate device tokens per tenant / app install.
+                $iospush:
+                  type: array
+                  items:
+                    type: string
+                  description: iOS push tokens on the per-tenant profile.
+                $webpush:
+                  type: array
+                  description: Web push subscription objects on the per-tenant profile.
+                  items:
+                    type: object
+                $slack:
+                  type: array
+                  description: Slack channel configuration on the per-tenant profile. Same shape as the global profile — email + access_token, user_id + access_token, channel + access_token, or incoming_webhook.
+                  items:
+                    type: object
+                $ms_teams:
+                  type: array
+                  description: Microsoft Teams channel configuration on the per-tenant profile. Same shape as the global profile.
+                  items:
+                    type: object
+                $timezone:
+                  type: string
+                  description: IANA timezone for the per-tenant profile.
+                  example: "America/New_York"
+                $preferred_language:
+                  type: string
+                  description: Preferred language code for the per-tenant profile.
+                  example: "en"
+                $locale:
+                  type: string
+                  description: Locale for the per-tenant profile.
+                  example: "en_GB"
+              additionalProperties:
+                description: Any custom property to set on the per-tenant profile. Overrides the same key on the global profile at send time.
+      responses:
+        '201':
+          description: "201 - Created. The response is the full user object with the merged (effective) profile at the top level and the per-tenant override under `tenant`."
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "distinct_id": "user@example.com",
+                    "properties": {
+                      "$timezone": "America/New_York",
+                      "$preferred_language": "en",
+                      "role": "admin"
+                    },
+                    "created_at": "2022-02-13T12:47:00.388999+00:00",
+                    "updated_at": "2026-07-21T09:49:36.383794+00:00",
+                    "$email": [
+                      { "value": "user@acme-corp.com", "status": "active", "perma_status": "active" }
+                    ],
+                    "$slack": [
+                      { "value_json": { "email": "user@acme-corp.com", "access_token": "xoxb-XXXXXXXX" }, "status": "active", "perma_status": "active" }
+                    ],
+                    "tenant": {
+                      "tenant_id": "acme-corp",
+                      "properties": {
+                        "$timezone": "America/New_York",
+                        "$preferred_language": "en",
+                        "role": "admin"
+                      },
+                      "$email": [
+                        { "value": "user@acme-corp.com", "status": "active", "perma_status": "active" }
+                      ],
+                      "$slack": [
+                        { "value_json": { "email": "user@acme-corp.com", "access_token": "xoxb-XXXXXXXX" }, "status": "active", "perma_status": "active" }
+                      ]
+                    }
+                  }
+              schema:
+                type: object
+                properties:
+                  distinct_id:
+                    type: string
+                    description: The user identifier the operation applied to.
+                    example: "user@example.com"
+                  properties:
+                    type: object
+                    description: Merged (effective) properties — global properties layered with per-tenant overrides.
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the user was originally created.
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the user was last updated (global or per-tenant).
+                  tenant:
+                    type: object
+                    description: The per-tenant override block for the tenant the request targeted. Contains only the fields explicitly set at the tenant level, not the merged view.
+                    properties:
+                      tenant_id:
+                        type: string
+                        description: Tenant this override belongs to.
+                        example: "acme-corp"
+                      properties:
+                        type: object
+                        description: Properties explicitly set on the per-tenant profile.
+        '400':
+          description: "400 - Bad Request. Returned when `user_tenancy_mode` is `exclusive` and the user is already associated with a different tenant."
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 400,
+                    "message": "user is already associated with a different tenant; workspace is in exclusive mode"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code.
+                    example: 400
+                  message:
+                    type: string
+                    description: Human-readable error description.
+                    example: "user is already associated with a different tenant; workspace is in exclusive mode"
+        '404':
+          description: "404 - Not Found. Returned when the tenant does not exist."
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'acme-corp' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code.
+                    example: 404
+                  message:
+                    type: string
+                    description: Human-readable error description.
+                    example: "tenant 'acme-corp' not found"
+      deprecated: false
+    get:
+      summary: Fetch User Tenant Profile
+      security:
+        - BearerAuth: []
+      description: "Returns the user profile evaluated for a specific tenant. The top-level fields are the **merged** effective profile (global layered with per-tenant overrides). The `tenant` block returns only the fields explicitly set on the per-tenant profile."
+      operationId: fetch-user-tenant-profile
+      parameters:
+        - name: distinct_id
+          in: path
+          description: Unique identifier of the user in your system.
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: path
+          description: Tenant to evaluate the profile against.
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: '200 - OK'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "distinct_id": "user@example.com",
+                    "properties": {
+                      "$timezone": "America/New_York",
+                      "role": "admin",
+                      "plan": "enterprise"
+                    },
+                    "created_at": "2022-02-13T12:47:00.388999+00:00",
+                    "updated_at": "2026-07-21T09:49:36.383794+00:00",
+                    "$email": [
+                      { "value": "user@acme-corp.com", "status": "active", "perma_status": "active" }
+                    ],
+                    "$slack": [
+                      { "value_json": { "email": "user@acme-corp.com", "access_token": "xoxb-XXXXXXXX" }, "status": "active", "perma_status": "active" }
+                    ],
+                    "tenant": {
+                      "tenant_id": "acme-corp",
+                      "properties": {
+                        "role": "admin"
+                      },
+                      "$email": [
+                        { "value": "user@acme-corp.com", "status": "active", "perma_status": "active" }
+                      ]
+                    }
+                  }
+              schema:
+                type: object
+                properties:
+                  distinct_id:
+                    type: string
+                    description: The user identifier.
+                  properties:
+                    type: object
+                    description: Merged (effective) properties — global properties layered with per-tenant overrides.
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the user was originally created.
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the user was last updated.
+                  tenant:
+                    type: object
+                    description: Per-tenant override block. Contains only the fields explicitly set on the per-tenant profile.
+                    properties:
+                      tenant_id:
+                        type: string
+                        description: Tenant the override belongs to.
+                      properties:
+                        type: object
+                        description: Properties explicitly set on the per-tenant profile.
+        '404':
+          description: '404 - Not Found. Returned when the tenant does not exist for the workspace.'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "tenant 'acme-corp' not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code.
+                    example: 404
+                  message:
+                    type: string
+                    description: Human-readable error description.
+                    example: "tenant 'acme-corp' not found"
+      deprecated: false
+    delete:
+      summary: Delete User Tenant Mapping
+      security:
+        - BearerAuth: []
+      description: "Removes the per-tenant profile for a user. The global profile is untouched and the user remains in the workspace."
+      operationId: delete-user-tenant-mapping
+      x-codeSamples:
+        - lang: cURL
+          label: Delete user tenant mapping
+          source: |
+            curl -X DELETE "https://hub.suprsend.com/v1/user/user@example.com/tenant/acme-corp/" \
+              --header 'Authorization: Bearer __YOUR_API_KEY__'
+      parameters:
+        - name: distinct_id
+          in: path
+          description: Unique identifier of the user in your system.
+          schema:
+            type: string
+          required: true
+        - name: tenant_id
+          in: path
+          description: Tenant to disassociate the user from. Only the per-tenant profile is removed.
+          schema:
+            type: string
+          required: true
+      responses:
+        '204':
+          description: '204 - No Content. The per-tenant profile was removed.'
+        '404':
+          description: '404 - Not Found. Returned when the mapping does not exist.'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "no per-tenant profile for user in tenant 'acme-corp'"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code.
+                    example: 404
+                  message:
+                    type: string
+                    description: Human-readable error description.
+                    example: "no per-tenant profile for user in tenant 'acme-corp'"
+      deprecated: false
+  /v1/user/{distinct_id}/tenant/:
+    get:
+      summary: List User Tenant Profiles
+      security:
+        - BearerAuth: []
+      description: "Returns every tenant profile the user has, one entry per mapping. Each entry contains the merged effective profile evaluated for that tenant, with the per-tenant override under the `tenant` key."
+      operationId: list-user-tenant-profiles
+      parameters:
+        - name: distinct_id
+          in: path
+          description: Unique identifier of the user in your system.
+          schema:
+            type: string
+          required: true
+        - name: limit
+          in: query
+          description: Number of results per page (1–100). Defaults to 10.
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 10
+        - name: after
+          in: query
+          description: Pagination cursor returned by a previous call. Pass to fetch the next page.
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: '200 - OK'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "meta": {
+                      "count": 2,
+                      "limit": 10,
+                      "has_prev": false,
+                      "before": null,
+                      "has_next": false,
+                      "after": null
+                    },
+                    "results": [
+                      {
+                        "distinct_id": "user@example.com",
+                        "properties": { "role": "admin" },
+                        "$email": [
+                          { "value": "user@acme-corp.com", "status": "active", "perma_status": "active" }
+                        ],
+                        "tenant": {
+                          "tenant_id": "acme-corp",
+                          "properties": { "role": "admin" },
+                          "$email": [
+                            { "value": "user@acme-corp.com", "status": "active", "perma_status": "active" }
+                          ]
+                        }
+                      },
+                      {
+                        "distinct_id": "user@example.com",
+                        "properties": { "role": "viewer" },
+                        "$email": [
+                          { "value": "user@globex.io", "status": "active", "perma_status": "active" }
+                        ],
+                        "tenant": {
+                          "tenant_id": "globex",
+                          "properties": { "role": "viewer" },
+                          "$email": [
+                            { "value": "user@globex.io", "status": "active", "perma_status": "active" }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    description: Pagination metadata.
+                    properties:
+                      count:
+                        type: integer
+                        description: Number of results in this response.
+                      limit:
+                        type: integer
+                        description: Maximum number of results requested for this page.
+                      has_prev:
+                        type: boolean
+                        description: Whether a previous page exists.
+                      before:
+                        type: string
+                        nullable: true
+                        description: Cursor for the previous page. `null` on the first page.
+                      has_next:
+                        type: boolean
+                        description: Whether a next page exists.
+                      after:
+                        type: string
+                        nullable: true
+                        description: Cursor to pass to fetch the next page.
+                  results:
+                    type: array
+                    description: List of tenant profiles for the user. One entry per associated tenant.
+                    items:
+                      type: object
+                      properties:
+                        distinct_id:
+                          type: string
+                          description: The user identifier this entry belongs to.
+                        properties:
+                          type: object
+                          description: Merged effective properties for this tenant (global layered with per-tenant overrides).
+                        tenant:
+                          type: object
+                          description: Per-tenant override block for this entry.
+                          properties:
+                            tenant_id:
+                              type: string
+                              description: Tenant the override belongs to.
+                            properties:
+                              type: object
+                              description: Properties explicitly set on the per-tenant profile.
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "message": "User [distinct_id: 'user@example.com'] not found"
+                  }
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: HTTP status code.
+                    example: 404
+                  message:
+                    type: string
+                    description: Human-readable error description.
+                    example: "User [distinct_id: 'user@example.com'] not found"
       deprecated: false
   /v1/object/{object_type}/{id}/subscribed_to/object/:
     get:
@@ -15359,6 +16046,108 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/AuthenticationError'
+
+  /v1/{workspace}/config/:
+    get:
+      summary: Get Workspace Config
+      description: |
+        Retrieve workspace-level configuration flags — the settings that govern behavior for every user, tenant, and workflow inside this workspace.
+
+        Fields returned:
+        - `user_inbox_preference_enabled` — if you are using the Inbox channel, enable this to show the Inbox channel in the preference centre.
+        - `sms_vendor_type` — SMS delivery mode used for this workspace (`basic` for standard sends, `dlt` for India DLT-compliant sends).
+        - `user_tenancy_mode` — how a user's association to tenants is constrained. `shared` allows a user to belong to any number of tenants; `exclusive` restricts each user to at most one tenant. See [User-tenant mapping](/docs/user-tenant-mapping) for the trade-offs.
+        - `user_tenancy_channel_fallback_mode` and `user_tenancy_channel_fallback` — govern which channels on a tenant-scoped profile are allowed to fall back to the user's global profile. Use `allowlist` mode with an explicit list to prevent identities like `$androidpush` or `$slack` from leaking across tenants.
+        - `user_tenancy_channel_fallback_applies_to_default_tenant` — whether the fallback rule above also applies to the default-tenant path (sends without a `tenant_id`).
+      operationId: get-workspace-config
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Workspace Config
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/config/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+      responses:
+        '200':
+          description: Workspace config retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceConfig'
+              example:
+                user_inbox_preference_enabled: true
+                sms_vendor_type: "basic"
+                user_tenancy_mode: "exclusive"
+                user_tenancy_channel_fallback_mode: "allowlist"
+                user_tenancy_channel_fallback: ["$email", "$sms", "$whatsapp"]
+                user_tenancy_channel_fallback_applies_to_default_tenant: false
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Update Workspace Config
+      description: |
+        Update one or more workspace-level configuration flags. Any field returned by `GET /v1/{workspace}/config/` can be sent in the PATCH body — only fields you include are changed.
+      operationId: update-workspace-config
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Update Workspace Config
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/config/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
+              --header 'Content-Type: application/json' \
+              --data '{"user_tenancy_mode":"shared"}'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceConfigUpdateRequest'
+            example:
+              user_tenancy_mode: "shared"
+      responses:
+        '200':
+          description: Workspace config updated. The full updated config is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceConfig'
+              example:
+                user_inbox_preference_enabled: true
+                sms_vendor_type: "basic"
+                user_tenancy_mode: "shared"
+                user_tenancy_channel_fallback_mode: "allowlist"
+                user_tenancy_channel_fallback: ["$email", "$sms", "$whatsapp"]
+                user_tenancy_channel_fallback_applies_to_default_tenant: false
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
 
   /v1/{workspace}/ws_api_key/:
     get:
