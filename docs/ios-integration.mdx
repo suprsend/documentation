@@ -60,15 +60,16 @@ SuprSend.shared.configure(publicKey: "YOUR_PUBLIC_API_KEY")
 
     <CodeGroup>
       ```swift syntax
-      await SuprSend.shared.identify(distinctID: "YOUR_USER_ID", userToken: userTokenData, options: AuthenticateOptions(refreshUserToken: {oldUserToken,tokenPayload in return refreshedUserToken()}));
+      await SuprSend.shared.identify(distinctID: "YOUR_USER_ID", userToken: userTokenData, tenantId: "TENANT_ID", options: AuthenticateOptions(refreshUserToken: {oldUserToken,tokenPayload in return refreshedUserToken()}));
       ```
     </CodeGroup>
 
-    | Properties       | Description                                                                                                                                                                                                      |
-    | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                            |
-    | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken. |
-    | refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                               |
+    | Properties       | Description                                                                                                                                                                                                          |
+    | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                                |
+    | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken.     |
+    | tenantId         | Needed only when your workspace has multiple tenants/brands. Scopes the identified user's activity to that tenant. Its value must match `scope.tenant_id` in the `userToken` payload, else it raises a scoping error. |
+    | refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                                   |
 
     **Returns:** `async -> APIResponse`
 
@@ -97,6 +98,24 @@ SuprSend.shared.configure(publicKey: "YOUR_PUBLIC_API_KEY")
 
   </Step>
   </Steps>
+
+## Change active tenant
+
+Use the below method to switch the active tenant of identified user. This is meant for users whose `userToken` scopes multiple tenants (`scope.tenant_id` as an array) - identify once and switch between them without resetting the session.
+
+<CodeGroup>
+  ```swift syntax
+  SuprSend.shared.changeTenant(tenantId: "TENANT_ID")
+  ```
+</CodeGroup>
+
+| Properties | Description                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| tenantId\* | Tenant to switch to. Used by subsequent preferences requests and newly initialized feeds. Must be one of the tenants scoped in `userToken`. |
+
+<Note>
+  Already running feed instances keep the tenant they were initialized with - re-initialize the feed to reflect the new tenant, and call `getPreferences` again to load the new tenant's data.
+</Note>
 
 ## Response Structure
 
