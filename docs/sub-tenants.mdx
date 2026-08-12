@@ -1,181 +1,100 @@
 ---
 title: "Sub-tenants"
-description: "Nest a tenant under a parent tenant so branding, preferences, vendors, and template variants cascade down, and each level overrides only what it needs."
+description: "Model parent–child relationships between your tenants and let settings cascade automatically from parent to child — branding, properties, preferences, and compliance rules flow down the tree, so you configure once at the top and override only where you need to."
+tag: "Coming Soon"
 ---
 
-A sub-tenant is a [tenant](/docs/tenants) that has a parent. It inherits the parent's configuration — properties and branding, default preferences, vendors, template variants, and per-tenant user profiles — and sets its own value only where it differs.
+<span style={{
+  display: "inline-block",
+  padding: "2px 10px",
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "#92400E",
+  backgroundColor: "#FEF3C7",
+  border: "1px solid #FDE68A",
+  borderRadius: "9999px",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em"
+}}>Coming Soon</span>
 
-Sub-tenants nest. A sub-tenant can be a parent to sub-tenants of its own, up to 5 levels in total.
+Today, [tenants](/docs/tenants) in SuprSend live in a flat list, with no way to nest one under another. For example, you can't today set a default preference at the **Org** level that descends to every **Project** under it, then go into a Project and set preferences that descend to each **Cycle** beneath it as a default, and finally let the end user set their own preferences at the Cycle level. Every tenant-level customization — preferences, user subscriptions, templates, branding, properties — is independent and self-contained, with no cascading.
 
-Without a parent, every tenant is self-contained. A customer with ten projects means configuring the same branding, categories, and vendors ten times, then keeping all ten in sync by hand. With a parent, you configure once at the top and override only where a level is genuinely different.
+**Sub-tenants** fix this. They let you arrange tenants into trees (up to **5 levels deep**) where a child tenant inherits its parent's configuration automatically, and each level only overrides the parts that are actually different.
+
+You can use it to build hierarchies like:
+
+| Use case | Example hierarchy |
+|---|---|
+| Financial services | HQ → Regional Office → Branch |
+| Project management SaaS | Organization → Team → Project |
+| Enterprise | Company → Division → Department → Team |
+| Multi-app workspace | Parent Org → App A / App B / App C |
+
+## What you can do
+
+<CardGroup cols={1}>
+  <Card title="Admins set default preferences once, and they cascade down the tree" icon="arrow-down-wide-short">
+    An admin defines the default notification preferences for a tenant, and they flow to every tenant beneath it until an admin overrides them lower down. *Example:* an admin opens the **Company** and turns email **off** for a category — now no user gets email for it across any Project or Cycle. Later they turn email back **on** for one **Cycle**, so just that Cycle sends email.
+  </Card>
+
+  <Card title="Each recipient then overrides preferences for themselves, and their choices cascade too" icon="user-check">
+    A user first sees whatever the admin configured as their starting point, then sets their own preferences — which also follow the hierarchy and always beat the admin default. *Example:* a user sets "**don't email me**" at the **Company** level, so it applies as their personal default everywhere; they then turn email **on** for a single **Project**, and receive email for that Project and its Cycles only.
+  </Card>
+
+  <Card title="Block channels and hide preference categories at one tenant, locked for everyone below" icon="lock">
+    A parent can switch a category off or block a channel (say SMS) and be guaranteed no descendant can turn it back on. Handy for org-wide compliance, regional regulations, or a plan tier that simply doesn't include a channel.
+  </Card>
+
+  <Card title="Share one user across many tenants, with a different profile per-tenant" icon="user-group">
+    The same person can be a **member** of Team A and a **lead** of Team B — with a different role, contact channels, and properties in each — while still carrying one global profile everywhere. At send time SuprSend merges the global profile with every tenant the user belongs to.
+  </Card>
+
+  <Card title="…or isolate users, and decide exactly where the wall sits" icon="border-all">
+    Sharing isn't all-or-nothing. A workspace-level setting controls whether a user can belong to more than one tenant, and **up to which level of the tree** that sharing is allowed. Set the isolation boundary at the root and each root tenant's subtree becomes its own walled-off pool: two separate root tenants can never share a user, but tenants under the *same* root still can.
+  </Card>
+
+  <Card title="Let each tenant — even your customers' customers — bring its own vendors and templates" icon="swatchbook">
+    Run a white-label or reseller setup where your *agency* is the root, each *client brand* is a child, and each brand sends through **its own delivery vendors** (their own Twilio, SendGrid, or FCM credentials) with **its own templates**, branding, and copy — inheriting whatever it doesn't set. Your customer can nest *their* customers and hand the same control down another level.
+  </Card>
+
+</CardGroup>
 
 ## How inheritance works
+There are two types of inheritance. The rule of thumb: **defaults flow top-down, a user's own settings flow bottom-up.**
 
-| Term | Meaning |
-|---|---|
-| **Root** | A tenant with no parent. Level 0. |
-| **Parent** | The tenant directly above. Each tenant has at most one. |
-| **Ancestors** | The chain from the root down to a tenant, including the tenant itself. |
-| **Level** | Depth in the tree. Root is level 0; the deepest allowed is level 4. |
-| **Effective value** | The value actually applied after walking the chain. |
+```text
+Company (Root)     logo: acme.png · Marketing: email OFF · SMS blocked
+└─ Project         support_email: eng@acme.com
+   └─ Cycle        Marketing: email ON
 
-Two rules cover every setting:
-
-- **Defaults flow top-down.** Start at the root and walk down to the tenant you triggered at. The **lowest** tenant that has explicitly set a value wins. This is how properties, branding, vendors, user profiles, and a tenant's default preferences — including their digest schedules and condition values — resolve.
-- **A user's own settings flow bottom-up.** Start at the tenant you triggered at and walk up. The **first** value found wins. This is how a user's own preferences, digest schedules, and condition values resolve.
-
-The full precedence order stays `user > tenant > category default` — sub-tenants change how the tenant part of that chain is resolved, not the order. See [Preference evaluation](/docs/preference-evaluation).
-
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','fontFamily':'ui-sans-serif, system-ui, sans-serif','lineColor':'#9a9a9a'},'flowchart':{'padding':14,'nodeSpacing':40,'rankSpacing':40}}}%%
-flowchart TD
-    R["Acme — root, level 0<br/>logo: acme.png<br/>email vendor: SendGrid<br/>SMS blocked"]
-    R --> E["Engineering — level 1<br/>support_email: eng@acme.com"]
-    E --> PL["Platform — level 2<br/>no local overrides"]
-    E --> PY["Payments — level 2<br/>email vendor: its own SendGrid"]
-    PL --> RES["Trigger at Platform resolves to:<br/>logo acme.png · support_email eng@acme.com<br/>email via Acme's SendGrid · SMS blocked"]
-
-    classDef s1 fill:transparent,stroke:#d9d9d9,stroke-width:1.4px;
-    classDef s2 fill:transparent,stroke:#b0b0b0,stroke-width:1.4px;
-    classDef s3 fill:transparent,stroke:#8a8a8a,stroke-width:1.4px;
-    class R s1;
-    class E,PL,PY s2;
-    class RES s3;
+Trigger at Cycle resolves to:
+  logo             acme.png              (from Company)
+  support_email    eng@acme.com          (from Project)
+  Marketing        email ON              (Cycle's own override)
+  SMS              blocked               (from Company — cannot be unblocked)
 ```
 
-Two things are true of every inherited setting:
+- **Top-down (Root → triggered tenant) — defaults.** Start at the root and walk down; the *lowest* tenant that has explicitly set a value wins. This is how properties, branding, vendor configuration, tenant default preferences, and user profiles resolve. *Example:* the Org sets `support_email = help@acme.com` and the Project overrides it with `eng@acme.com`. Triggering at a Cycle under that Project resolves to `eng@acme.com` (the lowest tenant that set it); a Cycle under a different Project still gets the Org's `help@acme.com`.
 
-- **Resolution is live.** Nothing is copied when you create a sub-tenant. Editing a parent immediately changes every descendant that hasn't overridden the same value.
-- **Merging is shallow.** Values merge one key at a time. Overriding one key never stops other keys from inheriting, and nested structures are not deep-merged.
+- **Bottom-up (triggered tenant → Root) — a user's own settings.** Start where the notification fired and walk up; the *first* value you find wins. This is how conditions, digest schedules, and a user's own preferences resolve. *Example:* a user sets "don't email me" at the Org and "email on" at one Project. Triggering at a Cycle under that Project walks up, finds "email on" at the Project first, and sends; triggering anywhere else walks all the way to the Org's "don't email me".
 
-## What inherits
 
-| Setting | How it resolves | Unit of override |
-|---|---|---|
-| Properties and [branding](/docs/tenant-templates) | Top-down | One key. Overriding `support_email` still inherits `company_name`. |
-| [Default preferences](/docs/tenant-preference) for a category | Top-down | The whole category. A child can't override the opt-in channels and keep the parent's opt-in/opt-out setting. |
-| Blocked categories and blocked channels | Top-down, and cannot be reversed | See [Settings that can't be overridden](#settings-that-cant-be-overridden). |
-| Default digest schedules and condition values | Top-down | One value. |
-| [Per-tenant user profile](/docs/user-tenant-mapping) | Top-down over the user's global profile | One field. |
-| A user's own preferences | Bottom-up | One category. |
-| A user's own digest schedule and condition values | Bottom-up | One value. |
-| [Template variants](/docs/template-variants) | Closest tenant in the chain wins | One variant. |
-| [Vendors](/docs/tenant-vendor) | Top-down | One channel. Overriding SMS still inherits the parent's email vendor. |
 
-A tenant's `id` and `name` are never inherited. Every tenant has its own.
-
-**Template variants.** At send time SuprSend walks the chain from the triggered tenant up to the root, then falls back to variants with no tenant filter. At each level it tries the recipient's locale from exact to broader to the template default (`es-MX` → `es` → `en`). The first variant whose channel, tenant, and locale match — and whose hard conditions pass — is used. **Tenant proximity beats locale specificity**: a closer tenant's `en` variant wins over a farther tenant's exact-locale variant. If nothing matches anywhere, the template's default variant is sent.
-
-**Vendors.** A descendant sees only *that* an ancestor covers a channel, never the ancestor's credentials. If no tenant in the chain configures a channel, the workspace vendor applies.
-
-**Digest schedules and condition values.** These resolve as `user value > tenant default > category default`, unchanged from [preference evaluation](/docs/preference-evaluation#resolving-digest-schedule-and-condition-values). Across a hierarchy each half of that resolves in its own direction: the tenant default top-down, the user's own choice bottom-up.
-
-**User profiles.** A user contributes a profile only at the levels they're actually subscribed to. Levels they skip add nothing — they don't reset or blank out anything already resolved.
-
-## Settings that can't be overridden
-
-Most settings can be overridden — by a tenant lower down, or by the user. Three can't be, which is what makes them safe to rely on for compliance.
-
-**Blocked categories** (`blocked_for_tenant`) — when any ancestor blocks a category:
-
-- It is hidden from the preference centre for every descendant.
-- No notifications are delivered for it at any descendant, even one that marks the category as `cant_unsubscribe` with mandatory channels.
-- A descendant cannot unblock it. The attempt is rejected.
-- A descendant **can** block a category an ancestor left unblocked. Blocking only ever moves down.
-
-**Blocked channels** (`blocked_channels`) — a channel blocked by any ancestor is blocked for the whole subtree. A descendant's effective list is the union of its own blocks and every ancestor's. Descendants can add channels; they cannot remove an inherited one.
-
-**Mandatory categories at the triggered tenant** — normally the user's own preference wins. The exception is a category whose resolved setting at the triggered tenant is `cant_unsubscribe`: the notification sends regardless of what the user chose, and the category's mandatory channels are always delivered. Trigger the same category somewhere it isn't `cant_unsubscribe` and the user's opt-out is respected as usual.
+Blocked categories and blocked channels play by a stricter rule: they **cascade down and can't be undone**. Once a parent sets them, no child below can reverse them.
 
 <Note>
-`cant_unsubscribe` is not a separate cascade. It is one of the values a category's preference can take, and it follows normal override rules — a child can set it even where the parent didn't.
+  Detailed setup, API changes, and dashboard flows will land here when sub-tenants ship. Reach out to [support@suprsend.com](mailto:support@suprsend.com) if you'd like early access or want to talk through your setup in the meantime.
 </Note>
 
-## Sharing users across the hierarchy
-
-Whether one user can belong to more than one tenant is controlled by the workspace's [`user_tenancy_mode`](/docs/user-tenant-mapping).
-
-| Mode | Behavior across a hierarchy |
-|---|---|
-| `exclusive` | A user belongs to exactly one tenant. A second subscription is rejected. SuprSend still resolves that tenant's full ancestor chain, so you don't subscribe the user at each ancestor. |
-| `shared` | A user can belong to several tenants. A **sharing boundary level** sets how far across the tree that is allowed: users are shared freely inside any subtree rooted at that level, and never across two different tenants at that level. |
-
-On `shared`, there is no boundary until you set one — a user can belong to any tenant in the workspace.
-
-Set the boundary at level 0 and each root tenant's subtree becomes its own pool: the teams and projects inside one customer share users freely, and no user ever crosses from one customer to another. Subscribing a user to a tenant outside their allowed subtree returns a `400`.
-
-## When to use sub-tenants
-
-Use sub-tenants when a group inside a customer needs most of that customer's setup and differs in a few specific places.
-
-- **Regional structure** — HQ → Regional office → Branch. The branch inherits the HQ's branding and compliance rules and overrides its own contact details.
-- **Projects inside an org** — Organization → Team → Project. An org admin sets category defaults once; a project turns one category off for itself.
-- **White-label and reseller** — Agency → Client brand → the client's own customers. Each brand connects its own Twilio, SendGrid, or FCM account so messages send from its own provider and reputation, and inherits everything it doesn't set. Because the tree goes 5 levels deep, your customer can hand the same control down another level.
-- **Multiple apps under one company** — Company → App A / App B. Each app overrides the vendor (its own FCM or APNs project, its own SMS sender) while inheriting the company's shared templates and branding. The same person's App A notifications go to their App A push token through App A's vendor, and their App B notifications to the App B token.
-- **Regulated channels** — a parent blocks SMS for the whole subtree, and no team below can turn it back on.
-
-## Sub-tenants, root tenants, and objects
-
-| | Sub-tenant | Separate root tenant | [Object](/docs/objects) |
-|---|---|---|---|
-| **What it is** | A tenant with a parent | A tenant with no parent | A non-user entity — a team, a channel, a shared inbox — that users subscribe to |
-| **Inherits settings from a parent** | Yes | No | No |
-| **Provides tenant branding, template variants, and vendor routing** | Yes | Yes | No |
-| **Reaches everyone in a group from one trigger** | No | No | Yes |
-| **Use when** | A group inside a customer needs most of the customer's setup and differs in a few places | Two customers share nothing and should never affect each other | You need to notify whoever is currently in a group |
-
-An object has its own channels, properties, and [preferences](/docs/objects#update-object-profile-and-preferences), but they apply when the object itself is the recipient — they are not applied to its subscribers.
-
-Sub-tenants and objects solve different problems and are often used together: the sub-tenant carries the settings, the object carries the membership. For choosing between a tenant and a separate workspace in the first place, see [Modelling your business customers](/docs/guides/modelling-customers-workspace-vs-tenant).
-
-## Limits and behavior
-
-| Topic | Behavior |
-|---|---|
-| **Maximum depth** | 5 levels (level 0–4). Creating or re-parenting beyond it returns a `400`. |
-| **One parent** | Each tenant has at most one parent. |
-| **Circular references** | Rejected when you create or re-parent, with a `400`. |
-| **Merge depth** | Shallow, per key. Nested structures are not deep-merged. |
-| **No snapshot** | Nothing is copied at create time. A parent's edit takes effect on the next read or trigger. |
-| **Re-parenting** | The whole subtree moves. User subscriptions move with it, local overrides are kept, and effective values are recomputed from the new chain immediately. |
-| **Deleting a parent** | Choose what happens to its children: move them under another tenant, delete the subtree, or leave them as roots (the default). Deletes are soft; users on the deleted tenant are auto-unsubscribed. |
-| **Recreating a deleted tenant** | A tenant recreated with a deleted tenant's `id` is a new record with no user associations. The `id` stays reserved. |
-| **In-flight notifications** | Always complete with the settings resolved at trigger time, including across deletes and re-parents. |
-| **Triggering** | Unchanged. Pass the `tenant_id` of the tenant you're triggering at; the chain resolves automatically. |
-
-## FAQ
-
-<AccordionGroup>
-  <Accordion title="Do I need to subscribe a user at every level of the tree?">
-    No. Subscribe them where they actually belong. SuprSend resolves the full ancestor chain from the tenant you trigger at, and levels the user isn't subscribed to contribute nothing.
-  </Accordion>
-
-  <Accordion title="If I change a parent's branding, do existing sub-tenants update?">
-    Yes, immediately, for every key they haven't overridden themselves. Nothing was copied at create time, so there is no re-sync step.
-  </Accordion>
-
-  <Accordion title="Can a sub-tenant send through its own delivery vendors?">
-    Yes, per channel. A sub-tenant can plug in its own SMS vendor and keep inheriting the parent's email vendor. A descendant never sees an ancestor's credentials — only that the channel is covered.
-  </Accordion>
-
-  <Accordion title="Can a sub-tenant unblock a channel or category its parent blocked?">
-    No. Blocked channels and blocked categories only move down the tree. A descendant can add blocks of its own, and the attempt to remove an inherited one is rejected.
-  </Accordion>
-
-  <Accordion title="A user opted out, but the category is marked cant_unsubscribe. What sends?">
-    The notification sends, and the category's mandatory channels are delivered. This applies when the resolved setting at the tenant you triggered at is `cant_unsubscribe`. Trigger the same category at a tenant where it isn't, and the user's opt-out is respected.
-  </Accordion>
-
-  <Accordion title="Does a sub-tenant need its own templates?">
-    No. It uses the closest matching [template variant](/docs/template-variants) in its chain and falls back to the template's default variant. Add a variant at a sub-tenant only when its content genuinely differs.
-  </Accordion>
-</AccordionGroup>
-
-## Next steps
+## Related concepts
 
 <CardGroup cols={2}>
   <Card title="Tenants" icon="layer-group" href="/docs/tenants">
-    What tenants are and what you can customize per tenant.
+    What tenants are and what you can customize per tenant today.
+  </Card>
+
+  <Card title="User–tenant mapping" icon="users" href="/docs/user-tenant-mapping">
+    Shared vs exclusive tenancy modes and how users map to tenants.
   </Card>
 
   <Card title="Tenant preferences" icon="sliders" href="/docs/tenant-preference">
@@ -183,10 +102,6 @@ Sub-tenants and objects solve different problems and are often used together: th
   </Card>
 
   <Card title="Tenant vendors" icon="envelope" href="/docs/tenant-vendor">
-    Route a tenant's notifications through its own providers.
-  </Card>
-
-  <Card title="Template variants" icon="paintbrush" href="/docs/template-variants">
-    Give a tenant its own content, layout, or channels.
+    Route a tenant's notifications through its own delivery providers.
   </Card>
 </CardGroup>
