@@ -1,5 +1,5 @@
 ---
-title: "Integrate Javascript SDK"
+title: "Integration"
 description: "Integrate the SuprSend JavaScript Web SDK to enable WebPush, preferences, and In-app feed across React, Vue, Next.js, and other modern web frameworks."
 ---
 
@@ -62,16 +62,20 @@ This is the client JavaScript SDK used to integrate SuprSend features like Webpu
       const authResponse = await suprSendClient.identify(
         distinctId: any,
         userToken?: string, // only needed in production environments for security
-        { refreshUserToken: (oldUserToken: string, tokenPayload: Dictionary) => Promise<string> }
+        {
+          tenantId?: string, // only needed in multi-tenant workspaces
+          refreshUserToken: (oldUserToken: string, tokenPayload: Dictionary) => Promise<string>
+        }
       );
       ```
     </CodeGroup>
 
-    | Properties       | Description                                                                                                                                                                                                      |
-    | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                            |
-    | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken. |
-    | refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                               |
+    | Properties       | Description                                                                                                                                                                                                                                                             |
+    | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+    | distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                                                                                   |
+    | userToken        | Mandatory when enhanced security mode is on. This is ES256 JWT token generated in your server-side. Refer [docs](/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken.                                                        |
+    | tenantId         | Needed only when your workspace has multiple tenants. Scopes the identified user's activity to that tenant, and is inherited by events, preferences and in-app feed. Its value must match `scope.tenant_id` in the `userToken` payload, else it raises a scoping error. |
+    | refreshUserToken | This function is called by SDK internally to get new userToken before existing token is expired. The returned string is used as the new userToken.                                                                                                                      |
 
     **Returns:** `Promise<ApiResponse>`
 
@@ -98,6 +102,26 @@ This is the client JavaScript SDK used to integrate SuprSend features like Webpu
     **Returns:** `Promise<ApiResponse>`
   </Step>
 </Steps>
+
+## Change active tenant
+
+Once a tenant is set in `identify`, all SDK calls (events, preferences, in-app feed) are scoped to the active tenant. Use this method to switch the active tenant of an identified user. This is meant for users whose `userToken` scopes multiple tenants (`scope.tenant_id` as an array) — identify once and switch between tenants without resetting the session.
+
+<CodeGroup>
+  ```typescript syntax
+  const response = suprSendClient.changeTenant(tenantId: string);
+  ```
+</CodeGroup>
+
+| Properties | Description                                                                                                                                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tenantId\* | Tenant to switch to. Used by subsequent events and newly initialized preferences and feed requests. Must be one of the tenants scoped in `userToken`. |
+
+**Returns:** `ApiResponse`
+
+<Note>
+  Already running feed instances and previously fetched preferences keep the tenant they were initialized with when `changeTenant` is called. Re-initialize the feed and call `getPreferences` again to load data for the new tenant.
+</Note>
 
 ## Response structure
 

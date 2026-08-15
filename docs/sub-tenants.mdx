@@ -1,0 +1,107 @@
+---
+title: "Sub-tenants"
+description: "Model parent–child relationships between your tenants and let settings cascade automatically from parent to child — branding, properties, preferences, and compliance rules flow down the tree, so you configure once at the top and override only where you need to."
+tag: "Coming Soon"
+---
+
+<span style={{
+  display: "inline-block",
+  padding: "2px 10px",
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "#92400E",
+  backgroundColor: "#FEF3C7",
+  border: "1px solid #FDE68A",
+  borderRadius: "9999px",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em"
+}}>Coming Soon</span>
+
+Today, [tenants](/docs/tenants) in SuprSend live in a flat list, with no way to nest one under another. For example, you can't today set a default preference at the **Org** level that descends to every **Project** under it, then go into a Project and set preferences that descend to each **Cycle** beneath it as a default, and finally let the end user set their own preferences at the Cycle level. Every tenant-level customization — preferences, user subscriptions, templates, branding, properties — is independent and self-contained, with no cascading.
+
+**Sub-tenants** fix this. They let you arrange tenants into trees (up to **5 levels deep**) where a child tenant inherits its parent's configuration automatically, and each level only overrides the parts that are actually different.
+
+You can use it to build hierarchies like:
+
+| Use case | Example hierarchy |
+|---|---|
+| Financial services | HQ → Regional Office → Branch |
+| Project management SaaS | Organization → Team → Project |
+| Enterprise | Company → Division → Department → Team |
+| Multi-app workspace | Parent Org → App A / App B / App C |
+
+## What you can do
+
+<CardGroup cols={1}>
+  <Card title="Admins set default preferences once, and they cascade down the tree" icon="arrow-down-wide-short">
+    An admin defines the default notification preferences for a tenant, and they flow to every tenant beneath it until an admin overrides them lower down. *Example:* an admin opens the **Company** and turns email **off** for a category — now no user gets email for it across any Project or Cycle. Later they turn email back **on** for one **Cycle**, so just that Cycle sends email.
+  </Card>
+
+  <Card title="Each recipient then overrides preferences for themselves, and their choices cascade too" icon="user-check">
+    A user first sees whatever the admin configured as their starting point, then sets their own preferences — which also follow the hierarchy and always beat the admin default. *Example:* a user sets "**don't email me**" at the **Company** level, so it applies as their personal default everywhere; they then turn email **on** for a single **Project**, and receive email for that Project and its Cycles only.
+  </Card>
+
+  <Card title="Block channels and hide preference categories at one tenant, locked for everyone below" icon="lock">
+    A parent can switch a category off or block a channel (say SMS) and be guaranteed no descendant can turn it back on. Handy for org-wide compliance, regional regulations, or a plan tier that simply doesn't include a channel.
+  </Card>
+
+  <Card title="Share one user across many tenants, with a different profile per-tenant" icon="user-group">
+    The same person can be a **member** of Team A and a **lead** of Team B — with a different role, contact channels, and properties in each — while still carrying one global profile everywhere. At send time SuprSend merges the global profile with every tenant the user belongs to.
+  </Card>
+
+  <Card title="…or isolate users, and decide exactly where the wall sits" icon="border-all">
+    Sharing isn't all-or-nothing. A workspace-level setting controls whether a user can belong to more than one tenant, and **up to which level of the tree** that sharing is allowed. Set the isolation boundary at the root and each root tenant's subtree becomes its own walled-off pool: two separate root tenants can never share a user, but tenants under the *same* root still can.
+  </Card>
+
+  <Card title="Let each tenant — even your customers' customers — bring its own vendors and templates" icon="swatchbook">
+    Run a white-label or reseller setup where your *agency* is the root, each *client brand* is a child, and each brand sends through **its own delivery vendors** (their own Twilio, SendGrid, or FCM credentials) with **its own templates**, branding, and copy — inheriting whatever it doesn't set. Your customer can nest *their* customers and hand the same control down another level.
+  </Card>
+
+</CardGroup>
+
+## How inheritance works
+There are two types of inheritance. The rule of thumb: **defaults flow top-down, a user's own settings flow bottom-up.**
+
+```text
+Company (Root)     logo: acme.png · Marketing: email OFF · SMS blocked
+└─ Project         support_email: eng@acme.com
+   └─ Cycle        Marketing: email ON
+
+Trigger at Cycle resolves to:
+  logo             acme.png              (from Company)
+  support_email    eng@acme.com          (from Project)
+  Marketing        email ON              (Cycle's own override)
+  SMS              blocked               (from Company — cannot be unblocked)
+```
+
+- **Top-down (Root → triggered tenant) — defaults.** Start at the root and walk down; the *lowest* tenant that has explicitly set a value wins. This is how properties, branding, vendor configuration, tenant default preferences, and user profiles resolve. *Example:* the Org sets `support_email = help@acme.com` and the Project overrides it with `eng@acme.com`. Triggering at a Cycle under that Project resolves to `eng@acme.com` (the lowest tenant that set it); a Cycle under a different Project still gets the Org's `help@acme.com`.
+
+- **Bottom-up (triggered tenant → Root) — a user's own settings.** Start where the notification fired and walk up; the *first* value you find wins. This is how conditions, digest schedules, and a user's own preferences resolve. *Example:* a user sets "don't email me" at the Org and "email on" at one Project. Triggering at a Cycle under that Project walks up, finds "email on" at the Project first, and sends; triggering anywhere else walks all the way to the Org's "don't email me".
+
+
+
+Blocked categories and blocked channels play by a stricter rule: they **cascade down and can't be undone**. Once a parent sets them, no child below can reverse them.
+
+<Note>
+  Detailed setup, API changes, and dashboard flows will land here when sub-tenants ship. Reach out to [support@suprsend.com](mailto:support@suprsend.com) if you'd like early access or want to talk through your setup in the meantime.
+</Note>
+
+## Related concepts
+
+<CardGroup cols={2}>
+  <Card title="Tenants" icon="layer-group" href="/docs/tenants">
+    What tenants are and what you can customize per tenant today.
+  </Card>
+
+  <Card title="User–tenant mapping" icon="users" href="/docs/user-tenant-mapping">
+    Shared vs exclusive tenancy modes and how users map to tenants.
+  </Card>
+
+  <Card title="Tenant preferences" icon="sliders" href="/docs/tenant-preference">
+    Set admin defaults and block categories or channels for a tenant.
+  </Card>
+
+  <Card title="Tenant vendors" icon="envelope" href="/docs/tenant-vendor">
+    Route a tenant's notifications through its own delivery providers.
+  </Card>
+</CardGroup>
