@@ -1,0 +1,140 @@
+---
+title: "Integration"
+---
+
+`suprsend_flutter_sdk` is used to integrate SuprSend features like Mobile Push, Preferences and InApp feed into your Flutter application. It wraps the native SuprSend Android and iOS SDKs.
+
+<Info>
+  This is v3 of `suprsend_flutter_sdk`. Documentation for v2 of this SDK is available [here](https://github.com/suprsend/suprsend-flutter-sdk-old/tree/main/docs). If you are upgrading from v2, refer the [migration guide](/docs/flutter-migration-from-v2).
+</Info>
+
+## Installation
+
+Add the SDK to your `pubspec.yaml`:
+
+<CodeGroup>
+  ```yaml pubspec.yaml
+  dependencies:
+    suprsend_flutter_sdk: ^3.0.0
+  ```
+</CodeGroup>
+
+<CodeGroup>
+  ```shell shell
+  flutter pub get
+  ```
+</CodeGroup>
+
+<Note>
+  **Requirements:** iOS 15.0+, Android minSdk 19.
+</Note>
+
+For iOS, set the deployment target in `ios/Podfile` and then run `pod install` from the `ios/` directory.
+
+<CodeGroup>
+  ```ruby ios/Podfile
+  platform :ios, '15.0'
+  ```
+</CodeGroup>
+
+## Integration steps
+
+### Step 1: Create client instance
+
+Initialize the SuprSend client inside `main`. All the methods of SuprSend SDK can be accessed only after creating the instance.
+
+<CodeGroup>
+  ```dart Dart
+  import 'package:suprsend_flutter_sdk/suprsend_flutter_sdk.dart';
+
+  void main() {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    SuprSend('YOUR_PUBLIC_KEY');
+
+    runApp(const MyApp());
+  }
+  ```
+</CodeGroup>
+
+| Parameter     | Description                                                                                      |
+| :------------ | :----------------------------------------------------------------------------------------------- |
+| `publicKey`\* | **Required.** Your workspace public key from the SuprSend dashboard (**ApiKeys → Public Keys**). |
+| `host`        | Optional. Custom SuprSend API host; only needed for self-hosted or region-specific setups.       |
+
+### Step 2: Authenticate user
+
+Authenticate the user so that all the actions performed after authenticating will be w.r.t that user. This is a mandatory step and needs to be called before using any other method. This is usually performed after successful login and on reload of the app to re-authenticate the user (can be changed based on your requirement).
+
+<CodeGroup>
+  ```dart Dart
+  await SuprSend.identify(
+    'user-distinct-id',
+    userToken: jwt, // only needed in production environments for security
+    tenantId: 'tenant-id', // only needed in multi-tenant workspaces
+    refreshUserToken: (oldUserToken, tokenPayload) async {
+      return await myBackend.fetchSuprSendToken();
+    },
+  );
+  ```
+</CodeGroup>
+
+| Properties       | Description                                                                                                                                                                                                          |
+| :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| distinctId\*     | Unique identifier to identify a user across platform.                                                                                                                                                                |
+| userToken        | Mandatory when enhanced security mode is on. This is an ES256 JWT token generated on your server-side. Refer [docs](/docs/client-authentication#enhanced-security-mode-with-signed-user-token) to create userToken.   |
+| tenantId         | Needed only when your workspace has multiple tenants/brands. Scopes the identified user's activity to that tenant. Its value must match `scope.tenant_id` in the `userToken` payload, else it raises a scoping error. |
+| refreshUserToken | This function is called by the SDK internally to get a new userToken when the existing user token is expired. The returned string is used as the new userToken.                                                        |
+
+### Step 3: Reset user
+
+This will remove user data from the SuprSend instance, similar to a logout action.
+
+<CodeGroup>
+  ```dart Dart
+  await SuprSend.reset();
+  ```
+</CodeGroup>
+
+## Change active tenant
+
+Use the below method to switch the active tenant of the identified user.
+
+<CodeGroup>
+  ```dart Dart
+  await SuprSend.changeTenant('tenant-id');
+  ```
+</CodeGroup>
+
+## Logging
+
+Add the below code in `main` below the SuprSend instance creation to see logs for debugging.
+
+<CodeGroup>
+  ```dart Dart
+  await SuprSend.enableLogging();
+  ```
+</CodeGroup>
+
+## API response
+
+All SuprSend SDK methods return `SSResponse`. Use it to check whether a call succeeded and to read error details when it didn't.
+
+<CodeGroup>
+  ```dart Dart
+  final response = await SuprSend.user.addEmail('user@example.com');
+  if (response.isSuccess) {
+    // handle success
+  } else {
+    print('${response.errorType}: ${response.errorMessage}');
+  }
+  ```
+</CodeGroup>
+
+| Property     | Description                                                      |
+| :----------- | :--------------------------------------------------------------- |
+| status       | `"success"` or `"error"`.                                        |
+| isSuccess    | `true` when the call succeeded (convenience getter over status). |
+| statusCode   | HTTP status code, when available.                                |
+| errorType    | Error category, e.g. `VALIDATION_ERROR`, `NETWORK_ERROR`.        |
+| errorMessage | Human-readable error message.                                    |

@@ -1,0 +1,153 @@
+---
+title: "Modelling your business customers & applications: tenants vs workspaces"
+description: "Learn how to model each business customer or your applications in SuprSend — as a tenant in a shared workspace, or as its own workspace — and how to choose."
+---
+
+If you run one notification system that serves many business customers, each customer usually wants its own notification experience for its own users: its own message content, its own rules, its own branding, and sometimes its own delivery vendors. Some customers also need their data kept separate from other customers'. The same applies in case your business runs multiple applications — mobile apps or websites.
+
+<Info>
+  Two terms used throughout this guide:
+
+  - **Customer** — a business you serve.
+  - **User** — the person who receives a notification: one of your customer's own people (their employees or their end users).
+</Info>
+
+SuprSend gives you two ways to model these customers:
+
+- **Tenants** — keep all customers in one shared workspace, each set up as a tenant.
+- **Workspaces** — give each customer its own separate workspace.
+
+Which model fits depends on how much isolation each customer needs and how much you want to manage centrally. This guide defines the concepts, compares the two models, and helps you choose.
+
+## Core concepts
+
+These concepts form the fundamental basis of both models.
+
+**[Workspace](/docs/workspaces)**
+
+- A self-contained environment in SuprSend. It holds everything needed to send notifications: API keys, vendors, templates, workflows, notification categories, and users.
+- Nothing is shared between workspaces, so they also serve as your separate environments — sandbox, testing, and production.
+
+**[Tenant](/docs/tenants)**
+
+- A customer or segment that lives inside a workspace.
+- You use tenants to give each customer its own notification experience — its branding, preferences, and delivery vendors — while sharing the same underlying templates and workflows.
+
+**[Sub-tenant](/docs/sub-tenants)**
+
+- A group inside a tenant that needs its own settings — a division, region, or project of a customer.
+- It inherits its parent tenant's branding, preferences, and vendors and overrides only what it needs, so settings cascade down the levels (category default → tenant → sub-tenant → user).
+
+These nest top-down: an account holds one or more workspaces, a workspace can hold tenants, a tenant can hold sub-tenants, and notifications reach users.
+
+<Frame>
+  <img src="/images/modelling-hierarchy.png" alt="Nesting hierarchy: account contains workspace, which contains tenant, which contains sub-tenant, which contains user" width="700" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+## Two ways to model a customer
+
+You can model your customers in one of two ways: as **tenants** inside one shared workspace, or as separate **workspaces**. The models differ in what is shared between customers and what is kept isolated.
+
+<CardGroup cols={2}>
+  <Card title="Tenants — one workspace, many tenants" icon="layer-group">
+    All customers live in a single workspace and share its templates, workflows, notification categories, and API keys.
+
+    Each customer is a tenant that you customize on its own: its branding, its [preferences](/docs/tenant-preference), and its [vendor routing](/docs/tenant-vendor). If you also need to customise the notification content for the customer, you can use [template variants](/docs/template-variants).
+  </Card>
+
+  <Card title="Workspaces — one workspace per customer" icon="clone">
+    Each customer gets its own workspace with its own templates, workflows, categories, vendors, users, API keys, and analytics.
+
+    Nothing is shared between customers, so a change you make for one customer never affects another.
+  </Card>
+</CardGroup>
+
+<Tip>
+  You can create a staging / prod workspace that has default assets in it, which gets copied to the customer workspaces via [CLI](/reference/cli-intro).
+</Tip>
+
+<Frame>
+  <img src="/images/modelling-two-models.png" alt="Side-by-side comparison: tenants model with customers A, B, C inside one workspace, versus workspaces model with each customer in its own workspace" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+## How they differ
+
+The table below compares where the two models actually differ.
+
+| Dimension | Tenants (one workspace) | Workspaces (one per customer) |
+| --- | --- | --- |
+| **Data & user isolation** | All customers share one workspace; users live in a shared user pool.<br />Users can still be isolated as you can choose to map users to their respective tenants. | Each customer's data and users are fully isolated. |
+| **API keys / credentials** | One set, shared across all customers. | Separate keys per customer. |
+| **Templates & workflows** | One shared set; editing a template or workflow changes it for all customers at once.<br />You can choose to have separate templates at tenant level by creating per tenant [variants](/docs/template-variants) within a template. | A separate copy per customer. You can sync the templates and workflows across workspaces using [CLI](/reference/cli-intro) easily. |
+| **Workflow logic** | Shared and structurally same [workflow](/docs/tenant-workflows) for every customer. It can branch on the customer's data. | Each customer can have a completely different workflow. |
+| **Preferences & categories** | The set of [notification categories](/docs/notification-category) is shared.<br />Each customer can override a category's default channels with its own [tenant preferences](/docs/tenant-preference).<br />Each user can then override their own at per tenant level. | Each customer has its own categories and default channels.<br />Each user can then override the categories' preferences. |
+| **Analytics** | One combined analytics view — filter by tenant internally, or surface per-tenant analytics back to each customer. | Separate analytics per customer. |
+| **Audit logs** | [Audit logs](/docs/audit-logs) don't distinguish between customers, as all the changes apply to all tenants. | Audit actions are tagged to each customer's workspace. |
+| **Onboard a new customer** | Create the tenant via the [tenant API](/reference/create-update-tenants) (or in the dashboard); your shared templates, workflows, and defaults apply automatically. | Create a workspace via the [Workspace API](/reference/create-workspace) (or through dashboard), generate its API keys, and copy your default templates and workflows into it via CLI. |
+| **Environments** (dev/staging/prod) | Each tenant can have its own environment `dev`, `staging`, `prod`. | More workspaces to run if each customer needs its own staging and production. |
+
+## How to choose
+
+Start from how much isolation each customer needs.
+
+<CardGroup cols={2}>
+  <Card title="Choose tenants if" icon="layer-group">
+    - Your customers can use the same workflows, differing mainly in branding, content and preference rules.
+    - You want to manage templates and workflows centrally, so a single update applies to all customers.
+    - Your customers may share users, or you have multiple products or applications that can have common users.
+  </Card>
+
+  <Card title="Choose workspaces if" icon="clone">
+    - A customer requires isolation from other customers — separate data, users, and API keys — often for security or compliance.
+    - A customer needs a structurally different workflow — different steps, delays, or branches — primarily due to different types of workflows (eg. marketing campaigns built by customers themselves).
+  </Card>
+</CardGroup>
+
+<Note>
+  **Rule of thumb:** default to tenants when customers share the same notifications and you manage them centrally; choose workspaces when a customer must be isolated or needs its own workflow logic.
+</Note>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Can a customer have its own branding and delivery vendors without its own workspace?">
+    Yes. In the tenants model, each customer can have its own branding and its own delivery vendors while sharing the workspace. You only need a separate workspace when a customer requires isolation or its own notifications logic that is not shared with other customers.
+  </Accordion>
+
+  <Accordion title="How do I handle groups inside a single customer, such as its divisions, regions, or projects?">
+    It depends on what the group needs.
+
+    - **The group needs its own settings** (branding, preferences, or vendors): when the customer is a tenant, model its groups as [sub-tenants](/docs/sub-tenants), which inherit the customer's settings and override only what they need; when the customer has its own workspace, model its groups as tenants inside that workspace.
+    - **You only need to notify everyone in the group** (for example, all members or certain members of a project): use an [object](/docs/objects). Subscribe the members to the object ([object subscriptions](/docs/object-subscriptions)), then trigger on the object and it reaches all current subscribers. Objects work in either model.
+  </Accordion>
+
+  <Accordion title="Can I use both models across my customers?">
+    Yes. Keep customers that require isolation in their own workspaces, and model the rest as tenants in a shared workspace.
+  </Accordion>
+
+  <Accordion title="Does the number of workspaces affect cost?">
+    No. SuprSend [bills by notification volume](https://www.suprsend.com/pricing) across your whole account, so the number of workspaces does not change the bill. Unlimited workspaces come in Enterprise plan.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+Follow a deep-dive — each walks through setup end to end with a working example app.
+
+<CardGroup cols={2}>
+  <Card title="Designing notifications for B2B2C applications" icon="clone" href="/docs/guides/multi-tenant-modelling">
+    The workspaces model in depth: one workspace per customer, with isolation, credentials, and asset sync with the CLI.
+  </Card>
+
+  <Card title="Designing notifications for B2B applications" icon="layer-group" href="/docs/guides/modelling-customers-b2b">
+    A single organization modelled with its projects inside one workspace.
+  </Card>
+</CardGroup>
+
+## Related reference
+
+- [Workspaces](/docs/workspaces)
+- [Tenants](/docs/tenants) · [Sub-tenants](/docs/sub-tenants) · [Tenant quick start](/docs/tenant-quick-start) · [Tenant management](/docs/tenant-management)
+- [Tenant templates](/docs/tenant-templates) · [Tenant preferences](/docs/tenant-preference) · [Tenant vendors](/docs/tenant-vendor) · [Tenant workflows](/docs/tenant-workflows)
+- [Notification categories](/docs/notification-category) · [Template variants](/docs/template-variants) · [CLI](/reference/cli-intro)
+- [Objects](/docs/objects) · [Object subscriptions](/docs/object-subscriptions)

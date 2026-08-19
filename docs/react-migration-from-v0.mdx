@@ -1,0 +1,59 @@
+---
+title: "Migration guide"
+description: "Upgrade the SuprSend React SDK between major versions with this migration guide."
+---
+
+# Migrating to v1 from v0
+
+The only change v1 of `@suprsend/react` introduces is tenant scoping across the sdk.
+
+<Note>
+  If you use headless `@suprsend/react-core`, follow this same section for
+  migrating to its v2 from v1 — the changes are identical.
+</Note>
+
+### Tenant scoping
+
+Skip this guide if you don't use multi-tenant architecture, i.e. if you don't pass tenant id in userToken jwt payload and don't use tenant id fields for preferences and in-app feed.
+
+Pass `tenantId` prop in `SuprSendProvider` and the rest of the SDK, including preferences and in-app feed, uses it. Changing the `tenantId` prop switches the active tenant of the identified user.
+
+The per-call `tenantId` params in v0 still work and override the active tenant, so you can migrate gradually or leave your v0 code as is.
+
+```javascript v1
+<SuprSendProvider
+  publicApiKey={publicApiKey}
+  distinctId={distinctId}
+  userToken={userToken}
+  tenantId="TENANT_ID"
+>
+  {/* inherited — no need to repeat for Inbox or SuprSendFeedProvider */}
+  <Inbox />
+</SuprSendProvider>;
+
+// preferences inherit it too
+await suprSendClient.user.preferences.getPreferences();
+```
+
+```javascript v0
+<SuprSendProvider
+  publicApiKey={publicApiKey}
+  distinctId={distinctId}
+  userToken={userToken}
+>
+  {/* tenant repeated at every place */}
+  <Inbox tenantId="TENANT_ID" />
+</SuprSendProvider>;
+
+// preferences needed tenant passed
+await suprSendClient.user.preferences.getPreferences({ tenantId: "TENANT_ID" });
+```
+
+**IMPORTANT**: Whichever tenant you pass in sdk, it must be included in `scope.tenant_id` of the [userToken](/docs/client-authentication#enhanced-security-mode-with-signed-user-token), else the server throws scoping error.
+
+### Behaviour changes to note
+
+- `Inbox` and `SuprSendFeedProvider` no longer default their `tenantId` to the `default` tenant. When `tenantId` is not passed, the feed follows the active tenant set on `SuprSendProvider` (falling back to the `default` tenant) and re-initializes automatically whenever the active tenant changes. Passing `tenantId` to them pins the feed to that tenant — it takes priority over the active tenant and the feed ignores later tenant changes on the provider.
+- Previously fetched preferences keep the tenant they were fetched with. Call `getPreferences` again after a tenant change to load the new tenant's data.
+
+If you face any issue in migration process please reach out to us on our [slack community](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ) or drop an email to us on [support@suprsend.com](mailto:support@suprsend.com)

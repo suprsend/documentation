@@ -28,7 +28,8 @@ flowchart LR
 You identify a user once — either from your backend SDK, a client-side SDK, or a third-party connector like Segment. From then on, every workflow trigger that names their `distinct_id` picks up their channels, properties, and preferences automatically.
 
 <Note>
-Users are workspace-scoped — a `distinct_id` in your staging workspace is a different user from the same `distinct_id` in production.
+  Users are workspace-scoped — a `distinct_id` in your staging workspace is a
+  different user from the same `distinct_id` in production.
 </Note>
 
 ## Types of users
@@ -61,10 +62,13 @@ SuprSend distinguishes users along two axes: whether they're **stored** (identif
   }
 }
 ```
+
 </CodeGroup>
 
 <Tip>
-Prefer identified users whenever you'll message the same person again — preferences, digest schedules, and per-tenant overrides all require a stored profile.
+  Prefer identified users whenever you'll message the same person again —
+  preferences, digest schedules, and per-tenant overrides all require a stored
+  profile.
 </Tip>
 
 ### Recipient vs actor
@@ -84,7 +88,7 @@ A typical payload sets one or more channel identities (each is a list) plus any 
 
 ### Backend SDK / HTTP API
 
-Call the [Create / Update Users API](/reference/create-update-users) or a backend SDK from your application server. *Best for server-of-record patterns — sync on signup, subscription change, or profile edit.*
+Call the [Create / Update Users API](/reference/create-update-users) or a backend SDK from your application server. _Best for server-of-record patterns — sync on signup, subscription change, or profile edit._
 
 <CodeGroup>
 ```bash cURL
@@ -195,21 +199,22 @@ if err != nil {
 }
 fmt.Println(res)
 ```
+
 </CodeGroup>
 
 See the language-specific guides for full method reference and installation: [Node](/docs/node-create-user-profile), [Python](/docs/python-create-user-profile), [Java](/docs/java-create-user-profile), [Go](/docs/go-create-user-profile). For precise mutations use [edit operations](/reference/edit-user-profile) (`$set`, `$unset`, `$append`, `$remove`).
 
 ### Client-side SDK
 
-Identify the user from the browser or mobile app after they've authenticated. *Best when you also need to capture in-app events or register device push tokens.* Client-side identification uses a public API key plus a short-lived user token minted by your backend — see [client authentication](/docs/client-authentication).
+Identify the user from the browser or mobile app after they've authenticated. _Best when you also need to capture in-app events or register device push tokens._ Client-side identification uses a public API key plus a short-lived user token minted by your backend — see [client authentication](/docs/client-authentication).
 
 <CodeGroup>
 ```javascript JavaScript
 import { SuprSendClient } from "@suprsend/web-sdk";
 
 const suprSendClient = new SuprSendClient(
-  "__public_api_key__",
-  "your-tenant"
+"**public_api_key**",
+"your-tenant"
 );
 
 // Authenticate the current user (userToken is minted by your backend)
@@ -220,10 +225,11 @@ await suprSendClient.user.addEmail("user@example.com");
 await suprSendClient.user.addSms("+15555555555");
 await suprSendClient.user.setPreferredLanguage("en");
 await suprSendClient.user.set({
-  name: "Alex Rivera",
-  plan: "growth",
+name: "Alex Rivera",
+plan: "growth",
 });
-```
+
+````
 
 ```javascript React Native
 import Suprsend from "@suprsend/react-native-sdk";
@@ -241,7 +247,7 @@ suprsend.user.set({
   name: "Alex Rivera",
   plan: "growth",
 });
-```
+````
 
 ```kotlin Android (Kotlin)
 // Authenticate the current user — androidpush token is registered automatically
@@ -283,17 +289,20 @@ suprsend.user.set({
   "plan": "growth",
 });
 ```
+
 </CodeGroup>
 
-See the platform-specific guides for installation, push-token setup, and full method reference: [JavaScript](/docs/js-events-and-user-methods), [React Native](/docs/react-native-create-user), [Android](/docs/android-create-user), [iOS](/docs/swift-events-and-user-methods), [Flutter](/docs/flutter-create-user).
+See the platform-specific guides for installation, push-token setup, and full method reference: [JavaScript](/docs/js-events-and-user-methods), [React Native](/docs/react-native-create-user), [Android](/docs/android-create-user), [iOS](/docs/ios-integration.mdx), [Flutter](/docs/flutter-integration.mdx).
 
 <Tip>
-For most B2B products, sync from the backend on write (signup, plan change) and use the client SDK only for push-token registration and events. That keeps the user profile authoritative in one place.
+  For most B2B products, sync from the backend on write (signup, plan change)
+  and use the client SDK only for push-token registration and events. That keeps
+  the user profile authoritative in one place.
 </Tip>
 
 ### Inline in a trigger
 
-Pass channel identities and properties directly on the `recipients` object of a [workflow trigger](/docs/trigger-workflow) — SuprSend upserts the user before sending. *Best for lightweight onboarding flows where the trigger itself carries the freshest data*, or for [anonymous sends](#identified-vs-anonymous) via `is_transient: true`.
+Pass channel identities and properties directly on the `recipients` object of a [workflow trigger](/docs/trigger-workflow) — SuprSend upserts the user before sending. _Best for lightweight onboarding flows where the trigger itself carries the freshest data_, or for [anonymous sends](#identified-vs-anonymous) via `is_transient: true`.
 
 <CodeGroup>
 ```bash cURL
@@ -323,17 +332,17 @@ To skip user creation when the recipient shouldn't be persisted, add `"$skip_cre
 
 ### Third-party connector
 
-Sync users automatically from [Segment](/docs/segment). Every `identify` call from Segment maps to a SuprSend user upsert — `userId` becomes the `distinct_id`, and everything under `traits` syncs as properties or channel identities (with a per-key mapping you configure once). *Best if user identity already flows through Segment in your stack — you get user sync without any additional integration code.*
+Sync users automatically from [Segment](/docs/segment). Every `identify` call from Segment maps to a SuprSend user upsert — `userId` becomes the `distinct_id`, and everything under `traits` syncs as properties or channel identities (with a per-key mapping you configure once). _Best if user identity already flows through Segment in your stack — you get user sync without any additional integration code._
 
 ## Mapping users to other entities
 
 A user can be associated with three other primitives in SuprSend — a **tenant**, an **object**, or a **list**. Each mapping serves a different purpose, and a single user can participate in all three simultaneously.
 
-| Mapping | What it does | Reach for it when |
-|---|---|---|
-| **[User ↔ Tenant](/docs/user-tenant-mapping)** | Isolate users to a single tenant, or share users across tenants with per-tenant overrides for channels and properties | *"Users in our B2B app should never leak across customer orgs"*, or *"Same person exists in two of our customer orgs and needs a different Slack token in each"* |
-| **[User ↔ Object](/docs/object-subscriptions)** | Subscribe a user to a group entity (team, project, department) with optional subscription properties | *"Notify everyone watching this project when a comment is posted"* |
-| **[User ↔ List](/docs/lists)** | Add the user to an audience for **campaigns** (broadcasts) or **re-engagement workflows** on list entry / exit | *"Send the Q1 product newsletter to Growth-plan users"* or *"Trigger a win-back flow when a user drops out of the 'active in last 30 days' list"* |
+| Mapping                                         | What it does                                                                                                          | Reach for it when                                                                                                                                                |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[User ↔ Tenant](/docs/user-tenant-mapping)**  | Isolate users to a single tenant, or share users across tenants with per-tenant overrides for channels and properties | _"Users in our B2B app should never leak across customer orgs"_, or _"Same person exists in two of our customer orgs and needs a different Slack token in each"_ |
+| **[User ↔ Object](/docs/object-subscriptions)** | Subscribe a user to a group entity (team, project, department) with optional subscription properties                  | _"Notify everyone watching this project when a comment is posted"_                                                                                               |
+| **[User ↔ List](/docs/lists)**                  | Add the user to an audience for **campaigns** (broadcasts) or **re-engagement workflows** on list entry / exit        | _"Send the Q1 product newsletter to Growth-plan users"_ or _"Trigger a win-back flow when a user drops out of the 'active in last 30 days' list"_                |
 
 ### User ↔ Tenant
 
@@ -377,21 +386,31 @@ See [Lists](/docs/lists) for creation options and [Add user to list](/docs/add-u
     Use a stable, unique identifier from your own system — typically your database's user primary key. Avoid email addresses or usernames, because those can change and the `distinct_id` cannot.
   </Accordion>
 
-  <Accordion title="Can one user have different channel identities per tenant?">
-    Yes. Set them up as per-tenant overrides via [user-tenant mapping](/docs/user-tenant-mapping). The global profile remains untouched; the per-tenant values apply only when a trigger carries the matching `tenant_id`.
-  </Accordion>
+<Accordion title="Can one user have different channel identities per tenant?">
+  Yes. Set them up as per-tenant overrides via [user-tenant
+  mapping](/docs/user-tenant-mapping). The global profile remains untouched; the
+  per-tenant values apply only when a trigger carries the matching `tenant_id`.
+</Accordion>
 
-  <Accordion title="How do I send to someone who isn't a registered user?">
-    Pass `is_transient: true` on the `recipients` payload along with the channel identities you want to reach them on. No profile is created, and nothing is stored. See [anonymous user triggers](/docs/node-trigger-workflow-from-api#sending-notification-to-anonymous-user).
-  </Accordion>
+<Accordion title="How do I send to someone who isn't a registered user?">
+  Pass `is_transient: true` on the `recipients` payload along with the channel
+  identities you want to reach them on. No profile is created, and nothing is
+  stored. See [anonymous user
+  triggers](/docs/node-trigger-workflow-from-api#sending-notification-to-anonymous-user).
+</Accordion>
 
-  <Accordion title="What happens if I trigger with a distinct_id that doesn't exist?">
-    If you pass channel identities inline on the recipient, SuprSend creates the user on the fly (unless you set `$skip_create: true`). If you pass only a `distinct_id` and no channels, the trigger fails because there's no way to reach the recipient.
-  </Accordion>
+<Accordion title="What happens if I trigger with a distinct_id that doesn't exist?">
+  If you pass channel identities inline on the recipient, SuprSend creates the
+  user on the fly (unless you set `$skip_create: true`). If you pass only a
+  `distinct_id` and no channels, the trigger fails because there's no way to
+  reach the recipient.
+</Accordion>
 
-  <Accordion title="Can a user appear as both actor and recipient in the same trigger?">
-    Yes — for example, an "I approved my own request" notification. The same `distinct_id` can be listed as `actor` and as a member of `recipients`. Their properties resolve into `$actor.*` and `$recipient.*` independently.
-  </Accordion>
+<Accordion title="Can a user appear as both actor and recipient in the same trigger?">
+  Yes — for example, an "I approved my own request" notification. The same
+  `distinct_id` can be listed as `actor` and as a member of `recipients`. Their
+  properties resolve into `$actor.*` and `$recipient.*` independently.
+</Accordion>
 
   <Accordion title="How do I delete a user?">
     Use [delete user API](/reference/delete-user). This removes the profile, channel identities, preferences, and per-tenant overrides for that `distinct_id` in the workspace.
@@ -401,13 +420,25 @@ See [Lists](/docs/lists) for creation options and [Add user to list](/docs/add-u
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Update user profile" icon="user-pen" href="/docs/update-user-profile">
+  <Card
+    title="Update user profile"
+    icon="user-pen"
+    href="/docs/update-user-profile"
+  >
     Add channels, set custom properties, and edit profiles via SDK or API.
   </Card>
-  <Card title="User-tenant mapping" icon="users" href="/docs/user-tenant-mapping">
+  <Card
+    title="User-tenant mapping"
+    icon="users"
+    href="/docs/user-tenant-mapping"
+  >
     Give a user different properties and channel identities per tenant.
   </Card>
-  <Card title="Object subscriptions" icon="sitemap" href="/docs/object-subscriptions">
+  <Card
+    title="Object subscriptions"
+    icon="sitemap"
+    href="/docs/object-subscriptions"
+  >
     Subscribe users to teams, projects, or other group entities.
   </Card>
   <Card title="Lists" icon="list" href="/docs/lists">
