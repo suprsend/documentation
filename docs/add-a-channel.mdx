@@ -831,16 +831,21 @@ app — a Firebase project for Android, an Apple developer account for iOS.
 | Platform | What SuprSend needs | Where to get it |
 |---|---|---|
 | **Android** | Service account key file (`.json`), FCM API version, and your app's package name | Firebase Console → **Project settings → Service accounts** |
-| **iOS** | `.p8` auth key, Auth Key ID, Team ID, Bundle ID | Apple Developer → **Certificates, IDs & Profiles → Keys**, new key with Apple Push Notification service enabled |
+| **iOS** | `.p8` auth key, Auth Key ID, Team ID, Bundle ID, and the APNS environment | Apple Developer → **Certificates, IDs & Profiles → Keys**, new key with Apple Push Notification service enabled |
 
 Add them at [**Vendors → Android Push**](https://app.suprsend.com/en/sandbox/vendors) or
 **Vendors → iOS Push**.
 
-<Frame>
+<CodeGroup>
   <img src="/images/add-channel-fcm-vendor.png" alt="SuprSend FCM vendor form with fields for nickname, FCM API version, service account key file upload and application package name" />
-</Frame>
+  <img src="/images/add-channel-apns-vendor.png" alt="SuprSend iOS APNs vendor form with fields for nickname, mode or environment, p8 file upload, auth key ID, team ID and bundle ID" />
+</CodeGroup>
 
-For iOS, three of the four values are easy to mislabel: the **Auth Key ID** is the code in the `.p8`
+**Mode/Environment** decides whether SuprSend talks to Apple's sandbox or production APNS. A token
+from a development build only works against the development setting, and the mismatch is the usual
+cause of a rejected send.
+
+For iOS, three of the remaining values are easy to mislabel: the **Auth Key ID** is the code in the `.p8`
 filename — `AuthKeyABCD1234.p8` means `ABCD1234`. The **Team ID** is on your Apple developer
 membership page. The **Bundle ID** is your app's, and it has to match exactly or Apple rejects the
 send. Full setup: [FCM](/docs/firebase-fcm-androidpush) · [APNS](/docs/ios-push-vendor-integration).
@@ -989,11 +994,11 @@ anything.
 There are three ways to get one, and the honest split is between what you can paste and what you have
 to build.
 
-| How you connect | Whose workspace | What you end up with | DMs |
+| How you connect | What you store | Where it can send | DMs |
 |---|---|---|---|
-| **Incoming webhook** | Yours or a customer's | A URL pointing at one fixed channel | No |
-| **Your own workspace** | Yours | A bot token, good for any channel or person in it | Yes |
-| **A customer's workspace** | Theirs | A bot token per customer, from an OAuth install | Yes |
+| **Incoming webhook** | A URL | Only the channel you chose when you created it | No |
+| **Bot token** | One token for your workspace | Any channel or person in that workspace | Yes |
+| **OAuth install** | A token per customer | Any channel or person in each customer's workspace | Yes |
 
 This guide covers the first two. Connecting a customer's workspace needs an OAuth flow built into
 your product — see the full [Slack](/docs/slack) and [Microsoft Teams](/docs/microsoft-teams) guides.
@@ -1051,14 +1056,15 @@ on the vendor.
     </Warning>
   </Tab>
 
-  <Tab title="Your own workspace">
-    Create a Slack app, add the OAuth scopes you need, install it to your workspace, and copy the bot
-    token — it starts with `xoxb-`.
+  <Tab title="Bot token">
+    Same Slack app as the webhook tab — you're just taking a different credential out of it. Add the
+    OAuth scopes you need, install the app to your workspace, and copy the bot token. It starts with
+    `xoxb-`.
 
     | Sending to | Scopes | Store |
     |---|---|---|
     | A channel | `chat:write`, `chat:write.public` | `channel_id` + `access_token` |
-    | A person by Slack ID | `chat:write`, `im:write` | `user_id` + `access_token` |
+    | A person by Slack ID | `chat:write`, `im:write`, `users:read` | `user_id` + `access_token` |
     | A person by email | `chat:write`, `im:write`, `users:read.email` | `email` + `access_token` |
 
     `chat:write.public` is what lets the bot post to a channel it hasn't been invited to. Without it,
@@ -1067,8 +1073,11 @@ on the vendor.
     For Teams, the equivalent is installing your Teams app to your tenant and storing `tenant_id`,
     `service_url` and `conversation_id`.
   </Tab>
-
 </Tabs>
+
+Sending into your customers' own workspaces works differently again — they install your app through an
+OAuth flow you build, and you store a token per customer. Full walkthrough in the
+[Slack](/docs/slack) and [Microsoft Teams](/docs/microsoft-teams) guides.
 
 ### Add the channels in SuprSend
 
