@@ -3095,12 +3095,28 @@ paths:
             schema:
               type: object
               required:
-                - tenant_name
+                - name
               properties:
+                name:
+                  type: string
+                  description: "Human-readable tenant name. Renamed from `tenant_name` — both spellings continue to work in requests and responses."
+                  default: Awesome Tenant
                 tenant_name:
                   type: string
-                  description: Name of the tenant. You can add company / organization name here
-                  default: Awesome Tenant
+                  description: "Deprecated alias for `name`. Continue supporting older clients; new integrations should use `name`."
+                  deprecated: true
+                parent_id:
+                  type: string
+                  nullable: true
+                  description: "ID of the hierarchical parent tenant. `null` (or omitted) creates the tenant as a root. Setting it on an existing tenant re-parents it. Must reference an existing tenant. Validated against the 5-level maximum and against circular references — see [Sub-tenants](/docs/sub-tenants)."
+                  example: acme-corp
+                blocked_channels:
+                  type: array
+                  items:
+                    type: string
+                  nullable: true
+                  description: "Channels globally unavailable for this tenant. Cascades irreversibly downward — a channel blocked at any ancestor cannot be unblocked lower down; the effective list is the union across the ancestor chain. Valid channel keys: `email`, `sms`, `whatsapp`, `androidpush`, `iospush`, `webpush`, `slack`, `ms_teams`, `inbox`."
+                  example: ["sms"]
                 logo:
                   type: string
                   description: URL of the tenant logo
@@ -3168,13 +3184,17 @@ paths:
               examples:
                 Result:
                   value: {
+                    "id": "acme-corp",
+                    "name": "Awesome Tenant",
                     "tenant_id": "acme-corp",
                     "tenant_name": "Awesome Tenant",
+                    "parent_id": null,
+                    "ancestors": ["acme-corp"],
+                    "level": 0,
+                    "children_count": 0,
                     "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
                     "timezone": null,
-                    "blocked_channels": [
-                      "email"
-                    ],
+                    "blocked_channels": ["sms"],
                     "embedded_preference_url": "https://app.suprsend.com/settings",
                     "hosted_preference_domain": "preferences.suprsend.com",
                     "primary_color": "#ff0000",
@@ -3182,8 +3202,8 @@ paths:
                     "tertiary_color": "#00ffff",
                     "social_links": {
                       "website": "https://suprsend.com",
-                      "facebook": "https://www.company.com",
-                      "LinkedIn": "",
+                      "facebook": "",
+                      "linkedin": "",
                       "x": "",
                       "instagram": "",
                       "medium": "",
@@ -3192,14 +3212,28 @@ paths:
                       "youtube": ""
                     },
                     "properties": {
-                      "k1": "v1",
-                      "address": "my company address"
+                      "region": "US",
+                      "support_email": "help@example.com"
                     },
-                    "updated_at": "2025-04-06T21:01:35.359787Z"
+                    "derived": {
+                      "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
+                      "primary_color": "#ff0000",
+                      "secondary_color": "#0000ff",
+                      "tertiary_color": "#00ffff",
+                      "preference_page_url": null,
+                      "social_links": {
+                        "website": "https://suprsend.com"
+                      },
+                      "properties": {
+                        "region": "US",
+                        "support_email": "help@example.com"
+                      }
+                    },
+                    "updated_at": "2026-08-27T21:01:35.359787Z"
                   }
               schema:
                 type: object
-                description: Updated Object Payload is returned in response. JSON structure similar to request payload.
+                description: "Tenant object returned. Top-level fields hold the tenant's own local values; the `derived` object holds the effective resolved values after walking the ancestor chain — see [Sub-tenants](/docs/sub-tenants)."
         '400':
           description: '400 - Bad Request'
           content:
@@ -3242,39 +3276,50 @@ paths:
               examples:
                 Result:
                   value: {
-                    "tenant_id": "_tenant_id_",
-                    "tenant_name": "Awesome Tenant",
-                    "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
+                    "id": "eu-sales",
+                    "name": "EU Sales",
+                    "tenant_id": "eu-sales",
+                    "tenant_name": "EU Sales",
+                    "parent_id": "eu",
+                    "ancestors": ["acme-corp", "eu", "eu-sales"],
+                    "level": 2,
+                    "children_count": 0,
+                    "logo": null,
                     "timezone": null,
-                    "blocked_channels": [
-                      "email"
-                    ],
+                    "blocked_channels": null,
                     "embedded_preference_url": "https://app.suprsend.com/en/user-settings/notifications",
                     "hosted_preference_domain": "preferences.suprsend.com",
-                    "primary_color": "#ff0000",
-                    "secondary_color": "#0000ff",
-                    "tertiary_color": "#00ffff",
+                    "primary_color": "#ff0055",
+                    "secondary_color": null,
+                    "tertiary_color": null,
                     "social_links": {
-                      "website": "https://suprsend.com",
-                      "facebook": "https://www.company.com",
-                      "linkedin": "",
-                      "x": "",
-                      "instagram": "",
-                      "medium": "",
-                      "discord": "",
-                      "telegram": "",
-                      "youtube": "",
-                      "tiktok": ""
+                      "website": "https://sales.example.eu"
                     },
                     "properties": {
-                      "k1": "v1",
-                      "address": "my company address"
+                      "team_size": 42
                     },
-                    "updated_at": "2025-04-06T21:01:35.359787Z"
+                    "derived": {
+                      "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
+                      "primary_color": "#ff0055",
+                      "secondary_color": "#0000ff",
+                      "tertiary_color": "#00ffff",
+                      "preference_page_url": null,
+                      "social_links": {
+                        "website": "https://sales.example.eu",
+                        "twitter": "@example"
+                      },
+                      "properties": {
+                        "region": "US",
+                        "support_email": "eu@example.com",
+                        "division": "EU",
+                        "team_size": 42
+                      }
+                    },
+                    "updated_at": "2026-08-27T21:01:35.359787Z"
                   }
               schema:
                 type: object
-                description: Updated Object Payload is returned in response. JSON structure similar to [request payload](/reference/create-update-tenants).
+                description: "Tenant object returned. Top-level fields hold the tenant's own local values; the `derived` object holds the effective resolved values after walking the ancestor chain — see [Sub-tenants](/docs/sub-tenants). Structure matches the [create/update tenant](/reference/create-update-tenants) response."
         '404':
           description: '404 - Not Found'
           content:
@@ -3296,18 +3341,50 @@ paths:
       summary: Delete Tenant
       security:
         - BearerAuth: []
-      description: API to permanently delete tenant and it's associated settings.
+      description: "Soft-deletes a tenant. The tenant record is marked deleted but persists in the database; in-flight notifications complete with the settings that were in effect at trigger time. When the tenant has children, use `children_action` in the request body to control what happens to them. See [Sub-tenants → Delete a tenant with children](/docs/sub-tenant-setup#delete-a-tenant-with-children)."
       operationId: delete-tenant
       parameters:
         - name: tenant_id
           in: path
-          description: unique identifier of the tenant you want to get the details for
+          description: unique identifier of the tenant to delete
           schema:
             type: string
           required: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                children_action:
+                  type: string
+                  enum: [reassign, delete]
+                  description: "How to handle direct and nested descendants when the deleted tenant has children. `reassign` re-parents children to the tenant given in `reassign_to` (validates the resulting subtree still fits within 5 levels). `delete` recursively soft-deletes every descendant. Omitting the field (the default) leaves children as root-level tenants — their data persists, `derived` is recomputed without the deleted tenant in the chain."
+                  example: reassign
+                reassign_to:
+                  type: string
+                  description: "Target parent for descendants when `children_action = reassign`. Required in that case; must reference an existing tenant. Rejected with 400 if sent alongside `children_action = delete` or when `children_action` is omitted."
+                  example: acme-corp
       responses:
         '204':
           description: '204 - No Content'
+        '400':
+          description: '400 - Bad Request. Returned when `reassign_to` is missing on a reassign, sent on a delete, references a non-existent tenant, or when the resulting move would exceed the 5-level limit.'
+          content:
+            application/json:
+              examples:
+                MissingReassignTo:
+                  value: {
+                    "code": 400,
+                    "error_code": "reassign_to_required",
+                    "type": "ValidationError",
+                    "message": "reassign_to is required when children_action = reassign",
+                    "detail": "reassign_to is required when children_action = reassign"
+                  }
+              schema:
+                type: object
+                description: error code and message detailing the error
         '404':
           description: '404 - Not Found'
           content:
@@ -3344,6 +3421,31 @@ paths:
           description: starting position of tenant list
           schema:
             type: integer
+        - name: parent_id
+          in: query
+          description: "Filter to direct children of the given tenant. Use to walk one level of the tree at a time — for a nested tree view, call once per node the user expands. See [Sub-tenants → Browse the tree](/docs/sub-tenant-setup#step-5-browse-the-tree)."
+          required: false
+          schema:
+            type: string
+          example: acme-corp
+        - name: ancestor[]
+          in: query
+          description: "Filter to every descendant of the given tenant at any depth. Pass a single value; the response includes the tenant itself and every tenant with it in their `ancestors` array. Useful for pulling an entire subtree in one call."
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          example: ["acme-corp"]
+        - name: level[]
+          in: query
+          description: "Filter to tenants at the given level(s). `level[]=0` returns all root tenants; repeat the param to combine levels (e.g. `level[]=0&level[]=1`). Root = level 0; the maximum allowed level is 4."
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          example: [0]
       responses:
         '200':
           description: '200 - OK'
@@ -3359,8 +3461,14 @@ paths:
                     },
                     "results": [
                       {
-                        "tenant_id": "random_id",
-                        "tenant_name": "Awesome Tenant",
+                        "id": "acme-corp",
+                        "name": "Acme Corp",
+                        "tenant_id": "acme-corp",
+                        "tenant_name": "Acme Corp",
+                        "parent_id": null,
+                        "ancestors": ["acme-corp"],
+                        "level": 0,
+                        "children_count": 2,
                         "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
                         "timezone": null,
                         "blocked_channels": null,
@@ -3381,7 +3489,7 @@ paths:
                           "youtube": ""
                         },
                         "properties": {},
-                        "updated_at": "2025-04-06T20:57:16.935605Z"
+                        "updated_at": "2026-08-27T20:57:16.935605Z"
                       }]
                     }
               schema:
@@ -3404,17 +3512,25 @@ paths:
                         description: offset passed in request
                   results:
                     type: array
-                    description: List of tenants available in the workspace. Tenant JSON is same as tenant upsert response.
+                    description: "List of tenants available in the workspace. Tenant JSON is the same shape as the [create/update tenant](/reference/create-update-tenants) response, including the `parent_id`, `ancestors`, `level`, `children_count`, and `derived` fields introduced with [sub-tenants](/docs/sub-tenants)."
                     items:
                       type: object
                       properties:
+                        id:
+                          type: string
+                          description: "Unique identifier of the tenant. Renamed from `tenant_id` — both spellings are returned."
+                          example: acme-corp
+                        name:
+                          type: string
+                          description: "Human-readable tenant name. Renamed from `tenant_name` — both spellings are returned."
+                          example: Acme Corp
                         tenant_id:
                           type: string
-                          description: Unique identifier of the tenant.
-                          example: random_id
+                          description: "Deprecated alias for `id`. Continues to be returned for backwards compatibility."
+                          example: acme-corp
                         tenant_name:
                           type: string
-                          description: Name of the tenant.
+                          description: "Deprecated alias for `name`. Continues to be returned for backwards compatibility."
                           example: Awesome Tenant
                         logo:
                           type: string
@@ -3493,14 +3609,66 @@ paths:
                               example: ""
                         properties:
                           type: object
-                          description: Custom properties associated with the tenant.
+                          description: Custom properties associated with the tenant. Local values only — the effective merged values (including inherited) appear under `derived.properties`.
                           additionalProperties: true
-                          example: {"address":"my company address"}
+                          example: {"region": "US"}
+                        parent_id:
+                          type: string
+                          nullable: true
+                          description: "ID of the hierarchical parent tenant. `null` indicates a root tenant. See [Sub-tenants](/docs/sub-tenants)."
+                          example: null
+                        ancestors:
+                          type: array
+                          items:
+                            type: string
+                          description: "Ordered list of tenant `id`s from root to this tenant, inclusive. Root tenants return `[<own-id>]`."
+                          example: ["acme-corp"]
+                        level:
+                          type: integer
+                          description: "Position in the tree. Root = 0; the maximum allowed level is 4 (5 levels total)."
+                          example: 0
+                        children_count:
+                          type: integer
+                          description: "Count of direct children of this tenant."
+                          example: 2
+                        derived:
+                          type: object
+                          description: "Effective resolved values for brand fields and `properties` after walking the ancestor chain — what actually applies at trigger time. Read-only. Refreshed synchronously on every write that could affect it. See [Sub-tenants → The derived field](/docs/sub-tenants#the-derived-field)."
+                          properties:
+                            logo:
+                              type: string
+                              nullable: true
+                              description: "Effective logo URL after inheritance."
+                            primary_color:
+                              type: string
+                              nullable: true
+                              description: "Effective primary color after inheritance."
+                            secondary_color:
+                              type: string
+                              nullable: true
+                              description: "Effective secondary color after inheritance."
+                            tertiary_color:
+                              type: string
+                              nullable: true
+                              description: "Effective tertiary color after inheritance."
+                            preference_page_url:
+                              type: string
+                              nullable: true
+                              description: "Effective preference page URL after inheritance."
+                            social_links:
+                              type: object
+                              description: "Effective social links after per-inner-key merge across the ancestor chain."
+                              additionalProperties:
+                                type: string
+                            properties:
+                              type: object
+                              description: "Effective custom properties after per-key merge across the ancestor chain."
+                              additionalProperties: true
                         updated_at:
                           type: string
                           format: date-time
                           description: Timestamp when the tenant was last updated.
-                          example: "2025-04-06T20:57:16.935605Z"
+                          example: "2026-08-27T20:57:16.935605Z"
       deprecated: false
   /v1/subscriber_list/{list_id}/subscriber/remove/:
     post:
