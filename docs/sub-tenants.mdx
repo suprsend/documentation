@@ -191,7 +191,7 @@ Effective at Cycle (Level 2):
 
 #### Per-tenant user preference
 
-A user can set their own preferences on any tenant they belong to. At trigger time, walk up from where the notification fired; the *first* value the user has explicitly set wins. Update via the [Update User Category Preference](/reference/update-user-category-preference) or [Update User Channel Preference](/reference/update-user-channel-preference) endpoint — the `tenant_id` query param scopes each write to a specific tenant:
+A user can set their own preferences on any tenant they belong to. Every user preference — category or channel — is always saved against a tenant; there is no workspace-wide user preference. At trigger time, walk up from where the notification fired; the *first* value the user has explicitly set wins. Update via the [Update User Category Preference](/reference/update-user-category-preference) or [Update User Channel Preference](/reference/update-user-channel-preference) endpoint — the `tenant_id` query param scopes each write to a specific tenant and is required:
 
 ```bash cURL
 # Category preference (scoped to tenant-1)
@@ -297,7 +297,7 @@ A user's effective profile at trigger time will be their global profile merged w
 %%{init: {'theme':'base','themeVariables':{'fontSize':'14px','fontFamily':'ui-sans-serif, system-ui, sans-serif','lineColor':'#9a9a9a'},'flowchart':{'padding':14,'nodeSpacing':40,'rankSpacing':40}}}%%
 flowchart TD
     R["<b>acme</b> (Root, L0)<br/>logo, primary_color, support_email<br/>blocked_channels: [sms]"]
-    R --> P1["<b>web-app</b> (Project, L1)<br/>support_email overridden"]
+    R --> P1["<b>project-1</b> (Project, L1)<br/>support_email overridden"]
     R --> P2["<b>mobile-app</b> (Project, L1)"]
     P1 --> C1["<b>sprint-42</b> (Cycle, L2)<br/>milestone property added"]
     P1 --> C2["<b>sprint-43</b> (Cycle, L2)"]
@@ -310,379 +310,104 @@ flowchart TD
     class C1,C2 s3;
 ```
 
-Trigger a workflow at `sprint-42` and SuprSend takes `logo` and `primary_color` from `acme`, `support_email` from `web-app`, and the `milestone` property from `sprint-42` itself. SMS stays blocked on every send because `acme` locks it at the root — no descendant can turn it back on.
+Trigger a workflow at `sprint-42` and SuprSend takes `logo` and `primary_color` from `acme`, `support_email` from `project-1`, and the `milestone` property from `sprint-42` itself. SMS stays blocked on every send because `acme` locks it at the root — no descendant can turn it back on.
 
-## What cascades in this release
-
-The cascade for properties, brand fields, preferences, and tenant vendors is live today. The rest of SuprSend's tenant surface still works exactly as before — flat, with no hierarchy.
-
-| Feature | Cascades? | Notes |
-|---|---|---|
-| Custom `properties` | Yes | Merges one key at a time — overriding one key doesn't stop others from being inherited. |
-| Brand fields (`logo`, `primary_color`, `secondary_color`, `tertiary_color`, `preference_page_url`) | Yes | The closest tenant that sets the field wins. |
-| Brand `social_links` (object) | Yes | Merges one inner key at a time — override `website` without breaking `twitter` inheritance. |
-| `blocked_channels` at the tenant level | Yes, and can't be undone | A channel blocked anywhere in the chain is blocked for everything below. Descendants can add more channels but can't remove an ancestor's block. |
-| Category-level `enabled_for_tenant: false`, `blocked_channels`, `visible_to_subscriber` | Yes, and can't be undone | Set on a preference category — locked for every tenant below. See [tenant preferences](/docs/tenant-preference). |
-| Tenant default preferences (per-category) | Yes | The closest tenant that sets a preference for a category wins. |
-| [Tenant vendors](/docs/tenant-vendor) | Yes | The closest tenant that configures a vendor for a channel wins. |
-| [Template variants](/docs/template-variants), [user-tenant mapping](/docs/user-tenant-mapping), inbox scoping | No (flat) | Continue to resolve against the triggered tenant only. Template variants fall back one level to the default tenant; full multi-level support ships later. |
-
-## Resolution — a worked example
-
-Say you set the following:
-
-```text
-acme (Root, L0):
-  logo:             "acme.png"
-  primary_color:    "#0055ff"
-  properties:       { support_email: "help@acme.com", region: "US" }
-  social_links:     { website: "acme.com", twitter: "@acme" }
-  blocked_channels: ["sms"]
-
-web-app (L1, parent = acme):
-  properties:       { support_email: "web-support@acme.com", team: "Web" }
-  social_links:     { website: "acme.com/web" }
-
-sprint-42 (L2, parent = web-app):
-  properties:       { milestone: "beta-launch" }
-```
-
-Triggering at `sprint-42` gives you:
-
-```json
-{
-  "logo": "acme.png",                          // from acme
-  "primary_color": "#0055ff",                  // from acme
-  "properties": {
-    "support_email": "web-support@acme.com",   // from web-app
-    "region": "US",                            // from acme
-    "team": "Web",                             // from web-app
-    "milestone": "beta-launch"                 // from sprint-42
-  },
-  "social_links": {
-    "website": "acme.com/web",                 // from web-app (overrode acme's)
-    "twitter": "@acme"                         // from acme (web-app didn't override)
-  },
-  "blocked_channels": ["sms"]                  // locked at acme, can't be undone
-}
-```
-
-Tenant API responses only show a tenant's **own local values** — the fields it explicitly set. Anything inherited from an ancestor shows as `null` on the tenant. SuprSend resolves the effective values at send time by walking the ancestor chain — your app never has to. Just pass the leaf tenant's `id` at trigger time.
-
-```json
-{
-  "id": "sprint-42",
-  "name": "Sprint 42",
-  "parent_id": "web-app",
-  "ancestors": ["acme", "web-app"],
-  "level": 2,
-  "logo": null,
-  "primary_color": null,
-  "properties": { "milestone": "beta-launch" },
-  "social_links": null,
-  "blocked_channels": null
-}
-```
-
-`logo`, `primary_color`, `social_links`, and `blocked_channels` are `null` here because `sprint-42` never set them locally — they still flow down from `acme` and `web-app` at send time.
-
-## When to use sub-tenants
-
-- Your customers have an **org structure** that admins need to reflect in notification settings (HQ → Branch, Org → Team → Project).
-- You run a **white-label or reseller** setup and want each brand's sub-brands to inherit branding by default and only change the differences.
-- You need to **lock channels or categories org-wide** — a channel or category blocked at the root must stay blocked everywhere below, and no team admin lower down can flip it back on.
-- You want admins to **configure once at the top** and let the tree do the rest, instead of copying the same properties into every tenant.
-
-## When NOT to use sub-tenants
-
-- **Two completely different products or customer bases** that share nothing — use [separate workspaces](/docs/workspaces) instead. Workspaces keep users, workflows, templates, vendors, and data isolated.
-- **A user segment inside one tenant** (e.g., "beta users") — that's a [List](/docs/lists) or an [Object](/docs/objects), not a tenant.
-- **Per-tenant content variations** that don't need any parent/child relationship — use flat tenants with [template variants](/docs/template-variants).
-
-## Create a root tenant
-
-Any existing flat tenant is already a root — `parent_id: null`, `level: 0`. Skip to the next section if you already have the tenant you want as the top of the tree. Otherwise, create one.
+## Adding a sub-tenant
 
 <Tabs>
   <Tab title="Dashboard">
-    1. Go to **Tenants** in the side nav and click **New Tenant**.
-    2. Enter a **Tenant ID** (must be unique across the workspace, ≤ 64 chars, characters `[a-z0-9_.-]`) and a **Name**.
-    3. Leave the **Parent Tenant** selector empty — the tenant is created as a root.
-    4. Fill in the logo, colors, social links, and any custom properties you want every tenant below to inherit by default.
+    1. Go to **Tenants** in the side nav and open the tenant you want to add a sub-tenant under.
+    2. Switch to the **Sub-tenants** tab and click **Add Sub-tenant**.
 
-    <Frame caption="Create root tenant">
-      {/* SCREENSHOT: New Tenant modal with Parent Tenant selector left empty, showing branding + properties inputs */}
-      <img alt="New Tenant modal with the Parent Tenant selector empty" />
+    <Frame caption="Sub-tenants tab — empty state">
+      <img src="/images/sub-tenant-tab-empty-screen.png" alt="Empty state of the Sub-tenants tab with the Add Sub-tenant CTA" />
     </Frame>
+
+    3. In the modal, enter a **Tenant ID** (unique across the workspace, ≤ 64 chars, characters `[a-z0-9_.-]`) and a **Name**. The parent is prefilled from the tenant you opened; if that tenant already has sub-tenants of its own, you can pick any tenant in its subtree as the parent instead. Click on Create Tenant.
+
+    <Frame caption="Add Sub-tenant modal">
+      <img src="/images/add-sub-tenant-modal.png" alt="Add Sub-tenant modal with Tenant ID and Name inputs" />
+    </Frame>
+
+     The new sub-tenant starts inheriting branding, properties, vendors, and preferences from the parent immediately; Click on it to override the properties or preference for this sub-tenant.
+
+    <Frame caption="Sub-tenants tab on the tenant details page">
+      <img src="/images/sub-tenant-tab-inside-tenant-details-page.png" alt="Sub-tenants tab on the tenant details page listing existing sub-tenants" />
+    </Frame>
+
+    Once at least one sub-tenant exists in your workspace, the **Add Tenant** action on the Tenants listing page also exposes a **Parent tenant** picker — so you can create a new tenant anywhere in the hierarchy without opening its parent first.
   </Tab>
-  <Tab title="REST API">
-    ```bash cURL
-    curl -X POST https://hub.suprsend.com/v1/tenant/acme-corp/ \
+  <Tab title="API">
+    Create a sub-tenant by passing `parent_id` in the [tenant upsert API](/reference/create-update-tenants).
+
+    <CodeGroup>
+    ```bash Request
+    curl -X POST https://hub.suprsend.com/v1/tenant/project-1/ \
       -H "Authorization: Bearer __api_key__" \
       -H "Content-Type: application/json" \
       -d '{
-        "name": "Acme Corp",
-        "logo": "https://acme.com/logo.png",
-        "primary_color": "#0055ff",
-        "social_links": { "website": "https://acme.com", "twitter": "@acme" },
-        "properties": { "support_email": "help@acme.com", "region": "US" }
+        "name": "Project 1",
+        "parent_id": "acme",
+        "properties": { "support_email": "web-support@acme.com", "team": "Web" },
+        "social_links": { "website": "https://acme.com/web" }
       }'
     ```
 
-    Skip `parent_id` (or send `null`) to create a root tenant.
-  </Tab>
-  <Tab title="Node.js">
-    ```javascript
-    const { Suprsend } = require("@suprsend/node-sdk");
-    const supr = new Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET");
-
-    await supr.tenants.upsert("acme-corp", {
-      name: "Acme Corp",
-      logo: "https://acme.com/logo.png",
-      primary_color: "#0055ff",
-      social_links: { website: "https://acme.com", twitter: "@acme" },
-      properties: { support_email: "help@acme.com", region: "US" },
-    });
-    ```
-  </Tab>
-  <Tab title="Python">
-    ```python
-    from suprsend import Suprsend
-
-    supr = Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET")
-
-    supr.tenants.upsert("acme-corp", {
-        "name": "Acme Corp",
-        "logo": "https://acme.com/logo.png",
-        "primary_color": "#0055ff",
-        "social_links": {"website": "https://acme.com", "twitter": "@acme"},
-        "properties": {"support_email": "help@acme.com", "region": "US"},
-    })
-    ```
-  </Tab>
-  <Tab title="AI agent / MCP">
-    With the [SuprSend MCP server](/reference/mcp-overview) connected to Claude, Cursor, or another agent, give it a prompt like:
-
-    ```text
-    Create a root tenant in my staging workspace with id "acme-corp" and name "Acme Corp".
-    Pull the logo, primary color, and social links from https://acme.com and set
-    support_email = "help@acme.com" and region = "US" as custom properties.
-    ```
-
-    The agent calls the `upsert_suprsend_tenant` tool for you.
-  </Tab>
-</Tabs>
-
-## Create a child tenant
-
-Add a `parent_id` pointing at the tenant you want as the parent. That's the only difference from creating a root — everything else works the same way.
-
-<Tabs>
-  <Tab title="Dashboard">
-    1. Open the parent tenant's detail page and click **Add Child Tenant** (or open **New Tenant** and pick the parent from the **Parent Tenant** selector).
-    2. Enter the child's **Tenant ID** and **Name**.
-    3. The branding and properties tabs show the parent's values as **inherited (read-only)**. Anything you leave alone keeps inheriting live.
-    4. Optionally override individual fields — those become the child's own values.
-
-    <Frame caption="Create sub-tenant with Parent Tenant selected">
-      {/* SCREENSHOT: New Tenant modal with Parent Tenant = acme-corp; branding preview showing acme-corp's logo/colors as inherited placeholders */}
-      <img alt="New Tenant modal with a parent selected and inherited fields shown as read-only placeholders" />
-    </Frame>
-  </Tab>
-  <Tab title="REST API">
-    ```bash cURL
-    curl -X POST https://hub.suprsend.com/v1/tenant/eu/ \
-      -H "Authorization: Bearer __api_key__" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "name": "Acme EU",
-        "parent_id": "acme-corp",
-        "properties": { "support_email": "eu@acme.com", "division": "EU" },
-        "social_links": { "website": "https://acme.eu" }
-      }'
-    ```
-
-    Fields you don't send stay `null` on the child and are inherited live from the parent chain at send time:
-
-    ```json
+    ```json Response
     {
-      "id": "eu",
-      "name": "Acme EU",
-      "parent_id": "acme-corp",
-      "ancestors": ["acme-corp"],
+      "id": "project-1",
+      "name": "Project 1",
+      "parent_id": "acme",
+      "ancestors": ["acme"],
       "level": 1,
       "logo": null,
       "primary_color": null,
-      "social_links": { "website": "https://acme.eu" },
-      "properties": { "support_email": "eu@acme.com", "division": "EU" }
+      "social_links": { "website": "https://acme.com/web" },
+      "properties": { "support_email": "web-support@acme.com", "team": "Web" },
+      "children_count": 0
     }
     ```
+    </CodeGroup>
 
-    `logo` and `primary_color` are `null` because `eu` never set them locally — they still resolve to `acme-corp`'s values when a workflow triggers at `eu`.
-  </Tab>
-  <Tab title="Node.js">
-    ```javascript
-    await supr.tenants.upsert("eu", {
-      name: "Acme EU",
-      parent_id: "acme-corp",
-      properties: { support_email: "eu@acme.com", division: "EU" },
-      social_links: { website: "https://acme.eu" },
-    });
-    ```
-  </Tab>
-  <Tab title="Python">
-    ```python
-    supr.tenants.upsert("eu", {
-        "name": "Acme EU",
-        "parent_id": "acme-corp",
-        "properties": {"support_email": "eu@acme.com", "division": "EU"},
-        "social_links": {"website": "https://acme.eu"},
-    })
-    ```
+    Fields you don't send stay `null` on the child and resolve from the ancestor chain at send time. Skip `parent_id` (or send `null`) to create a root tenant.
   </Tab>
 </Tabs>
 
-<Check>
-  Fetch the child right after creating it and check that `logo` and `primary_color` are `null` on the child while the parent has them set — that's inheritance in place. `social_links.website` should show the child's own value.
-</Check>
+## Re-parent or delink a tenant
 
-## Override without breaking inheritance
-
-The merge happens **one key at a time**. Overriding one property or one inner social-link key leaves every other key inheriting from the parent chain.
-
-### Custom properties
-
-Use `PATCH /v1/tenant/{tenant_id}/properties/` with `$set` / `$unset` operations to change one property without touching the rest of the object.
-
-```bash cURL
-curl -X PATCH https://hub.suprsend.com/v1/tenant/eu-sales/properties/ \
-  -H "Authorization: Bearer __api_key__" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "operations": [
-      { "$set": { "team_size": 42 } },
-      { "$unset": ["division"] }
-    ]
-  }'
-```
-
-- `$set` — adds or updates the given keys in `properties`. Existing keys not in the payload stay as they are.
-- `$unset` — removes the listed keys from the tenant's own `properties`. If an ancestor still has the key set, the tenant falls back to the inherited value at send time; otherwise the key isn't there at all.
-- Only custom properties are settable this way. Reserved fields (`id`, `name`) can't be set or unset here.
-
-To **replace the entire properties object** — dropping all local values in one shot — send `properties` at the top level instead:
-
-```bash cURL
-curl -X PATCH https://hub.suprsend.com/v1/tenant/eu-sales/properties/ \
-  -H "Authorization: Bearer __api_key__" \
-  -H "Content-Type: application/json" \
-  -d '{ "properties": { "team_size": 42 } }'
-```
-
-<Warning>
-  The top-level `properties` form **replaces** the tenant's entire local properties object. Anything not in the payload is dropped. Inherited keys still apply at send time, but any local values you'd set are gone. Use the `operations` form when you want to change just one key.
-</Warning>
-
-### Brand fields
-
-Send only the fields you want to set. Fields you skip stay unset on the tenant and keep inheriting.
-
-```bash cURL
-curl -X POST https://hub.suprsend.com/v1/tenant/eu-sales/ \
-  -H "Authorization: Bearer __api_key__" \
-  -H "Content-Type: application/json" \
-  -d '{ "primary_color": "#ff0055" }'
-```
-
-For `social_links`, send only the inner keys you want to override — the ones you skip keep inheriting:
-
-```bash cURL
-curl -X POST https://hub.suprsend.com/v1/tenant/eu-sales/ \
-  -H "Authorization: Bearer __api_key__" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "social_links": { "website": "https://sales.acme.eu" }
-  }'
-```
-
-At send time the child resolves `social_links.website` to `"https://sales.acme.eu"` (its own value), while `social_links.twitter` still comes from the root's `"@acme"`.
-
-## Block a channel across a subtree
-
-Set `blocked_channels` on the tenant to make one or more channels unavailable for every user under that tenant — and every tenant below it.
-
-```bash cURL
-curl -X POST https://hub.suprsend.com/v1/tenant/acme-corp/ \
-  -H "Authorization: Bearer __api_key__" \
-  -H "Content-Type: application/json" \
-  -d '{ "blocked_channels": ["sms"] }'
-```
-
-A descendant's **effective `blocked_channels` is the combined list of its own and every ancestor's**. Descendants can add more channels; they can't remove one an ancestor set.
-
-```text
-acme-corp:  blocked_channels = ["sms"]
-  eu:       blocked_channels = ["whatsapp"]
-    eu-sales effective = ["sms", "whatsapp"]   ← combined across the chain
-```
-
-For category-level rules (turn a category off for a whole subtree, force a channel block per category, or hide a category from user preference pages) see [tenant preferences](/docs/tenant-preference).
-
-## Browse the tree
-
-The list tenants endpoint takes a few new query parameters that let you walk the hierarchy without pulling everything back.
-
-| Query param | Returns |
-|---|---|
-| `parent_id=<id>` | Direct children of the given tenant only. |
-| `ancestor[]=<id>` | Every tenant under the given tenant, at any depth. |
-| `level[]=<n>` | Tenants at the given level. `level[]=0` returns all root tenants. Repeat the param to combine multiple levels. |
-
-Every tenant in the list response includes `ancestors`, `level`, and `children_count`, so you can build a client-side tree view from a single call.
-
-```bash cURL
-# Direct children of acme-corp
-curl -H "Authorization: Bearer __api_key__" \
-  "https://hub.suprsend.com/v1/tenant/?parent_id=acme-corp"
-
-# Every tenant under acme-corp, any depth
-curl -H "Authorization: Bearer __api_key__" \
-  "https://hub.suprsend.com/v1/tenant/?ancestor[]=acme-corp"
-
-# All root tenants in the workspace
-curl -H "Authorization: Bearer __api_key__" \
-  "https://hub.suprsend.com/v1/tenant/?level[]=0"
-```
-
-<Tip>
-  Use `children_count` on each list item to decide whether a tree node is expandable in your UI, without making an extra call.
-</Tip>
-
-## Re-parent a tenant
-
-Change the `parent_id` on an existing tenant to move it (and its entire subtree) somewhere else in the tree. Pass `parent_id: null` (or an empty string) to make it a root again.
+Change the `parent_id` on an existing tenant to move it (and its entire subtree) somewhere else in the tree, or delink it from its parent so it becomes a root again. On the API it's a single field — set `parent_id` to a new tenant to re-parent, or send `null` (or an empty string) to delink. On the dashboard the two flows are surfaced as separate actions.
 
 <Tabs>
   <Tab title="Dashboard">
-    1. Open the tenant's detail page.
-    2. Click the **Change Parent** action next to the breadcrumb.
-    3. Pick the new parent from the selector. Any parent that would push the moved subtree past level 4 is disabled.
-    4. Confirm — the modal shows how many children are moving with it and warns that inherited values will be recomputed.
+    On the **Sub-tenants** tab, click the three-dot menu next to a sub-tenant. You'll see the options to **Change Parent** or **Delink Parent**.
 
-    <Frame caption="Re-parent confirmation modal">
-      {/* SCREENSHOT: Change parent modal showing "Moving eu-sales (and 3 children) from eu to acme-corp. Inherited values will be recomputed." */}
-      <img alt="Change Parent modal with impact summary" />
+    <Frame caption="Change Parent and Delink Parent actions on a sub-tenant row">
+      <img src="/images/chang-parent-and-delink-option-on-sub-tenant-tab.png" alt="Sub-tenants tab row showing the Change Parent and Delink Parent actions" />
+    </Frame>
+
+    **Change Parent** — pick a new parent from the selector. Any parent that would push the moved subtree past level 4 is disabled. Confirm to move the tenant (and every tenant below it) under the new parent. Inherited values are recomputed against the new chain.
+
+    <Frame caption="Change Parent modal">
+      <img src="/images/change-parent-modal.png" alt="Change Parent modal with the new parent selector" />
+    </Frame>
+
+    **Delink Parent** — detaches the tenant from its current parent and promotes it to a root. Its subtree comes along; local values stay as they are; values and preferences that were being inherited from the parent chain stop applying.
+
+    <Frame caption="Delink Parent modal">
+      <img src="/images/delink-parent-modal.png" alt="Delink Parent confirmation modal" />
     </Frame>
   </Tab>
-  <Tab title="REST API">
+  <Tab title="API">
+    Send `parent_id` on the tenant upsert endpoint — a tenant ID to re-parent, or `null` (or an empty string) to delink and promote to a root:
+
     ```bash cURL
-    curl -X POST https://hub.suprsend.com/v1/tenant/eu-sales/ \
+    curl -X POST https://hub.suprsend.com/v1/tenant/project-1/ \
       -H "Authorization: Bearer __api_key__" \
       -H "Content-Type: application/json" \
-      -d '{ "parent_id": "acme-corp" }'
+      -d '{ "parent_id": "acme" }'   # or: "parent_id": null to delink
     ```
 
-    Local values on the moved tenant (and every tenant below it) stay as they are. Inherited values are resolved from the new chain at the next send — they may have changed.
+    Local values on the moved tenant (and every tenant below it) stay as they are. Inherited values are resolved from the new chain at the next send.
   </Tab>
 </Tabs>
 
@@ -692,42 +417,47 @@ Change the `parent_id` on an existing tenant to move it (and its entire subtree)
 
 ## Delete a tenant
 
-Deletes are always soft — the tenant and its history are kept in the database with an `is_deleted` flag. Notifications already in flight finish with the settings that were in effect when they were triggered. When the tenant has children, you decide what happens to them with `children_action`.
+Deleting a tenant is permanent — its settings, preferences, and per-tenant profiles are gone, and creating a new tenant with the same ID doesn't restore any previous settings. Notifications already in flight are not affected — they finish with the settings that were in effect when they were triggered. When the tenant has children, you decide what happens to them with `children_action`.
 
 | `children_action` | What happens to the children |
 |---|---|
 | `"orphan"` (default, also applied when omitted) | Children become **root tenants**. Their data stays; the deleted parent is dropped from their ancestor chain. |
-| `"reassign"` | Children move under the tenant given in `reassign_to`. SuprSend checks the new subtree still fits within 5 levels. `reassign_to` is required — if omitted or `null`, the behavior falls back to `orphan`. |
-| `"delete"` | Every child (and their children, all the way down) is soft-deleted too. |
+| `"reassign"` | Children move under the tenant given in `reassign_to`. SuprSend checks the new subtree still fits within 5 levels. `reassign_to` is required — if omitted or `null`, the API returns `400`. |
+| `"delete"` | Every child (and their children, all the way down) is deleted too. |
 
 <Tabs>
   <Tab title="Dashboard">
-    On the tenant detail page, click **Delete**. If the tenant has children, the confirmation modal gives you three options — reassign to a specific tenant, leave children as roots, or delete them all — with a summary of how many tenants are affected.
+    Open the tenant's detail page and click the three-dot menu at the top-right corner, then choose **Delete**.
+
+    <Frame caption="Delete option on a sub-tenant row">
+      <img src="/images/delete_tenant_option_on_UI.png" alt="Sub-tenants tab row with the Delete action open" />
+    </Frame>
+
+    If the tenant has children, the confirmation modal gives you three options — reassign to a specific tenant, leave children as roots, or delete them all. If reassign is selected, you can choose the new parent from the dropdown.
 
     <Frame caption="Delete modal with children handling options">
-      {/* SCREENSHOT: Delete confirmation with three radio options: reassign, leave as root, delete all; impact summary "3 child tenants affected" */}
-      <img alt="Delete modal showing the three children-action radio options and an impact summary" />
+      <img src="/images/delete-tenant-modal.png" alt="Delete modal showing the three children-action options and an impact summary" />
     </Frame>
   </Tab>
-  <Tab title="REST API">
+  <Tab title="API">
     ```bash cURL
     # Move children under a new parent
-    curl -X DELETE https://hub.suprsend.com/v1/tenant/eu/ \
+    curl -X DELETE https://hub.suprsend.com/v1/tenant/project-1/ \
       -H "Authorization: Bearer __api_key__" \
       -H "Content-Type: application/json" \
       -d '{
         "children_action": "reassign",
-        "reassign_to": "acme-corp"
+        "reassign_to": "project-2"
       }'
 
     # Delete every tenant below too
-    curl -X DELETE https://hub.suprsend.com/v1/tenant/eu/ \
+    curl -X DELETE https://hub.suprsend.com/v1/tenant/project-1/ \
       -H "Authorization: Bearer __api_key__" \
       -H "Content-Type: application/json" \
       -d '{ "children_action": "delete" }'
 
     # Leave children as root tenants (default)
-    curl -X DELETE https://hub.suprsend.com/v1/tenant/eu/ \
+    curl -X DELETE https://hub.suprsend.com/v1/tenant/project-1/ \
       -H "Authorization: Bearer __api_key__" \
       -H "Content-Type: application/json" \
       -d '{ "children_action": "orphan" }'
@@ -737,52 +467,32 @@ Deletes are always soft — the tenant and its history are kept in the database 
   </Tab>
 </Tabs>
 
+## Navigate the tenant listing
+
+Once sub-tenants exist, the **Tenants** listing adds two columns to every row — **Parent** and **Level** — so you can see each tenant's place in the tree at a glance. On each row, a small dot next to `logo`, brand colors, or `social_links` means that value is **inherited** from an ancestor; no dot means it's set locally on this tenant.
+
+<Frame caption="Tenant listing page after sub-tenants are added">
+  <img src="/images/tenant-listing-after-sub-tenant-addition.png" alt="Tenant listing showing Parent and Level columns alongside each tenant" />
+</Frame>
+
+Use the **filter** icon at the top of the listing to narrow the view:
+
+- **Ancestor** — pick a tenant and the listing shows every tenant in its subtree, at any depth.
+- **Level** — restrict to specific depths (`0` = roots, `4` = deepest).
+
+Combine them to narrow further — e.g. ancestor `acme` + level `1` returns every project directly under `acme`.
+
 ## Key behaviors and constraints
 
 - **5 levels max.** Root = level 0, deepest allowed = level 4. Every create and re-parent is checked — moves that would go past the limit are rejected with a 400.
 - **One parent per tenant.** Every non-root tenant has exactly one `parent_id`. There's no multi-parent or DAG model.
-- **`id` is unique across the workspace.** A tenant can't share its `id` with its parent, sibling, or any other tenant. IDs are ≤ 64 chars, and now also accept `.` (dot) alongside the previously allowed characters.
+- **`id` is unique across the workspace.** A tenant can't share its `id` with its parent, sibling, or any other tenant. IDs are ≤ 64 chars and accept letters, digits, `.`, `_`, and `-`.
 - **Live inheritance.** Editing an ancestor's field takes effect right away for every tenant below that hasn't overridden it. There's no snapshot at create time.
-- **Merged one key at a time, not replaced whole.** Setting `social_links: { website: "..." }` on a child only overrides `website`; other inner keys (`twitter`, `linkedin`, ...) keep inheriting from the parent.
-- **`blocked_channels` and category-level block settings only go one way — down.** A channel or category blocked at any ancestor can't be unblocked lower down.
+- **Properties are merged per inner key.** Override `social_links.website` on a child and other inner keys (`twitter`, `linkedin`, …) keep inheriting from the parent.
+- **Category preferences merge per setting.** Within a category, `preference`, `digest_schedule`, and `conditions` each inherit independently — overriding one doesn't mean that other settings will also stop inheriting.
+- **Tenant Preference — blocked channels and categories.** Tenant `blocked_channels`, per-category `blocked_channels`, and category `enabled_for_tenant: false` cascade to every descendant and can't be reversed.
 - **Re-parenting is safe.** Local values on the moved tenant stay put; inherited values resolve from the new chain at the next send. Notifications in flight finish with the settings that were in effect at trigger time.
-- **Delete is soft.** A deleted tenant is marked deleted but the data stays. Creating a new tenant with the same `id` starts a fresh record — it does **not** bring back the deleted tenant's users, subscriptions, or history.
 - **The `default` tenant is unchanged.** Every workspace still ships with the `default` tenant. It behaves as a root tenant with no children until you give it any.
-
-## Migration from flat tenants
-
-You don't need to do anything. All existing tenants keep working as roots (`parent_id: null`, `level: 0`), and every existing API call keeps working. Two additions worth knowing:
-
-- The tenant resource now uses **`id`** and **`name`** at the top level (renamed from `tenant_id` / `tenant_name`). The old keys still work in both requests and responses — every response includes both spellings so nothing breaks.
-- Every tenant response now includes `parent_id`, `ancestors`, `level`, and `children_count`. For an existing flat tenant, `parent_id` is `null`, `ancestors` is `[]`, `level` is `0`.
-
-## Troubleshooting
-
-<AccordionGroup>
-  <Accordion title="`Tenant id already in use`">
-    Tenant IDs are unique across a workspace — the ID can't match any existing tenant (including its own siblings, ancestors, or descendants). Soft-deleted tenants don't hold the ID; you can create a new tenant with the same ID as a deleted one, and it starts as a fresh record. Pick a different ID or delete the existing tenant first.
-  </Accordion>
-
-  <Accordion title="`Circular reference detected`">
-    A create or re-parent tried to set a tenant's parent to one of its own descendants. Look at the proposed parent's ancestor chain — it contains the tenant you're moving. Break the loop by moving the descendant somewhere neutral first (or making it a root), then retry the original move.
-  </Accordion>
-
-  <Accordion title="`Operation would exceed the maximum of 5 levels`">
-    The move (or create) would push some tenant in the affected subtree to level 5 or beyond. The error names the tenant's subtree depth and the target parent's level. Options: pick a shallower parent, or move deeper nodes up first to flatten the subtree.
-  </Accordion>
-
-  <Accordion title="My child tenant isn't picking up my parent update at send time.">
-    Inheritance is resolved live at send time, so a workflow triggered after the parent update should already reflect the new value. If it doesn't, check that (a) the write on the parent actually returned 200, (b) you're triggering at the right child (`parent_id` and `ancestors` match what you expect), and (c) the field isn't overridden on the child — a local value always wins over an inherited one.
-  </Accordion>
-
-  <Accordion title="`reassign_to` is required when `children_action = reassign`">
-    You sent `"children_action": "reassign"` in the delete body without `reassign_to`. Add the target parent's `id`, or use one of the other actions (`"delete"` to also delete the children, or `"orphan"` to leave them as roots).
-  </Accordion>
-
-  <Accordion title="My `blocked_channels` change didn't take effect for a descendant.">
-    A `blocked_channels` block at any level flows down and can't be undone. The descendant's effective list at send time is the **combined list** across the chain — every ancestor's blocks plus its own. If you were trying to *unblock* a channel by removing it from a child's `blocked_channels`, that's not possible — an ancestor's block always wins. Remove it at the level where it was originally set.
-  </Accordion>
-</AccordionGroup>
 
 ## FAQ
 
@@ -813,6 +523,29 @@ You don't need to do anything. All existing tenants keep working as roots (`pare
 
   <Accordion title="Is there a performance cost to deep hierarchies?">
     No. Send-time resolution is optimized and doesn't add measurable latency, even at the maximum depth of 5 levels.
+  </Accordion>
+
+  <Accordion title="My child tenant isn't picking up a parent update at send time.">
+    Inheritance is resolved live at send time, so a workflow triggered after the parent update should already reflect the new value. If it doesn't, check that (a) the write on the parent actually returned 200, (b) you're triggering at the right child (`parent_id` and `ancestors` match what you expect), and (c) the field isn't overridden on the child — a local value always wins over an inherited one.
+  </Accordion>
+
+  <Accordion title="My `blocked_channels` change didn't take effect for a descendant.">
+    A `blocked_channels` block at any level flows down and can't be undone. The descendant's effective list at send time is the **union** across the chain — every ancestor's blocks plus its own. If you were trying to *unblock* a channel by removing it from a child's `blocked_channels`, that isn't possible — an ancestor's block always wins. Remove it at the level where it was originally set.
+  </Accordion>
+
+  <Accordion title="Can users have a global preference in a workspace?">
+    No. Every user preference — category or channel — is always saved against a tenant. Preference writes require a `tenant_id` query param; without one, the API rejects the request. If your workspace uses just the built-in `default` tenant, all writes land there and behave workspace-wide in practice, but there is no global-across-all-tenants preference on a user.
+
+    If you need a **workspace-wide default preference** that individual tenants can then override per user, model your tenants as **sub-tenants of the `default` tenant**. For example, keep the Company at `default`, nest Projects under it, and nest Cycles under each Project. The user's preference at `default` acts as the global default; a preference set on a Project (or a Cycle) wins for triggers scoped to that subtree.
+  </Accordion>
+
+  <Accordion title="My customers are mapped as tenants and users need a global preference plus a per-tenant override. How do I model this?">
+    Re-parent each customer tenant so it becomes a **child of the `default` tenant**. `default` then acts as the global layer, and each customer stays its own tenant where users can override.
+
+    1. Re-parent every customer tenant to `default` (or create new ones with `parent_id: "default"`). Existing users, subscriptions, and history stay intact.
+    2. Save the user's global preference by writing to `tenant_id=default`.
+    3. Save a customer-specific override by writing to `tenant_id=<customer_tenant_id>`.
+    4. At trigger time, pass the customer's `tenant_id`. SuprSend walks up the chain — the customer's preference wins if the user set one there; otherwise the `default` preference applies; if neither is set, the customer tenant's own default preference for the category applies.
   </Accordion>
 
   <Accordion title="Which plans include sub-tenants?">
