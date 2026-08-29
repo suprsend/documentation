@@ -3341,7 +3341,7 @@ paths:
       summary: Delete Tenant
       security:
         - BearerAuth: []
-      description: "Soft-deletes a tenant. The tenant record is marked deleted but persists in the database; in-flight notifications complete with the settings that were in effect at trigger time. When the tenant has children, use `children_action` in the request body to control what happens to them. See [Sub-tenants → Delete a tenant with children](/docs/sub-tenant-setup#delete-a-tenant-with-children)."
+      description: "Soft-deletes a tenant. The tenant record is marked deleted but persists in the database; in-flight notifications complete with the settings that were in effect at trigger time. When the tenant has children, use `children_action` in the request body to control what happens to them. See [Sub-tenants → Delete a tenant](/docs/sub-tenants#delete-a-tenant)."
       operationId: delete-tenant
       parameters:
         - name: tenant_id
@@ -3402,6 +3402,128 @@ paths:
                 type: object
                 description: error code and message detailing the error
       deprecated: false
+  /v1/tenant/{tenant_id}/properties/:
+    patch:
+      summary: Update Tenant Properties
+      security:
+        - BearerAuth: []
+      description: |
+        Update a tenant's custom `properties`. Supports two modes:
+
+        - **Replace mode** — send `{ "properties": { ... } }` to replace the entire custom properties object with the payload. Any custom property key not in the payload is removed.
+        - **Operations mode** — send `{ "operations": [ ... ] }` with `$set` and `$unset` operators to add, update, or remove individual property keys without touching the rest. `$unset` only removes custom keys; reserved properties (`logo`, `primary_color`, `secondary_color`, `tertiary_color`, `preference_page_url`, `social_links`) are ignored.
+
+        Only custom `properties` are affected by this endpoint. Use the [Create / Update Tenants](/reference/create-update-tenants) endpoint to update reserved fields such as branding, `blocked_channels`, or `parent_id`.
+      operationId: update-tenant-properties
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant whose properties you want to update
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  title: Replace mode
+                  description: Replace the entire custom properties object with the payload.
+                  required:
+                    - properties
+                  properties:
+                    properties:
+                      type: object
+                      description: The new custom properties object. Replaces the tenant's existing custom properties in full.
+                      additionalProperties: true
+                - type: object
+                  title: Operations mode
+                  description: Update individual property keys with `$set` / `$unset` operators.
+                  required:
+                    - operations
+                  properties:
+                    operations:
+                      type: array
+                      description: Ordered list of operations to apply.
+                      items:
+                        type: object
+                        properties:
+                          $set:
+                            type: object
+                            description: Add or update these keys in the tenant's custom properties.
+                            additionalProperties: true
+                          $unset:
+                            type: array
+                            description: Custom property keys to remove.
+                            items:
+                              type: string
+            examples:
+              Replace:
+                summary: Replace all custom properties
+                value:
+                  properties:
+                    region: "US"
+                    team: "Web"
+              Operations:
+                summary: Add and remove individual keys
+                value:
+                  operations:
+                    - $set:
+                        division: "Engineering"
+                    - $unset: ["region"]
+      responses:
+        '200':
+          description: Tenant properties updated. Returns the tenant's identifier fields and its updated `properties` object.
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "id": "tenant-1",
+                    "name": "SuprSend UAT",
+                    "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend_341e8336ac2e1fbeaeae8d92e1b32bc484440f42.png",
+                    "properties": {
+                      "p1": "Q1"
+                    }
+                  }
+              schema:
+                type: object
+                description: The tenant with its updated local custom `properties`.
+        '400':
+          description: '400 - Bad Request'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 400,
+                    "error_code": "error",
+                    "type": "ValidationError",
+                    "message": "Invalid operations payload",
+                    "detail": "Only $set and $unset operators are supported."
+                  }
+              schema:
+                type: object
+                description: error code and message detailing the error
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "error_code": "not_found",
+                    "type": "NotFound",
+                    "message": "No tenant found for tenant_id tenant-1",
+                    "detail": "No tenant found for tenant_id tenant-1"
+                  }
+              schema:
+                type: object
+                description: error code and message detailing the error
+      deprecated: false
   /v1/tenant/:
     get:
       summary: Get Tenant List
@@ -3423,7 +3545,7 @@ paths:
             type: integer
         - name: parent_id
           in: query
-          description: "Filter to direct children of the given tenant. Use to walk one level of the tree at a time — for a nested tree view, call once per node the user expands. See [Sub-tenants → Browse the tree](/docs/sub-tenant-setup#step-5-browse-the-tree)."
+          description: "Filter to direct children of the given tenant. Use to walk one level of the tree at a time — for a nested tree view, call once per node the user expands. See [Sub-tenants → Browse the tree](/docs/sub-tenants#browse-the-tree)."
           required: false
           schema:
             type: string
