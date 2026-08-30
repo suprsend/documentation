@@ -3085,9 +3085,11 @@ paths:
       parameters:
         - name: tenant_id
           in: path
-          description: unique identifier of the tenant that you want to create / update
+          description: "Tenant identifier to create or update. Max 64 chars; allowed characters `[a-z0-9_.-]`."
           schema:
             type: string
+            pattern: "^[a-z0-9_.-]+$"
+            maxLength: 64
           required: true
       requestBody:
         content:
@@ -3095,69 +3097,84 @@ paths:
             schema:
               type: object
               required:
-                - tenant_name
+                - name
               properties:
+                name:
+                  type: string
+                  description: "Tenant display name. Replaces the legacy `tenant_name` field; both are accepted."
+                  default: Awesome Tenant
                 tenant_name:
                   type: string
-                  description: Name of the tenant. You can add company / organization name here
-                  default: Awesome Tenant
+                  description: "Will be deprecated in future. Use `name` instead."
+                parent_id:
+                  type: string
+                  nullable: true
+                  description: "ID of the parent tenant if you want to add this tenant as a sub-tenant. Skip this field, or pass `null` or `\"\"` to create the tenant as a root. Setting it on an existing tenant re-parents it or leave it `null` to delink existing parent. Must reference an existing tenant. See [Sub-tenants](/docs/sub-tenants)."
+                  example: acme-corp
+                blocked_channels:
+                  type: array
+                  items:
+                    type: string
+                  nullable: true
+                  description: "Channels turned off for this tenant. Notifications on these channels won't be sent to any user of the tenant — including on [root categories](/docs/notification-category#root-categories) (which users normally can't unsubscribe from) — and users can't override this. If [sub-tenants](/docs/sub-tenants) are used, a block set here also applies to every sub-tenant below and can't be removed lower down. Allowed: `email`, `sms`, `whatsapp`, `androidpush`, `iospush`, `webpush`, `slack`, `ms_teams`, `inbox`."
+                  example: ["sms"]
                 logo:
                   type: string
-                  description: URL of the tenant logo
+                  description: Tenant logo URL.
                   default: https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png
                 primary_color:
                   type: string
-                  description: Primary color of the tenant - used for designing tenant template. If you don't provide any of the colors for the tenant, SuprSend will assume you want to use the default values, so color settings will automatically be set to the color settings of default tenant.
+                  description: Primary brand color, used in the tenant's email header, buttons, and footer. If left empty on create, it's copied from the default tenant.
                   default: '#ff0000'
                 secondary_color:
                   type: string
-                  description: Secondary color of the tenant - not used for designing the default templates. You can however add this property and use it in your templates
+                  description: Secondary brand color. Not part of the default tenant component but can be used in templates as `{{$tenant.secondary_color}}`. If left empty on create, it's copied from the default tenant.
                   example: '#00ff00'
                 tertiary_color:
                   type: string
-                  description: Tertiary color of the tenant - not used for designing the default templates. You can however add this property and use it in your templates
+                  description: Tertiary brand color. Not part of the default tenant component but can be used in templates as `{{$tenant.tertiary_color}}`. If left empty on create, it's copied from the default tenant.
                   example: '#0000ff'
                 preference_page_url:
                   type: string
-                  description: Link of the preference page inside the tenant product
+                  description: URL of your product's preference page.
                 social_links:
                   type: object
-                  description: urls of social media accounts of the tenant. If you really want to remove any social link, you must set its value="" (instead of null)
+                  description: Tenant's social media URLs. Pass `""` to clear a link (not `null`).
                   properties:
                     website:
                       type: string
-                      description: link of tenant website. While updating a social link, if you want to remove the link, you must the value="" (instead of null)
+                      description: Website URL.
                       default: https://suprsend.com
                     facebook:
                       type: string
-                      description: tenant facebook page link
+                      description: Facebook page URL.
                     LinkedIn:
                       type: string
-                      description: tenant linkedin page link
+                      description: LinkedIn page URL.
                     x:
                       type: string
-                      description: tenant x(previously twitter) page link
+                      description: X (formerly Twitter) page URL.
                     instagram:
                       type: string
-                      description: tenant instagram page link
+                      description: Instagram page URL.
                     medium:
                       type: string
-                      description: tenant medium page link
+                      description: Medium page URL.
                     discord:
                       type: string
-                      description: tenant discord page link
+                      description: Discord URL.
                     telegram:
                       type: string
-                      description: tenant telegram page link
+                      description: Telegram URL.
                     youtube:
                       type: string
-                      description: tenant youtube page link
+                      description: YouTube channel URL.
                     tiktok:
                       type: string
-                      description: tenant tiktok page link
+                      description: TikTok URL.
                 properties:
                   type: object
-                  description: Custom properties associated with the tenant. Update operation on properties works like upsert on 1st-level keys (i.e., if top-level key doesn't already exist, then it will be added, otherwise its value will be replaced by the new value. All other key-value pairs will remain unchanged).
+                  description: Custom tenant properties. Merged per top-level key on update — keys not in the payload are kept as-is.
                   additionalProperties:
                     type: string
       responses:
@@ -3168,13 +3185,17 @@ paths:
               examples:
                 Result:
                   value: {
+                    "id": "acme-corp",
+                    "name": "Awesome Tenant",
                     "tenant_id": "acme-corp",
                     "tenant_name": "Awesome Tenant",
+                    "parent_id": null,
+                    "ancestors": [],
+                    "level": 0,
+                    "children_count": 0,
                     "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
                     "timezone": null,
-                    "blocked_channels": [
-                      "email"
-                    ],
+                    "blocked_channels": ["sms"],
                     "embedded_preference_url": "https://app.suprsend.com/settings",
                     "hosted_preference_domain": "preferences.suprsend.com",
                     "primary_color": "#ff0000",
@@ -3182,8 +3203,8 @@ paths:
                     "tertiary_color": "#00ffff",
                     "social_links": {
                       "website": "https://suprsend.com",
-                      "facebook": "https://www.company.com",
-                      "LinkedIn": "",
+                      "facebook": "",
+                      "linkedin": "",
                       "x": "",
                       "instagram": "",
                       "medium": "",
@@ -3192,14 +3213,14 @@ paths:
                       "youtube": ""
                     },
                     "properties": {
-                      "k1": "v1",
-                      "address": "my company address"
+                      "region": "US",
+                      "support_email": "help@example.com"
                     },
-                    "updated_at": "2025-04-06T21:01:35.359787Z"
+                    "updated_at": "2026-08-27T21:01:35.359787Z"
                   }
               schema:
                 type: object
-                description: Updated Object Payload is returned in response. JSON structure similar to request payload.
+                description: "Tenant object returned. Fields hold the tenant's own local values — values not set on this tenant come back as `null` (or as empty objects/arrays). For flat tenants (no [sub-tenants](/docs/sub-tenants)), unset fields stay unresolved and the tenant simply has no value for them. For [sub-tenants](/docs/sub-tenants), unset fields still return `null` here, but are resolved from the closest ancestor that has a value set at trigger time."
         '400':
           description: '400 - Bad Request'
           content:
@@ -3222,10 +3243,10 @@ paths:
                 description: error code and message detailing the error
       deprecated: false
     get:
-      summary: Get Tenant data
+      summary: Get Tenant
       security:
         - BearerAuth: []
-      description: API to fetch tenant settings (logo, colors, links, preference) corresponding to a tenant_id. To create or update tenant data, use the [Create/Update Tenant](#operation/create-tenants) endpoint.
+      description: API to fetch properties and blocked channel settingcorresponding to a tenant_id. To create or update tenant data, use the [Create/Update Tenant](#operation/create-tenants) endpoint.
       operationId: get-tenant
       parameters:
         - name: tenant_id
@@ -3236,45 +3257,161 @@ paths:
           required: true
       responses:
         '200':
-          description: '200'
+          description: OK
           content:
             application/json:
               examples:
                 Result:
                   value: {
-                    "tenant_id": "_tenant_id_",
-                    "tenant_name": "Awesome Tenant",
-                    "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
+                    "id": "eu-sales",
+                    "name": "EU Sales",
+                    "tenant_id": "eu-sales",
+                    "tenant_name": "EU Sales",
+                    "parent_id": "eu",
+                    "ancestors": ["acme-corp", "eu"],
+                    "level": 2,
+                    "children_count": 0,
+                    "logo": null,
                     "timezone": null,
-                    "blocked_channels": [
-                      "email"
-                    ],
+                    "blocked_channels": null,
                     "embedded_preference_url": "https://app.suprsend.com/en/user-settings/notifications",
                     "hosted_preference_domain": "preferences.suprsend.com",
-                    "primary_color": "#ff0000",
-                    "secondary_color": "#0000ff",
-                    "tertiary_color": "#00ffff",
+                    "primary_color": "#ff0055",
+                    "secondary_color": null,
+                    "tertiary_color": null,
                     "social_links": {
-                      "website": "https://suprsend.com",
-                      "facebook": "https://www.company.com",
-                      "linkedin": "",
-                      "x": "",
-                      "instagram": "",
-                      "medium": "",
-                      "discord": "",
-                      "telegram": "",
-                      "youtube": "",
-                      "tiktok": ""
+                      "website": "https://sales.example.eu"
                     },
                     "properties": {
-                      "k1": "v1",
-                      "address": "my company address"
+                      "team_size": 42
                     },
-                    "updated_at": "2025-04-06T21:01:35.359787Z"
+                    "updated_at": "2026-08-27T21:01:35.359787Z"
                   }
               schema:
                 type: object
-                description: Updated Object Payload is returned in response. JSON structure similar to [request payload](/reference/create-update-tenants).
+                description: "Tenant object returned. Fields hold the tenant's own local values — values not set on this tenant come back as `null` (or as empty objects/arrays). For flat tenants (no [sub-tenants](/docs/sub-tenants)), unset fields stay unresolved and the tenant simply has no value for them. For [sub-tenants](/docs/sub-tenants), unset fields still return `null` here, but are resolved from the closest ancestor that has a value set at trigger time."
+                properties:
+                  id:
+                    type: string
+                    description: "Tenant `id`. Replaces the legacy `tenant_id` field; both are returned."
+                    example: eu-sales
+                  name:
+                    type: string
+                    description: "Tenant display name. Replaces the legacy `tenant_name` field; both are returned."
+                    example: EU Sales
+                  tenant_id:
+                    type: string
+                    description: "Will be deprecated in future. Use `id` instead."
+                    example: eu-sales
+                  tenant_name:
+                    type: string
+                    description: "Will be deprecated in future. Use `name` instead."
+                    example: EU Sales
+                  parent_id:
+                    type: string
+                    nullable: true
+                    description: "Parent tenant `id` when this tenant is a [sub-tenant](/docs/sub-tenants). `null` for root tenants (including flat tenants that aren't part of a hierarchy)."
+                    example: eu
+                  ancestors:
+                    type: array
+                    items:
+                      type: string
+                    description: "For [sub-tenants](/docs/sub-tenants): ancestor tenant `id`s from root down to the immediate parent (excludes the tenant itself). Empty for root and flat tenants."
+                    example: ["acme-corp", "eu"]
+                  level:
+                    type: integer
+                    description: "For [sub-tenants](/docs/sub-tenants): depth in the tree. Root = 0, max = 4. Flat tenants always report `0`."
+                    example: 2
+                  children_count:
+                    type: integer
+                    description: "For [sub-tenants](/docs/sub-tenants): number of direct children. `0` for tenants with no sub-tenants."
+                    example: 0
+                  logo:
+                    type: string
+                    format: uri
+                    nullable: true
+                    description: Tenant logo URL.
+                    example: https://logo.png
+                  timezone:
+                    type: string
+                    nullable: true
+                    description: Tenant timezone. Used as a fallback when the recipient user has no timezone set.
+                    example: America/New_York
+                  blocked_channels:
+                    type: array
+                    items:
+                      type: string
+                    nullable: true
+                    description: "Channels turned off for this tenant. Notifications on these channels won't be sent to any user of the tenant — including on [root categories](/docs/notification-category#root-categories) (which users normally can't unsubscribe from) — and users can't override this. If [sub-tenants](/docs/sub-tenants) are used, a block set here also applies to every sub-tenant below and can't be removed lower down."
+                    example: ["sms"]
+                  embedded_preference_url:
+                    type: string
+                    format: uri
+                    description: URL of your product's preference page.
+                    example: https://app.suprsend.com/en/user-settings/notifications
+                  hosted_preference_domain:
+                    type: string
+                    description: Domain of the SuprSend-hosted preference page.
+                    example: preferences.suprsend.com
+                  primary_color:
+                    type: string
+                    nullable: true
+                    description: Primary brand color, used in the tenant's email header, buttons, and footer. If left empty on create, it's copied from the default tenant.
+                    example: "#ff0055"
+                  secondary_color:
+                    type: string
+                    nullable: true
+                    description: Secondary brand color. Not part of the default tenant component but can be used in templates as `{{$tenant.secondary_color}}`. If left empty on create, it's copied from the default tenant.
+                    example: "#00ff00"
+                  tertiary_color:
+                    type: string
+                    nullable: true
+                    description: Tertiary brand color. Not part of the default tenant component but can be used in templates as `{{$tenant.tertiary_color}}`. If left empty on create, it's copied from the default tenant.
+                    example: "#0000ff"
+                  social_links:
+                    type: object
+                    description: Tenant's social media URLs.
+                    properties:
+                      website:
+                        type: string
+                        example: https://suprsend.com
+                      facebook:
+                        type: string
+                        example: ""
+                      linkedin:
+                        type: string
+                        example: ""
+                      x:
+                        type: string
+                        example: ""
+                      instagram:
+                        type: string
+                        example: ""
+                      medium:
+                        type: string
+                        example: ""
+                      discord:
+                        type: string
+                        example: ""
+                      telegram:
+                        type: string
+                        example: ""
+                      youtube:
+                        type: string
+                        example: ""
+                      tiktok:
+                        type: string
+                        example: ""
+                  properties:
+                    type: object
+                    description: Custom tenant properties (local values only). Inherited values from ancestors are resolved at trigger time.
+                    additionalProperties: true
+                    example: {"team_size": 42}
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: Timestamp when the tenant was last updated.
+                    example: "2026-08-27T21:01:35.359787Z"
         '404':
           description: '404 - Not Found'
           content:
@@ -3296,18 +3433,55 @@ paths:
       summary: Delete Tenant
       security:
         - BearerAuth: []
-      description: API to permanently delete tenant and it's associated settings.
+      description: "Delete a tenant by passing it's ID. Deletion does not affect in-flight notifications, which complete with the settings that were in effect at trigger time. When the tenant has sub-tenants, use `children_action` in the request body to control what happens to them."
       operationId: delete-tenant
       parameters:
         - name: tenant_id
           in: path
-          description: unique identifier of the tenant you want to get the details for
+          description: unique identifier of the tenant to delete
           schema:
             type: string
           required: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                children_action:
+                  type: string
+                  enum: [orphan, reassign, delete]
+                  description: "Only applies when the tenant has [sub-tenants](/docs/sub-tenants). `orphan` (default) promotes sub-tenants to root tenants. `reassign` moves sub-tenants under `reassign_to` tenant. `delete` deletes every sub-tenant in the subtree. Ignored for tenants with no sub-tenants."
+                  default: orphan
+                  example: reassign
+                reassign_to:
+                  type: string
+                  description: "Target parent when `children_action = reassign`. Required in that case; must reference an existing tenant. See [sub-tenants](/docs/sub-tenants)."
+                  example: acme-corp
       responses:
         '204':
           description: '204 - No Content'
+        '400':
+          description: '400 - Bad Request. Returned when `reassign_to` is missing on a reassign, sent on a delete, references a non-existent tenant, or when the resulting move would exceed the 5-level limit.'
+          content:
+            application/json:
+              examples:
+                MissingReassignTo:
+                  value: {
+                    "code": 400,
+                    "error_code": "error",
+                    "type": "ValidationError",
+                    "message": "{\"reassign_to\": [\"This field may not be blank.\"]}",
+                    "detail": {
+                      "reassign_to": [
+                        "This field may not be blank."
+                      ]
+                    }
+                  }
+              schema:
+                type: object
+                description: error code and message detailing the error
         '404':
           description: '404 - Not Found'
           content:
@@ -3325,9 +3499,115 @@ paths:
                 type: object
                 description: error code and message detailing the error
       deprecated: false
+  /v1/tenant/{tenant_id}/properties/:
+    patch:
+      summary: Update Tenant Properties
+      security:
+        - BearerAuth: []
+      description: |
+        Update a tenant's custom `properties` in one of two ways:
+
+        - **Replace entire payload** — send `{ "properties": { ... } }` to replace the entire custom properties object with the payload. Any custom property key not in the payload is removed.
+        - **Update individual properties** — send `{ "operations": [ ... ] }` with `$set` and `$unset` operators to add, update, or remove individual property keys without touching the rest. Use `$set` to add new keys or overwrite the value of existing keys. Use `$unset` to delete existing keys.
+
+        Only custom `properties` are affected by this endpoint. Use the [Create / Update Tenants](/reference/create-update-tenants) endpoint to update reserved fields such as branding, `blocked_channels`, or `parent_id`.
+      operationId: update-tenant-properties
+      parameters:
+        - name: tenant_id
+          in: path
+          description: unique identifier of the tenant whose properties you want to update
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  title: Replace entire payload
+                  description: Replace the entire custom properties object with the payload.
+                  required:
+                    - properties
+                  properties:
+                    properties:
+                      type: object
+                      description: The new custom properties object. Replaces the tenant's existing custom properties in full.
+                      additionalProperties: true
+                - type: object
+                  title: Update individual properties
+                  description: Update individual property keys with `$set` / `$unset` operators.
+                  required:
+                    - operations
+                  properties:
+                    operations:
+                      type: array
+                      description: Ordered list of operations to apply.
+                      items:
+                        type: object
+                        properties:
+                          $set:
+                            type: object
+                            description: Add or update these keys in the tenant's custom properties.
+                            additionalProperties: true
+                          $unset:
+                            type: array
+                            description: Pass property keys to remove.
+                            items:
+                              type: string
+            examples:
+              Replace entire payload:
+                summary: Replace entire payload
+                value:
+                  properties:
+                    region: "US"
+                    team: "Web"
+              Update individual properties:
+                summary: Update individual properties
+                value:
+                  operations:
+                    - $set:
+                        division: "Engineering"
+                    - $unset: ["region"]
+      responses:
+        '200':
+          description: Tenant properties updated. Returns the tenant's identifier fields and its updated `properties` object.
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "id": "tenant-1",
+                    "name": "SuprSend UAT",
+                    "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend_341e8336ac2e1fbeaeae8d92e1b32bc484440f42.png",
+                    "properties": {
+                      "p1": "Q1"
+                    }
+                  }
+              schema:
+                type: object
+                description: The tenant with its updated local custom `properties`.
+        '404':
+          description: '404 - Not Found'
+          content:
+            application/json:
+              examples:
+                Result:
+                  value: {
+                    "code": 404,
+                    "error_code": "not_found",
+                    "type": "NotFound",
+                    "message": "No tenant found for tenant_id tenant-1",
+                    "detail": "No tenant found for tenant_id tenant-1"
+                  }
+              schema:
+                type: object
+                description: error code and message detailing the error
+      deprecated: false
   /v1/tenant/:
     get:
-      summary: Get Tenant List
+      summary: List Tenants
       security:
         - BearerAuth: []
       description: API to fetch a paginated list of tenants available in your workspace.
@@ -3335,15 +3615,40 @@ paths:
       parameters:
         - name: limit
           in: query
-          description: number of results to be returned in API response
+          description: Number of tenants to return per page.
           schema:
             type: integer
             default: 20
         - name: offset
           in: query
-          description: starting position of tenant list
+          description: Number of tenants to skip.
           schema:
             type: integer
+        - name: parent_id
+          in: query
+          description: "Returns only direct children of the given tenant."
+          required: false
+          schema:
+            type: string
+          example: acme-corp
+        - name: ancestor[]
+          in: query
+          description: "Returns the given tenant and all its descendants at any depth."
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          example: ["acme-corp"]
+        - name: level[]
+          in: query
+          description: "Returns tenants at the given level(s). Root = 0, max = 4. Repeat the param to combine levels."
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          example: [0]
       responses:
         '200':
           description: '200 - OK'
@@ -3359,8 +3664,14 @@ paths:
                     },
                     "results": [
                       {
-                        "tenant_id": "random_id",
-                        "tenant_name": "Awesome Tenant",
+                        "id": "acme-corp",
+                        "name": "Acme Corp",
+                        "tenant_id": "acme-corp",
+                        "tenant_name": "Acme Corp",
+                        "parent_id": null,
+                        "ancestors": [],
+                        "level": 0,
+                        "children_count": 2,
                         "logo": "https://ik.imagekit.io/l0quatz6utm/suprsend/staging/media/suprsend-only-logo_c8aa27faef118418e8c5bd7b31a1cafc74e09200.png",
                         "timezone": null,
                         "blocked_channels": null,
@@ -3381,7 +3692,7 @@ paths:
                           "youtube": ""
                         },
                         "properties": {},
-                        "updated_at": "2025-04-06T20:57:16.935605Z"
+                        "updated_at": "2026-08-27T20:57:16.935605Z"
                       }]
                     }
               schema:
@@ -3404,27 +3715,35 @@ paths:
                         description: offset passed in request
                   results:
                     type: array
-                    description: List of tenants available in the workspace. Tenant JSON is same as tenant upsert response.
+                    description: "List of tenants available in the workspace. Tenant JSON is the same shape as the [create/update tenant](/reference/create-update-tenants) response, including the `parent_id`, `ancestors`, `level`, and `children_count` fields introduced with [sub-tenants](/docs/sub-tenants)."
                     items:
                       type: object
                       properties:
+                        id:
+                          type: string
+                          description: "Tenant `id`. Replaces the legacy `tenant_id` field; both are returned."
+                          example: acme-corp
+                        name:
+                          type: string
+                          description: "Tenant display name. Replaces the legacy `tenant_name` field; both are returned."
+                          example: Acme Corp
                         tenant_id:
                           type: string
-                          description: Unique identifier of the tenant.
-                          example: random_id
+                          description: "Will be deprecated in future. Use `id` instead."
+                          example: acme-corp
                         tenant_name:
                           type: string
-                          description: Name of the tenant.
+                          description: "Will be deprecated in future. Use `name` instead."
                           example: Awesome Tenant
                         logo:
                           type: string
                           format: uri
-                          description: URL of the tenant logo.
+                          description: Tenant logo URL.
                           example: https://logo.png
                         timezone:
                           type: string
                           nullable: true
-                          description: timezone of the tenant. Used as fallback if user's timezone is not set.
+                          description: Tenant timezone. Used as a fallback when the recipient user has no timezone set.
                           example: America/New_York
                         blocked_channels:
                           type: string
@@ -3436,33 +3755,33 @@ paths:
                             sms:
                               summary: "SMS channel"
                               value: "sms"
-                          description: channels that are blocked for the tenant.
+                          description: "Channels turned off for this tenant. Notifications on these channels won't be sent to any user of the tenant — including on [root categories](/docs/notification-category#root-categories) (which users normally can't unsubscribe from) — and users can't override this. If [sub-tenants](/docs/sub-tenants) are used, a block set here also applies to every sub-tenant below and can't be removed lower down."
                         embedded_preference_url:
                           type: string
                           format: uri
                           example: https://app.suprsend.com/en/user-settings/notifications
-                          description: url of the preference page inside the tenant product.
+                          description: URL of your product's preference page.
                         hosted_preference_domain:
                           type: string
                           example: preferences.suprsend.com
-                          description: domain of the hosted preference page.
+                          description: Domain of the SuprSend-hosted preference page.
                         primary_color:
                           type: string
-                          description: Primary color of the tenant used for template design.
+                          description: Primary brand color, used in the tenant's email header, buttons, and footer. If left empty on create, it's copied from the default tenant.
                           example: "#ff0000"
                         secondary_color:
                           type: string
                           nullable: true
-                          description: Secondary color of the tenant.
+                          description: Secondary brand color. Not part of the default tenant component but can be used in templates as `{{$tenant.secondary_color}}`. If left empty on create, it's copied from the default tenant.
                           example: "#ff0000"
                         tertiary_color:
                           type: string
                           nullable: true
-                          description: Tertiary color of the tenant.
+                          description: Tertiary brand color. Not part of the default tenant component but can be used in templates as `{{$tenant.tertiary_color}}`. If left empty on create, it's copied from the default tenant.
                           example: "#ff0000"
                         social_links:
                           type: object
-                          description: Social media links associated with the tenant.
+                          description: Tenant's social media URLs.
                           properties:
                             website:
                               type: string
@@ -3493,14 +3812,33 @@ paths:
                               example: ""
                         properties:
                           type: object
-                          description: Custom properties associated with the tenant.
+                          description: Custom tenant properties (local values only). Inherited values from ancestors are resolved at trigger time.
                           additionalProperties: true
-                          example: {"address":"my company address"}
+                          example: {"region": "US"}
+                        parent_id:
+                          type: string
+                          nullable: true
+                          description: "Parent tenant `id` when this tenant is a [sub-tenant](/docs/sub-tenants). `null` for root tenants (including flat tenants that aren't part of a hierarchy)."
+                          example: null
+                        ancestors:
+                          type: array
+                          items:
+                            type: string
+                          description: "For [sub-tenants](/docs/sub-tenants): ancestor tenant `id`s from root down to the immediate parent (excludes the tenant itself). Empty for root and flat tenants."
+                          example: []
+                        level:
+                          type: integer
+                          description: "For [sub-tenants](/docs/sub-tenants): depth in the tree. Root = 0, max = 4. Flat tenants always report `0`."
+                          example: 0
+                        children_count:
+                          type: integer
+                          description: "For [sub-tenants](/docs/sub-tenants): number of direct children. `0` for tenants with no sub-tenants."
+                          example: 2
                         updated_at:
                           type: string
                           format: date-time
                           description: Timestamp when the tenant was last updated.
-                          example: "2025-04-06T20:57:16.935605Z"
+                          example: "2026-08-27T20:57:16.935605Z"
       deprecated: false
   /v1/subscriber_list/{list_id}/subscriber/remove/:
     post:
@@ -7275,6 +7613,9 @@ paths:
             schema:
               type: object
               properties:
+                enabled_for_tenant:
+                  type: boolean
+                  description: Whether the category is enabled for this tenant. Set to `false` to hide the category from the tenant's users and stop sending notifications in it. If [sub-tenants](/docs/sub-tenants) are used, a category disabled on an ancestor stays disabled on every sub-tenant below and can't be re-enabled lower down.
                 preference:
                   type: string
                   enum: ["opt_in", "opt_out", "cant_unsubscribe"]
@@ -7292,6 +7633,12 @@ paths:
                   description: List of channels to opt-in for this category. Only applicable when preference is `opt_in`.
                   items:
                     type: string
+                blocked_channels:
+                  type: array
+                  description: Channels turned off for this category for this tenant. Notifications on these channels won't be sent to any user of the tenant in this category, and users can't override it. If [sub-tenants](/docs/sub-tenants) are used, a block set on an ancestor also applies to every sub-tenant below and can't be removed lower down.
+                  items:
+                    type: string
+                    enum: [email, sms, whatsapp, androidpush, inbox, iospush, slack, webpush, ms_teams]
                 digest_schedule:
                   type: object
                   description: >
