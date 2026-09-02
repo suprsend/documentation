@@ -150,8 +150,11 @@ A broadcast sends a **template** — the content itself. No workflow, no trigger
 
       <Step title="Check it against a real person">
         In the Variables panel, open **Recipient** and pick one of your users. The preview renders
-        with their actual data. Variables that don't resolve show in **red** — a red variable is a
-        blank space in someone's inbox.
+        with their actual data. Variables that don't resolve show in **red**.
+
+        Don't send with a red variable. A `{{$recipient.<property>}}` that a user doesn't have
+        doesn't come out blank — that user's message **fails outright**. Check a few different
+        recipients, especially ones you didn't create yourself.
 
         <Frame>
           <img src="/images/broadcast-template-editor.png" alt="The template editor with the message content and the live preview rendering a real user's name" />
@@ -231,27 +234,38 @@ undo.
 
 ## Confirm it went out
 
-Open the list you sent to. Two tabs, two views:
+Open the list you sent to, or [**Logs**](https://app.suprsend.com/en/sandbox/logs) for everything at
+once. Two views:
 
 | Tab | Shows |
 |---|---|
-| **Broadcast Executions** | The send as a whole — how many were triggered, skipped and failed |
-| **Messages** | One row per recipient, with the template and channel each person got |
+| **Broadcast Executions** | The send as a whole, with its overall status |
+| **Messages** | One row per recipient. Expand a row for that person's delivery timeline |
+
+Each message carries one of four statuses, and you can filter by them:
 
 | Status | Meaning |
 |---|---|
-| **Triggered** | Reached on at least one channel. This is the number you want |
-| **Skipped** | Not sent — the user opted out, or has no address on that channel |
-| **Failed** | The send broke, usually a template that couldn't render |
+| **In Progress** | Still being processed |
+| **Completed** | Sent on every channel it was meant to go out on |
+| **Partial Failure** | Went out on some channels, failed on others |
+| **Failed** | Didn't send at all. Expand the row for the reason |
+
+Expand a completed message and you get its journey — the vendor that carried it, then
+**Triggered → Delivered → Seen → Clicked**.
+
+<Warning>
+  One failed message makes the whole broadcast read **Partial Failure**, even when everything else
+  delivered. Open **Messages** and filter by **Failed** to see which recipients missed out and why.
+</Warning>
 
 <Frame>
-  {/* SCREENSHOT NEEDED: broadcast-logs.png — the Broadcast Executions tab on a list, showing the triggered / skipped / failed counts for a send */}
-  <img src="/images/broadcast-logs.png" alt="The Broadcast Executions tab showing the triggered, skipped and failed counts" />
+  {/* SCREENSHOT NEEDED: broadcast-logs.png — the Messages log filtered to this broadcast, showing the status counts down the left and one expanded row with its Triggered / Delivered timeline */}
+  <img src="/images/broadcast-logs.png" alt="The Messages log for a broadcast, showing per-recipient rows and the status filters" />
 </Frame>
 
 <Check>
-  Triggered matches the size of your list, and the message is in the inbox of the address you
-  verified.
+  Every recipient shows **Completed**, and the message is in the inbox of the address you verified.
 </Check>
 
 ## Troubleshooting
@@ -274,13 +288,21 @@ Open the list you sent to. Two tabs, two views:
     earlier hard bounce.
   </Accordion>
 
-  <Accordion title="Failed with a template rendering error">
-    The template used a variable the broadcast didn't supply. Names in **Variable data** have to match
-    the template exactly, and `{{$recipient.<property>}}` only resolves for users who have that
-    property on their profile.
+  <Accordion title="The broadcast says Partial Failure">
+    Some messages sent and at least one didn't. Open **Messages**, filter by **Failed**, and expand
+    the row — it names the recipient and the reason.
 
-    Open the template, set a real user as the Recipient in the Variables panel, and look for
-    variables highlighted in red.
+    The most common one is a variable that recipient doesn't have:
+
+    ```text
+    email: template rendering error error: missing variables in template: "$recipient.name"
+    ```
+
+    That user has no `name` on their profile, so the template couldn't render and their message was
+    dropped. Everyone who does have it still received theirs.
+
+    Either fill the property in for those users, or don't personalise on a property that isn't set
+    for everyone on the list. Names in **Variable data** have to match the template exactly too.
   </Accordion>
 
   <Accordion title="The segment matched users but the list is empty">
