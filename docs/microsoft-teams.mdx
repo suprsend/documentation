@@ -132,13 +132,49 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
       <img src="/images/docs/0f6b463-image.png" />
     </Frame>
 
+  ### App Type and Tenant ID
+
+    **App Type** must match how your bot is registered in Azure:
+
+    | App Type | When to use | Tenant ID |
+    |---|---|---|
+    | `Single tenant` | Bots registered after **31 July 2025** — the only type Azure creates today | **Required** |
+    | `Multi tenant` | Older bots registered before that date | Not used |
+
+    <Warning>
+      Microsoft deprecated multi-tenant bot registration on **31 July 2025**. If you created your bot
+      in the Azure portal after that date, it is single tenant — the **Type of App** dropdown no
+      longer offers Multi Tenant at all.
+
+      A single-tenant bot configured as multi-tenant will appear to work: the access token is issued
+      successfully, but every send is rejected with `401 Authorization has been denied for this request`.
+      Set App Type correctly to avoid this.
+    </Warning>
+
+    For a single-tenant bot, **Tenant ID** is the Microsoft Entra tenant your bot is registered in.
+    Find it in the Azure portal under **Microsoft Entra ID → Overview → Tenant ID**, or on your app
+    registration's **Overview** page as *Directory (tenant) ID*.
+
+    <Note>
+      Saving the vendor immediately attempts a real token request. If the **Access Token** field
+      stays empty, the stored error explains what to fix — `AADSTS700016` means the app was not found
+      in the tenant it was looked up in, which usually means the bot is single tenant but the Tenant
+      ID is missing or wrong.
+
+      A populated token confirms your credentials were accepted, but it does **not** by itself
+      guarantee that sends will succeed. Microsoft issues the token, then separately checks at send
+      time that it came from the tenant the bot is registered against — so a wrong App Type can
+      produce a healthy-looking token here and a `401` on every send. Send a test notification to
+      confirm the setup end to end.
+    </Note>
+
   ## Update teams channel in user or object profile
 
     The information required in the user profile is dependent on the type of message you are sending.
 
     <AccordionGroup>
       <Accordion title="Sending a direct message" defaultOpen={false}>
-        To send a direct message to a user, add `tenant_id` , `service_url` of the tenant, and `conversation_id` or `user_id` corresponding to user personal chat.
+        To send a direct message to a user, add `tenant_id` , `service_url` of the tenant, and `conversation_id` or `user_id` corresponding to user personal chat. Only the target — `conversation_id` or `user_id` — is strictly required; `tenant_id` and `service_url` fall back to your vendor settings when omitted.
 
         You can pass this information in a json format using `user.add_ms_teams` method as below:
 
@@ -193,6 +229,18 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
           ```
         </CodeGroup>
 
+        <Note>
+          `service_url` is set per user profile. Microsoft's own guidance is to store the
+          `serviceUrl` from the most recent inbound activity, since it is region-pinned and can
+          change — and a Multi-Geo tenant can place two users in the same directory in different
+          regions, so it genuinely varies per recipient.
+
+          Both `tenant_id` and `service_url` are **optional**. If `service_url` is omitted, SuprSend
+          uses Microsoft's global endpoint `https://smba.trafficmanager.net/teams`, which routes to
+          the correct region automatically. That is the right choice unless your tenant is in a
+          sovereign cloud such as GCC High or DoD, which have their own endpoints.
+        </Note>
+
         **Getting tenant ID, user ID, conversation ID:**
 
         You'll get **tenant ID** from your developer azure portal.
@@ -209,16 +257,37 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
 
         You can get **user\_id** by following the steps to [fetch the roster or user profile](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/get-teams-context?tabs=json#fetch-the-roster-or-user-profile). You'll need authentication token to fetch user profile. You can get this token from SuprSend vendor page after saving the form.
 
+        <Tip>
+          The roster returns two identifiers per member, and they are not equivalent:
+
+          - **The Entra object ID** — returned as `aadObjectId` by `/v3/conversations/{id}/members`
+            and as `objectId` by `/v3/conversations/{id}/pagedmembers`. Stable for the life of the
+            user.
+          - **`id`** (`29:…`) — an encrypted identifier scoped to *one bot app registration*. It
+            works as `user_id`, but if you ever recreate or replace your bot, every stored `29:`
+            value stops resolving.
+
+          Prefer the object ID. Note that it comes back as `null` unless your Teams app manifest
+          declares a resource-specific consent permission such as `TeamMember.Read.Group`. Without
+          that, `pagedmembers` still returns `userPrincipalName`, which you can resolve to an object
+          ID via Microsoft Graph or look up in the Azure portal under **Microsoft Entra ID → Users**.
+        </Tip>
+
         <Frame>
           <img src="/images/docs/a861ce0-image.png" />
         </Frame>
       </Accordion>
 
       <Accordion title="Sending to a channel" defaultOpen={false}>
-        To send a message to a public or private channel, you’ll need to pass `tenant_id` , `service_url` of the tenant, and `conversation_id` of the teams chat channel.
+        To send a message to a public or private channel, you’ll need to pass `tenant_id` , `service_url` of the tenant, and `conversation_id` of the teams chat channel. As with direct messages, only `conversation_id` is strictly required — the other two fall back to your vendor settings when omitted.
 
         <Warning>
           Please note that you'll have to add App in your teams channel to send notification otherwise it will fail.
+
+          Adding the app to the team is not always sufficient on its own — the bot also has to be in
+          the channel's conversation roster. If sends fail with `BotNotInConversationRoster` after
+          adding the app, @mention the bot once in the channel. Teams then adds it, and it stays
+          added across the whole team.
         </Warning>
 
         To add App to your teams channel, click on `+` icon to add a tab. In **Add a tab** modal, click on **"More Apps"**.
@@ -231,6 +300,15 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
 
         <Frame>
           <img src="/images/docs/363ff8c-image.png" />
+        </Frame>
+
+        **Getting the channel's `conversation_id`:**
+
+        Hover the channel → **⋯** → **Copy link**. The link holds the channel's thread id, URL-encoded —
+        decode `%3A` back to `:` and `%40` to `@`, and the result is the `conversation_id`.
+
+        <Frame>
+          <img src="/images/docs/msteams-copy-channel-link.png" />
         </Frame>
 
         We recommend creating a separate user for identifying channels and not mix it in user profile. You can create a teams channel user with `distinct_id` as `channel_<channel_name>` so it's easy for you to remember and pass in your workflow calls whenever you want to send message on a teams channel.
@@ -281,7 +359,7 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
           user.add_ms_teams(
             {
               "incoming_webhook": {
-                "url": "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
+                "url": "https://defaultXXXX.XX.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/XXXX/triggers/manual/paths/invoke?api-version=1&sig=XXXX"
               }
             })
 
@@ -296,7 +374,7 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
           user.add_ms_teams(
             {
               "incoming_webhook": {
-                "url": "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
+                "url": "https://defaultXXXX.XX.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/XXXX/triggers/manual/paths/invoke?api-version=1&sig=XXXX"
               }
             })
 
@@ -311,7 +389,32 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
 
         **Get Incoming webhook for a teams channel:**
 
-        To get incoming webhook, select **connectors** from channel -> more options.
+        Create these as **Workflows**. Select **Workflows** from the channel's more options menu.
+
+        <Frame>
+          <img src="/images/docs/msteams-workflows-menu.png" />
+        </Frame>
+
+        Search the templates for **webhook** and pick **Send webhook alerts to a channel** (or the chat
+        variant), choose the target channel, and save. Then copy the URL with **Copy webhook link**.
+
+        <Frame>
+          <img src="/images/docs/msteams-workflows-copy-webhook-link.png" />
+        </Frame>
+
+        Copy it straight away — the URL embeds a signature and is generally shown only once. No premium
+        Power Automate licence is needed for these templates.
+
+        <Warning>
+          Office 365 connectors, the older route shown below, are retired — Microsoft began the
+          rollout on 18 May 2026, and connector URLs stop delivering once it reaches a tenant. The
+          `incoming_webhook` profile accepts either URL format, so migrating a subscriber means
+          replacing the URL and nothing else. Workflows supports MessageCard as well as Adaptive
+          Card, so your existing card templates carry over. The steps below are kept only for
+          reference while you migrate.
+        </Warning>
+
+        To get an incoming webhook the older way, select **connectors** from channel -> more options.
 
         <Frame>
           <img src="/images/docs/f99ea8e-image.png" />
@@ -339,7 +442,7 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
           user.add_ms_teams(
             {
               "incoming_webhook": {
-                "url": "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
+                "url": "https://defaultXXXX.XX.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/XXXX/triggers/manual/paths/invoke?api-version=1&sig=XXXX"
               },
           		"tenant_id": "c1981ab2-9aaf-xxxx-xxxx",
           		"service_url": "https://smba.trafficmanager.net/amer",
@@ -358,7 +461,7 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
           user.add_ms_teams(
             {
               "incoming_webhook": {
-                "url": "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"
+                "url": "https://defaultXXXX.XX.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/XXXX/triggers/manual/paths/invoke?api-version=1&sig=XXXX"
               },
           		"tenant_id": "c1981ab2-9aaf-xxxx-xxxx",
           		"service_url": "https://smba.trafficmanager.net/amer",
@@ -371,7 +474,7 @@ To send notifications on Microsoft Teams, you'll need to create a Teams bot. Thi
           ```
         </CodeGroup>
 
-        The profile will be saved as `{"incoming_webhook": { "url": "https://wnk1z.webhook.office.com/webhookb2/XXXXXXXXX"}}`
+        The profile will be saved as `{"incoming_webhook": { "url": "https://defaultXXXX.XX.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/XXXX/triggers/manual/paths/invoke?api-version=1&sig=XXXX"}}`
 
 
 
