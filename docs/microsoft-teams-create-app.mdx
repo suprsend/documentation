@@ -1,0 +1,195 @@
+---
+title: "Create a Teams app and add the vendor"
+description: "Register an Azure bot, wrap it in a Teams app package, and save the bot credentials on the Microsoft Teams vendor in SuprSend."
+sidebarTitle: "Create a Teams app"
+---
+
+Every Microsoft Teams send in SuprSend needs this page: you create the app, then save **App ID**, **password**, **App Type**, and **Tenant ID** on the vendor form. That includes [incoming webhook](/docs/microsoft-teams-incoming-webhook) sends.
+
+For bot delivery you also wrap the bot in a Teams app package that customers install. That's what makes the message show *your* name and icon, and what lets you DM people. In the [customer's bot](/docs/microsoft-teams-customer-bot) use case they create their own copy. For webhook-only, you still save the vendor credentials; you don't have to install the app in the customer's tenant, because Microsoft's Workflows app is what posts in the channel.
+
+You'll need a Microsoft 365 account that can create apps.
+
+<Warning>
+  Since **31 July 2025**, every new Azure bot is **single-tenant**. That's fine — customers still get your bot by installing your Teams **app**. Existing multi-tenant bots keep working.
+
+  On the SuprSend vendor form, set **App Type** to `Single tenant` for any bot created after that date. Picking `Multi tenant` still returns an access token, but every send then fails with `401 Authorization has been denied for this request`.
+
+  This is separate from **Supported account types** in Azure, which controls which directories can install your app. Set that to multiple tenants if customers will install it (see step 4).
+</Warning>
+
+## Create the Teams app
+
+### 1. Create the app
+
+Open the [Teams Developer Portal](https://dev.teams.microsoft.com/) → **Apps** → **+ New App**. Name it something people will recognize in the Teams app list, such as `Incident Alerts`.
+
+<Frame>
+  <img src="/images/docs/d5b25a5-Screenshot_2023-10-20_at_3.38.10_PM.png" alt="Teams Developer Portal Apps page with New App" />
+</Frame>
+
+<Frame>
+  <img src="/images/docs/229a7e1-image.png" alt="New app name dialog" />
+</Frame>
+
+You'll land on the **Basic information** form shown below. Fill in the app name, descriptions, company name, and the website, privacy policy, and terms of use URLs. All three URLs must be `https://` — an `http://` link or a missing one blocks publishing.
+
+<Frame caption="Basic information in the Teams Developer Portal. The three URL fields are validated for https://.">
+  <img src="/images/ms_teams_app_create_form.png" alt="Teams app Basic information form with developer name, HTTPS URL fields, and Application (client) ID" />
+</Frame>
+
+### 2. Create the bot and a client secret
+
+Left panel → **App features → Bot**. Pick an existing bot or **Create a new bot**. On the [bot page](https://dev.teams.microsoft.com/bots), **+ New Bot**, name it, **Add**.
+
+Leave the messaging endpoint blank unless you also handle inbound activity (for example @mentions). Select **Microsoft Teams** as the channel.
+
+<Frame>
+  <img src="/images/docs/9a4ab84-image.png" alt="Create a new bot dialog" />
+</Frame>
+
+Then create a **client secret**. It is shown only once — save it. That value is **Password** on the SuprSend vendor form.
+
+<Frame>
+  <img src="/images/docs/msteams-devportal-bot-secret.png" alt="Create a client secret on the bot configuration page" />
+</Frame>
+
+### 3. Attach the bot and set scopes
+
+Select **App features → Bot**, then pick the bot you just created. Its **Application (client) ID** is filled in on **Basic information** and cannot be edited there. You will need that value when you configure the vendor in SuprSend.
+
+<Frame>
+  <img src="/images/docs/msteams-devportal-add-bot.png" alt="Attach the newly created bot; Application client ID is filled in automatically" />
+</Frame>
+
+Under **What can your bot do?**, choose **Only send notifications** unless you also handle inbound messages. Add the scopes you'll use:
+
+- **personal** — DMs
+- **team** — channel posts
+- **group chat** — group chats
+
+Save.
+
+<Frame>
+  <img src="/images/docs/msteams-devportal-bot-scopes.png" alt="Bot scopes personal, team, and group chat" />
+</Frame>
+
+Add these application permissions:
+
+| Section | Permissions |
+|---|---|
+| Team Permissions → Application | `Channel.Create.Group`, `Channel.Delete.Group`, `ChannelMessage.Read.Group`, `ChannelMessage.Send.Group`, `TeamsActivity.Send.Group` |
+| Chat/Meeting Permissions → Application | `ChatMessage.Read.Chat`, `ChatMessage.Send.Chat` |
+| User Permissions → Application | `TeamsActivity.Send.User` |
+
+If you need Entra object IDs from the roster (stable `user_id`s for DMs), include a resource-specific consent permission such as `TeamMember.Read.Group`.
+
+<Frame>
+  <img src="/images/docs/8d923d0-image.png" alt="Teams app resource-specific permission list" />
+</Frame>
+
+Your app package is ready. To test it, upload it in your own tenant from **Teams admin center → Teams apps → Manage apps → Upload new app**. How customers install it is covered on the [your bot](/docs/microsoft-teams-customer-workspaces) page.
+
+### 4. Let other directories install the app (SaaS)
+
+Skip this if the bot only ever serves your own Microsoft Entra directory.
+
+In the [Azure portal](https://portal.azure.com/), open **App registrations → your app → Authentication**, and set **Supported account types** to **Multiple Entra ID tenants**.
+
+The bot still mints its token from *your* directory. This setting only lets other organizations install the app.
+
+<Frame>
+  <img src="/images/docs/msteams-supported-account-types.png" alt="Azure Authentication supported account types set to Multiple Entra ID tenants" />
+</Frame>
+
+Until the app registration has a verified publisher (MPN ID), end users in those organizations cannot consent themselves — an administrator has to approve it.
+
+### Alternative: create the bot with the Azure CLI
+
+Prefer scripts over portal clicks? These commands do the **Azure side** of steps 2–4 — the app registration, its client secret, and the Azure Bot with the Teams channel enabled. They're useful if you provision infrastructure with scripts, or if you're setting up a bot inside a customer's subscription for the [customer's bot](/docs/microsoft-teams-customer-bot) use case.
+
+They do **not** build the Teams app package (name, scopes, permissions). You still do that in the Developer Portal — steps 1 and 3 above — and attach the bot these commands create.
+
+```bash
+# Your home directory. The bot authenticates against this tenant.
+HOME_TENANT_ID=$(az account show --query tenantId -o tsv)
+RG="incident-alerts"
+BOT_NAME="incident-alerts-bot"
+
+# 1. A resource group to hold the bot.
+az group create --name "$RG" --location eastus
+
+# 2. Register the Entra app. This is the same as Azure portal → App registrations.
+#    AzureADMultipleOrgs lets other organizations install your app (step 4).
+#    Use AzureADMyOrg if the bot will only ever serve your own directory.
+APP_ID=$(az ad app create \
+  --display-name "Incident Alerts" \
+  --sign-in-audience AzureADMultipleOrgs \
+  --query appId -o tsv)
+
+# 3. Create the client secret. It prints once — copy it. This is the
+#    Password on the SuprSend vendor form.
+az ad app credential reset --id "$APP_ID" --append \
+  --display-name "suprsend" --years 2
+
+# 4. Create the Azure Bot, bound to your home tenant. SingleTenant is the
+#    only option for new bots; MultiTenant fails after 31 July 2025.
+az bot create \
+  --resource-group "$RG" \
+  --name "$BOT_NAME" \
+  --appid "$APP_ID" \
+  --app-type SingleTenant \
+  --tenant-id "$HOME_TENANT_ID" \
+  --sku F0 \
+  --location global
+
+# 5. Enable the Microsoft Teams channel on the bot.
+az bot msteams create --name "$BOT_NAME" --resource-group "$RG"
+```
+
+When it finishes you have the three values the vendor form needs: `$APP_ID` (Application ID), the secret printed in step 3 (Password), and `$HOME_TENANT_ID` (Tenant ID), with App Type `Single tenant`.
+
+The CLI created the bot outside the Developer Portal, so it won't show up in the bot list there. Go back to step 3 in the [Teams Developer Portal](https://dev.teams.microsoft.com/), open your app → **App features → Bot**, and enter `$APP_ID` as the bot ID to attach it to your Teams app.
+
+## Add the vendor in SuprSend
+
+Go to **Vendors → Microsoft Teams** ([open vendor settings](https://app.suprsend.com/en/staging/vendors/ms_teams/ms_teams-ms_teams?tenant_id=default)). Add the **Application (client) ID** and the **client secret** (Password field). This form is required for webhook sends as well as bot sends.
+
+<Frame>
+  <img src="/images/docs/msteams-suprsend-vendor-page.png" alt="SuprSend Microsoft Teams vendor form with App Type and Tenant ID" />
+</Frame>
+
+| Field | What it is |
+|---|---|
+| **Application (client) ID** | Filled onto the app in Developer Portal when you attach the bot. Same value as Azure **App registration → Overview**. |
+| **Password** | Bot client secret (shown only once when you created it) |
+| **App Type** | Must match the **Azure Bot**. `Single tenant` for bots created after 31 July 2025. `Multi tenant` only for an older bot. |
+| **Tenant ID** | The Microsoft Entra tenant **your bot is registered in**. Required for single-tenant. Not the customer's directory. |
+
+Find **Tenant ID** in the [Azure portal](https://portal.azure.com/) under **Microsoft Entra ID → Overview → Tenant ID**, or on the app registration **Overview** as *Directory (tenant) ID*.
+
+<Frame>
+  <img src="/images/docs/msteams-entra-tenant-id.png" alt="Microsoft Entra ID Overview showing Directory tenant ID" />
+</Frame>
+
+Save. SuprSend requests a token immediately.
+
+- Empty **Access Token** and `AADSTS700016` — Tenant ID is missing or isn't the bot's home directory.
+- Token filled in — credentials were accepted. That does not prove sends will work. Microsoft issues the token, then checks at send time that it came from the tenant the bot is registered against. A wrong App Type produces a healthy-looking token and `401 Authorization has been denied for this request` on every send. Send a test from the use-case page you picked.
+
+<Warning>
+  **Tenant ID** on the vendor is the directory your **bot** is registered in. `tenant_id` on a user or object `$ms_teams` channel is the **recipient's** organization. They are the same value when the bot only serves its own directory. Once the bot serves several customers, a destination without its own `tenant_id` falls back to the vendor's and the send fails with `401`.
+</Warning>
+
+If an enterprise customer brings their own bot, those credentials go on a [tenant-level vendor](/docs/tenant-vendor) instead. See [Send with their bot](/docs/microsoft-teams-customer-bot).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Send as your bot" icon="robot" href="/docs/microsoft-teams-customer-workspaces">
+    Customers install your app. DMs on users, channels on objects.
+  </Card>
+  <Card title="Send with your customer's bot" icon="building" href="/docs/microsoft-teams-customer-bot">
+    The customer registers the app in their own Entra directory and hands you the credentials.
+  </Card>
+</CardGroup>
