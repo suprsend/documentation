@@ -1,49 +1,42 @@
 ---
 title: "Post to a Teams channel with a webhook"
-sidebarTitle: "Incoming webhook"
-description: "Let a customer map a resource in your product to one Teams channel by pasting a Workflows webhook URL. You still save app credentials on the Microsoft Teams vendor; Workflows posts the message."
+sidebarTitle: "Send via channel webhook"
+description: "Let a customer map a resource in your product to one Teams channel by pasting a Workflows webhook URL. Workflows posts the message."
 ---
 
 This page covers posting into a single Microsoft Teams channel using a Workflows incoming webhook.
 
-You still [create the Teams app and save the vendor](/docs/microsoft-teams-create-app) — App ID, password, App Type, and Tenant ID. SuprSend does not send Teams without those credentials, including on this path.
+Let's say you are building a product like GitHub. A customer wants deploy events for their `payments-api` repository posted in their `#deploys` channel — nothing more. Their Teams admin creates a webhook for the channel and pastes the URL into your product.
 
-What you skip is installing your app in the customer's tenant. The destination is a webhook URL. Microsoft's **Workflows** app (the flow bot, powered by Power Automate) is what posts in the channel — usually as Workflows, or on behalf of the person who created the flow, not as your product.
+In SuprSend, you store that URL on an [object](/docs/objects) representing the repository, and trigger workflows with the object as the recipient.
 
-Let's say you are building a product like GitHub. Acme wants deploy events for the `acme/api` repository to land in their `#deploys` channel, and that's all they want — no DMs from your app. An admin who can edit `#deploys` creates a webhook and pastes the URL into your product.
-
-In SuprSend, that channel is a connection on an [object](/docs/objects) that models the repository. The object is the recipient of the workflow.
-
-If you also need to DM people, post in several channels as a bot they can @mention, or appear as an installed app, use [Send as your bot](/docs/microsoft-teams-customer-workspaces) instead.
+If you also need to DM people, post in several channels as a bot they can @mention, or appear as an installed app, use [Send using your Teams app](/docs/microsoft-teams-customer-workspaces) instead.
 
 ## Teams channels are connections on objects
 
-[Objects](/docs/objects) let you model any resource in your system — a repository, a project, a service. Each object lives in a type (think of it as a table) and has an id unique inside that type.
+[Objects](/docs/objects) represent non-human entities in your product — a repository, a project, a service. You group them by `object_type` and give each one an `id`. Here, the type is `repositories` and the id is `payments-api`.
 
-For this GitHub-style flow, each repository becomes an object in a `repositories` type. The webhook URL is stored as `$ms_teams` on that object, not on a human user. If Maya leaves Acme, `#deploys` should still receive `acme/api` events.
+The webhook URL is stored as `$ms_teams` on that repository object, not on a user. If the engineer who set it up leaves the company, `#deploys` should still receive `payments-api` events.
 
 ```python
 from suprsend import Suprsend
 
 supr_client = Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET")
 
-supr_client.objects.upsert("repositories", "acme/api", {
-  "name": "API",
-  "full_name": "acme/api",
+supr_client.objects.upsert("repositories", "payments-api", {
+  "name": "Payments API",
 })
 ```
 
-You don't need a SuprSend [tenant](/docs/tenants) for a webhook. The URL is self-contained. Reach for a tenant when you later add a bot, branding, or [tenant vendors](/docs/tenant-vendor) for that customer.
-
 ## 1. Save the vendor
 
-Follow [Create a Teams app and add the vendor](/docs/microsoft-teams-create-app) through **Add the vendor in SuprSend**. You need the same App ID, password, App Type, and Tenant ID as a bot send.
+Follow [Create a Teams app and add the vendor](/docs/microsoft-teams-create-app) doc.
 
 ## 2. Create a Workflows webhook in Teams
 
 Office 365 connectors are retired. Create the URL with **Workflows**.
 
-In `#deploys`, open **⋯** → **Workflows**.
+In the channel you want to post to, open **⋯** → **Workflows**.
 
 <Frame>
   <img src="/images/docs/msteams-workflows-menu.png" alt="Workflows in a Teams channel more-options menu" />
@@ -55,9 +48,9 @@ Search for **webhook** and pick **Send webhook alerts to a channel**. Choose the
   <img src="/images/docs/msteams-workflows-copy-webhook-link.png" alt="Copy webhook link from a Teams Workflows flow" />
 </Frame>
 
-Copy it while it's on screen. The URL embeds a `sig=` and is usually shown once. These templates don't need a premium Power Automate licence.
+The URL embeds a `sig=` token that authorises posts, so treat it like a secret. These templates don't need a premium Power Automate licence.
 
-In your product this is a settings field: "Paste your Teams webhook URL." You are not building OAuth.
+In your product, all you need is a settings field where the customer pastes this URL. No OAuth flow required.
 
 ## 3. Store the URL on the object
 
@@ -67,8 +60,8 @@ from suprsend import Suprsend
 
 supr_client = Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET")
 
-supr_client.objects.upsert("repositories", "acme/api", {
-  "name": "API",
+supr_client.objects.upsert("repositories", "payments-api", {
+  "name": "Payments API",
   "$ms_teams": [{
     "incoming_webhook": {
       "url": "https://defaultXXXX.XX.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/XXXX/triggers/manual/paths/invoke?api-version=1&sig=XXXX"
@@ -81,7 +74,7 @@ supr_client.objects.upsert("repositories", "acme/api", {
 const { Suprsend } = require("@suprsend/node-sdk");
 
 const supr_client = new Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET");
-const repo = supr_client.objects.get_instance("repositories", "acme/api");
+const repo = supr_client.objects.get_instance("repositories", "payments-api");
 
 repo.add_ms_teams({
   incoming_webhook: {
@@ -95,60 +88,11 @@ supr_client.objects.edit(repo).then((res) => console.log(res));
 
 If `add_ms_teams` includes a webhook URL *and* bot fields (`conversation_id`, `user_id`), only the webhook is kept. Precedence is `incoming_webhook.url` > `conversation_id` > `user_id`. Don't mix them on the same object.
 
-<Warning>
-  Incoming webhooks are not bound to a [tenant vendor](/docs/tenant-vendor). If the same users belong to multiple tenants and you route other channels through each customer's own providers, don't put webhooks on those shared profiles — SuprSend posts to every webhook on the recipient, regardless of tenant vendor. Keep the URL on the repository object instead.
-</Warning>
-
 ## 4. Trigger a workflow with the object as recipient
 
-Add a Microsoft Teams step to a workflow such as `new-deploy`. The object is the recipient, so template variables like `{{recipient.name}}` resolve against the repository.
+Next, create a workflow (for example `new-deploy`) with either a **multi-channel** node or an **MS Teams** node, and connect it to a [Teams template](/docs/ms-teams-template).
 
-A Workflows webhook accepts **Adaptive Cards only**. Plain text and MessageCard are not rendered, so the MS Teams template must produce an Adaptive Card on this path.
-
-Use **Adaptive Card version 1.4 or 1.5**. Version 1.6 renders through the bot but fails silently through a Workflows webhook — the request is accepted and nothing appears in the channel.
-
-<Frame>
-  <img src="/images/docs/msteams-adaptive-card-template.png" alt="MS Teams template producing an Adaptive Card for a Workflows webhook" />
-</Frame>
-
-If you already have a plain-text template, wrap it in a single `TextBlock` so the same template works over the bot and the webhook:
-
-```json
-{
-  "type": "AdaptiveCard",
-  "version": "1.5",
-  "body": [{ "type": "TextBlock", "text": "Deployment finished", "wrap": true }]
-}
-```
-
-Or build the Workflows flow yourself with a condition on the incoming payload — cards one way, text the other:
-
-<Frame>
-  <img src="/images/docs/msteams-workflow-text-and-card.png" alt="Power Automate flow that posts Adaptive Cards or plain text from a Teams webhook" />
-</Frame>
-
-1. Trigger: **When a Teams webhook request is received**
-2. Add a **Condition**, with this expression on the left and *is greater than* `0` on the right:
-
-   ```
-   length(coalesce(triggerBody()?['attachments'], json('[]')))
-   ```
-
-3. **If yes** — **Post card in a chat or channel**, set **Adaptive Card** to:
-
-   ```
-   string(first(triggerBody()?['attachments'])?['content'])
-   ```
-
-4. **If no** — **Post message in a chat or channel**, set the message to:
-
-   ```
-   triggerBody()?['text']
-   ```
-
-The condition counts `attachments` on the request. SuprSend sends a card there and plain text in `text`. `coalesce` supplies an empty array when `attachments` is absent, which stops the expression erroring on a text-only payload.
-
-See [MS Teams templates](/docs/ms-teams-template) for authoring.
+Trigger it with the repository object as the recipient:
 
 <CodeGroup>
 ```python Python
@@ -159,7 +103,7 @@ w = WorkflowTriggerRequest(body={
   "workflow": "new-deploy",
   "recipients": [{
     "object_type": "repositories",
-    "id": "acme/api",
+    "id": "payments-api",
   }],
   "data": {
     "sha": "a1b2c3d",
@@ -175,7 +119,7 @@ const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
 const supr_client = new Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET");
 const w = new WorkflowTriggerRequest({
   workflow: "new-deploy",
-  recipients: [{ object_type: "repositories", id: "acme/api" }],
+  recipients: [{ object_type: "repositories", id: "payments-api" }],
   data: { sha: "a1b2c3d", environment: "production" },
 });
 
@@ -183,30 +127,105 @@ supr_client.workflows.trigger(w).then((res) => console.log(res));
 ```
 </CodeGroup>
 
+Write the Teams template in **JSONNET**, not Markdown. A Workflows webhook only renders Adaptive Cards, and Markdown templates produce plain text, which the webhook silently drops.
+
+Set the card `version` to **1.4 or 1.5**. Version 1.6 works through a bot but not through a webhook — the request is accepted and nothing appears in the channel.
+
+<Frame>
+  <img src="/images/docs/msteams-adaptive-card-template.png" alt="MS Teams template producing an Adaptive Card for a Workflows webhook" />
+</Frame>
+
+If you already have a Markdown template, recreate it in JSONNET as a single `TextBlock` so the same content works over both the bot and the webhook:
+
+```json
+{
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [{ "type": "TextBlock", "text": "Deployment finished", "wrap": true }]
+}
+```
+
+If you'd rather keep using Markdown templates — they're easier for your team to edit — you can build a custom Workflows flow in Teams instead of the "Send webhook alerts" template. The flow checks the incoming payload and posts a card when there is one, or plain text otherwise.
+
+<Accordion title="Steps to build the custom Workflows flow">
+  <Frame>
+    <img src="/images/docs/msteams-workflow-text-and-card.png" alt="Power Automate flow that posts Adaptive Cards or plain text from a Teams webhook" />
+  </Frame>
+
+  1. Trigger: **When a Teams webhook request is received**
+  2. Add a **Condition**, with this expression on the left and *is greater than* `0` on the right:
+
+     ```
+     length(coalesce(triggerBody()?['attachments'], json('[]')))
+     ```
+
+  3. **If yes** — **Post card in a chat or channel**, set **Adaptive Card** to:
+
+     ```
+     string(first(triggerBody()?['attachments'])?['content'])
+     ```
+
+  4. **If no** — **Post message in a chat or channel**, set the message to:
+
+     ```
+     triggerBody()?['text']
+     ```
+
+  The condition counts `attachments` on the request. SuprSend sends a card there and plain text in `text`. `coalesce` supplies an empty array when `attachments` is absent, which stops the expression erroring on a text-only payload.
+</Accordion>
+
 <Check>
-  `#deploys` shows the post. **Logs → Messages** has the Teams delivery for the `acme/api` object.
+  If everything works, you'll see the message in your Teams channel. You can also check **Logs → Messages** in SuprSend for the delivery and later statuses.
+
+  One caveat: for Markdown templates and Adaptive Cards above version 1.5, the log shows a successful delivery but the message is silently dropped by Teams. So confirm in the channel, not just the logs.
 </Check>
 
-## If something fails
+## Troubleshooting
 
 <AccordionGroup>
+  <Accordion title="Logs show delivered, but nothing appears in the channel">
+    Teams accepted the request and then dropped it. Two causes:
+
+    - The template is in **Markdown**. A Workflows webhook only renders Adaptive Cards. Switch the template to JSONNET, or build the custom flow described above.
+    - The card `version` is **1.6 or higher**. Set it to `1.4` or `1.5`.
+  </Accordion>
+  <Accordion title="Logs show a failed delivery">
+    The webhook URL didn't accept the request. Check, in order:
+
+    - The URL on the object is complete and includes the `sig=` token.
+    - The Workflows flow still exists and is turned on in Teams. Flows are owned by the person who created them — if that person left the organization or lost access to the channel, the flow stops working. Have another admin recreate it and update the URL.
+    - The URL is a Workflows URL, not a retired Office 365 connector URL (see below).
+  </Accordion>
   <Accordion title="An old office.com / webhook.office.com URL stopped delivering">
     That's a retired Office 365 connector. Microsoft began the rollout on **18 May 2026**. Create a Workflows webhook and replace `incoming_webhook.url` on the object. The field accepts either URL shape, so migration is a URL swap. You don't have to rewrite the card.
   </Accordion>
-  <Accordion title="Nothing shows up in the channel">
-    Confirm the Workflows flow is on `#deploys`, the URL includes `sig=`, and the workflow triggered the `acme/api` object. Check **Logs → Messages**.
+  <Accordion title="No delivery attempt in the logs at all">
+    The workflow ran but never reached the Teams channel. Open the **workflow execution log** in SuprSend — it shows which step skipped the send and why. The usual reasons:
+
+    - The template has no **MS Teams** version published. Add one and commit it.
+    - The recipient has no `$ms_teams` channel.
+    - The recipient or the tenant has **opted out** of the MS Teams channel in preferences.
+    - **Template rendering failed** — for example a variable the template uses is missing from `data`, or the JSONNET has a syntax error. SuprSend discards the Teams notification for that recipient.
+    - The **Microsoft Teams vendor** isn't enabled. Check **Vendors → Microsoft Teams** and follow [Create a Teams app and add the vendor](/docs/microsoft-teams-create-app) if it's empty.
+  </Accordion>
+  <Accordion title="The message landed in the wrong channel">
+    A Workflows webhook is bound to the channel picked when the flow was created. Create a new flow on the right channel and replace the URL on the object.
+  </Accordion>
+  <Accordion title="The same message posts more than once">
+    The object has several `$ms_teams` entries with webhook URLs, and SuprSend posts to each. Remove the ones you don't need.
+  </Accordion>
+  <Accordion title="Messages come from &quot;Workflows&quot; or the admin's name, not your product">
+    This is expected behaviour. A webhook posts through Microsoft's Workflows app, usually as **Workflows** or on behalf of the person who created the flow. To post under your own name and icon, use [Send using your Teams app](/docs/microsoft-teams-customer-workspaces).
   </Accordion>
 </AccordionGroup>
-
-Don't create new Office 365 connector URLs. The `incoming_webhook` field accepts either URL shape, so migration is a URL swap — but the template still has to be an Adaptive Card 1.4 or 1.5.
 
 ## Next
 
 <CardGroup cols={2}>
-  <Card title="Write the Teams template" icon="file-lines" href="/docs/ms-teams-template">
-    Markdown or Adaptive Card for the webhook post.
+  <Card title="Design the Teams template" icon="file-lines" href="/docs/ms-teams-template">
+    Build the Adaptive Card in the JSONNET editor — layout, variables, and preview.
   </Card>
-  <Card title="Need DMs as well?" icon="robot" href="/docs/microsoft-teams-customer-workspaces">
-    Register a bot and store channels on objects, people on users.
+  <Card title="Send using your Teams app" icon="robot" href="/docs/microsoft-teams-customer-workspaces">
+    Go beyond one channel: DM people, post in any channel, and show your own name and icon.
   </Card>
 </CardGroup>

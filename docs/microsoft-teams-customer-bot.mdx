@@ -1,40 +1,54 @@
 ---
-title: "Send Teams notifications with your customer's bot"
-sidebarTitle: "Customer's bot"
-description: "Route Teams DMs and channel posts through a bot registered in the customer's Entra tenant, using a tenant-level vendor in SuprSend."
+title: "Send DMs or post in channels via your customer's Teams app"
+sidebarTitle: "Send via customer's Teams app"
+description: "Route Teams DMs and channel posts through a Teams app the customer registers in their own Entra directory, using a tenant-level vendor in SuprSend."
 ---
 
-This page covers the case where the Azure bot is **the customer's**, not yours. Destinations still live on objects and users; only the credentials change at send time.
+This page covers the case where the Teams app and bot belong to **the customer**, not you. Everything else — objects for channels, users for DMs, the trigger — is the same as [Send via your Teams app](/docs/microsoft-teams-customer-workspaces). Only the credentials change at send time.
 
-Let's say you sell to a hospital system or a bank. Their security team will not install a third-party bot into Entra. They will register *their* Teams app in *their* directory, give you the client id and secret, and expect every Teams message for that account to come from that app.
+Let's say you sell to a hospital network or a bank. Their security team won't approve a third-party bot in their Entra directory. Instead, they register *their own* Teams app in *their* directory, hand you its credentials, and expect every Teams message for their account to come from that app.
 
-In SuprSend that's a [tenant-level vendor](/docs/tenant-vendor) on the tenant you already created for them (`acme`). If a tenant has no Teams vendor, the default workspace vendor is used — which would be *your* bot, the thing they rejected.
+## Key concepts
 
-The modeling is the same as [Send as your bot](/docs/microsoft-teams-customer-workspaces): channels on [objects](/docs/objects), DMs on [users](/docs/users) (per-tenant profiles when someone belongs to more than one customer), and a SuprSend [tenant](/docs/tenants) per customer account. This page only changes who owns the bot.
+| In your product | In SuprSend | Example |
+|:--|:--|:--|
+| **Customer organization** | **[Tenant](/docs/tenants)**, required here — it's what the customer's bot credentials attach to. Pass `tenant_id` on every trigger for that customer. | `tenant_id: "customer-a"` |
+| **Customer's bot credentials** | **[Tenant vendor](/docs/tenant-vendor)** for Microsoft Teams on that tenant. Overrides your default vendor for this customer's sends. | App ID, secret, App Type, Tenant ID |
+| **Monitored service** (any resource that owns a channel) | **[Object](/docs/objects)** with an `$ms_teams` entry holding the channel's `conversation_id`. | `services` / `api-prod` → `#incidents` |
+| **Person to DM** | **[User](/docs/users)** with an `$ms_teams` entry holding their `user_id`, on a [per-tenant profile](/docs/user-tenant-mapping). | `distinct_id: "on-call-engineer"` |
+| **Customer's Microsoft Entra directory** | `tenant_id` inside each `$ms_teams` entry — optional here. Sends for this tenant already use *their* vendor, whose home Tenant ID is their directory, so SuprSend falls back to that if you leave it out. | `c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9` |
 
-It assumes you know how to [create a Teams app](/docs/microsoft-teams-create-app). Here, *they* run those steps in their Azure tenant (or you run them in a subscription they own).
+## 1. The customer creates the Teams app
 
-## 1. They create the app in their directory
+Point their IT team at [Create a Teams app](/docs/microsoft-teams-create-app). They run those steps in their own Azure and Teams Developer Portal, with three differences from your own setup:
 
-Point their IT at [Create a Teams app](/docs/microsoft-teams-create-app). Differences:
+- **Supported account types** can stay single-directory (`AzureADMyOrg`). This bot never leaves their tenant.
+- Azure Bot **App Type** is still **Single tenant**.
+- They send you the **Application (client) ID**, **client secret**, and **Directory (tenant) ID**. The app package stays with them — their admins install it from their own org catalog.
 
-- Entra **supported account types** can stay single-directory (`AzureADMyOrg`). This bot does not need to leave their tenant.
-- Azure Bot **App Type** is still **Single tenant** for anything created after 31 July 2025.
-- They send you **Application (client) ID**, **client secret**, **Directory (tenant) ID**, and the Teams app package (so their admins can install it from *their* org catalog).
+If they'd rather you provision it, the [Azure CLI script](/docs/microsoft-teams-create-app#alternative-create-the-bot-with-the-azure-cli) on that page works in a subscription they grant you access to; use `--sign-in-audience AzureADMyOrg`.
 
-You can automate that provisioning in a subscription they grant you access to, with `--sign-in-audience AzureADMyOrg` and `--app-type SingleTenant`. The CLI on the setup page applies; swap the audience.
+## 2. The customer installs the app in their tenant
 
-They still have to install the app in the team that owns `#incidents` and, for DMs, in personal scope. `BotNotInConversationRoster` is the same @mention fix.
+Their admin uploads the app package in **Teams admin center → Teams apps → Manage apps → Upload new app**, then gives it permission to send:
 
-## 2. Put their credentials on a tenant vendor
+- **DMs** — add the app to the *Global* setup policy under **Teams apps → Setup policies → Installed apps**, so it's installed in personal scope for everyone.
+- **Channel posts** — @mention the bot once in each channel you'll post in, which installs the app in that team.
 
-Create the SuprSend tenant for this customer if it doesn't exist.
+This is the same as Option A on [Send via your Teams app](/docs/microsoft-teams-customer-workspaces#give-the-app-permission-to-send-dms-and-post-in-channels). Because the app is theirs and lives in their catalog, there's no Store listing or `.zip` from your side.
 
-```python
-supr_client.tenants.upsert("acme", { "tenant_name": "Acme Health" })
+## 3. Save their credentials on a tenant vendor
+
+Create the SuprSend tenant for this customer if it doesn't exist:
+
+```bash
+curl -X POST "https://hub.suprsend.com/v1/tenant/customer-a/" \
+  --header "Authorization: Bearer __API_KEY__" \
+  --header "Content-Type: application/json" \
+  --data '{ "tenant_name": "Customer A" }'
 ```
 
-Then open **Vendors → Microsoft Teams** with **that tenant selected** in the tenant switcher ([open vendors](https://app.suprsend.com/en/staging/vendors/)). Paste *their* client id, secret, App Type, and *their* Directory (tenant) ID.
+Then open **Vendors → Microsoft Teams** with **that tenant selected** in the tenant switcher ([open vendors](https://app.suprsend.com/en/staging/vendors/)) and fill in *their* values:
 
 <Frame>
   <img src="/images/docs/msteams-suprsend-vendor-page.png" alt="SuprSend Microsoft Teams vendor form with App Type and Tenant ID" />
@@ -42,58 +56,39 @@ Then open **Vendors → Microsoft Teams** with **that tenant selected** in the t
 
 | Field | Value |
 |---|---|
-| **Application (client) ID** | Their bot |
+| **Application (client) ID** | Their bot's App ID |
 | **Password** | Their client secret |
-| **App Type** | Matches **their** Azure Bot (`Single tenant` for new bots) |
-| **Tenant ID** | **Their** home directory |
+| **App Type** | Matches **their** Azure Bot — `Single tenant` for new bots |
+| **Tenant ID** | **Their** Directory (tenant) ID |
 
-There isn't a public API for this vendor form today. Set it in the dashboard. Tenant-vendor API access is beta — email [support@suprsend.com](mailto:support@suprsend.com) if you need it.
-
-Save and check **Access Token**. Empty + `AADSTS700016` means the Tenant ID isn't the directory the bot is registered in. A filled token plus `401` on send usually means App Type is wrong.
+After you save, SuprSend logs in with these credentials and shows the result in the **Access Token** field. Empty means the login failed — usually a wrong Tenant ID. Filled means it worked, but a mismatched App Type can still fail every send with `401`, so send a test before going further.
 
 <Note>
-  The workspace (default tenant) vendor can stay as *your* bot for customers who install your app. Only accounts that bring their own bot get a tenant vendor. At send time, passing `tenant_id: "acme"` selects Acme's vendor.
+  Your default (workspace) vendor stays as *your* bot for customers who install your app. Only customers who bring their own app get a tenant vendor. Passing `tenant_id: "customer-a"` on a trigger is what selects their vendor.
 </Note>
 
-## 3. Store destinations the same way
+There isn't a public API for the vendor form today; set it in the dashboard. Tenant-vendor API access is in beta — email [support@suprsend.com](mailto:support@suprsend.com) if you need it.
 
-Channels on the service object, DMs on the user. Because every send for this tenant goes through *their* vendor, whose home Tenant ID is their directory, `tenant_id` on `$ms_teams` is optional here — if you leave it out, SuprSend picks it up from that vendor. Including it is harmless and keeps the entries identical to the your-bot path. For a first test, copy `conversation_id` from **⋯ → Copy link** on `#incidents` (decode `%3A` and `%40`) and Maya's Entra object ID for a DM.
+## 4. Save Teams channels and users in SuprSend
+
+Channels go on the service object, DMs on the user's per-tenant profile — the same as the your-app path. Collecting the IDs works the same way too; see [In production, fetch the IDs automatically with Graph](/docs/microsoft-teams-customer-workspaces#in-production-fetch-the-ids-automatically-with-graph).
 
 <CodeGroup>
-```python Python
-from suprsend import Suprsend
-
-supr_client = Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET")
-entra_id = "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9"
-
-supr_client.objects.upsert("services", "api-prod", {
-  "name": "API production",
-  "$ms_teams": [{
-    "tenant_id": entra_id,
-    "conversation_id": "19:abc123def@thread.tacv2"
-  }]
-})
+```bash Channel on object
+curl -X POST "https://hub.suprsend.com/v1/object/services/api-prod/" \
+  --header "Authorization: Bearer __API_KEY__" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "name": "API production",
+    "$ms_teams": [{
+      "tenant_id": "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9",
+      "conversation_id": "19:abc123def@thread.tacv2"
+    }]
+  }'
 ```
 
-```javascript Node.js
-const { Suprsend } = require("@suprsend/node-sdk");
-
-const supr_client = new Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET");
-const service = supr_client.objects.get_instance("services", "api-prod");
-
-service.add_ms_teams({
-  tenant_id: "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9",
-  conversation_id: "19:abc123def@thread.tacv2"
-});
-
-supr_client.objects.edit(service).then((res) => console.log(res));
-```
-</CodeGroup>
-
-Maya's DM, scoped to Acme:
-
-```bash
-curl -X POST "https://hub.suprsend.com/v1/user/maya/tenant/acme/" \
+```bash DM on user (per-tenant)
+curl -X POST "https://hub.suprsend.com/v1/user/on-call-engineer/tenant/customer-a/" \
   --header "Authorization: Bearer __API_KEY__" \
   --header "Content-Type: application/json" \
   --data '{
@@ -103,42 +98,51 @@ curl -X POST "https://hub.suprsend.com/v1/user/maya/tenant/acme/" \
     }]
   }'
 ```
+</CodeGroup>
 
-Copy-link screenshots and roster notes: [Send as your bot](/docs/microsoft-teams-customer-workspaces#4-store-destinations).
+`tenant_id` on the entry is optional on this path, because the tenant vendor already knows their directory. Including it is harmless and keeps the entries identical to the your-app path.
 
 Don't put `incoming_webhook` on these recipients. Webhooks ignore tenant vendors and fire for every URL on the profile.
 
-## 4. Trigger with that tenant
+## 5. Trigger a workflow
+
+Create a workflow (for example `new-incident`) with a **multi-channel** or **MS Teams** node connected to a [Teams template](/docs/ms-teams-template). Trigger it with the service object and the on-call user as recipients, and **always** pass the customer's `tenant_id` — that's what routes the send through their vendor:
 
 ```json
 {
   "workflow": "new-incident",
-  "tenant_id": "acme",
+  "tenant_id": "customer-a",
   "recipients": [
     { "object_type": "services", "id": "api-prod" },
-    "maya"
+    "on-call-engineer"
   ],
-  "data": { "severity": "high" }
+  "data": { "severity": "high", "summary": "API p99 > 2s" }
 }
 ```
 
-SuprSend authenticates as Acme's bot (tenant vendor), posts to the channel on `api-prod`, and DMs Maya using her per-tenant `$ms_teams`.
+SuprSend authenticates as the customer's bot, posts to the channel on `api-prod`, and DMs the on-call engineer from their per-tenant `$ms_teams` entry.
 
 <Check>
-  The message in `#incidents` comes from **their** app name, not yours. **Logs → Messages** shows the tenant as `acme`.
+  If everything works, the channel post and the DM arrive from **the customer's** app name, not yours. You can also check **Logs → Messages** in SuprSend for the delivery and later statuses — the tenant column shows which customer's vendor was used.
 </Check>
 
-## If something fails
+## FAQs
 
 <AccordionGroup>
-  <Accordion title="Posts still come from your bot">
-    The trigger didn't pass `tenant_id`, or that tenant has no Teams vendor. Without a tenant vendor, SuprSend uses the default workspace vendor.
+  <Accordion title="Can I have some customers on my app and others on their own?">
+    Yes. Customers who install your app use the default vendor; customers who bring their own app get a tenant vendor. The trigger's `tenant_id` decides which vendor a send uses — the same workflow and templates serve both.
   </Accordion>
-  <Accordion title="401 Authorization has been denied for this request">
-    App Type on *their* tenant vendor doesn't match *their* Azure bot. New bots are single-tenant.
+  <Accordion title="Posts still come from my bot, not the customer's">
+    The trigger didn't pass `tenant_id`, or that tenant has no Microsoft Teams vendor. Without a tenant vendor, SuprSend uses the default workspace vendor — yours.
   </Accordion>
-  <Accordion title="AADSTS700016">
-    Tenant ID on the vendor form isn't the directory where they registered the bot.
+  <Accordion title="Sends fail with 401 Authorization has been denied for this request">
+    **App Type** on their tenant vendor doesn't match their Azure Bot. Bots created after 31 July 2025 are single-tenant.
+  </Accordion>
+  <Accordion title="Access Token is empty with AADSTS700016">
+    **Tenant ID** on the vendor form isn't the directory where they registered the bot. Use their Directory (tenant) ID.
+  </Accordion>
+  <Accordion title="What does BotNotInConversationRoster mean?">
+    The app is in their tenant but not installed in the team that owns that channel. Their admin @mentions the bot once in the channel, or installs the app in the team.
   </Accordion>
 </AccordionGroup>
 
@@ -146,9 +150,9 @@ SuprSend authenticates as Acme's bot (tenant vendor), posts to the channel on `a
 
 <CardGroup cols={2}>
   <Card title="Tenant vendors" icon="sitemap" href="/docs/tenant-vendor">
-    How per-tenant credentials override the default vendor.
+    How per-tenant credentials override the default vendor, for Teams and every other channel.
   </Card>
   <Card title="User-tenant mapping" icon="users" href="/docs/user-tenant-mapping">
-    Store Maya's Teams identity on Acme only.
+    Keep a user's Teams identity separate for each customer they belong to.
   </Card>
 </CardGroup>

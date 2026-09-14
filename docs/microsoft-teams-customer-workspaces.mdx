@@ -1,75 +1,36 @@
 ---
-title: "Send Teams DMs and channel posts as your bot"
-sidebarTitle: "Your bot"
-description: "Let customers install your Teams app so you can DM people and post in their channels — channels on objects, DMs on users, and the customer's Entra tenant id on each $ms_teams entry."
+title: "Send DMs or post in channels via your Teams app"
+sidebarTitle: "Send via your Teams app"
+description: "Let customers install your Teams app so you can DM people and post in their channels."
 ---
 
-This page covers sending as **your** Microsoft Teams bot into a customer's tenant: direct messages to people, and posts in channels. It assumes you have already [created the Teams app and added the vendor](/docs/microsoft-teams-create-app).
+This page covers sending as **your** Microsoft Teams bot into a customer's tenant: direct messages to people, and posts in channels.
 
-Let's say you are building an incident product like PagerDuty. When an alert fires on Acme's `api-prod` service, two things should happen in *their* Teams:
+Let's say you are building an incident product like PagerDuty. When an alert fires on a customer's `api-prod` service, two things should happen in *their* Teams:
 
-- Maya, who is on call, gets a **DM** from your bot.
+- The on-call engineer gets a **DM** from your bot.
 - `#incidents` gets the same alert, so the rest of the team can see it.
-
-People should also be able to @mention the bot in a channel (or open a DM with it) the way they would with a support or on-call bot. That inbound experience is your bot runtime; SuprSend sends the outbound notifications.
-
-SuprSend does not ship a Connect UI. You build admin consent, install, and the channel/user picker in your product, then write the IDs you collected.
-
-If the customer will only grant a single channel and never DMs, a [webhook](/docs/microsoft-teams-incoming-webhook) is enough. If they insist the bot live in *their* Azure directory, see [Send with their bot](/docs/microsoft-teams-customer-bot).
 
 ## Key concepts
 
-The channel or person to notify is stored as an `$ms_teams` channel on a [user](/docs/users) or an [object](/docs/objects). A [tenant](/docs/tenants) identifies which customer account a send belongs to.
+| In your product | In SuprSend | Example |
+|:--|:--|:--|
+| **Customer organization** | **[Tenant](/docs/tenants)**, optional. Create tenants only if you need per-customer branding, preferences, or [vendor credentials](/docs/tenant-vendor), or if a user belongs to several customers and needs a [tenant-specific Teams channel](/docs/user-tenant-mapping). Pass `tenant_id` on the trigger when you do. | `tenant_id: "customer-a"` |
+| **Monitored service** (any resource that owns a channel) | **[Object](/docs/objects)** with an `$ms_teams` entry holding the channel's `conversation_id`. | `services` / `api-prod` → `#incidents` |
+| **Person to DM** | **[User](/docs/users)** with an `$ms_teams` entry holding their `user_id`. Use a [per-tenant profile](/docs/user-tenant-mapping) if they belong to more than one customer. | `distinct_id: "on-call-engineer"` |
+| **Customer's Microsoft Entra directory** | `tenant_id` inside each `$ms_teams` entry. Needed here because one workspace serves many customer directories — without it, SuprSend uses your bot's home tenant. | `c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9` |
 
-### Tenants identify the customer account
+## 1. Create the Teams app
 
-[Tenants](/docs/tenants) in SuprSend map to accounts, organizations, or workspaces in your product. Create one tenant per customer (`acme`) and pass its `tenant_id` on every workflow trigger for that customer so branding, preferences, and vendor routing apply.
+Follow [Create a Teams app and add the vendor](/docs/microsoft-teams-create-app) to register the bot, build the app package, and save its credentials on the Microsoft Teams vendor in SuprSend.
 
-The SuprSend tenant does not hold the customer's Microsoft Entra tenant ID. SuprSend reads that from each `$ms_teams` entry, so keep the Entra ID in your own database against the customer account and write it into every entry you store for them.
+<Note>
+  You set up the vendor once, with *your* bot's App ID, secret, App Type, and home Tenant ID. That single vendor serves every customer who installs your app — nothing on it changes per customer, and the customer's Entra ID never goes on this form. The customer's directory is identified by the `tenant_id` on each recipient's `$ms_teams` entry.
+</Note>
 
-### Each `$ms_teams` entry names the customer's Entra directory
+## 2. Make your app installable by customers
 
-Your bot is installed into many customer directories, and one SuprSend workspace serves all of them. That's the case where `tenant_id` on `$ms_teams` matters: it tells SuprSend which directory to deliver into. If you leave it out, SuprSend falls back to the home Tenant ID saved on the vendor — *your* bot's directory — and the send never reaches Acme. Include the customer's Entra tenant ID on every entry you write for them.
-
-### Objects hold channels
-
-A Teams channel is a connection on a resource in your product, not on a person. For the incident example, each monitored **service** is an object in a `services` type. `$ms_teams` on that object is `#incidents` (or whichever channel Acme picked for that service).
-
-When you trigger a workflow with the service as recipient, SuprSend posts to the channel stored on the object.
-
-### Users hold DMs
-
-If Maya should get a DM, store her Teams `user_id` (prefer the Entra object ID) on her SuprSend user. If Maya also uses your product under Northwind, put Acme's Teams identity on her [per-tenant profile](/docs/user-tenant-mapping) so a Northwind incident doesn't DM her Acme chat.
-
-### Merging at send time
-
-Trigger with the object or user as recipient **and** `tenant_id: "acme"`. SuprSend uses:
-
-- The destination (`conversation_id` or `user_id`) on the recipient
-- The Entra `tenant_id` on that destination
-- The workspace vendor (your bot), unless a [tenant vendor](/docs/tenant-vendor) overrides it
-
-```json
-{
-  "workflow": "new-incident",
-  "tenant_id": "acme",
-  "recipients": [
-    { "object_type": "services", "id": "api-prod" },
-    "maya"
-  ],
-  "data": { "severity": "high", "summary": "API p99 > 2s" }
-}
-```
-
-## 1. Finish the app for other tenants
-
-On [Create a Teams app](/docs/microsoft-teams-create-app), keep Azure Bot **App Type** as **Single tenant**. In Azure **App registrations → your app → Authentication**, set **Supported account types** to **Multiple Entra ID tenants** so Acme's admin can consent. That is not the vendor App Type.
-
-<Frame>
-  <img src="/images/docs/msteams-supported-account-types.png" alt="Azure Authentication supported account types set to Multiple Entra ID tenants" />
-</Frame>
-
-Add **personal** and **team** bot scopes in the manifest if you'll both DM and post in channels.
+When you [create the Teams app](/docs/microsoft-teams-create-app), set **Supported account types** to **Multiple Entra ID tenants** (step 4 on that page) so customer admins can consent. Then add the bot scopes you'll use to the manifest — **personal** for DMs, **team** for channel posts:
 
 ```json
 {
@@ -82,135 +43,185 @@ Add **personal** and **team** bot scopes in the manifest if you'll both DM and p
 }
 ```
 
-## 2. How Acme's admin installs the app
+## 3. Install the app in the customer's tenant
 
-Put this in Settings → Integrations → Microsoft Teams. An Entra / Teams admin has to click.
+A Teams admin on the customer's side does this, in two stages: the app is added to their organization, then it's given permission to DM users and post in channels.
 
-| How they get the app | When it fits |
+### Expose your app for install
+
+Your customer's admin installs your Teams app in their workspace. Three ways to offer it:
+
+| Option | When it fits |
 |---|---|
-| Upload the `.zip` (sideload) | Pilots, a few enterprise deals, testing while Store review is open |
-| Their org catalog, via Graph after consent | Connect should finish without an IT ticket to upload a zip |
-| Teams Store | Self-serve, many tenants |
+| **Upload the `.zip`** — download it from the [Developer Portal](https://dev.teams.microsoft.com/) and offer it on your settings page. The admin uploads it in **Teams admin center → Teams apps → Manage apps → Upload new app** | Pilots, a few enterprise customers, or while your Teams Store listing is under review |
+| **Teams Store** — the admin searches for your app in the Store and adds it | Self-serve, many customers. Microsoft reviews the listing before it goes live |
+| **Graph API** — your product uploads the `.zip` to their org catalog after admin consent | Install should complete inside your product without an IT ticket. See *Automate with Graph* below |
 
-Microsoft owns Store review. Sideload while that's in flight: download the zip from the [Developer Portal](https://dev.teams.microsoft.com/), then in Acme's tenant **Teams admin center → Teams apps → Manage apps → Upload new app**. An administrator in that organization has to approve it. Until your app registration has a verified publisher (MPN ID), their end users cannot consent themselves.
+Whichever option you use, an administrator in the customer's organization has to approve the app — end users can't consent on their own until your app registration has a verified publisher.
 
-Installing the app in a catalog does not put it in front of anyone.
+<Accordion title="Publishing to the Teams Store">
+  Store listing is a Microsoft process, separate from SuprSend. Budget a few weeks for the first submission.
 
-**For channels** — in [Teams](https://teams.cloud.microsoft/), open **Apps** from the left rail and find your app under **Added by your org** or **Built for your org**. Open it, choose **Add to a team**, then pick the team that owns `#incidents`. Then **@mention the bot once in the channel**. Adding the app is not enough on its own; the mention puts the bot in the channel roster. It applies team-wide afterwards.
+  1. **Complete the app package** in the Developer Portal — name, icons, descriptions, privacy and terms URLs, bot scopes and permissions.
+  2. **Register in [Microsoft Partner Center](https://partner.microsoft.com/)** and get a Publisher ID for your company. Store apps need a verified publisher.
+  3. **Submit for validation** from the Developer Portal (**Publish → Publish to the Teams Store**) or directly in Partner Center. Microsoft runs automated checks and a manual review against its [Teams app validation guidelines](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/deploy-and-publish/appsource/prepare/teams-store-validation-guidelines).
+  4. **Fix and resubmit** if the review raises issues. One or two rounds is normal.
+  5. **Once approved, the app is listed.** Customer admins find it under **Apps** in Teams and add it — no `.zip` from you. Every app update goes through the same review.
 
-<Frame>
-  <img src="/images/docs/msteams-apps-store-page.png" alt="Teams Apps page showing the app under Added by your org" />
-</Frame>
+  Offer the `.zip` upload until the Store listing is live.
+</Accordion>
 
-<Frame>
-  <img src="/images/docs/363ff8c-image.png" alt="Add the org app to a team" />
-</Frame>
+### Give the app permission to send DMs and post in channels
 
-**For DMs** — the app must be installed for each user in *personal* scope. Admins can push this to everyone through Teams admin center → **Teams apps → Setup policies → Installed apps**.
+Adding the app to the org catalog doesn't put it in front of anyone yet. The bot can only DM people who have the app installed, and only post in channels of teams the app is added to. You can get there manually, which is fine for testing, or automate it from your product, which is what you'll want in production.
 
-### Automate install
+#### Option A: manual, in Teams — good for testing
 
-Admin consent:
+The customer's admin does two things:
+
+1. **Enable DMs** — in **Teams admin center → Teams apps → Setup policies**, edit the *Global* policy (or one assigned to the relevant users) and add your app under **Installed apps**. Teams installs it in personal scope for everyone the policy covers, so any of them can receive DMs.
+2. **Enable channel posts** — **@mention the bot once in each channel you'll post in.** That adds the bot to the channel and, if needed, installs the app in the team.
+
+This is enough to prove the integration works. Some enterprise customers will also prefer to keep control this way in production — the setup policy is an admin-only control that Graph can't set, so it stays available as a path.
+
+#### Option B: automated from your product — recommended
+
+After the admin grants consent, your product installs the app where it's needed through Graph, so "Connect Teams" finishes in your UI without the admin clicking around in Teams:
+
+- **Channel posts** — install the app in the team that owns the channel. The bot can then post to any standard channel in that team. Private and shared channels need the app added to that channel specifically.
+- **DMs** — install the app for each user when they enable Teams notifications in your product.
+
+The calls are in *Automate with Graph* below.
+
+### Automate with Graph (optional)
+
+To finish install from inside your product, first send the admin to the consent URL:
 
 ```text
-https://login.microsoftonline.com/{acme-entra-tenant-id}/adminconsent?client_id={YOUR_APP_ID}
+https://login.microsoftonline.com/{customer-entra-tenant-id}/adminconsent?client_id={YOUR_APP_ID}
 ```
 
-Then, with a token that can write the catalog **in Acme's tenant**:
+Then, with a Graph token for the customer's tenant, upload the app to their catalog and install it in the team:
 
 ```bash
+# 1. Upload the app package to the customer's org catalog
 curl -X POST "https://graph.microsoft.com/v1.0/appCatalogs/teamsApps" \
   -H "Authorization: Bearer $GRAPH_TOKEN" \
   -H "Content-Type: application/zip" \
-  --data-binary @acme-alerts.zip
+  --data-binary @incident-alerts.zip
 
+# 2. Install it in the team that owns the channel (enables channel posts)
 curl -X POST "https://graph.microsoft.com/v1.0/teams/$TEAM_ID/installedApps" \
   -H "Authorization: Bearer $GRAPH_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"grace.l@example.com\": \"https://graph.microsoft.com/v1.0/appCatalogs/teamsApps('$TEAMS_APP_ID')\"
+    \"teamsApp@odata.bind\": \"https://graph.microsoft.com/v1.0/appCatalogs/teamsApps/$TEAMS_APP_ID\"
   }"
 ```
 
-`$TEAMS_APP_ID` is the catalog id from the upload, which can differ from your Entra client id.
+`$TEAMS_APP_ID` is the catalog id returned by the upload — different from your Entra client id.
 
-## 3. Confirm the vendor is your bot
+For DMs, install the app for the user when they enable Teams notifications in your product, or right before their first DM. If the app is already installed for them (for example through a setup policy), Graph returns `409 Conflict` — treat that as success:
 
-**Vendors → Microsoft Teams** should already have *your* Application (client) ID, secret, App Type, and **your** home Tenant ID. That's the bot Acme is installing. Acme's Entra id does not go on this form.
+```bash
+# 3. Install for a single user in personal scope (enables DMs to that user)
+curl -X POST "https://graph.microsoft.com/v1.0/users/$USER_ID/teamwork/installedApps" \
+  -H "Authorization: Bearer $GRAPH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"teamsApp@odata.bind\": \"https://graph.microsoft.com/v1.0/appCatalogs/teamsApps/$TEAMS_APP_ID\"
+  }"
+```
 
-Empty Access Token + `AADSTS700016` → wrong home Tenant ID. Token present but send `401` → App Type doesn't match the Azure Bot, or a destination is missing the **recipient's** `tenant_id` and fell back to the vendor's directory.
+`$USER_ID` is the person's Entra object ID — the same value you store as `user_id` on their `$ms_teams` entry. See **Users** under *In production, fetch the IDs automatically with Graph* in step 4 for how to obtain it.
 
-One MS Teams vendor serves every organization — same App ID, same password, same vendor **Tenant ID** (your bot's own directory). What changes per customer is the `$ms_teams.tenant_id` on the user or object.
+These calls need application permissions on your app registration, granted through the admin consent above: `AppCatalog.ReadWrite.All` for the upload, `TeamsAppInstallation.ReadWriteForTeam.All` for the team install, and `TeamsAppInstallation.ReadWriteForUser.All` for the user install.
 
-Details: [Add the vendor in SuprSend](/docs/microsoft-teams-create-app#add-the-vendor-in-suprsend).
+## 4. Save Teams channels and users in SuprSend
 
-## 4. Store destinations
+Every recipient needs an `$ms_teams` entry with the customer's Entra `tenant_id` and either a channel's `conversation_id` or a person's `user_id`. For a first test, copy them by hand. In production, your product collects them through Graph after the app is installed and writes them to SuprSend.
 
-### For a first test, copy IDs by hand
+### For a first test, copy the IDs by hand
 
-You don't need a picker to prove the bot can post in Acme's tenant.
+To prove the bot can post in the customer's tenant, a channel post is enough. Grab the two IDs from a channel link:
 
-1. In Acme's Teams, hover `#incidents` → **⋯** → **Copy link**.
+1. In the customer's Teams, hover the channel → **⋯** → **Copy link**.
 2. Decode `%3A` → `:` and `%40` → `@`. That's `conversation_id`.
-3. The link's `tenantId=` query param is Acme's Entra id — the value you write as `tenant_id` on each `$ms_teams` entry. You can also copy it from the [Azure portal](https://portal.azure.com/) under **Microsoft Entra ID → Overview** in *their* directory.
+3. The link's `tenantId=` query parameter is the customer's Entra `tenant_id`.
 
 <Frame>
   <img src="/images/docs/msteams-copy-channel-link.png" alt="Copy link on a Teams channel to get conversation_id" />
 </Frame>
 
-<Frame>
-  <img src="/images/docs/msteams-entra-tenant-id.png" alt="Microsoft Entra ID Overview showing Directory tenant ID" />
-</Frame>
-
-For a DM, copy the personal-chat URL, or look up Maya's Entra object ID. Prefer that object ID as `user_id`. Roster `29:` ids are tied to this bot registration; recreate the bot and they die. Object IDs come back `null` on the roster unless the manifest includes RSC such as `TeamMember.Read.Group`.
-
-<Frame>
-  <img src="/images/docs/34467e8-image.png" alt="Teams chat URL containing conversation_id" />
-</Frame>
-
-<Frame>
-  <img src="/images/docs/a861ce0-image.png" alt="SuprSend vendor Access Token used to call the Teams roster" />
-</Frame>
-
-### Channel on the service object
-
-<CodeGroup>
-```python Python
-from suprsend import Suprsend
-
-supr_client = Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET")
-entra_id = "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9"
-
-supr_client.objects.upsert("services", "api-prod", {
-  "name": "API production",
-  "$ms_teams": [{
-    "tenant_id": entra_id,
-    "conversation_id": "19:abc123def@thread.tacv2"
-  }]
-})
-```
-
-```javascript Node.js
-const { Suprsend } = require("@suprsend/node-sdk");
-
-const supr_client = new Suprsend("WORKSPACE_KEY", "WORKSPACE_SECRET");
-const service = supr_client.objects.get_instance("services", "api-prod");
-
-service.add_ms_teams({
-  tenant_id: "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9",
-  conversation_id: "19:abc123def@thread.tacv2"
-});
-
-supr_client.objects.edit(service).then((res) => console.log(res));
-```
-</CodeGroup>
-
-`service_url` is optional. Omit it to use `https://smba.trafficmanager.net/teams`, unless you're on GCC High or DoD.
-
-### DM on the user (per-tenant profile)
+Add them as an `$ms_teams` entry on a test user, then trigger a test with that user as the recipient. A `conversation_id` works for a personal chat too — copy the link from the chat instead of a channel. The object form is in *Save the IDs in SuprSend* below.
 
 ```bash
-curl -X POST "https://hub.suprsend.com/v1/user/maya/tenant/acme/" \
+curl -X POST "https://hub.suprsend.com/v1/user/test-user/" \
+  --header "Authorization: Bearer __API_KEY__" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "$ms_teams": [{
+      "tenant_id": "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9",
+      "conversation_id": "19:abc123def@thread.tacv2"
+    }]
+  }'
+```
+
+### In production, fetch the IDs automatically with Graph
+
+Once the admin has consented, your product can look up everything it needs in the customer's tenant:
+
+- **Entra tenant ID** — comes back as the `tenant` query parameter on the admin consent redirect. If users sign in to your product with Microsoft, it's also the `tid` claim on their ID token. Store it against the customer account; you'll write it as `tenant_id` on every entry.
+
+- **Channels** — list the teams, let the customer pick one, then list its channels and show them as a picker:
+
+  ```bash
+  # Teams in the tenant
+  curl -X GET "https://graph.microsoft.com/v1.0/groups?\$filter=resourceProvisioningOptions/Any(x:x eq 'Team')&\$select=id,displayName" \
+    -H "Authorization: Bearer $GRAPH_TOKEN"
+
+  # Channels in the chosen team
+  curl -X GET "https://graph.microsoft.com/v1.0/teams/$TEAM_ID/channels" \
+    -H "Authorization: Bearer $GRAPH_TOKEN"
+  ```
+
+  Each channel's `id` is the `conversation_id` you store, already decoded. Needs `Team.ReadBasic.All` and `Channel.ReadBasic.All`.
+
+- **Users** — the `user_id` you store is the person's Entra object ID, a stable GUID in the customer's directory. Three ways to get it:
+
+  - **From Microsoft sign-in.** If users log in to your product with Entra ID, the ID token's `oid` claim is the object ID (and `tid` is the tenant ID). You have it the moment they sign in — no extra call.
+  - **Look it up by email.** Your product already knows the user's work email:
+
+    ```bash
+    curl -X GET "https://graph.microsoft.com/v1.0/users/$USER_EMAIL" \
+      -H "Authorization: Bearer $GRAPH_TOKEN"
+    ```
+
+    The `id` field in the response is the object ID. Needs `User.Read.All`.
+  - **From the team roster.** `GET /teams/$TEAM_ID/members` returns each member's `userId` — useful for a "choose who to DM" picker scoped to a team. Needs `TeamMember.Read.All`.
+
+  Don't store the `29:...` id the Bot Framework roster returns. It's tied to this bot registration and breaks if you recreate the bot.
+
+### Save the IDs in SuprSend
+
+When the customer picks a channel for a service, save it on the object. When a user turns on Teams DMs, save their identity on their user — on the per-tenant profile if they belong to more than one customer.
+
+<CodeGroup>
+```bash Channel on object
+curl -X POST "https://hub.suprsend.com/v1/object/services/api-prod/" \
+  --header "Authorization: Bearer __API_KEY__" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "name": "API production",
+    "$ms_teams": [{
+      "tenant_id": "c1981ab2-9aaf-4f36-8c1e-7d2a54e0b3f9",
+      "conversation_id": "19:abc123def@thread.tacv2"
+    }]
+  }'
+```
+
+```bash DM on user (per-tenant)
+curl -X POST "https://hub.suprsend.com/v1/user/on-call-engineer/tenant/customer-a/" \
   --header "Authorization: Bearer __API_KEY__" \
   --header "Content-Type: application/json" \
   --data '{
@@ -220,54 +231,64 @@ curl -X POST "https://hub.suprsend.com/v1/user/maya/tenant/acme/" \
     }]
   }'
 ```
+</CodeGroup>
 
-That route writes Maya's Teams identity on the **Acme** profile only, so a Northwind incident doesn't use this DM. See [User-tenant mapping](/docs/user-tenant-mapping). If you call `user.add_ms_teams` without a tenant, it writes the global profile instead.
+The per-tenant route writes the Teams identity on the **customer-a** profile only, so an incident for another customer doesn't use this DM — see [User-tenant mapping](/docs/user-tenant-mapping). Posting to `/v1/user/{distinct_id}/` without the `/tenant/{tenant_id}/` segment writes the global profile instead, which is used across all tenant sends.
 
-### What to build instead of copy-link
+`service_url` is optional. Omit it for commercial Microsoft 365 tenants; set it only if the customer is on a Microsoft US Government cloud (GCC High or DoD), which uses its own endpoints.
 
-After install, your settings screen should list channels the app can post to, and/or **DM this user**. Save the channel on the service (object). Save the DM on the user (per-tenant).
+## 5. Trigger a workflow
 
-```bash
-curl -X GET "https://graph.microsoft.com/v1.0/teams/$TEAM_ID/channels" \
-  -H "Authorization: Bearer $GRAPH_TOKEN"
+Create a workflow (for example `new-incident`) with either a **multi-channel** node or an **MS Teams** node, and connect it to a [Teams template](/docs/ms-teams-template).
+
+```json
+{
+  "workflow": "new-incident",
+  "tenant_id": "customer-a",
+  "recipients": [
+    { "object_type": "services", "id": "api-prod" },
+    "on-call-engineer"
+  ],
+  "data": { "severity": "high", "summary": "API p99 > 2s" }
+}
 ```
 
-Graph's channel `id` is the `conversation_id` you store (already decoded).
-
-## 5. Send a test
-
-Create the [Teams template](/docs/ms-teams-template). Trigger `new-incident` with `tenant_id: "acme"`, the `api-prod` object, and Maya.
-
-Then trigger the same workflow for a second customer.
+SuprSend reads the `$ms_teams` entry on each recipient: the object's `conversation_id` becomes the channel post and the user's `user_id` becomes the DM.
 
 <Check>
-  Acme's `#incidents` and Maya's DM show the post. Northwind's send uses Northwind's tenant and destinations, not Acme's.
+  If everything works, the channel shows the post and the on-call engineer gets a DM. You can also check **Logs → Messages** in SuprSend for the delivery and later statuses.
 </Check>
 
-## If something fails
+## FAQs
 
 <AccordionGroup>
-  <Accordion title="401 Authorization has been denied for this request">
-    Vendor App Type doesn't match the Azure bot. A new single-tenant bot saved as `Multi tenant` gets a token and a `401` on send.
+  <Accordion title="Can the bot DM someone who hasn't installed the app?">
+    No. The app has to be in the user's personal scope first — either through a Teams setup policy that installs it for everyone, or a per-user Graph install when they enable Teams notifications in your product. Until then the DM fails.
   </Accordion>
-  <Accordion title="Works in your tenant, fails in Acme's">
-    The app isn't installed there, or `$ms_teams.tenant_id` is missing or still your directory. Write Acme's Entra id as `tenant_id` on the `$ms_teams` entry.
+  <Accordion title="Do I have to @mention the bot in every channel?">
+    Only if you didn't install the app in the team through Graph. The @mention is just another way of installing it in the team. Once the app is in the team, the bot can post to any standard channel there. Private and shared channels are the exception — the app has to be added to those channels specifically.
   </Accordion>
-  <Accordion title="BotNotInConversationRoster">
-    App is in the tenant but not in that channel. Add it to the team and @mention the bot once.
+  <Accordion title="Sends fail with 401 Authorization has been denied for this request">
+    The vendor's **App Type** doesn't match the Azure bot. A bot created after 31 July 2025 is single-tenant; saving it as `Multi tenant` on the vendor form still returns a token but every send gets a `401`.
   </Accordion>
-  <Accordion title="29: user_id stopped resolving">
-    The bot registration was recreated. Collect Entra object IDs and write those as `user_id`.
+  <Accordion title="It works in my tenant but fails in the customer's">
+    Either the app isn't installed in their tenant, or `$ms_teams.tenant_id` is missing or still points to your own directory. Write the customer's Entra tenant ID as `tenant_id` on the entry.
+  </Accordion>
+  <Accordion title="What does BotNotInConversationRoster mean?">
+    The app is in the customer's tenant but not installed in the team that owns that channel. Install it in the team through Graph, or have someone @mention the bot once in the channel — either one fixes it.
+  </Accordion>
+  <Accordion title="user_id values starting with 29: stopped working">
+    Those are Bot Framework roster ids, tied to the bot registration. If you recreate the bot they stop resolving. Switch to Entra object IDs as `user_id` — see **Users** under *In production, fetch the IDs automatically with Graph*.
   </Accordion>
 </AccordionGroup>
 
 ## Next
 
 <CardGroup cols={2}>
-  <Card title="Write the Teams template" icon="file-lines" href="/docs/ms-teams-template">
-    Markdown or Adaptive Card content.
+  <Card title="Design the Teams template" icon="file-lines" href="/docs/ms-teams-template">
+    Write the message in Markdown, or build an Adaptive Card in the JSONNET editor.
   </Card>
-  <Card title="Customer brings their own bot" icon="building" href="/docs/microsoft-teams-customer-bot">
-    Same objects and users; credentials live on a tenant vendor.
+  <Card title="Send via your customer's Teams app" icon="building" href="/docs/microsoft-teams-customer-bot">
+    For customers who won't allow a third-party bot: they register the app in their own Entra directory and you save its credentials on a tenant vendor.
   </Card>
 </CardGroup>

@@ -4,9 +4,9 @@ description: "Register an Azure bot, wrap it in a Teams app package, and save th
 sidebarTitle: "Create a Teams app"
 ---
 
-Every Microsoft Teams send in SuprSend needs this page: you create the app, then save **App ID**, **password**, **App Type**, and **Tenant ID** on the vendor form. That includes [incoming webhook](/docs/microsoft-teams-incoming-webhook) sends.
+Before you send to Microsoft Teams, create a Teams app and save its **App ID**, **password**, **App Type**, and **Tenant ID** on the Microsoft Teams vendor form in SuprSend.
 
-For bot delivery you also wrap the bot in a Teams app package that customers install. That's what makes the message show *your* name and icon, and what lets you DM people. In the [customer's bot](/docs/microsoft-teams-customer-bot) use case they create their own copy. For webhook-only, you still save the vendor credentials; you don't have to install the app in the customer's tenant, because Microsoft's Workflows app is what posts in the channel.
+For bot delivery you also wrap the bot in a Teams app package that customers install. That's what makes the message show *your* name and icon, and what lets you DM people. In the [customer's Teams app](/docs/microsoft-teams-customer-bot) use case they create their own copy.
 
 You'll need a Microsoft 365 account that can create apps.
 
@@ -88,7 +88,7 @@ If you need Entra object IDs from the roster (stable `user_id`s for DMs), includ
   <img src="/images/docs/8d923d0-image.png" alt="Teams app resource-specific permission list" />
 </Frame>
 
-Your app package is ready. To test it, upload it in your own tenant from **Teams admin center → Teams apps → Manage apps → Upload new app**. How customers install it is covered on the [your bot](/docs/microsoft-teams-customer-workspaces) page.
+Your app package is ready. To test it, upload it in your own tenant from **Teams admin center → Teams apps → Manage apps → Upload new app**. How customers install it is covered on [Send using your Teams app](/docs/microsoft-teams-customer-workspaces).
 
 ### 4. Let other directories install the app (SaaS)
 
@@ -106,7 +106,7 @@ Until the app registration has a verified publisher (MPN ID), end users in those
 
 ### Alternative: create the bot with the Azure CLI
 
-Prefer scripts over portal clicks? These commands do the **Azure side** of steps 2–4 — the app registration, its client secret, and the Azure Bot with the Teams channel enabled. They're useful if you provision infrastructure with scripts, or if you're setting up a bot inside a customer's subscription for the [customer's bot](/docs/microsoft-teams-customer-bot) use case.
+Prefer scripts over portal clicks? These commands do the **Azure side** of steps 2–4 — the app registration, its client secret, and the Azure Bot with the Teams channel enabled. They're useful if you provision infrastructure with scripts, or if you're setting up a bot inside a customer's subscription for the [customer's Teams app](/docs/microsoft-teams-customer-bot) use case.
 
 They do **not** build the Teams app package (name, scopes, permissions). You still do that in the Developer Portal — steps 1 and 3 above — and attach the bot these commands create.
 
@@ -153,7 +153,7 @@ The CLI created the bot outside the Developer Portal, so it won't show up in the
 
 ## Add the vendor in SuprSend
 
-Go to **Vendors → Microsoft Teams** ([open vendor settings](https://app.suprsend.com/en/staging/vendors/ms_teams/ms_teams-ms_teams?tenant_id=default)). Add the **Application (client) ID** and the **client secret** (Password field). This form is required for webhook sends as well as bot sends.
+Go to **Vendors → Microsoft Teams** ([open vendor settings](https://app.suprsend.com/en/staging/vendors/ms_teams/ms_teams-ms_teams?tenant_id=default)). Add the **Application (client) ID** and the **client secret** (Password field).
 
 <Frame>
   <img src="/images/docs/msteams-suprsend-vendor-page.png" alt="SuprSend Microsoft Teams vendor form with App Type and Tenant ID" />
@@ -172,24 +172,25 @@ Find **Tenant ID** in the [Azure portal](https://portal.azure.com/) under **Micr
   <img src="/images/docs/msteams-entra-tenant-id.png" alt="Microsoft Entra ID Overview showing Directory tenant ID" />
 </Frame>
 
-Save. SuprSend requests a token immediately.
+After you save, SuprSend tries to log in to Microsoft with these credentials and shows the result in the **Access Token** field on the same form.
 
-- Empty **Access Token** and `AADSTS700016` — Tenant ID is missing or isn't the bot's home directory.
-- Token filled in — credentials were accepted. That does not prove sends will work. Microsoft issues the token, then checks at send time that it came from the tenant the bot is registered against. A wrong App Type produces a healthy-looking token and `401 Authorization has been denied for this request` on every send. Send a test from the use-case page you picked.
+If the field stays **empty**, the login failed. The usual cause is a wrong **Tenant ID** — it must be the directory the bot was created in, not a customer's.
+
+If the field is **filled**, the login worked. Sends can still fail if **App Type** doesn't match the Azure Bot, so send one test message from your use-case page before going further. A `401 Authorization has been denied for this request` on that test means App Type is wrong.
 
 <Warning>
   **Tenant ID** on the vendor is the directory your **bot** is registered in. `tenant_id` on a user or object `$ms_teams` channel is the **recipient's** organization. They are the same value when the bot only serves its own directory. Once the bot serves several customers, a destination without its own `tenant_id` falls back to the vendor's and the send fails with `401`.
 </Warning>
 
-If an enterprise customer brings their own bot, those credentials go on a [tenant-level vendor](/docs/tenant-vendor) instead. See [Send with their bot](/docs/microsoft-teams-customer-bot).
+If an enterprise customer brings their own bot, those credentials go on a [tenant-level vendor](/docs/tenant-vendor) instead. See [Send via your customer's Teams app](/docs/microsoft-teams-customer-bot).
 
 ## Next
 
 <CardGroup cols={2}>
-  <Card title="Send as your bot" icon="robot" href="/docs/microsoft-teams-customer-workspaces">
+  <Card title="Send using your Teams app" icon="robot" href="/docs/microsoft-teams-customer-workspaces">
     Customers install your app. DMs on users, channels on objects.
   </Card>
-  <Card title="Send with your customer's bot" icon="building" href="/docs/microsoft-teams-customer-bot">
+  <Card title="Send via your customer's Teams app" icon="building" href="/docs/microsoft-teams-customer-bot">
     The customer registers the app in their own Entra directory and hands you the credentials.
   </Card>
 </CardGroup>
