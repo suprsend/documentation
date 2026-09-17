@@ -1018,8 +1018,8 @@ to build.
 | How you connect | What you store | Where it can send | DMs |
 |---|---|---|---|
 | **Incoming webhook** | A URL | Only the channel you chose when you created it | No |
-| **Bot token** | One token for your workspace | Any channel or person in that workspace | Yes |
-| **OAuth install** | A token per customer | Any channel or person in each customer's workspace | Yes |
+| **Your own bot** | Slack: a bot token. Teams: a channel or user ID | Any channel or person in your workspace | Yes |
+| **Customer install** | Slack: a token per customer. Teams: IDs plus the customer's tenant ID | Any channel or person in each customer's workspace | Yes |
 
 Whose workspace it is doesn't change the method. Posting into a community or a customer's workspace
 still uses one of these three — someone with rights there either hands you a webhook URL or installs
@@ -1035,14 +1035,32 @@ your product — see the full [Slack](/docs/slack) and [Microsoft Teams](/docs/m
 
 ### Turn the channel on
 
-Enable the channel at [**Vendors → Slack**](https://app.suprsend.com/en/sandbox/vendors) or
-**Vendors → MS Teams**. There are no credentials to enter — the connection lives on the recipient, not
-on the vendor.
+**Slack:** enable the channel at [**Vendors → Slack**](https://app.suprsend.com/en/sandbox/vendors).
+There are no credentials to enter — the connection lives on the recipient, not on the vendor.
 
-<Note>
-  Microsoft Teams incoming webhooks skip this entirely — a webhook URL carries its own authorisation,
-  so no vendor configuration is involved at all.
-</Note>
+**Microsoft Teams:** save the channel at [**Vendors → MS Teams**](https://app.suprsend.com/en/sandbox/vendors).
+
+<Tabs>
+  <Tab title="Webhook">
+    A webhook doesn't use these credentials, but the vendor still has to be saved. Enter placeholder
+    values:
+
+    | Field | Value |
+    |---|---|
+    | **App ID** | `00000000-0000-0000-0000-000000000001` |
+    | **Password** | `placeholder` |
+    | **App Type** | `Single tenant` |
+    | **Tenant ID** | `00000000-0000-0000-0000-000000000002` |
+
+    Saving shows a sign-in error from Microsoft. Ignore it — webhook sends still go through.
+  </Tab>
+
+  <Tab title="Bot">
+    Enter your bot's **App ID**, **Password** (client secret), **App Type** and **Tenant ID**. Set App
+    Type to `Single tenant` for any bot created after 31 July 2025 — the wrong value fails every send
+    with `401`. See [Create a Teams app](/docs/microsoft-teams-create-app).
+  </Tab>
+</Tabs>
 
 ### Get the address
 
@@ -1103,34 +1121,77 @@ on the vendor.
     An incoming webhook is the quickest way in. It posts to one channel and can't send DMs.
 
     <Steps>
+      <Step title="Pick a channel">
+        In [Teams](https://teams.cloud.microsoft/), use an existing channel or create one. Choose
+        **Standard** and the **Posts** layout.
+
+        <Frame>
+          <img src="/images/add-channel-teams-create-channel.png" alt="Teams Create a channel dialog with Standard channel type and the Posts layout selected" />
+        </Frame>
+      </Step>
+
       <Step title="Open the channel's Workflows menu">
-        In Teams, go to the channel you want to post into, select **More options (…)** next to it, and
-        choose **Workflows**.
+        Hover over the channel, select **More options (…)**, and choose **Workflows**.
+
+        <Frame>
+          <img src="/images/add-channel-teams-workflows-menu.png" alt="Channel more-options menu in Teams with Workflows highlighted" />
+        </Frame>
       </Step>
 
       <Step title="Pick the webhook template">
-        Choose **Send webhook alerts to a channel**, fill in the parameters, and **Save**.
+        Search for `webhook` and choose **Send webhook alerts to a channel**.
+
+        <Frame>
+          <img src="/images/add-channel-teams-webhook-template.png" alt="Workflows template search for webhook, with Send webhook alerts to a channel highlighted" />
+        </Frame>
+
+        Check the team and channel, then **Save**.
+
+        <Frame>
+          <img src="/images/add-channel-teams-pick-channel.png" alt="Send webhook alerts parameters with the team and channel selected and a Save button" />
+        </Frame>
       </Step>
 
       <Step title="Copy the URL">
-        The workflow generates a webhook URL once saved. That channel is the only one it can post to.
+        Select **Copy webhook link**. It looks like
+        `https://….environment.api.powerplatform.com/powerautomate/automations/direct/workflows/…&sig=…`.
+
+        <Frame>
+          <img src="/images/add-channel-teams-copy-link.png" alt="Active webhook workflow overview with the Copy webhook link option" />
+        </Frame>
+
+        The `sig=` part lets anyone post to the channel, so treat the URL like a secret. That channel is
+        the only one it can post to.
       </Step>
     </Steps>
 
     <Warning>
       **Ignore any Teams instructions that tell you to "add a connector".** Microsoft retired Office 365
-      connectors in Teams in May 2026, and webhooks now come from the Workflows app instead. A workflow
-      also belongs to the person who created it rather than to the channel, so add a co-owner before you
-      depend on it — otherwise it stops when they leave. See
-      [Microsoft's guidance](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook).
+      connectors, and webhooks now come from the Workflows app. A workflow belongs to the person who
+      created it, not the channel — add a co-owner, or it stops when they leave.
     </Warning>
 
-    <Accordion title="Or install a Teams app — any channel, and DMs">
-      Install your Teams app to your tenant, then store `tenant_id`, `service_url` and
-      `conversation_id` for a channel, or `user_id` in place of `conversation_id` for a DM.
+    <Accordion title="Or use your own Teams bot — any channel, and DMs">
+      <Steps>
+        <Step title="Create the app and bot">
+          Follow [Create a Teams app](/docs/microsoft-teams-create-app) in the
+          [Teams Developer Portal](https://dev.teams.microsoft.com/), and save the bot's login on
+          **Vendors → MS Teams**.
+        </Step>
 
-      `service_url` is regional — `https://smba.trafficmanager.net/amer` is one region, not a universal
-      endpoint. All three values have to come from the same tenant.
+        <Step title="Install it in your Teams">
+          Upload the app package in your Teams, then **@mention the bot once** in the channel you'll
+          post to.
+        </Step>
+
+        <Step title="Copy the channel ID">
+          On the channel, select **⋯ → Copy link**. The part after `/channel/` is the
+          `conversation_id` — decode `%3A` to `:` and `%40` to `@`.
+        </Step>
+      </Steps>
+
+      For a DM, store the person's Entra object ID as `user_id` instead. `tenant_id` and `service_url`
+      are optional — SuprSend falls back to the vendor's Tenant ID and Microsoft's global endpoint.
     </Accordion>
   </Tab>
 </Tabs>
@@ -1152,6 +1213,9 @@ OAuth flow you build, and you store a token per customer. Full walkthrough in th
     For each channel I pick, add content to the existing "Order Shipped" template,
     alongside the channels already there.
     Body: Order #{{order_id}} is on its way.
+    For ms_teams, use the JSONNET editor, not Markdown: an Adaptive Card, version 1.4,
+    with that line as a single TextBlock. In JSONNET the variable is data.order_id,
+    not {{order_id}}.
 
     Then open the workflow "Order Shipped Notification" and add every channel I picked
     to its multi-channel delivery node.
@@ -1172,10 +1236,22 @@ OAuth flow you build, and you store a token per customer. Full walkthrough in th
       </Step>
 
       <Step title="Pick an editor">
-        Both channels offer two, and you can switch at any time — each keeps its own content. **Text**
-        for Slack and **Markdown** for Teams handle a plain line like this one. **JSONNET** outputs
-        Slack [Block Kit](/docs/slack-template) or Teams [Adaptive Cards](/docs/ms-teams-template),
-        which is what you want as soon as the message needs buttons, sections or images.
+        **Slack:** **Text** handles a plain line like this one. Switch to **JSONNET** for
+        [Block Kit](/docs/slack-template) when you need buttons, sections or images.
+
+        **Teams:** use **JSONNET**, not Markdown. A Teams webhook only shows
+        [Adaptive Cards](/docs/ms-teams-template) — a Markdown message shows as delivered in Logs but
+        never appears in the channel.
+
+        ```jsonnet
+        {
+          "type": "AdaptiveCard",
+          "version": "1.4",
+          "body": [
+            { "type": "TextBlock", "text": "Order #" + std.toString(data.order_id) + " is on its way.", "wrap": true }
+          ]
+        }
+        ```
       </Step>
 
       <Step title="Commit the template">
@@ -1202,14 +1278,15 @@ The value you copied goes on the user profile, the same way a phone number did.
 
     Ask me two things before you write anything, and wait for both answers:
       a. Which channel — slack, ms_teams, or both.
-      b. How I'm connecting — an incoming webhook URL, or a bot token for my own
-         workspace. If I say anything else, stop and tell me it needs the full Slack
-         or Teams integration guide rather than this quick start.
+      b. How I'm connecting — an incoming webhook URL, or a bot for my own workspace
+         (Slack: a bot token; Teams: a bot already set up in Vendors). If I say
+         anything else, stop and tell me it needs the full Slack or Teams integration
+         guide rather than this quick start.
 
     Then ask me for the actual value: the webhook URL, or the bot token plus the channel
-    ID, Slack user ID, or email I want it sent to. For Teams with a bot token, ask for
-    tenant_id, service_url and conversation_id. Use exactly what I give you and do not
-    invent any of it.
+    ID, Slack user ID, or email I want it sent to. For a Teams bot, ask for the
+    conversation_id (or the person's user_id for a DM); tenant_id is optional. Use exactly
+    what I give you and do not invent any of it.
 
     Already built, do not re-create: the SuprSend client, the code that syncs a user to
     SuprSend, the code that triggers "order-shipped-notification", and the template and
@@ -1225,8 +1302,8 @@ The value you copied goes on the user profile, the same way a phone number did.
     1. Find the existing SuprSend user sync and show it to me before you change it.
     2. Add the channel identity to that same sync, alongside what's already there, using
        the object shape that matches what I gave you.
-    3. A bot token is a credential. Read it from the environment, never hardcode it, and
-       tell me the variable name you used so I can set it.
+    3. A bot token or webhook URL is a credential. Read it from the environment, never
+       hardcode it, and tell me the variable name you used so I can set it.
     4. Leave the trigger call exactly as it is.
     5. Run the sync and then the trigger once, and show me SuprSend's actual response to
        each. If you could not run them, say so plainly — do not tell me it worked.
@@ -1272,11 +1349,9 @@ The value you copied goes on the user profile, the same way a phone number did.
     });
     ```
 
-    ```javascript Teams — conversation
+    ```javascript Teams — bot, channel
     user.add_ms_teams({
-      tenant_id: "c19xxxx2-9aaf-xxxx-xxxx",
-      service_url: "https://smba.trafficmanager.net/amer",
-      conversation_id: "19:c1524d7c-a06f-456f-8abe-xxxx",
+      conversation_id: "19:c1524d7c-a06f-456f-8abe-xxxx@thread.tacv2",
     });
     ```
     </CodeGroup>
@@ -1336,10 +1411,22 @@ The value you copied goes on the user profile, the same way a phone number did.
     throttles at more than four requests a second and rejects messages over 28 KB.
   </Accordion>
 
-  <Accordion title="Teams says the tenant or conversation is unknown">
-    `tenant_id`, `service_url` and `conversation_id` have to come from the same tenant, and
-    `service_url` is regional — `https://smba.trafficmanager.net/amer` is one region, not a universal
-    endpoint. A conversation ID from one tenant won't resolve against another.
+  <Accordion title="Logs say delivered, but nothing appears in Teams">
+    The webhook accepted the request, then Teams dropped it — the Teams template is in **Markdown**.
+    Switch to JSONNET. Confirm in the channel, not just the logs.
+  </Accordion>
+
+  <Accordion title="Teams shows &quot;We're sorry, this card couldn't be displayed&quot;">
+    The card `version` is too new for a webhook. Set it to `1.4` or `1.5`.
+  </Accordion>
+
+  <Accordion title="Teams bot sends fail with 401">
+    **App Type** on **Vendors → MS Teams** doesn't match your Azure bot. Bots created after 31 July 2025
+    are `Single tenant`.
+  </Accordion>
+
+  <Accordion title="BotNotInConversationRoster">
+    The bot isn't in the team that owns the channel. @mention the bot once in that channel.
   </Accordion>
 </AccordionGroup>
 ## Next steps
