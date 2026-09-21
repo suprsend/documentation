@@ -1,0 +1,569 @@
+---
+title: "Integrate SuprSend"
+sidebarTitle: "Integrate SuprSend"
+description: "Integrate SuprSend into your backend: build a template and workflow, identify users from your code, trigger notifications, and confirm delivery in logs."
+---
+
+This guide takes you from a new SuprSend account to a notification sent from your own code. By the end, you'll have built a template and a workflow in SuprSend, and added two calls to your backend: one that identifies a user, and one that triggers the workflow. You'll then confirm in logs whether the notification was sent.
+
+Everything in this guide runs in your Sandbox workspace and uses the email channel. Because it's a sandbox, an email vendor is already connected — there's nothing to set up before you send.
+
+<Note>
+  This guide assumes you've read [Core concepts](/docs/core-concepts). It uses template, user,
+  workflow, and logs without redefining them.
+</Note>
+
+## Set up
+
+### Sign up and start in Sandbox
+
+[Create your SuprSend account](https://auth.suprsend.com/sign-up).
+
+Three workspaces are created automatically — **Sandbox**, **Staging**, and **Production**. Switch
+between them from the top navigation bar. Stay in **Sandbox** for this guide: it already has an
+email vendor connected, so there's nothing to configure before you send.
+
+### Get your credentials
+
+SuprSend uses different credentials for different jobs. You won't need all three.
+
+| Credential | Authenticates | Where | You need it if |
+|---|---|---|---|
+| **Workspace Key + Secret** | Backend SDKs — Node.js, Python, Java, Go | [Developers → API Keys](https://app.suprsend.com/en/sandbox/developers/api-keys), top of the page | Your backend is in one of those four languages |
+| **API Key** | REST API calls | [Developers → API Keys](https://app.suprsend.com/en/sandbox/developers/api-keys) → **Generate API Key** | It isn't — you'll call the REST API directly |
+| **Service Token** | The CLI and MCP server — your AI editor | [Account Settings → Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens) | You'll connect an AI editor |
+
+Go to [**Developers → API Keys**](https://app.suprsend.com/en/sandbox/developers/api-keys) and
+copy your **Workspace Key** and **Workspace Secret** — that's what the code in this guide uses by
+default. If you are generating an **API Key** instead, it's on the same page and is shown only
+once, so copy it before closing the dialog.
+
+Store them as environment variables:
+
+```bash .env
+SUPRSEND_WORKSPACE_KEY=your_workspace_key
+SUPRSEND_WORKSPACE_SECRET=your_workspace_secret
+
+# Only if you're calling the REST API instead of using an SDK
+SUPRSEND_API_KEY=your_api_key
+```
+
+## Build the notification
+
+One email template with a single variable, `order_id`, and a workflow that sends it.
+
+<Tabs>
+  <Tab title="Dashboard Agent">
+    Open Agent with `Cmd+/` and paste:
+
+    ```text
+    Create a workflow named "Order Shipped Notification" with a Workflow API trigger
+    and a single channel email delivery node.
+
+    For that email, create a template named "Order Shipped" with one variable, order_id.
+    Subject: Your order has shipped
+    Body: Order #{{order_id}} is on its way.
+    Add {"order_id": "ORD-1234"} to the Input Payload.
+
+    Commit both the template and the workflow live, then tell me both slugs.
+    ```
+
+    Agent builds the template first, then the workflow that uses it, and commits both.
+
+    <Frame caption="Agent building and committing both, then reporting the slugs">
+      <img src="/images/basic-setup-agent-build.png" alt="SuprSend Agent completing six tasks to create and commit the Order Shipped template and the Order Shipped Notification workflow, ending with both slugs" />
+    </Frame>
+
+    <Frame caption="The committed template">
+      <img src="/images/basic-setup-template-agent-response.png" alt="Order Shipped template marked Live, with the input payload on the left and the preview rendering Order #ORD-1234 is on its way" />
+    </Frame>
+
+    <Frame caption="The committed workflow">
+      <img src="/images/basic-setup-wf-by-agent.png" alt="Order Shipped Notification workflow marked Live, showing the Trigger via API node and an Email node using the order-shipped template" />
+    </Frame>
+  </Tab>
+
+  <Tab title="Dashboard">
+    **Create the template**
+
+    <Warning>
+      Editing always works on a draft. Until you commit, a workflow triggering this template sends
+      the previous live version — or fails, if there is no live version.
+    </Warning>
+
+    1. Go to **Templates** and click **+ New Template**.
+
+    2. Enter a **Name** — `Order Shipped`. The slug `order-shipped` is auto-generated from the
+       name and can't be changed later. Click **Create**.
+
+       <Frame caption="Create Template modal">
+         <img src="/images/basic-setup-tmp-create-modal.png" alt="Create Template modal with the name Order Shipped and the auto-generated slug order-shipped" />
+       </Frame>
+
+    3. Select **Email** as the channel, then choose **Plain text only** from the editor dropdown —
+       the quickest way to see your content render.
+
+       <Frame caption="Choosing the plain text editor">
+         <img src="/images/basic-setup-tmp-choose-editor.png" alt="Email template editor with the editor dropdown open and Plain text only selected" />
+       </Frame>
+
+    4. The subject can be edited by clicking edit icon on top right of template editor. Set the
+       **Subject** to `Your order has shipped` and click **Save**.
+
+       <Frame caption="Email Settings, where the subject is edited">
+         <img src="/images/basic-setup-tmp-subject.png" alt="Email Settings modal with the subject set to Your order has shipped" />
+       </Frame>
+
+    5. Write the body: `Order #{{order_id}} is on its way.` — `{{order_id}}` is a placeholder, and
+       its value arrives in the payload you send when you trigger the workflow, in a later step.
+
+       <Frame caption="Body with the order_id variable">
+         <img src="/images/basic-setup-tmp-body.png" alt="Plain text email body reading Order #{{order_id}} is on its way" />
+       </Frame>
+
+    6. Open the **Variables** panel — the `{}` icon in the far-left sidebar — click the edit icon
+       next to **Input Payload**, enter `{"order_id": "ORD-1234"}`, and click
+       **Update Input Payload**.
+
+       <Frame caption="Input Payload, the sample data your preview renders with">
+         <img src="/images/basic-setup-tmp-input-payload.png" alt="Input Payload modal containing the JSON order_id set to ORD-1234" />
+       </Frame>
+
+       The preview updates to `Order #ORD-1234 is on its way.`
+
+    7. Click **Commit** in the top right.
+
+    <Frame caption="Plain text editor with the input payload set and the preview rendering">
+      <img src="/images/basic-setup-template-text-editor.png" alt="SuprSend email template editor in plain text mode, with order_id set to ORD-1234 in the input payload and the preview showing the rendered body" />
+    </Frame>
+
+
+    **Create the workflow**
+
+    Two nodes: a trigger that starts the workflow, and a delivery node that sends the email.
+
+    1. Go to **Workflows** and click **+ New Workflow**.
+
+    2. Enter a **Name** — `Order Shipped Notification` — and pick a **Notification Category**, for
+       example `Transactional`. The slug `order-shipped-notification` is auto-generated from the
+       name. Click **Create** to open the workflow in draft.
+
+       <Frame caption="Create Workflow modal">
+         <img src="/images/basic-setup-wf-create-modal.png" alt="Create Workflow modal with the name Order Shipped Notification and the Transactional notification category selected" />
+       </Frame>
+
+    3. Open the **Trigger** node. Its **Type** is **API** — the trigger type you call from your
+       backend, naming the workflow and its recipients in the request. Workflow API is selected by
+       default when you make the workflow from dashboard manually. The panel also shows the
+       **Workflow Slug** you'll use in your code.
+
+       <Frame caption="Trigger node, with the workflow slug you'll call from your backend">
+         <img src="/images/basic-setup-wf-trigger-node.png" alt="Trigger node panel with Type set to API and the workflow slug order-shipped-notification" />
+       </Frame>
+
+    4. Add a **Single Channel** delivery node, select **Email**, choose the `order-shipped`
+       template, and click **Save**.
+
+       <Frame caption="Email delivery node using the order-shipped template">
+         <img src="/images/basic-setup-wf-send-node.png" alt="Email delivery node panel with the order-shipped template selected from the template dropdown" />
+       </Frame>
+
+    5. Click **Commit** in the top right to make the workflow live.
+
+    <Note>
+      Only live templates appear in the delivery node. If `order-shipped` isn't listed, it hasn't
+      been committed yet.
+    </Note>
+  </Tab>
+</Tabs>
+
+You now have a live template, `order-shipped`, and a live workflow, `order-shipped-notification`.
+
+<Tip>
+  Delays, batching, branches, and multi-channel routing are all added as extra nodes — see
+  [Design workflow](/docs/design-workflow). For ready-made examples, browse the sample library from
+  **Workflows → New Workflow → Use Sample Workflow**.
+</Tip>
+
+## Identify a user and trigger the workflow
+
+Two calls go into your backend. The first tells SuprSend who your user is and how to reach them. The
+second runs the workflow you just built.
+
+<Tabs>
+  <Tab title="AI editor">
+    One prompt writes both calls into your codebase. Paste it into Claude Code, Cursor, Windsurf, or
+    any other AI editor you use.
+
+    <Note>
+      **Recommended:** connect your editor to SuprSend first. Your agent can then confirm the
+      workflow exists and check the user was created, instead of taking your word for it. The prompt
+      works without it.
+    </Note>
+
+    <Accordion title="Connect your editor to SuprSend (optional)">
+      Get a Service Token from [Account Settings → Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens).
+      It's shown only once, and it's **account-wide** — it belongs in your editor's configuration, not
+      in your application code or your `.env` file. Requires Node.js 18+.
+
+      **Claude Code** — run in your terminal, not inside a `claude` session:
+
+      ```bash
+      claude mcp add suprsend \
+        --scope user \
+        --env SUPRSEND_SERVICE_TOKEN=your_service_token \
+        -- npx -y suprsend start-mcp-server
+      ```
+
+      **Cursor** — add to `~/.cursor/mcp.json`, creating the file if it doesn't exist:
+
+      ```json mcp.json
+      {
+        "mcpServers": {
+          "suprsend": {
+            "command": "npx",
+            "args": ["-y", "suprsend", "start-mcp-server"],
+            "env": { "SUPRSEND_SERVICE_TOKEN": "your_service_token" }
+          }
+        }
+      }
+      ```
+
+      **Windsurf** — add the same block to `~/.codeium/windsurf/mcp_config.json`, without the
+      `mcpServers` wrapper, then click **Refresh**.
+
+      Confirm it worked by asking your editor to list your SuprSend workflows. Full setup:
+      [MCP server](/reference/mcp-overview).
+    </Accordion>
+
+    <Note>
+      No codebase yet? Use the cURL example in the next tab — it runs both calls from your terminal
+      with nothing to install.
+    </Note>
+
+    <Accordion title="Copy the integration prompt">
+    ```text
+    Integrate SuprSend into this codebase.
+
+    Already built — do not re-create these: a live workflow "order-shipped-notification"
+    in the Sandbox workspace that takes one data field, order_id, and the email
+    template behind it.
+
+    My SuprSend credentials belong in my environment — SUPRSEND_WORKSPACE_KEY and
+    SUPRSEND_WORKSPACE_SECRET for the SDKs, SUPRSEND_API_KEY for the REST API. The
+    guide had me put them there, but confirm with me rather than assuming.
+
+    If the SuprSend MCP server is connected, use it. My workspace is "sandbox" — pass
+    that on every MCP call, because it otherwise defaults to staging. Use it to look
+    up exact SDK method names and payload shapes in the SuprSend docs instead of
+    writing them from memory, to list the live workflows and confirm
+    "order-shipped-notification" is there, and to fetch the user back from SuprSend
+    after you sync it. Use MCP to check your work, never to do the work — the sync
+    and the trigger must run from this codebase's own code.
+    If it isn't connected, carry on without it and tell me so.
+
+    1. Work out what language this codebase is written in and install the matching
+       SuprSend backend SDK — Node.js, Python, Java or Go. For any other language,
+       call the REST API instead. Then tell me which credential that path needs —
+       the workspace key and secret for an SDK, the API key for REST — and ask me
+       to confirm it's actually set in my environment and not still a placeholder,
+       before you write any code.
+    2. Read both credentials from the environment in one shared place.
+    3. Find where user records live in this codebase. Take one existing record and
+       sync it to SuprSend: that record's own ID as distinct_id, plus an email
+       address. Ask me which email to use, and tell me to pick an inbox I can
+       actually open — any address works, but a fake one means I'll only see the
+       send in the dashboard logs. If this codebase has no user records at all, tell
+       me that and ask me before creating one — ask me for the email address to put
+       on it, same rule.
+    4. Trigger "order-shipped-notification" for that distinct_id, with data
+       {"order_id": "ORD-1234"}. Sync the user before triggering, and name
+       recipients by distinct_id only.
+    5. Keep all SuprSend code in new files. In existing files, add only the single
+       line that calls it — where this codebase already creates or updates a user
+       record, and at whatever point here makes sense to notify someone. If neither
+       has an obvious home, call it from a new file of its own and say so.
+    6. Run both calls once and show me SuprSend's actual response to each. If you
+       could not run them, say so plainly — do not tell me it worked.
+
+    Read credentials from the environment, never hardcode them. Never put a SuprSend
+    service token in application code. Do not invent workflow slugs, SDK method
+    names, or user properties.
+
+    Finish with one line per file you created and per existing file you edited, then
+    tell me to check the dashboard: Users for the profile, then Logs → Requests →
+    Workflow executions → Messages for the send.
+    ```
+    </Accordion>
+
+    Your editor writes the same two calls shown in the next tab. Read the diff before you run it.
+  </Tab>
+
+  <Tab title="Write it yourself">
+    Install the SDK and create the client once. Both calls below reuse it.
+
+    <CodeGroup>
+    ```javascript Node.js
+    // npm install @suprsend/node-sdk
+    const { Suprsend } = require("@suprsend/node-sdk");
+
+    const supr_client = new Suprsend(
+      process.env.SUPRSEND_WORKSPACE_KEY,
+      process.env.SUPRSEND_WORKSPACE_SECRET
+    );
+    ```
+
+    ```python Python
+    # pip install suprsend-py-sdk
+    import os
+    from suprsend import Suprsend
+
+    supr_client = Suprsend(
+        os.environ["SUPRSEND_WORKSPACE_KEY"],
+        os.environ["SUPRSEND_WORKSPACE_SECRET"],
+    )
+    ```
+
+    ```java Java
+    import suprsend.Suprsend;
+
+    Suprsend suprClient = new Suprsend(
+        System.getenv("SUPRSEND_WORKSPACE_KEY"),
+        System.getenv("SUPRSEND_WORKSPACE_SECRET")
+    );
+    ```
+
+    ```go Go
+    // go get github.com/suprsend/suprsend-go
+    import "github.com/suprsend/suprsend-go"
+
+    suprClient, err := suprsend.NewClient(
+        os.Getenv("SUPRSEND_WORKSPACE_KEY"),
+        os.Getenv("SUPRSEND_WORKSPACE_SECRET"),
+    )
+    ```
+
+    ```bash cURL
+    # No client to initialise. Every request uses your API key:
+    #   Authorization: Bearer $SUPRSEND_API_KEY
+    ```
+    </CodeGroup>
+
+    **Identify a user**
+
+    Call this wherever your app creates or updates a user record. `distinct_id` is SuprSend's name for
+    the user identifier — pass whatever ID that record already has. You don't create a new one.
+
+    To try it now, run it once for a user that already exists. Use an email address you can actually
+    open, or you'll only see the send in the dashboard logs.
+
+    <CodeGroup>
+    ```javascript Node.js
+    const user = supr_client.user.get_instance("user_1a2b3c");
+    user.add_email("you@example.com");
+
+    const res = await user.save();
+    console.log(res);
+    ```
+
+    ```python Python
+    user = supr_client.user.get_instance("user_1a2b3c")
+    user.add_email("you@example.com")
+
+    res = user.save()
+    print(res)
+    ```
+
+    ```java Java
+    Subscriber user = suprClient.user.getInstance("user_1a2b3c");
+    user.addEmail("you@example.com");
+
+    JSONObject res = user.save();
+    System.out.println(res);
+    ```
+
+    ```go Go
+    user := suprClient.Users.GetInstance("user_1a2b3c")
+    user.AddEmail("you@example.com")
+
+    res, err := user.Save()
+    ```
+
+    ```bash cURL
+    curl --request POST \
+      --url https://hub.suprsend.com/v1/user/user_1a2b3c/ \
+      --header "Authorization: Bearer $SUPRSEND_API_KEY" \
+      --header 'Content-Type: application/json' \
+      --data '{ "$email": ["you@example.com"] }'
+    ```
+    </CodeGroup>
+
+    It upserts: the first call creates the profile, later calls update it.
+
+    <Check>
+      Go to **Users** in the dashboard and open `user_1a2b3c`. The Channels panel shows the email
+      address you just set.
+    </Check>
+
+    **Trigger the workflow**
+
+    This goes at the moment the thing actually happens — here, when an order ships.
+
+    <CodeGroup>
+    ```javascript Node.js
+    const { WorkflowTriggerRequest } = require("@suprsend/node-sdk");
+
+    const w1 = new WorkflowTriggerRequest({
+      workflow: "order-shipped-notification",
+      recipients: [{ distinct_id: "user_1a2b3c" }],
+      data: { order_id: "ORD-1234" },
+    });
+
+    const res = await supr_client.workflows.trigger(w1);
+    console.log(res);
+    ```
+
+    ```python Python
+    from suprsend import WorkflowTriggerRequest
+
+    w1 = WorkflowTriggerRequest(body={
+        "workflow": "order-shipped-notification",
+        "recipients": [{"distinct_id": "user_1a2b3c"}],
+        "data": {"order_id": "ORD-1234"},
+    })
+
+    res = supr_client.workflows.trigger(w1)
+    print(res)
+    ```
+
+    ```java Java
+    JSONObject body = new JSONObject()
+        .put("workflow", "order-shipped-notification")
+        .put("recipients", new JSONArray()
+            .put(new JSONObject().put("distinct_id", "user_1a2b3c")))
+        .put("data", new JSONObject().put("order_id", "ORD-1234"));
+
+    WorkflowTriggerRequest wf = new WorkflowTriggerRequest(body);
+    JSONObject res = suprClient.workflows.trigger(wf);
+    ```
+
+    ```go Go
+    w1 := &suprsend.WorkflowTriggerRequest{
+        Body: map[string]interface{}{
+            "workflow":   "order-shipped-notification",
+            "recipients": []map[string]interface{}{{"distinct_id": "user_1a2b3c"}},
+            "data":       map[string]interface{}{"order_id": "ORD-1234"},
+        },
+    }
+
+    res, err := suprClient.Workflows.Trigger(w1)
+    ```
+
+    ```bash cURL
+    curl --request POST \
+      --url https://hub.suprsend.com/trigger/ \
+      --header "Authorization: Bearer $SUPRSEND_API_KEY" \
+      --header 'Content-Type: application/json' \
+      --data '{
+        "workflow": "order-shipped-notification",
+        "recipients": [{ "distinct_id": "user_1a2b3c" }],
+        "data": { "order_id": "ORD-1234" }
+      }'
+    ```
+    </CodeGroup>
+
+    The call names the user by `distinct_id` only — SuprSend already has their email from the previous
+    step. The keys in `data` fill your template's variables, so `order_id` here becomes `{{order_id}}`
+    there.
+  </Tab>
+</Tabs>
+
+<Note>
+  Sandbox already has a user created from your registered email. You're making your own anyway — the
+  point of this step is your code creating the profile, not the profile existing.
+</Note>
+
+## Confirm delivery
+
+Open [**Logs**](https://app.suprsend.com/en/sandbox/logs) in the dashboard. Under **Requests** you'll
+see both of your calls — `user_update` for the user you created, and `workflow` for the trigger.
+
+<Frame>
+  <img src="/images/basic-setup-logs.png" alt="SuprSend Logs page on the Requests tab, showing a workflow request and a user_update request, both completed" />
+</Frame>
+
+Open the workflow execution to watch it run node by node, and to see the email reach the recipient.
+
+<Frame>
+  <img src="/images/basic-setup-logs-workflow.png" alt="Workflow execution log for order-shipped-notification, showing the email node succeeding and the message delivered" />
+</Frame>
+
+<Check>
+  Now check that inbox. The email is there, sent by code you wrote.
+</Check>
+
+<Note>
+  Sandbox is a trial workspace: it expires 28 days after signup and has capped usage. Everything you
+  built here — the template, the workflow, and the two calls in your backend — works the same in
+  Staging and Production once you connect your own vendor.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Go live" icon="rocket" href="/docs/go-live-checklist">
+    Move to Staging and Production, connect your own email vendor, and run through the pre-launch checks.
+  </Card>
+
+  <Card title="Add an in-app inbox" icon="bell" href="/docs/inbox-quick-start">
+    Show notifications inside your product. Needs frontend SDK work on top of the backend integration here.
+  </Card>
+
+  <Card title="Trigger with events" icon="bolt" href="/docs/event-vs-workflow-api">
+    Send one event and let it start several workflows, instead of naming one workflow per call.
+  </Card>
+
+  <Card title="Let users choose" icon="sliders" href="/docs/user-preferences">
+    Preference categories and channel opt-outs, so people control what reaches them.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Request failed: workflow not found">
+    The slug in your trigger call doesn't match a live workflow. Either it's a typo, or the workflow is
+    still a draft. Open it and check the badge reads **Live** — if it doesn't, commit it.
+  </Accordion>
+
+  <Accordion title="Request failed: authentication error">
+    You're using the wrong credential for the path you're on. Backend SDKs take the **Workspace Key and
+    Secret**. The REST API takes an **API Key** as `Authorization: Bearer`. A Service Token works for
+    neither — it's for the CLI and MCP server only.
+  </Accordion>
+
+  <Accordion title="The send succeeded but no email arrived at all">
+    Sandbox only delivers to **verified channels** — a short list you control at
+    [Developers → Verified Channels](https://app.suprsend.com/en/sandbox/developers/verified-channels),
+    up to 5 per channel type. If the recipient's address isn't on that list, nothing arrives.
+  </Accordion>
+
+  <Accordion title="Nothing arrived, but the workflow shows Completed">
+    A completed execution means every node ran, not that a message was delivered. A channel only sends
+    when all four are true:
+
+    - The template has live content for that channel
+    - The user has an identity for it — an email address, in this case
+    - The user hasn't opted out
+    - A vendor is connected
+
+    The workflow execution log names which one failed. The most common cause here is a user synced
+    without an email address, so check the profile under **Users** first.
+  </Accordion>
+
+  <Accordion title="The email arrived with a blank where the variable should be">
+    The key in your trigger's `data` doesn't match the variable in your template. `data` must contain
+    `order_id` for `{{order_id}}` to resolve. Open the message in **Logs → Messages** and use
+    **Message preview** to see exactly what rendered.
+  </Accordion>
+</AccordionGroup>
