@@ -1,18 +1,502 @@
 ---
-title: "Designing notifications for B2B2C applications"
+title: "Designing Notifications for B2B2C Applications"
 description: "Model each business customer as its own isolated SuprSend workspace — its own keys, vendors, users, templates, workflows, and analytics."
-tag: "Coming Soon"
 ---
 
-<span style={{
-  display: "inline-block",
-  padding: "2px 10px",
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "#92400E",
-  backgroundColor: "#FEF3C7",
-  border: "1px solid #FDE68A",
-  borderRadius: "9999px",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em"
-}}>Coming Soon</span>
+A B2B2C product serves many business customers, and each customer uses it to notify its own end users. Every customer wants its notifications and user data kept fully separate from every other customer's.
+
+SuprSend gives you two ways to model such customers: as tenants in one shared workspace, or as a workspace each. The [tenants vs workspaces guide](/docs/guides/modelling-customers-workspace-vs-tenant) details the pros and cons of the two approaches. This guide is the deep dive where each business customer is modelled as a **workspace** — one [workspace](/docs/workspaces) per customer.
+
+Two terms used throughout:
+
+- **Customer** — a business you serve. In this model, each customer is one workspace.
+- **User** — one of your customer's own end users, and the person who receives a notification. Each one maps to a SuprSend user.
+
+The example used throughout is **WorkVibe**, a restaurant management platform. Its business customers are restaurant chains, and the people who receive notifications are their diners. WorkVibe runs on SuprSend under a single **account**, and serves two customers — Ember & Oak and Nolan's Pizza — giving each its own SuprSend workspace (`workvibe-emberoak`, `workvibe-nolans`). Switching customer in the app switches the entire workspace behind it.
+
+<Note>
+  **Example app.** WorkVibe's source code and a walkthrough are in the [WorkVibe reference app guide](/docs/workvibe-app-guide).
+</Note>
+
+---
+
+## WorkVibe Architecture Overview
+
+Each restaurant chain uses WorkVibe to run its own notifications — order updates, receipts, account security — over email and an in-app inbox.
+
+**What every customer gets**
+
+| Category | Covers | Workflow |
+|:---|:---|:---|
+| `getting-started` | Welcome, on joining the subscriber list | `welcome-diner` |
+| `order-updates` | Order confirmed, order ready | `order-confirmed`, `order-ready` |
+| `receipts` | The receipt after payment | `order-receipt` |
+| `account-security` | Sign-ins. Always on | `sign-in-alert` |
+
+**What each customer adds**
+
+| | `workvibe-emberoak` | `workvibe-nolans` |
+|:---|:---|:---|
+| **The customer** | Ember & Oak — casual dining, dine-in and pickup | Nolan's Pizza — delivery-first |
+| **Adds** | `order-feedback` workflow, a day after an order completes, under a `feedback` category | `arriving-soon` workflow, an `offers` category, and the `weekend-deal` broadcast |
+
+Both customers run the same five notifications. The differences are what each chain adds on top — and each addition lives only in that customer's workspace.
+
+**Who can change what**
+
+<CardGroup cols={2}>
+  <Card title="Customer's admin" icon="user-shield">
+    Sets everything that applies to all their diners: which notifications exist, whether each is on, off, or mandatory, the default channels, the branding, and the message content.
+  </Card>
+  <Card title="Diner" icon="user">
+    Controls only their own notifications — which categories they receive and on which channels — from a preference centre inside the chain's own product.
+  </Card>
+</CardGroup>
+
+<Frame>
+  <img src="/images/b2b2c-workvibe-roles.png" alt="WorkVibe roles and what each can change" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+The sections below map each of these onto SuprSend, using Ember & Oak, and Nolan's Pizza where the two differ.
+
+---
+
+## WorkVibe Concept Mapping to SuprSend
+
+Here's how the WorkVibe concepts map to SuprSend:
+
+<Frame>
+  <img src="/images/b2b2c-concept-mapping.png" alt="WorkVibe concepts mapped to SuprSend entities" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+| WorkVibe concept | SuprSend entity | Example |
+|:---|:---|:---|
+| **WorkVibe (the product)** | Account | One SuprSend account, holding every customer's workspace |
+| **Customer** | **[Workspace](/docs/workspaces)** | `workvibe-emberoak`, `workvibe-nolans` — one per customer, with its own staging and production |
+| **Diner** | **[User](/docs/users)** | `distinct_id`, with `$email` and `$inbox` channel identities |
+| **Diners signed up for updates** | **[List](/docs/lists)** | `all-subscribers` — the audience a broadcast goes to, and what the welcome triggers on |
+| **Notification types** | **[Notification categories](/docs/notification-category)** | `transactional` → `order-updates`, `promotional` → `offers` |
+| **A notification** | **[Workflow](/docs/workflows)** | `order-ready` tells a diner their order is ready |
+| **One message to everyone** | **[Broadcast](/docs/broadcast)** | `weekend-deal` to `all-subscribers` |
+| **Message content** | **[Template](/docs/templates)** | `order-receipt`, rendered for email and in-app inbox |
+| **A diner's settings** | **[User preferences](/docs/user-preferences)** | Per-category, per-channel opt-in / opt-out |
+| **Branding (logo, colours)** | The workspace's **`default` tenant** | Applied to that customer's emails |
+
+<Note>
+  If a customer is modelled as a tenant instead of a workspace, the rest of this mapping is unchanged — only Customer moves from [workspace](/docs/workspaces) to [tenant](/docs/tenants). A customer with its own sub-brands can model those as [sub-tenants](/docs/sub-tenants).
+</Note>
+
+---
+
+## Data Modelling in SuprSend
+
+The components below model WorkVibe in SuprSend.
+
+### 1. Workspaces
+
+Each customer gets its own [workspace](/docs/workspaces). All of Ember & Oak's assets and diners live in `workvibe-emberoak`; Nolan's Pizza has its own and shares nothing with it.
+
+A workspace holds its own copy of everything, shared with no other by default:
+
+- Notification categories, templates, and workflows
+- Vendors, users, and preferences
+- Credentials, logs, and analytics
+
+WorkVibe creates each workspace with the [Create workspace API](/reference/create-workspace):
+
+```json
+{
+  "name": "workvibe-emberoak",
+  "description": "Ember & Oak — Diner Communications"
+}
+```
+
+**Environments.** A workspace is also SuprSend's environment boundary — every account starts with Sandbox, Staging and Production. What that means when each customer already has a workspace is covered in [Managing customers](#managing-customers).
+
+<Frame>
+  <img src="/images/b2b2c-environments.png" alt="One workspace per customer, with its own staging and production" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+<Note>
+  A customer doesn't always need to be modelled as a workspace. You can model each customer as a tenant in one shared workspace instead — see [tenants vs workspaces](/docs/guides/modelling-customers-workspace-vs-tenant) to choose.
+</Note>
+
+📘 [Workspaces →](/docs/workspaces) | [Create workspace →](/reference/create-workspace) | [Test Mode →](/docs/developer/test-mode)
+
+---
+
+### 2. Users
+
+Each diner is a [user](/docs/users), identified by a `distinct_id`, with `$email` and `$inbox` channel identities, living in exactly one workspace. WorkVibe upserts each one through the [users API](/reference/create-update-users):
+
+```json
+{
+  "distinct_id": "u_30214",
+  "$email": [{ "value": "sam@example.com" }],
+  "properties": { "name": "Sam Rivera" }
+}
+```
+
+In WorkVibe, a user can be added through the Users screen.
+
+<Frame>
+  <img src="/images/b2b2c-users.png" alt="Diners listed inside a customer's workspace" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+📘 [Users →](/docs/users) | [Upsert user →](/reference/create-update-users) | [Node SDK →](/docs/node-create-user-profile) | [Python SDK →](/docs/python-create-user-profile)
+
+---
+
+### 3. Notification Categories
+
+Every WorkVibe notification belongs to a [notification category](/docs/notification-category) — the tree that holds one customer's notification settings, inside that customer's workspace. It has three levels, and only the bottom one carries preferences:
+
+- **Root** — **System**, **Transactional**, or **Promotional**. Fixed. Which root a notification sits under matters: a promotional category must be one a user can switch off, and only a promotional category can carry a broadcast.
+- **Section** — an optional grouping for the preference page. Carries no settings.
+- **Sub-category** — one per notification type. This is what a diner opts in and out of, and where the customer's defaults live. Every workflow sends under one sub-category, and several workflows can share the same one.
+
+The default tree every chain starts with, plus the promotional category Nolan's Pizza adds:
+
+```
+Transactional (root)
+ └── Your orders (section)
+      ├── Order updates (sub-category)      ← order-confirmed and order-ready send under this
+      └── Receipts (sub-category)
+ └── Your account (section)
+      ├── Getting started (sub-category)
+      └── Account security (sub-category)   ← can't be switched off
+Promotional (root)
+ └── Offers (section)
+      └── Offers (sub-category)             ← the category the weekend-deal broadcast sends under
+```
+
+Each sub-category holds the **defaults** for its notification across that customer:
+
+- **Default preference** — **On**, **Off**, or **Can't Unsubscribe**. Both chains set `account-security` to Can't Unsubscribe, so a sign-in alert always goes out.
+- **Default channels** — email and in-app inbox, per category.
+
+Each customer's tree is published with the [Create/update category API](/reference/create-update-category).
+
+<Frame>
+  <img src="/images/b2b2c-category-tree.png" alt="Notification category tree with sections and sub-categories" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+📘 [Notification Categories →](/docs/notification-category) | [Managing categories →](/docs/managing-notification-categories) | [Create/update category →](/reference/create-update-category)
+
+---
+
+### 4. Preferences
+
+A [preference](/docs/user-preferences) decides whether a diner receives a notification for a category, and on which channels. Two layers set it, both inside that customer's workspace.
+
+<CardGroup cols={2}>
+  <Card title="Customer-wide default" icon="user-shield">
+    The customer's admin, for all their diners. Set through the [Create/update category API](/reference/create-update-category).
+  </Card>
+  <Card title="User preference" icon="user">
+    The diner, from the preference centre in the chain's own product. An admin can also adjust one diner's settings. Set through the [User preference API](/reference/get-user-full-preference).
+  </Card>
+</CardGroup>
+
+**Evaluation order:** `User preference` → falls back to `Customer-wide default`.
+
+In WorkVibe both layers set two controls, whether it's sent and on which channels; a category can also carry a [digest cadence](/docs/digest) and condition properties, covered in [managing notification categories](/docs/managing-notification-categories).
+
+<Note>
+  If a workspace does use [tenants](/docs/tenants), a [tenant layer](/docs/tenant-preference) sits between the two — [preference evaluation](/docs/preference-evaluation) covers the full resolution order.
+</Note>
+
+#### Expose Preferences to Diners within WorkVibe App
+
+WorkVibe builds its own preference-centre UI on the [user preference API](/reference/get-user-full-preference), authenticated with a signed user token (see [credentials](#credentials)).
+
+Prebuilt and headless [preference components](/docs/preference-react-sdk) and a hosted [preference centre](/docs/embedded-preference-centre) are also available to help you go live quickly.
+
+<Frame>
+  <img src="/images/b2b2c-preferences.png" alt="Preference centre for a diner, inside the chain's own product" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+📘 [User Preferences →](/docs/user-preferences) | [Preference Evaluation →](/docs/preference-evaluation) | [Preference Components →](/docs/preference-react-sdk) | [Embedded Preference Centre →](/docs/embedded-preference-centre)
+
+---
+
+### 5. Templates
+
+A [template](/docs/templates) holds the message content for each channel — email, inbox, SMS, WhatsApp, Slack. Templates use [Handlebars](/docs/handlebars-helpers), and variables can come from three places:
+
+```
+// Data variables (from the trigger)
+{{order_total}}              → "$32.40"
+{{ready_time}}               → "7:05 PM"
+
+// Tenant branding (the workspace's default tenant)
+{{$tenant.logo}}             → the customer's logo
+{{$tenant.primary_color}}    → the customer's colour
+{{$tenant.name}}             → the customer's name
+
+// Recipient info
+{{$recipient.name}}          → the diner's name
+```
+
+Set the customer's name and colours on their workspace's [`default` tenant](/docs/tenants), and `{{$tenant.*}}` resolves to them. WorkVibe's Brand Settings screen writes to that tenant ([tenant profile](/reference/create-update-tenants)).
+
+Templates are created and updated per workspace — in the dashboard's visual editor or with the [SuprSend agent](/reference/agent), or through the [Templates Management API](/reference/upsert-template-v2) in WorkVibe.
+
+#### Expose Templates to Admins within WorkVibe App
+
+WorkVibe lets each customer's admins edit their own templates with the embedded [`@suprsend/react-editor`](/docs/embeddable-template-react-sdk), authenticated with a JWT scoped to that workspace. Because the customer already has its own workspace, an admin edits the template **directly** — the master version, with no tenant-scoped [variant](/docs/template-variants).
+
+<Frame>
+  <img src="/images/b2b2c-templates.png" alt="The embedded template editor inside WorkVibe" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+<Note>
+  With customers modelled as tenants, the `default` tenant's branding applies to every template. Where a customer needs different content, that change is stored as a tenant [variant](/docs/template-variants) rather than edited on the master.
+</Note>
+
+📘 [Templates →](/docs/templates) | [Embedded Template Editor →](/docs/embeddable-template-react-sdk) | [Handlebars →](/docs/handlebars-helpers) | [Template Variants →](/docs/template-variants)
+
+---
+
+### 6. Workflows
+
+A [workflow](/docs/workflows) is the orchestration layer — the sequence of sends, waits, delays, and branches. Each has a unique **slug**, a linked category (for preference evaluation), and linked templates per channel.
+
+A workflow starts one of three ways, and the trigger decides what its templates can render from:
+
+| Trigger | Starts when | What the template can use |
+|:---|:---|:---|
+| **Event Stream** | Your app tracks a linked event | The event's `properties`, plus recipient, tenant and profile |
+| **Workflow API** | You name the workflow and its recipients | The request's `data`, plus recipient, tenant and profile |
+| **List entry / exit** | A user joins or leaves a [list](/docs/lists) | Recipient, tenant and profile only |
+
+WorkVibe uses all three: the welcome runs on list entry, and order updates, receipts and sign-in alerts run on events the app tracks. Both chains share those, and each adds its own on top (see the architecture overview). WorkVibe authors and publishes them with the [Workflows Management API](/reference/create-update-workflow); see [triggering a workflow](/docs/trigger-workflow) and [event vs workflow API](/docs/guides/event-vs-workflow-api) for choosing between them.
+
+<Frame>
+  <img src="/images/b2b2c-workflows.png" alt="A WorkVibe workflow in the SuprSend workflow builder" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+📘 [Workflows →](/docs/workflows) | [Design a Workflow →](/docs/design-workflow) | [Trigger a Workflow →](/docs/trigger-workflow) | [Event vs Workflow API →](/docs/guides/event-vs-workflow-api)
+
+---
+
+### 7. Vendors
+
+Delivery [vendors](/docs/vendors) — email, SMS, Slack, push — are configured **per workspace**, so each customer sends through its own providers and sender identities.
+
+Ember & Oak's mail goes out from Ember & Oak, with its own sending reputation, separate from Nolan's Pizza's.
+
+<Frame>
+  <img src="/images/b2b2c-vendors.png" alt="Vendors configured once per workspace" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+<Note>
+  With customers modelled as tenants, the workspace's vendor sends for every tenant, and a trigger passes only a `tenant_id`. A customer that needs its own sending identity gets a [tenant vendor](/docs/tenant-vendor) override; without one, the workspace's vendor is used.
+</Note>
+
+📘 [Vendors →](/docs/vendors) | [Tenant Vendors →](/docs/tenant-vendor) | [Vendor Fallback →](/docs/vendor-fallback)
+
+---
+
+### 8. Lists
+
+A [list](/docs/lists) groups users inside one workspace. A user joining or leaving it can start a workflow, and a list is the audience a broadcast fans out to.
+
+WorkVibe keeps one `all-subscribers` list per workspace, and every diner joins it on signup ([add a user to a list](/reference/add-user-to-list)). Joining is what sends the welcome — the list entry trigger described in [Workflows](#6-workflows). The same list is the audience for a broadcast, next.
+
+To reach a subset instead — for example diners near one location or those who ordered in the last month — use a [segment list](/docs/segment-lists).
+
+<Frame>
+  <img src="/images/b2b2c-lists.png" alt="A subscriber list inside a customer's workspace" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+📘 [Lists →](/docs/lists) | [Segment Lists →](/docs/segment-lists) | [Add user to list →](/reference/add-user-to-list) | [List subscribers →](/reference/get-list-users)
+
+---
+
+### 9. Broadcast
+
+A [broadcast](/docs/broadcast) sends one template to every member of a list.
+
+A broadcast is triggered through the [broadcast API](/reference/trigger-broadcast) in WorkVibe, naming the list, the template and the category.
+
+```json
+{
+  "list_id": "all-subscribers",
+  "template": "weekend-deal",
+  "notification_category": "offers",
+  "data": {
+    "deal_headline": "two large pizzas for $22 this weekend",
+    "promo_code": "WEEKEND22"
+  }
+}
+```
+
+<Frame>
+  <img src="/images/b2b2c-broadcast.png" alt="A broadcast composed inside a customer's workspace" width="1000" style={{ border: '2px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb', display: 'block', margin: '20px auto', maxWidth: '100%', height: 'auto' }} />
+</Frame>
+
+<Info>
+  A broadcast should go out on a promotional category. On a transactional or system category it can delay that category's other messages.
+</Info>
+
+📘 [Broadcast →](/docs/broadcast) | [Trigger Broadcast →](/reference/trigger-broadcast)
+
+---
+
+## Managing Customers
+
+Every customer's workspace starts from the same set — five workflows, their templates, four categories. This section covers how you keep that set consistent and roll changes out to every customer.
+
+<CardGroup cols={2}>
+  <Card title="Where the defaults live" icon="code-branch">
+    WorkVibe keeps the shared default set in version control and publishes it into a workspace through the Management API. If your defaults aren't in version control, keep them in a workspace of your own and copy them out with [`suprsend sync`](/reference/cli-sync).
+  </Card>
+  <Card title="Onboarding a customer" icon="rocket">
+    A new customer is a new workspace, seeded with that default set. Two things never come from it — the customer's brand (on its `default` tenant) and its vendor — so both are set in the new workspace, along with any category defaults this customer wants changed.
+  </Card>
+  <Card title="Adding a notification later" icon="plus">
+    A new default reaches every customer's workspace the same way the first set did. What a customer's admins have edited lives only in their own workspace, so a later publish covers the assets you own and leaves theirs alone.
+  </Card>
+  <Card title="Staging and production" icon="flask">
+    A customer that wants a staging environment gets a second workspace with [Test Mode](/docs/developer/test-mode) on, which holds delivery back from real people. Nothing else separates the two.
+  </Card>
+</CardGroup>
+
+<Note>
+  With customers modelled as tenants, onboarding is creating a tenant — set its branding, the workspace's defaults apply on their own, and you pass its `tenant_id` at trigger time. There is one workspace to publish into rather than one per customer.
+</Note>
+
+📘 [SuprSend CLI →](/reference/cli-intro) | [`suprsend sync` →](/reference/cli-sync) | [Management API →](/docs/management-api-overview) | [Test Mode →](/docs/developer/test-mode)
+
+---
+
+## End-to-End Notification Flow
+
+Once the setup is complete (workspaces, categories, templates, workflows, vendors, and lists), workflows can be triggered to send notifications. Take an order at Ember & Oak: the diner should hear the moment it's ready to collect, on the channels they've kept switched on.
+
+<Steps>
+  <Step title="Track the event">
+    WorkVibe tracks the event using Ember & Oak's workspace credentials. The workspace credentials are what pick the customer — nothing else in the payload identifies the chain.
+
+    ```json
+    {
+      "distinct_id": "u_30214",
+      "event": "ORDER_READY",
+      "properties": {
+        "order_number": "4712",
+        "handoff_note": "Show this at the counter to collect it."
+      }
+    }
+    ```
+
+    **Key fields:**
+    - **distinct_id:** The diner receiving the notification
+    - **event:** The event name that a workflow is linked to
+    - **properties:** Data variables available to the template as `{{property}}`
+  </Step>
+  <Step title="Match the workflow and category">
+    SuprSend looks up the workflow linked to `ORDER_READY` in this workspace, then resolves that workflow's category (`order-updates`).
+  </Step>
+  <Step title="Apply the diner's preferences">
+    SuprSend evaluates the two preference layers for `order-updates`:
+    - **User preference** — whichever the diner chose in the preference centre
+    - **Customer-wide default** — the fallback set on the category by Ember & Oak's admin
+
+    The result is the final channel set for this diner: email only, say, if they've turned off inbox.
+  </Step>
+  <Step title="Render the template">
+    The template is rendered with three sources of variables: the event `properties`, `{{$recipient.*}}` from the user record, and `{{$tenant.*}}` from the workspace's `default` tenant — so Ember & Oak's logo and colours appear on the message.
+  </Step>
+  <Step title="Deliver via the workspace's vendor">
+    The rendered message goes out through Ember & Oak's email vendor. Sending reputation stays with Ember & Oak; Nolan's Pizza's vendor and reputation are never touched.
+  </Step>
+  <Step title="Log the send">
+    The delivery is logged in Ember & Oak's workspace only — visible on its Executions and Analytics screens, and nowhere else.
+  </Step>
+</Steps>
+
+One event, one workspace: the workspace's credentials pick the customer, the diner's preferences pick the channels, the workspace's `default` tenant paints the message.
+
+---
+
+## When This Model Fits
+
+Give a customer its own workspace when what it sends is genuinely its own:
+
+<CardGroup cols={2}>
+  <Card title="Data cannot be pooled" icon="lock">
+    User records, logs and analytics sit behind separate credentials — the usual requirement when your customers are banks, lenders or health providers, or when a contract says so.
+  </Card>
+  <Card title="Sending identity is separate" icon="envelope">
+    Each customer sends through its own vendor account, so one customer's bounce and spam history never touches another's.
+  </Card>
+  <Card title="Admins own their content" icon="pen">
+    Customer admins edit their own templates and defaults directly, with no shared master to diverge from.
+  </Card>
+  <Card title="Customers diverge over time" icon="code-branch">
+    Every customer starts from the same default set, then adds its own workflows and categories on its own schedule — and those additions never reach anyone else.
+  </Card>
+</CardGroup>
+
+Marketplaces, fintech-as-a-service, white-label products and agencies usually meet several of these at once.
+
+**When to use a different model.**
+
+- If your customers mostly send the same notifications and differ only in branding and preferences, model each as a **tenant** in one shared workspace — the [tenants vs workspaces overview](/docs/guides/modelling-customers-workspace-vs-tenant) compares the two.
+- If your product notifies your customer's own employees rather than its end users, see [Designing notifications for multi-tenant B2B applications](/docs/guides/modelling-customers-b2b).
+
+---
+
+## Reference: Credentials and APIs
+
+WorkVibe talks to SuprSend across **four surfaces**. Secrets stay server-side; the two browser SDKs only ever receive a short-lived JWT minted by the backend.
+
+| Surface | Host / package | Auth | Used for |
+|:---|:---|:---|:---|
+| **Node SDK** | `@suprsend/node-sdk` → `hub.suprsend.com` | Per-workspace **key + secret** (server-side) | Users, subscriber lists, broadcasts, workflow triggers, tenant profile, message logs |
+| **Management API** | `management-api.suprsend.com` | Account **Service Token** | Authoring: templates, workflows, the category tree, workspace config, and workspaces themselves |
+| **Hub REST (signed)** | `hub.suprsend.com` | **Public key** + an `ES256` JWT signed with the signing key, or the workspace key + an HMAC signature | The two things the SDK doesn't cover: a user's own preferences, and list membership |
+| **React SDK** | [`@suprsend/react`](/docs/react-inbox-integration), `@suprsend/react-editor` | Short-lived **ES256 JWT** minted server-side | The browser widgets: the inbox, and the embedded template editor |
+
+### Credentials
+
+| Credential | Scope | Surface | Used for |
+|:---|:---|:---|:---|
+| **Service Token** | Account (all workspaces) | Management API | [Authoring](/docs/management-api-overview) templates, workflows and categories; creating workspaces |
+| **Workspace Key & Secret** | One workspace | Node SDK | [Backend SDK](/docs/developer/sdk-overview) auth: users, lists, triggers, tenant profile |
+| **API Key** | One workspace | Hub REST | [REST API](/reference/overview) auth (`Authorization: Bearer <API_KEY>`) — the same delivery actions over HTTP |
+| **Public Key** | One workspace | React SDK, Hub REST | [Client SDK](/docs/client-authentication) auth (web / mobile) |
+| **Signing Key** | One workspace | React SDK, Hub REST | Signing the user tokens (JWT) that authenticate the inbox, the preference centre, and the template editor |
+
+The frontend embeds authenticate the user with a **signed user token** the backend mints with the workspace's signing key (see [client authentication](/docs/client-authentication)). WorkVibe keys each workspace's credentials by its slug — for example `SUPRSEND_WORKVIBE_EMBEROAK_WORKSPACE_KEY`.
+
+### Node SDK and Hub REST — per-workspace credentials
+
+On `hub.suprsend.com`. SuprSend ships backend SDKs for Java, Python, Node, and Go; WorkVibe uses the Node SDK (`@suprsend/node-sdk`). Preferences and list membership are the exceptions — the SDK has no methods for them, so WorkVibe calls Hub REST directly.
+
+| API | What it does | Where it's used in WorkVibe |
+|:---|:---|:---|
+| [Track event](/reference/trigger-event) | Emits an event; any live workflow linked to that event name fires | Sending anything triggered by an app event |
+| [Trigger workflow](/reference/trigger-workflow-api) | Runs a workflow for the recipients you name | Sending from an API-triggered workflow |
+| [Upsert user](/reference/create-update-users) | Creates or updates a user — channel identities and profile properties | Ingesting a diner when they sign up |
+| [Add user to list](/reference/add-user-to-list) | Adds a user to a subscriber list | The signup moment — it is what welcomes them |
+| [List subscribers](/reference/get-list-users) *(signed REST)* | Reads a list's members | The Lists screen |
+| [Broadcast](/reference/trigger-broadcast) | Sends one template to every member of a list | The Broadcast screen |
+| [Tenant profile](/reference/create-update-tenants) | Reads / updates the workspace's `default` tenant | The Brand Settings page |
+| [Messages](/reference/list-messages) | Lists sent messages with per-channel delivery status (delivered, seen, clicked) | The Executions and Analytics screens |
+| [User preferences](/reference/get-user-full-preference) *(signed REST)* | Reads / updates a user's per-category, per-channel preferences | The diner preference centre and the admin per-user view |
+
+### Management API — account Service Token
+
+On `management-api.suprsend.com`, with the workspace as a path segment (`/v1/{workspace}/...` or `/v2/{workspace}/...`).
+
+| API | What it does | Where it's used in WorkVibe |
+|:---|:---|:---|
+| [Templates](/reference/upsert-template-v2) (v2) | Create, read, update, and commit template content per channel | Creating and editing templates |
+| [Workflows](/reference/create-update-workflow) (v1) | Create, list, and publish workflows | Creating and publishing workflows |
+| [Notification categories](/reference/create-update-category) (v1) | Read / update the category tree and its default preferences | The Preference Defaults page |
+| [Workspace config](/reference/update-workspace-config) | Workspace-level settings, including `user_inbox_preference_enabled` | Showing inbox in the preference centre |
+| [Create](/reference/create-workspace) / [list workspaces](/reference/list-workspaces) | Creates a workspace, or lists those that exist | Provisioning a new customer |
+
+Workspace [key generation](/reference/create-workspace-api-key) runs on the same Service Token but is not used — those credentials are read from the dashboard.
