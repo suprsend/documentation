@@ -1,0 +1,173 @@
+# Agent 4: learner.
+#   After every docs-agent PR closes: study human edits/requests, propose skill updates.
+#   Weekly: consolidate learnings, report autonomy readiness, post a digest to Slack.
+name: docs-learn
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "43 7 * * 1"            # Mondays 07:43 UTC
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Learn from this PR number (blank = weekly consolidation)"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-learn                 # skill edits must not race each other
+  cancel-in-progress: false
+
+jobs:
+  after-pr:
+    if: >-
+      (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'docs-agent') || contains(github.event.pull_request.labels.*.name, 'docs-local') || contains(github.event.pull_request.labels.*.name, 'postman-update'))) ||
+      (github.event_name == 'workflow_dispatch' && inputs.pr != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: main
+
+      - name: Tell Slack the docs shipped
+        if: github.event.pull_request.merged == true
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+        run: python3 .docs-agent/scripts/notify_slack.py --pr "$PR"
+
+      - name: Collect feedback
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+        run: python3 .docs-agent/scripts/collect_feedback.py --pr "$PR"
+
+      # Metrics go on their own branch: no conflicts between learner PRs, not lost
+      # if a skill PR is closed, and no need to bypass branch protection on main.
+      - name: Save metrics
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+        run: |
+          f=".docs-agent/metrics/prs/${PR}.json"
+          cp "$f" /tmp/m.json
+          if git fetch -q origin docs-agent/metrics 2>/dev/null; then
+            git checkout -qf -B docs-agent/metrics origin/docs-agent/metrics
+          else
+            git checkout -q --orphan docs-agent/metrics && git rm -rqf --cached .
+          fi
+          mkdir -p .docs-agent/metrics/prs && cp /tmp/m.json "$f"
+          git add -f "$f"      # prs/*.json is gitignored on main on purpose
+          git commit -qm "metrics: #${PR}" -m "Docs-Agent: true" && git push -q origin docs-agent/metrics
+          git checkout -qf main
+
+      - name: Learner (Mode A)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.setup.outputs.token }}
+          prompt: |
+            You are the docs learner. Read and follow .claude/skills/docs-learner/SKILL.md, Mode A.
+            PR=${{ env.PR }}. Feedback: .docs-agent/run/feedback.json. Metrics: .docs-agent/run/metrics-line.json (already saved; don't commit metrics).
+            Label for your PR: skill-update. Request reviewers from .docs-agent/config.yml → docs.reviewers.
+          claude_args: |
+            --max-turns 50
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(grep:*),Bash(ls:*),Bash(find:*),Bash(cat:*),Bash(python3:*)"
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+
+      - name: Announce new skill-update PRs in Slack
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+        run: |
+          for n in $(gh pr list --label skill-update --state open --json number,body \
+                     --jq '.[] | select(.body | contains("docs-slack-thread") | not) | .number'); do
+            python3 .docs-agent/scripts/notify_slack.py --announce "$n" --status tested
+          done
+
+  weekly:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr == '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: main
+
+      - name: Pull metrics for the autonomy report
+        run: |
+          git fetch -q origin docs-agent/metrics && git checkout origin/docs-agent/metrics -- .docs-agent/metrics/prs || echo "no metrics yet"
+          git reset -q .docs-agent/metrics/prs || true    # unstage; prs/*.json is gitignored on main
+
+      - name: Learner (Mode B)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.setup.outputs.token }}
+          prompt: |
+            You are the docs learner. Read and follow .claude/skills/docs-learner/SKILL.md, Mode B (weekly consolidation).
+            Write the digest to .docs-agent/run/digest.md.
+          claude_args: |
+            --max-turns 50
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh pr:*),Bash(gh issue:*),Bash(grep:*),Bash(ls:*),Bash(find:*),Bash(cat:*),Bash(python3:*)"
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+
+      - name: Announce new skill-update PRs in Slack
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+        run: |
+          for n in $(gh pr list --label skill-update --state open --json number,body \
+                     --jq '.[] | select(.body | contains("docs-slack-thread") | not) | .number'); do
+            python3 .docs-agent/scripts/notify_slack.py --announce "$n" --status tested
+          done
+
+      - name: Post digest
+        if: hashFiles('.docs-agent/run/digest.md') != ''
+        env:
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+          SLACK_DIGEST_CHANNEL: ${{ vars.SLACK_DIGEST_CHANNEL }}
+        run: python3 .docs-agent/scripts/notify_slack.py --digest .docs-agent/run/digest.md
+
+  # Close out the Slack thread of any agent PR (docs, Postman, skill updates).
+  announce-close:
+    if: >-
+      github.event_name == 'pull_request' && (
+        contains(github.event.pull_request.labels.*.name, 'docs-agent') ||
+        contains(github.event.pull_request.labels.*.name, 'docs-local') ||
+        contains(github.event.pull_request.labels.*.name, 'postman-update') ||
+        contains(github.event.pull_request.labels.*.name, 'skill-update'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: main
+      - env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+        run: python3 .docs-agent/scripts/notify_slack.py --announce ${{ github.event.pull_request.number }} --status ${{ github.event.pull_request.merged && 'merged' || 'closed' }}

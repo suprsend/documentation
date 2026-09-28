@@ -1,0 +1,183 @@
+# Docs agent configuration. Every workflow and script reads this file.
+# Edit it, commit it, done. No secrets in here: those live in GitHub Actions secrets.
+
+docs:
+  repo: suprsend/documentation        # this repo (Mintlify, default branch main)
+  base_branch: main
+  site_url: https://docs.suprsend.com
+  openapi: openapi.yaml               # drives every reference/* page with `openapi:` frontmatter
+  reviewers: [Annjali95]   # SETUP: your GitHub username(s), requested on every docs PR
+  bot_login: suprsend-docs-bot           # SETUP: GitHub login of the docs bot account (owner of DOCS_AGENT_TOKEN)
+  commit_trailer: "Docs-Agent: true"  # every agent commit carries this trailer
+  labels:
+    brief: docs-brief                 # issue created by the planner
+    ready: "docs-brief:ready"         # triggers the executor
+    needs_info: "docs-brief:needs-info"
+    agent_pr: docs-agent              # every PR the executor opens
+    fix: "docs-agent:fix"             # reviewer asks executor to revise
+    needs_human: "docs-agent:needs-human"
+    skill_update: skill-update        # PRs opened by the learner
+    postman: postman-update           # PRs opened by the Postman agent
+    local: docs-local                 # PRs a human wrote locally from a brief (reviewer tests them too)
+    brief_local: "docs-brief:local"   # brief is being written by a human; the executor skips it
+
+# Public code repos in github.com/suprsend that ship something the docs describe.
+# Each one gets .github/workflows/notify-docs.yml (see code-repo-template/).
+# watch_paths "*" = everything except ignore_paths. Narrow per repo if a repo is noisy.
+code_repos:
+  - {repo: suprsend/suprsend-node-sdk,       area: sdk-node,        watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-py-sdk,         area: sdk-python,      watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-go,             area: sdk-go,          watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-java-sdk,       area: sdk-java,        watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-web-sdk,        area: sdk-web,         watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-react-sdk,      area: sdk-react,       watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-react-core,     area: sdk-react-core,  watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-web-components, area: sdk-web-components, watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-android-sdk,    area: sdk-android,     watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-swift-sdk,      area: sdk-ios,         watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-rn-sdk,         area: sdk-react-native, watch_paths: ["*"]}
+  - {repo: suprsend/suprsend-flutter-sdk,    area: sdk-flutter,     watch_paths: ["*"]}
+  - {repo: suprsend/cli,                     area: cli-mcp,         watch_paths: ["*"]}
+  - {repo: suprsend/schema,                  area: schema,          watch_paths: ["*"]}   # workflow/template JSON schemas: source for node reference pages
+  - {repo: suprsend/skills,                  area: agent-skills,    watch_paths: ["*"]}
+  - {repo: suprsend/agents-sdk-py,           area: agent-sdk,       watch_paths: ["*"]}
+
+commit_filters:
+  # Commits whose message contains any of these are skipped.
+  skip_markers: ["[skip docs]", "[no docs]", "chore(deps)", "ci:", "test:"]
+  # Files under these never count as a docs-relevant change.
+  ignore_paths: ["test/", "tests/", "__tests__/", "spec/", "*_test.go", "*.test.ts", "*.test.js",
+                 "*.spec.ts", ".github/", "example/", "examples/", "sample/", "*.lock",
+                 "package-lock.json", "yarn.lock", "go.sum", ".gitignore"]
+  max_diff_chars: 60000               # per push, keeps the planner's input bounded
+  sweep_lookback_hours: 26            # scheduled safety-net sweep
+
+slack:
+  lookback_hours: 26                  # overlap with the 2h cron is intentional; dedupe handles it
+  flag_emoji: memo                    # anyone reacting :memo: forces a message into the planner
+  workspaces:
+    - name: internal                  # SuprSend team workspace
+      token_secret: SLACK_INTERNAL_BOT_TOKEN
+      channels:
+        - {id: C09BPA6J5QF, name: documentation,             mode: all, reply_in_thread: true}
+        - {id: C025KL4C8E7, name: all-team,                  mode: all, reply_in_thread: false}
+        - {id: C08F3LRRXT8, name: what-is-our-differentiator, mode: all, reply_in_thread: false}
+        - {id: C066PQ22JG6, name: deployment-notifications,  mode: all, reply_in_thread: false, include_bots: true}  # deploy posts come from a bot
+        - {id: C09CR7B6Q04, name: customer-feedback,         mode: all, reply_in_thread: false, external: true}   # may quote customers: redact
+    - name: community                 # SuprSend community workspace
+      token_secret: SLACK_COMMUNITY_BOT_TOKEN
+      external: true                  # redact everything, never reply
+      # Every public channel the community bot has been added to. Invite the bot to a
+      # channel to start watching it; remove it to stop. No IDs to maintain here.
+      auto_channels: true
+      default_mode: all
+
+  # Every PR the agents open is announced here, with one thread per PR that follows it
+  # (tested → needs your review → merged/closed).
+  announce:
+    workspace: internal
+    channel: C09BPA6J5QF              # #documentation
+    mention: [U02UT626XAS]            # Slack user IDs pinged when a PR is ready for review
+    kinds: [docs, local, postman, skill_update]
+
+gmail:
+  mailbox: support@suprsend.com
+  # Gmail search query. Keep it narrow: resolved threads carry the real answer.
+  query: 'label:support-resolved -label:docs-agent-seen'
+  seen_label: docs-agent-seen         # the collector adds this after reading a thread
+  max_threads: 30
+
+# Anonymisation applied to Slack community + email before any model sees them.
+redaction:
+  emails: true
+  phones: true
+  api_keys: true                      # anything that looks like a key/secret/token
+  keep_domains: [suprsend.com]
+
+planner:
+  # Shadow mode for the first 2 weeks: 1.01 means every brief waits for a human to add
+  # the docs-brief:ready label. Drop to 0.75 once briefs look right (SETUP.md step 9).
+  auto_ready_min_confidence: 1.01
+  max_briefs_per_run: 8
+
+reviewer:
+  max_rounds: 2                       # reviewer→executor loops before a human is pulled in
+  staging:
+    api_base: https://hub.suprsend.com
+    # Secrets used by the snippet runner (set in GitHub → Settings → Secrets):
+    #   SUPRSEND_STAGING_WORKSPACE_KEY, SUPRSEND_STAGING_WORKSPACE_SECRET (SDK samples),
+    #   SUPRSEND_STAGING_API_KEY (REST samples, Bearer), SUPRSEND_STAGING_SERVICE_TOKEN (management API)
+    # The staging workspace must have Test Mode on and only verified channels.
+    test_user_distinct_id: docs-agent-test-user
+    test_workflow_slug: docs-agent-smoke-test
+    test_tenant_id: docs-agent-tenant
+
+browser:
+  # Real-browser runs against the staging dashboard: screenshots for docs (capture) and
+  # checking that documented click-paths still work (verify). Flows: .docs-agent/flows/
+  dashboard_url: https://app.suprsend.com
+  allowed_origins:                    # a flow may only navigate to these
+    - https://app.suprsend.com
+    - https://hub.suprsend.com
+  viewport: {width: 1440, height: 900}
+  device_scale_factor: 2              # crisp screenshots on retina screens
+  step_timeout_ms: 15000
+  diff_threshold: 0.02                # >2% of pixels changed → screenshot is stale
+  # Auth, in order of preference:
+  #   1. DASHBOARD_STORAGE_STATE secret: base64 of a Playwright storageState JSON for a
+  #      dedicated staging test user (refresh it when the session expires).
+  #   2. DASHBOARD_EMAIL + DASHBOARD_PASSWORD secrets + the login steps below.
+  # Check the selectors against the real login page before relying on option 2.
+  login_steps:
+    - goto: /
+    - fill: {target: {label: "Email"}, value: "${env:DASHBOARD_EMAIL}"}
+    - fill: {target: {label: "Password"}, value: "${env:DASHBOARD_PASSWORD}"}
+    - click: {role: button, name: "Log in"}
+    - wait_for: {url: "**/en/**"}
+  # Hidden before every screenshot (chat widgets, cookie banners, "what's new" popups).
+  hide_selectors: ["#intercom-container", ".intercom-lightweight-app", "[id^=hs-]"]
+  # Always masked in screenshots, on top of each flow's own masks.
+  mask_selectors: ["[data-sensitive]", "input[type=password]"]
+  # Values flows can use as ${name}. The staging workspace should be seeded with
+  # persona data (e.g. a "Routewise Demo" tenant) so screenshots match docs examples.
+  vars:
+    workspace: staging
+    distinct_id: docs-agent-test-user
+    workflow_slug: docs-agent-smoke-test
+    tenant_id: docs-agent-tenant
+  docs_preview_port: 3000             # `mintlify dev` for rendered-page checks
+
+postman:
+  # From docs.suprsend.com/reference/postman-collection. The API key must belong to a
+  # member of the "suprsend" Postman team with edit rights on this collection.
+  collection_uid: "27786422-d77a13c1-8f59-406d-9669-078a10d52521"
+  file: postman/collection.json       # the collection, versioned in this repo
+  # Docs paths that mean "the API surface changed". A push to main touching these
+  # starts the Postman agent.
+  watch_paths: ["reference/**", "openapi.yaml"]
+  # Collection variables → where the value comes from at test time. Values are never
+  # written into the collection; newman gets them from a generated environment file.
+  environment:
+    base_url: "https://hub.suprsend.com"
+    workspace_key: "env:SUPRSEND_STAGING_WORKSPACE_KEY"
+    workspace_secret: "env:SUPRSEND_STAGING_WORKSPACE_SECRET"
+    api_key: "env:SUPRSEND_STAGING_API_KEY"          # Bearer key (Developers → API Keys)
+    service_token: "env:SUPRSEND_STAGING_SERVICE_TOKEN"  # management API (Account Settings → Service Tokens)
+    distinct_id: "docs-agent-test-user"
+    workflow_slug: "docs-agent-smoke-test"
+    tenant_id: "docs-agent-tenant"
+
+autonomy:
+  # The learner recommends flipping these once the evidence is there
+  # (see docs-learner skill → "Graduation"). Humans flip them.
+  auto_merge_skill_updates: false
+  auto_merge_docs:
+    changelog: false
+    sdk_reference: false
+    clarification: false
+    concept: false
+    implementation_guide: false
+    postman: false
+    screenshot_refresh: false          # usually the first to graduate
+  graduation_window: 10               # last N merged PRs of a type considered
+  graduation_max_human_edit_ratio: 0.05

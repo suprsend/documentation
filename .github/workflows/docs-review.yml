@@ -1,0 +1,165 @@
+# Agent 3: reviewer + tester.
+# Runs every changed code sample against the staging workspace, checks facts and
+# clarity, posts a verdict, and either sends the PR back to the executor or to a human.
+name: docs-review
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write    # GITHUB_TOKEN for the reviewer step: read + comment only
+
+jobs:
+  review:
+    # Initial review when the PR gets the docs-agent label; re-review on every push.
+    # Other label events (fix/needs-human) must not retrigger, or we'd loop.
+    if: >-
+      (contains(github.event.pull_request.labels.*.name, 'docs-agent') || contains(github.event.pull_request.labels.*.name, 'docs-local')) &&
+      (github.event.action == 'synchronize' || github.event.label.name == 'docs-agent' || github.event.label.name == 'docs-local')
+    # Job-level so skipped label events (fix/needs-human) don't cancel a running review.
+    concurrency:
+      group: docs-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true      # a newer push supersedes an in-flight review
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: docs-staging       # holds the staging secrets; add required reviewers here if you want a gate
+    steps:
+      - uses: actions/checkout@v4       # shared action from base, never from the PR head
+        with: {sparse-checkout: .github/actions, ref: "${{ github.event.pull_request.base.sha }}"}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+
+      - name: Announce the new PR in Slack
+        if: github.event.action == 'labeled'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+        run: python3 .docs-agent/scripts/notify_slack.py --announce ${{ github.event.pull_request.number }} --status opened
+
+      # The PR is agent-written. Its pipeline code must not be trusted: fail if it
+      # touches pipeline paths, and run scripts/skills/config from the base branch.
+      - name: Guard pipeline files
+        run: |
+          base=origin/${{ github.event.pull_request.base.ref }}
+          # Flows (.docs-agent/flows/) are data the executor may add; everything else is pipeline code.
+          if git diff --name-only "$base"...HEAD | grep -E '^(\.github/|\.docs-agent/|\.claude/)' | grep -vE '^\.docs-agent/flows/'; then
+            echo "::error::docs-agent PRs may not modify pipeline files"; exit 1
+          fi
+          git checkout "$base" -- .docs-agent .claude .github
+          git checkout HEAD -- .docs-agent/flows 2>/dev/null || true   # keep the PR's flows, run by main's runner
+          mkdir -p .docs-agent/run
+
+      - name: Docs tooling (Mintlify CLI + Vale, as the repo uses them)
+        run: |
+          npm ci --silent --no-audit --no-fund
+          pip install --quiet vale && vale sync >/dev/null
+      - name: Install SDKs used by samples
+        working-directory: .docs-agent/tester
+        run: |
+          npm install --silent
+          pip install --quiet -r requirements.txt
+
+      - name: Link check + Vale on changed pages
+        run: |
+          npx mintlify broken-links > .docs-agent/run/broken-links.txt 2>&1 || true
+          base=origin/${{ github.event.pull_request.base.ref }}
+          pages=$(git diff --name-only --diff-filter=AM "$base"...HEAD -- '*.mdx' | grep -vE '^\.' || true)
+          if [ -n "$pages" ]; then vale --output=JSON $pages > .docs-agent/run/vale.json 2>/dev/null || true; else echo '{}' > .docs-agent/run/vale.json; fi
+
+      - name: Run code samples against staging
+        env:
+          SUPRSEND_STAGING_WORKSPACE_KEY: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_KEY }}
+          SUPRSEND_STAGING_WORKSPACE_SECRET: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_SECRET }}
+          SUPRSEND_STAGING_SERVICE_TOKEN: ${{ secrets.SUPRSEND_STAGING_SERVICE_TOKEN }}
+          SUPRSEND_STAGING_API_KEY: ${{ secrets.SUPRSEND_STAGING_API_KEY }}
+        run: python3 .docs-agent/scripts/run_snippets.py --base origin/${{ github.event.pull_request.base.ref }}
+
+      - name: Install browser
+        working-directory: .docs-agent/browser
+        run: npm install --silent && npx playwright install --with-deps chromium
+
+      # Real browser, staging dashboard: every documented click-path on the changed pages
+      # still works, and screenshots in the PR match what the dashboard shows today.
+      - name: Run dashboard flows for changed pages
+        continue-on-error: true      # a browser/login problem must not skip the review
+        env:
+          DASHBOARD_STORAGE_STATE: ${{ secrets.DASHBOARD_STORAGE_STATE }}
+          DASHBOARD_EMAIL: ${{ secrets.DASHBOARD_EMAIL }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+        run: |
+          base=origin/${{ github.event.pull_request.base.ref }}
+          pages=$(git diff --name-only --diff-filter=AM "$base"...HEAD -- '*.mdx' '*.md' | grep -vE '^\.' || true)
+          flows=$(git diff --name-only --diff-filter=AM "$base"...HEAD -- .docs-agent/flows | grep -E '\.ya?ml$' || true)
+          if [ -n "$flows" ]; then
+            node .docs-agent/browser/run_flow.mjs --mode verify $flows || true
+            [ -f .docs-agent/run/browser.json ] && mv .docs-agent/run/browser.json .docs-agent/run/browser-changed-flows.json || true
+          fi
+          if [ -n "$pages" ]; then node .docs-agent/browser/run_flow.mjs --mode verify --page $pages || true; fi
+          [ -f .docs-agent/run/browser.json ] || echo '[]' > .docs-agent/run/browser.json
+
+      # The docs as a reader sees them: local Mintlify preview, desktop + mobile.
+      - name: Render changed pages in a browser
+        continue-on-error: true
+        run: |
+          base=origin/${{ github.event.pull_request.base.ref }}
+          pages=$(git diff --name-only --diff-filter=AM "$base"...HEAD -- '*.mdx' '*.md' | grep -vE '^\.' || true)
+          # Reference pages are generated from openapi.yaml: render the ones whose operation changed.
+          pages="$pages $(python3 .docs-agent/scripts/openapi_pages.py "$base" 2>/dev/null || true)"
+          [ -z "$(echo $pages)" ] && exit 0
+          npx mintlify dev --port 3000 > .docs-agent/run/mint-dev.log 2>&1 &
+          for i in $(seq 1 90); do curl -sf http://localhost:3000 >/dev/null && break; sleep 2; done
+          node .docs-agent/browser/render_check.mjs --base http://localhost:3000 $pages || true
+
+      - name: Reviewer
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You are the docs reviewer and tester. Read and follow .claude/skills/docs-reviewer/SKILL.md.
+            PR_NUMBER=${{ github.event.pull_request.number }}
+            Snippet results: .docs-agent/run/snippets.json. Link check: .docs-agent/run/broken-links.txt. Vale (house style linter, errors only): .docs-agent/run/vale.json.
+            Browser results: .docs-agent/run/browser.json (flows for changed pages), .docs-agent/run/browser-changed-flows.json (flows the PR changed, if any),
+            .docs-agent/run/render.json (rendered pages). Screenshots are under .docs-agent/run/browser/ and .docs-agent/run/render/ — open them with Read.
+            Staging API base is in $SUPRSEND_API_BASE. Write .docs-agent/run/review.json, then post your PR comment.
+          claude_args: |
+            --max-turns 60
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Glob,Grep,Bash(curl:*),Bash(node:*),Bash(python3:*),Bash(git clone --depth 50 https://github.com/suprsend/:*),Bash(git diff:*),Bash(git log:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(grep:*),Bash(ls:*),Bash(cat:*)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUPRSEND_API_BASE: https://hub.suprsend.com
+          SUPRSEND_STAGING_WORKSPACE_KEY: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_KEY }}
+          SUPRSEND_STAGING_WORKSPACE_SECRET: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_SECRET }}
+          SUPRSEND_STAGING_SERVICE_TOKEN: ${{ secrets.SUPRSEND_STAGING_SERVICE_TOKEN }}
+          SUPRSEND_STAGING_API_KEY: ${{ secrets.SUPRSEND_STAGING_API_KEY }}
+
+      - name: Act on verdict
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+        run: python3 .docs-agent/scripts/review_gate.py ${{ github.event.pull_request.number }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: |
+            .docs-agent/run/review.json
+            .docs-agent/run/broken-links.txt
+            .docs-agent/run/vale.json
+            .docs-agent/run/browser*.json
+            .docs-agent/run/browser/
+            .docs-agent/run/render.json
+            .docs-agent/run/render/
+          retention-days: 30
