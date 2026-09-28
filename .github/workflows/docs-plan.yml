@@ -1,0 +1,108 @@
+# Agent 1: monitor + plan.
+# Collects new signals (code pushes, Slack, support email), asks the planner which need
+# docs, and files each as a `docs-brief` issue. Ready briefs start the executor.
+name: docs-plan
+
+on:
+  repository_dispatch:
+    types: [code-pushed]            # sent by notify-docs.yml in each code repo
+  schedule:
+    - cron: "17 */2 * * 1-5"        # Slack + email + a commit sweep, every 2h on weekdays
+    - cron: "17 9 * * 0,6"          # once a day at weekends
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read            # GITHUB_TOKEN for the planner step (it only reads); scripts use DOCS_AGENT_TOKEN
+
+concurrency:
+  group: docs-plan                  # one planner at a time so dedupe stays correct
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+
+      - name: Collect commits
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SOURCE_REPO: ${{ github.event.client_payload.repo }}
+          BEFORE: ${{ github.event.client_payload.before }}
+          AFTER: ${{ github.event.client_payload.after }}
+        run: python3 .docs-agent/scripts/collect_commits.py
+
+      - name: Collect Slack
+        if: github.event_name != 'repository_dispatch'
+        continue-on-error: true      # a Slack outage must not block commit planning
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+          SLACK_COMMUNITY_BOT_TOKEN: ${{ secrets.SLACK_COMMUNITY_BOT_TOKEN }}
+        run: python3 .docs-agent/scripts/collect_slack.py
+
+      - name: Collect support email
+        if: github.event_name != 'repository_dispatch'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+        run: python3 .docs-agent/scripts/collect_gmail.py
+
+      - name: Anything new?
+        id: count
+        run: |
+          n=$(python3 -c "import json,glob;print(sum(len(json.load(open(f))) for f in glob.glob('.docs-agent/run/signals-*.json')))")
+          echo "signals=$n" >> "$GITHUB_OUTPUT"
+          echo "New signals: $n"
+
+
+      - name: Planner
+        if: steps.count.outputs.signals != '0'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You are the docs planner. Read and follow .claude/skills/docs-planner/SKILL.md exactly.
+            New signals are in .docs-agent/run/signals-*.json.
+            Write your output to .docs-agent/run/briefs.json (schema: .docs-agent/schemas/brief.schema.json).
+            Do not create issues yourself; a script does that from your file.
+          claude_args: |
+            --max-turns 60
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Glob,Grep,Bash(git clone --depth 50 https://github.com/suprsend/:*),Bash(git -C /tmp/src/:*),Bash(gh issue list:*),Bash(gh issue view:*),Bash(grep:*),Bash(ls:*)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: File briefs + reply in Slack
+        if: steps.count.outputs.signals != '0'
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+          SLACK_COMMUNITY_BOT_TOKEN: ${{ secrets.SLACK_COMMUNITY_BOT_TOKEN }}
+        run: python3 .docs-agent/scripts/create_briefs.py
+
+      - name: Mark emails as seen
+        if: steps.count.outputs.signals != '0' && github.event_name != 'repository_dispatch'
+        env:
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+        run: python3 .docs-agent/scripts/collect_gmail.py --mark-seen
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plan-run-${{ github.run_id }}
+          path: .docs-agent/run/
+          retention-days: 14
