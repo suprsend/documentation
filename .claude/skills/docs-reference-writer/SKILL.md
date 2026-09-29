@@ -1,6 +1,6 @@
 ---
 name: docs-reference-writer
-description: Specialist writing lane for SuprSend reference docs — REST API reference, SDK method pages, CLI/MCP command reference, and schema docs (workflow JSON, template schemas, trigger payloads). Used by the docs executor for any brief page whose doc_type is api_reference, sdk, cli, mcp or schema. Focus is completeness and exactness: every field described, every variant exampled, every example verified.
+description: "Specialist writing lane for SuprSend reference docs — REST API reference, SDK method pages, CLI/MCP command reference, and schema docs (workflow JSON, template schemas, trigger payloads). Used by the docs executor for any brief page whose doc_type is api_reference, sdk, cli, mcp or schema. Focus is completeness and exactness: every field described, every variant exampled, every example verified."
 ---
 
 # Reference writer

@@ -15,6 +15,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import subprocess
 
 from common import AGENT_DIR, RUN_DIR, config, gh
 
@@ -86,14 +87,20 @@ def main():
     total_lines = max(pr["additions"] + pr["deletions"], 1)
     merged = pr.get("mergedAt") is not None
     labels = {l["name"] for l in pr.get("labels", [])}
-    category = "postman" if CFG["docs"]["labels"]["postman"] in labels else \
+    local = CFG["docs"]["labels"].get("local") in labels
+    category = "local" if local else "postman" if CFG["docs"]["labels"]["postman"] in labels else \
         ((brief or {}).get("json") or {}).get("doc_category", "unknown")
     opened = dt.datetime.fromisoformat(pr["createdAt"].replace("Z", "+00:00"))
     closed = dt.datetime.fromisoformat((pr.get("closedAt") or pr["createdAt"]).replace("Z", "+00:00"))
 
+    full_diff = ""
+    if local:  # for hand-written PRs the whole diff is the lesson
+        full_diff = subprocess.run(["gh", "pr", "diff", str(n)], capture_output=True, text=True).stdout[:80000]
     feedback = {
         "pr": {k: pr[k] for k in ("number", "title", "url", "state")},
         "merged": merged,
+        "written_by_human": local,     # the whole PR is a human's version of the brief
+        "human_diff_full": full_diff or None,
         "brief": brief,
         "human_edit_diff": human_diff[:60000],
         "change_requests": requests,

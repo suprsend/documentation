@@ -90,6 +90,14 @@ never has to guess a parameter name, a default, or which page to edit.
 - Set `changelog: true` for new features, breaking changes and deprecations.
 - `ask`: who can answer open questions (commit author, thread owner).
 
+## Local mode
+
+When run by `da` on the owner's laptop, open briefs are files in
+`.docs-agent/local/state/briefs/*.json` instead of GitHub issues; merge a signal into one
+with `merged_into_existing[].brief: "b004"`. A `manual_request` signal comes from the docs
+owner (often improving existing docs, not a product change): never skip it, treat its text
+as the intent, and still verify every fact and find every affected page.
+
 ## Never
 
 - Never invent facts to fill a brief. Missing facts → `open_questions`.

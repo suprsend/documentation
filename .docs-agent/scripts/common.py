@@ -19,7 +19,12 @@ RUN_DIR.mkdir(parents=True, exist_ok=True)
 
 def config() -> dict:
     with open(AGENT_DIR / "config.yml") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    # bot_login can live in the repo variable DOCS_AGENT_LOGIN (workflows export it).
+    bl = str(cfg["docs"].get("bot_login") or "")
+    if not bl or bl.startswith("TODO") or bl == "DOCS_AGENT_LOGIN":
+        cfg["docs"]["bot_login"] = os.environ.get("DOCS_AGENT_LOGIN", "")
+    return cfg
 
 
 # ---------- HTTP ----------
@@ -98,11 +103,31 @@ def write_signals(kind: str, items: list[dict]) -> Path:
     return path
 
 
+LOCAL = os.environ.get("DOCS_AGENT_MODE") == "local"     # set by .docs-agent/local/da
+STATE_DIR = AGENT_DIR / "local" / "state"                  # gitignored; local mode only
+
+
+def local_ledger() -> dict:
+    path = STATE_DIR / "ledger.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def remember_sources(entries: dict[str, str]):
+    """Local mode: record source_id → what happened to it (brief id / skipped reason)."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    led = local_ledger()
+    led.update(entries)
+    (STATE_DIR / "ledger.json").write_text(json.dumps(led, indent=2, ensure_ascii=False))
+
+
 def known_source_ids() -> set[str]:
     """Source IDs already turned into a brief (open or closed), for dedupe.
 
-    Briefs embed `<!-- source-id: ... -->` markers in the issue body.
+    GitHub mode: briefs embed `<!-- source-id: ... -->` markers in the issue body.
+    Local mode: .docs-agent/local/state/ledger.json.
     """
+    if LOCAL:
+        return set(local_ledger())
     label = config()["docs"]["labels"]["brief"]
     try:
         raw = gh("issue", "list", "--label", label, "--state", "all",

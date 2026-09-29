@@ -21,13 +21,14 @@ MIN_CONF = CFG["planner"]["auto_ready_min_confidence"]
 def ensure_labels():
     colors = {L["brief"]: "0E8A16", L["ready"]: "1D76DB", L["needs_info"]: "FBCA04",
               L["agent_pr"]: "5319E7", L["fix"]: "D93F0B", L["needs_human"]: "B60205",
-              L["skill_update"]: "C5DEF5", L["postman"]: "0B7285"}
+              L["skill_update"]: "C5DEF5", L["postman"]: "0B7285",
+              L["local"]: "BFDADC", L["brief_local"]: "BFDADC"}
     for name, color in colors.items():
         gh("label", "create", name, "--force", "--color", color)
 
 
 def render(b: dict) -> str:
-    src = "\n".join(f"- [{s['source_id']}]({s['url']}){' — ' + s['note'] if s.get('note') else ''}"
+    src = "\n".join(f"- [{s['source_id']}]({s.get('url', 'local')}){' — ' + s['note'] if s.get('note') else ''}"
                     f"\n  <!-- source-id: {s['source_id']} -->" for s in b["sources"])
     pages = "\n".join(f"| `{p['path']}` | {p['action']} | {p.get('doc_type', '')} | {p['what']} |"
                       for p in b["pages"])

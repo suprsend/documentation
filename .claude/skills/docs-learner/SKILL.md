@@ -21,6 +21,18 @@ schema pages → reference writer; concept/guide/changelog pages → guide write
 `postman/**` → Postman agent. A lesson that shows up in both lanes belongs in
 `suprsend-docs-writer`.
 
+### 0. Hand-written PRs (`written_by_human: true`)
+
+The author wrote this PR themselves from a brief (label `docs-local`), so there's no agent
+draft to compare. Treat the merged PR as a **worked example** of what good looks like:
+- Compare `human_diff_full` with the brief. What did they do that the brief or the
+  writing skills wouldn't have produced? Structure, which persona and example, what they
+  left out, how they phrased steps, which pages they also touched.
+- Anything the brief got wrong (missing page, wrong fact, wrong persona) is a planner lesson.
+- Patterns in their writing go to `docs-reference-writer` / `docs-guide-writer` /
+  `suprsend-docs-writer` as candidates (rules once seen twice, as usual).
+- Don't count it toward autonomy metrics; the workflow already excludes it.
+
 ### 1. Extract lessons
 
 Go through, in this order:
@@ -106,6 +118,14 @@ If there are no rules and no candidates, don't open a PR. Exit with a one-line s
 5. Write `.docs-agent/run/digest.md` (≤15 lines): PRs closed, median human edit ratio
    by category, top 3 lessons, graduation recommendations. The workflow posts it to Slack.
 6. Open one PR labelled `skill-update` with all consolidation edits.
+
+## Local mode
+
+When run by `da learn` or `/doc-agent`, feedback comes from the current branch before it is
+pushed: commits without the trailer are the owner's edits, and `change_requests` are what they
+asked for. Edit the skill files but don't commit: `da skills-pr` puts your edits in their own
+`skill-update` PR from `main`, so docs PRs stay docs-only and GitHub stays the source of truth.
+Write `.docs-agent/run/learn-summary.md` in the PR body format above; it becomes the PR body.
 
 ## Never
 
