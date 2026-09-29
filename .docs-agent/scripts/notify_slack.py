@@ -57,14 +57,20 @@ def reply_to_source(sig: dict, text: str):
 
 
 def notify_pr_merged(pr: int):
-    data = json.loads(gh("pr", "view", str(pr), "--json", "body,url,title"))
+    data = json.loads(gh("pr", "view", str(pr), "--json", "body,url,title,files"))
+    files = [f["path"] for f in data.get("files", [])]
+    pages = [f for f in files if f.endswith((".mdx", ".md")) or f == "openapi.yaml"] or files
+    listing = "\n".join(f"• `{p}`" for p in pages)
     issues = re.findall(r"(?:Closes|Fixes|Resolves) #(\d+)", data["body"] or "")
     for n in issues:
         body = json.loads(gh("issue", "view", n, "--json", "body"))["body"]
         for sid in re.findall(r"<!-- source-id: (slack:[^ ]+) -->", body):
             _, ws, ch, ts = sid.split(":", 3)
             if _channel_cfg(ws, ch).get("reply_in_thread"):
-                post(ws, ch, f"Docs updated: {data['title']} — {data['url']}", ts)
+                text = f"Docs updated: {data['title']} — {data['url']}"
+                if listing:
+                    text += f"\nPages:\n{listing}"
+                post(ws, ch, text, ts)
 
 
 THREAD = re.compile(r"<!-- docs-slack-thread: (\S+) (\S+) -->")
