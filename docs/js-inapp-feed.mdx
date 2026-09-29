@@ -17,12 +17,15 @@ interface IFeedOptions {
   pageSize?: number;
   stores?: IStore[] | null;
   host?: { socketHost?: string; apiHost?: string };
+  reachability?: boolean;
 }
 ```
 
 `tenantId` defaults to the active tenant set in [identify](/docs/integrate-javascript-sdk#authenticate-user) or [changeTenant](/docs/integrate-javascript-sdk#change-active-tenant), else the `default` tenant. Passing it here overrides the active tenant for that feed instance. Already running feed instances keep the tenant they were initialized with when `changeTenant` is called — re-initialize the feed to reflect the new tenant.
 
 If you are passing `tenant_id` in feed, make sure to pass scope key while creating [userToken](/docs/client-authentication#2-creating-signed-user-jwt-token) else error will be thrown due to scope mismatching.
+
+`reachability` defaults to `false`. Set it to `true` to track whether the feed is working for this user. See [Tracking reachability](#tracking-reachability).
 
 ## Feed client
 
@@ -77,6 +80,102 @@ feedClient.emitter.on(
     // your logic to trigger toast with new notification data
   }
 );
+```
+
+### Tracking reachability
+
+Reachability tells you whether the feed is working for this user right now. It combines three checks into one status: the browser is online, the feed socket is live, and the feed API is reachable. Use it to tell users when new notifications may be missing.
+
+It's off by default. Turn it on when you create the feed client:
+
+```typescript norun
+const feedClient = suprSendClient.feeds.initialize({ reachability: true });
+```
+
+Listen for changes with the `feed.reachability_change` event:
+
+```typescript norun
+feedClient.emitter.on(
+  "feed.reachability_change",
+  (reachability: IFeedReachability) => {
+    // reachability.status is ONLINE | CONNECTING | DEGRADED | AUTH_ERROR | OFFLINE | UNKNOWN
+  }
+);
+```
+
+You can also read the current value at any time with `feedClient.reachability`. It's `undefined` when you didn't pass `reachability: true`.
+
+The event fires only when the overall `status`, `socket.status`, `api.status` or `api.authError` changes. It doesn't fire on every request or reconnect attempt.
+
+```typescript
+interface IFeedReachability {
+  status: ReachabilityStatus;
+  socket: {
+    status: ChannelStatus;
+    lastConnectedAt?: number;
+    lastDisconnectedAt?: number;
+    disconnectReason?: string;
+    reconnectAttempts?: number;
+  };
+  api: {
+    status: ChannelStatus;
+    lastSuccessAt?: number;
+    lastFailureAt?: number;
+    authError?: boolean;
+  };
+  lastChangedAt: number;
+}
+```
+
+Timestamps are epoch milliseconds. `lastChangedAt` updates only when the event fires. Each value is a frozen object, so read from it but don't modify it.
+
+`ReachabilityStatus` and `ChannelStatus` are exported from `@suprsend/web-sdk`. Each channel (`socket` and `api`) is `UNKNOWN`, `CONNECTING`, `UP` or `DOWN`. A channel stays `UNKNOWN` until it's used, and an `UNKNOWN` channel is ignored.
+
+The SDK picks the first `status` in this table that matches:
+
+| `status`     | Meaning                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `OFFLINE`    | The browser reports no internet connection.                                                               |
+| `AUTH_ERROR` | The browser is online, but the API answered the initial feed load with `401` or `403`.                    |
+| `DEGRADED`   | The browser is online and at least one channel is `DOWN`.                                                 |
+| `CONNECTING` | No channel is `DOWN` and at least one is `CONNECTING`.                                                    |
+| `ONLINE`     | The browser is online and every channel in use is `UP`.                                                   |
+| `UNKNOWN`    | The browser is online but neither channel has been used yet (`initializeSocketConnection` and `fetch` not called). |
+
+#### How each channel is measured
+
+- **Browser:** read from `navigator.onLine` and the window `online` and `offline` events. With no `window` (for example, during server-side rendering), the browser counts as online.
+- **Socket:** `CONNECTING` when you call `initializeSocketConnection()`. It turns `UP` only after the server confirms the feed joined its room. If that confirmation doesn't arrive within 5 seconds, it turns `DOWN`. It also turns `DOWN` after more than 10 reconnect attempts. Disconnects caused by `feedClient.remove()` are ignored.
+- **API:** measured on the first page fetch only. It's `CONNECTING` when `fetch()` starts for an identified user, `DOWN` on a network error, and `UP` otherwise. A `401` or `403` on this initial load sets `api.authError` to `true` and the status to `AUTH_ERROR`. Later page fetches don't change it.
+
+#### Example: show a connection banner
+
+Proofly, a creative review app, shows `comment_added` and `approval_requested` notifications in a custom feed. Reviewers on flaky conference Wi-Fi were missing new comments without knowing it. This banner tells them when to reload.
+
+```javascript norun
+import { SuprSend } from "@suprsend/web-sdk";
+
+const suprSendClient = new SuprSend("YOUR_PUBLIC_API_KEY");
+await suprSendClient.identify("YOUR_DISTINCT_ID");
+
+const feedClient = suprSendClient.feeds.initialize({ reachability: true });
+const banner = document.getElementById("proofly-feed-banner");
+
+const messages = {
+  OFFLINE: "You're offline. Reload the page to see new comments when you're back.",
+  CONNECTING: "Reconnecting to comments…",
+  DEGRADED: "Connection issue. New comments may be delayed.",
+  AUTH_ERROR: "We couldn't load your comments. Sign in again to refresh them.",
+};
+
+feedClient.emitter.on("feed.reachability_change", (reachability) => {
+  const message = messages[reachability.status];
+  banner.textContent = message || "";
+  banner.hidden = !message;
+});
+
+feedClient.initializeSocketConnection();
+feedClient.fetch();
 ```
 
 ### Removing feed
