@@ -2613,6 +2613,90 @@ components:
           nullable: true
           description: Optional notes for operators.
 
+    ManagementWorkspaceKey:
+      type: object
+      description: |
+        A workspace key/secret pair used to authenticate backend SDKs (`Suprsend(workspace_key, workspace_secret)`).
+
+        Unlike `ws_api_key`, both `key` and `secret` are returned in full plain text on every response - list, detail, create and rotate. Treat every response as sensitive: do not log it, do not surface it to browsers, and store the secret only in an environment variable or secrets manager.
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the workspace key. Format is `ws_key_` followed by a 26-character ULID.
+          example: "ws_key_01ABCDEFGHJKMNPQRSTVWXYZ0"
+        name:
+          type: string
+          description: Label for the workspace key. Unique across the workspace's ws_key records.
+          example: "ops-cli"
+        key:
+          type: string
+          description: |
+            Full workspace key value. This is the `workspace_key` passed to backend SDKs when authenticating (`Suprsend(workspace_key, workspace_secret)`). Returned in plain text on every response.
+
+            Rotation does not change `key` - only `secret` is regenerated.
+          example: "SS.WSK.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        secret:
+          type: string
+          description: |
+            Full workspace secret. This is the `workspace_secret` passed to backend SDKs when authenticating (`Suprsend(workspace_key, workspace_secret)`). Returned in plain text on every response, not masked and not "returned once".
+
+            Anyone with read access to this response can authenticate as this workspace. Handle every list, detail, create and rotate response as sensitive data.
+          example: "SS.WSS.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        is_default:
+          type: boolean
+          description: Whether this is the workspace's default key/secret pair. The default record cannot be deleted; it can be rotated.
+        is_active:
+          type: boolean
+          description: Whether this workspace key can authenticate requests.
+        is_deleted:
+          type: boolean
+          description: Whether this workspace key has been deleted.
+        allowed_domains:
+          type: array
+          items:
+            type: string
+          description: Array of domain strings associated with the workspace key.
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the workspace key was created.
+        created_by:
+          $ref: '#/components/schemas/ManagementActor'
+        rotated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the workspace secret was last rotated.
+        rotated_by:
+          $ref: '#/components/schemas/ManagementActor'
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the workspace key was deleted, if applicable.
+        deleted_by:
+          $ref: '#/components/schemas/ManagementActor'
+
+    ManagementWorkspaceKeyListResponse:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/ManagementListMeta'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManagementWorkspaceKey'
+
+    WorkspaceKeyCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Label for the workspace key. Must be unique across the workspace's existing ws_key records.
+          example: "ops-cli"
+
     ManagementWorkspacePublicKey:
       type: object
       description: Workspace public key used by client SDKs.
@@ -16653,6 +16737,325 @@ paths:
       responses:
         '204':
           description: API key disabled - no response body.
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/{workspace}/ws_key/:
+    get:
+      summary: List Workspace Keys
+      description: |
+        List workspace key/secret pairs for this workspace. Backend SDKs authenticate with a workspace key and secret (`Suprsend(workspace_key, workspace_secret)`).
+
+        Every response - including this list - returns the full `key` and `secret` in plain text. Handle the response as sensitive data.
+      operationId: list-workspace-keys
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: List Workspace Keys
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/ws_key/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
+              --header 'Content-Type: application/json'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+      responses:
+        '200':
+          description: Successfully retrieved workspace keys. Each result includes the full `key` and `secret` in plain text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementWorkspaceKeyListResponse'
+              example:
+                meta:
+                  count: 2
+                  limit: 10
+                  offset: 0
+                results:
+                  - id: "ws_key_01ABCDEFGHJKMNPQRSTVWXYZ0"
+                    name: "default"
+                    key: "SS.WSK.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                    secret: "SS.WSS.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                    is_default: true
+                    is_active: true
+                    is_deleted: false
+                    allowed_domains: []
+                    created_at: "2024-08-27T10:54:03.512045Z"
+                    created_by: null
+                    rotated_at: null
+                    rotated_by: null
+                    deleted_at: null
+                    deleted_by: null
+                  - id: "ws_key_01ABCDEFGHJKMNPQRSTVWXYZ1"
+                    name: "ops-cli"
+                    key: "SS.WSK.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                    secret: "SS.WSS.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                    is_default: false
+                    is_active: true
+                    is_deleted: false
+                    allowed_domains: []
+                    created_at: "2026-09-28T11:12:23.557360Z"
+                    created_by:
+                      name: "System User"
+                      email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                    rotated_at: null
+                    rotated_by: null
+                    deleted_at: null
+                    deleted_by: null
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Create Workspace Key
+      description: |
+        Create a new workspace key/secret pair for this workspace.
+      operationId: create-workspace-key
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Create Workspace Key
+          source: |
+            curl -X POST "https://management-api.suprsend.com/v1/{workspace}/ws_key/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>' \
+              --header 'Content-Type: application/json' \
+              --data '{"name":"ops-cli"}'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceKeyCreateRequest'
+            example:
+              name: "ops-cli"
+      responses:
+        '201':
+          description: Workspace key created. The full `key` and `secret` are returned in plain text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementWorkspaceKey'
+              example:
+                id: "ws_key_01ABCDEFGHJKMNPQRSTVWXYZ1"
+                name: "ops-cli"
+                key: "SS.WSK.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                secret: "SS.WSS.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                is_default: false
+                is_active: true
+                is_deleted: false
+                allowed_domains: []
+                created_at: "2026-09-28T11:12:23.557360Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                rotated_at: null
+                rotated_by: null
+                deleted_at: null
+                deleted_by: null
+        '400':
+          description: Validation error - most commonly a duplicate `name`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "[\"Name must be unique. A record with name 'my-key' already exists in this workspace\"]"
+                detail:
+                  - "Name must be unique. A record with name 'my-key' already exists in this workspace"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/{workspace}/ws_key/{workspace_key_id}/:
+    get:
+      summary: Get Workspace Key
+      description: |
+        Retrieve a single workspace key/secret pair by its `id`.
+
+        The response returns the full `key` and `secret` in plain text.
+      operationId: get-workspace-key
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Workspace Key
+          source: |
+            curl -X GET "https://management-api.suprsend.com/v1/{workspace}/ws_key/{workspace_key_id}/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: workspace_key_id
+          required: true
+          schema:
+            type: string
+          description: Workspace key identifier (e.g. `ws_key_...`).
+      responses:
+        '200':
+          description: Successfully retrieved the workspace key. Full `key` and `secret` are included.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementWorkspaceKey'
+              example:
+                id: "ws_key_01ABCDEFGHJKMNPQRSTVWXYZ1"
+                name: "ops-cli"
+                key: "SS.WSK.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                secret: "SS.WSS.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                is_default: false
+                is_active: true
+                is_deleted: false
+                allowed_domains: []
+                created_at: "2026-09-28T11:12:23.557360Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                rotated_at: null
+                rotated_by: null
+                deleted_at: null
+                deleted_by: null
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete Workspace Key
+      description: |
+        Delete a workspace key/secret pair by its `id`.
+
+        Only non-default records can be deleted. Attempting to delete the record with `is_default: true` returns 400.
+      operationId: delete-workspace-key
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delete Workspace Key
+          source: |
+            curl -X DELETE "https://management-api.suprsend.com/v1/{workspace}/ws_key/{workspace_key_id}/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: workspace_key_id
+          required: true
+          schema:
+            type: string
+          description: Workspace key identifier (e.g. `ws_key_...`).
+      responses:
+        '204':
+          description: Workspace key deleted successfully. Response body is empty.
+          content:
+            application/json:
+              example: {}
+        '400':
+          description: The default workspace key cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                type: "ValidationError"
+                message: "['cannot delete default workspace-key; rotate secret instead']"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/{workspace}/ws_key/{workspace_key_id}/rotate/:
+    patch:
+      summary: Rotate Workspace Key Secret
+      description: |
+        Rotate the `secret` on a workspace key/secret pair. The `key` value is unchanged; only `secret` is regenerated. Backend SDKs using the old secret must switch to the new value.
+
+        Rotation is allowed on every record, including the record where `is_default` is true.
+      operationId: rotate-workspace-key
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Rotate Workspace Key Secret
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v1/{workspace}/ws_key/{workspace_key_id}/rotate/" \
+              --header 'Authorization: ServiceToken <SERVICE_TOKEN>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug (e.g. `staging`, `production`).
+        - in: path
+          name: workspace_key_id
+          required: true
+          schema:
+            type: string
+          description: Workspace key identifier (e.g. `ws_key_...`).
+      responses:
+        '202':
+          description: Rotation accepted. The response returns the updated record with a new `secret`; `key` is unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementWorkspaceKey'
+              example:
+                id: "ws_key_01ABCDEFGHJKMNPQRSTVWXYZ1"
+                name: "ops-cli"
+                key: "SS.WSK.YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+                secret: "SS.WSS.ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+                is_default: false
+                is_active: true
+                is_deleted: false
+                allowed_domains: []
+                created_at: "2026-09-28T11:12:23.557360Z"
+                created_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                rotated_at: "2026-09-28T13:08:59.983999Z"
+                rotated_by:
+                  name: "System User"
+                  email: "org_XXXXXXXXXXXXXXXXXXXXXX@systemuser.suprsend.com"
+                deleted_at: null
+                deleted_by: null
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
