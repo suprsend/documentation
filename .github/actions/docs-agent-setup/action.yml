@@ -1,0 +1,37 @@
+name: docs-agent-setup
+description: Checkout with the docs-bot token, git identity, Python deps. Shared by every docs-agent workflow.
+
+inputs:
+  token:
+    required: true
+    description: secrets.DOCS_AGENT_TOKEN, a fine-grained PAT of the docs bot account
+  ref: {required: false, default: ""}
+
+outputs:
+  token:
+    description: The same token, for gh/git. Events it creates (labels, PRs, pushes) trigger the next workflow; GITHUB_TOKEN events don't.
+    value: ${{ inputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ inputs.token }}
+        ref: ${{ inputs.ref }}
+        fetch-depth: 0
+
+    - name: Git identity = the docs bot account
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        read -r login uid < <(gh api user --jq '"\(.login) \(.id)"')
+        git config --global user.name  "$login"
+        git config --global user.email "${uid}+${login}@users.noreply.github.com"
+
+    - uses: actions/setup-python@v5
+      with: {python-version: "3.12"}
+
+    - shell: bash
+      run: pip install --quiet pyyaml

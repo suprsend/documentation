@@ -1,0 +1,59 @@
+# Humans talk to the executor on the PR: comment "@docs-agent make the example use Slack
+# instead of email" and it pushes the change. Every such request is later read by the
+# learner, so asking here (instead of editing by hand) is how the agents learn fastest.
+name: docs-iterate
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+jobs:
+  iterate:
+    if: >-
+      (contains(github.event.comment.body, '@docs-agent') || contains(github.event.review.body, '@docs-agent')) &&
+      (github.event.issue.pull_request || github.event.pull_request) &&
+      github.event.comment.user.login != vars.DOCS_AGENT_LOGIN &&
+      github.event.review.user.login != vars.DOCS_AGENT_LOGIN     # never react to the bot's own comments
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: docs-staging       # so "@docs-agent retake the screenshot" works
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+      - name: Docs tooling (Mintlify CLI + Vale, as the repo uses them)
+        run: |
+          npm ci --silent --no-audit --no-fund
+          pip install --quiet vale && vale sync >/dev/null
+      - name: Install browser
+        working-directory: .docs-agent/browser
+        run: npm install --silent && npx playwright install --with-deps chromium
+
+      # No `prompt` → the action runs in tag mode: it reads the comment thread,
+      # checks the commenter has write access, and replies/pushes on the PR.
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.setup.outputs.token }}
+          trigger_phrase: "@docs-agent"
+          claude_args: |
+            --max-turns 40
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --append-system-prompt "You are the SuprSend docs executor revising a docs PR at a human's request. Follow .claude/skills/docs-executor/SKILL.md Mode B and the suprsend-docs-writer skill; for screenshots and dashboard steps follow .claude/skills/docs-ui-flows/SKILL.md. Do exactly what the human asked. End every commit message with the trailer line 'Docs-Agent: true'."
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh pr:*),Bash(npx mintlify:*),Bash(vale:*),Bash(node .docs-agent/browser/run_flow.mjs:*),Bash(grep:*),Bash(ls:*),Bash(find:*)"
+        env:
+          DASHBOARD_STORAGE_STATE: ${{ secrets.DASHBOARD_STORAGE_STATE }}
+          DASHBOARD_EMAIL: ${{ secrets.DASHBOARD_EMAIL }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}

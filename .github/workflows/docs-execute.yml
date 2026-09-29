@@ -1,0 +1,122 @@
+# Agent 2: executor.
+#   Mode A: a brief issue gets `docs-brief:ready` → write the docs, open a PR.
+#   Mode B: a docs-agent PR gets `docs-agent:fix` (from the reviewer) → revise it.
+name: docs-execute
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-execute-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  new-brief:
+    if: github.event_name == 'issues' && github.event.label.name == 'docs-brief:ready'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: docs-staging       # staging dashboard login for the browser
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+      - name: Docs tooling (Mintlify CLI + Vale, as the repo uses them)
+        run: |
+          npm ci --silent --no-audit --no-fund
+          pip install --quiet vale && vale sync >/dev/null
+      - name: Install browser (screenshots + flow runs)
+        working-directory: .docs-agent/browser
+        run: npm install --silent && npx playwright install --with-deps chromium
+
+      - name: Executor (Mode A)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.setup.outputs.token }}
+          prompt: |
+            You are the docs executor. Read and follow .claude/skills/docs-executor/SKILL.md, Mode A.
+            BRIEF_ISSUE=${{ github.event.issue.number }}
+            Also load .claude/skills/suprsend-docs-writer/SKILL.md before editing, and .claude/skills/docs-ui-flows/SKILL.md if the brief lists dashboard flows or the pages describe dashboard steps. Do not use the suprsend-brand-voice skill for docs.
+            Push the branch before opening the PR. Don't request reviewers; the review gate does that after tests pass.
+          claude_args: |
+            --max-turns 80
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh issue:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(npx mintlify:*),Bash(npx vale:*),Bash(vale:*),Bash(node .docs-agent/browser/run_flow.mjs:*),Bash(grep:*),Bash(ls:*),Bash(find:*)"
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          DASHBOARD_STORAGE_STATE: ${{ secrets.DASHBOARD_STORAGE_STATE }}
+          DASHBOARD_EMAIL: ${{ secrets.DASHBOARD_EMAIL }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+
+  revise:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'docs-agent:fix' &&
+      contains(github.event.pull_request.labels.*.name, 'docs-agent')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: docs-staging       # staging dashboard login for the browser
+    steps:
+      - uses: actions/checkout@v4       # shared action from base, never from the PR head
+        with: {sparse-checkout: .github/actions, ref: "${{ github.event.pull_request.base.sha }}"}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+      - name: Docs tooling (Mintlify CLI + Vale, as the repo uses them)
+        run: |
+          npm ci --silent --no-audit --no-fund
+          pip install --quiet vale && vale sync >/dev/null
+      - name: Install browser (screenshots + flow runs)
+        working-directory: .docs-agent/browser
+        run: npm install --silent && npx playwright install --with-deps chromium
+
+      - name: Executor (Mode B)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.setup.outputs.token }}
+          prompt: |
+            You are the docs executor. Read and follow .claude/skills/docs-executor/SKILL.md, Mode B.
+            PR_NUMBER=${{ github.event.pull_request.number }}
+            The reviewer's findings are the latest PR comment starting with <!-- docs-reviewer -->.
+            You are already on the PR branch. Push to it when done.
+            If the findings include browser results (flow failures, stale screenshots), fix them with the flow runner as described in .claude/skills/docs-ui-flows/SKILL.md.
+          claude_args: |
+            --max-turns 60
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh pr:*),Bash(gh issue view:*),Bash(npx mintlify:*),Bash(npx vale:*),Bash(vale:*),Bash(node .docs-agent/browser/run_flow.mjs:*),Bash(grep:*),Bash(ls:*),Bash(find:*)"
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          DASHBOARD_STORAGE_STATE: ${{ secrets.DASHBOARD_STORAGE_STATE }}
+          DASHBOARD_EMAIL: ${{ secrets.DASHBOARD_EMAIL }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+
+      - name: Clear the fix label; hand to a human if nothing was pushed
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh pr edit "$PR" --remove-label "docs-agent:fix" || true
+          after=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          if [ "$after" = "$BEFORE" ]; then
+            # No push means no re-review would fire. Don't let the PR stall silently.
+            gh pr edit "$PR" --add-label "docs-agent:needs-human"
+            gh pr comment "$PR" --body "Executor couldn't resolve the reviewer's findings without a human. See the last review comment."
+          fi

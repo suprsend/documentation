@@ -1,0 +1,136 @@
+# Agent 5: Postman collection.
+#   update  – API docs changed on main (or weekly drift check): pull the collection from
+#             Postman, update it to match the docs and code, run it with newman against
+#             staging, open a `postman-update` PR.
+#   publish – that PR merged: upload the collection to Postman (only if nobody edited it
+#             in the Postman app in the meantime).
+name: docs-postman
+
+on:
+  push:
+    branches: [main]
+    paths: ["reference/**", "openapi.yaml"]   # keep in sync with config.yml → postman.watch_paths
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "37 6 * * 3"            # Wednesdays: drift check even if nothing changed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: docs-postman
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: docs-staging
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: main
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+
+      - name: Branch + pull the live collection from Postman
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+        run: |
+          mkdir -p .docs-agent/run
+          git checkout -b "docs-agent/postman-${{ github.run_id }}"
+          python3 .docs-agent/scripts/postman_sync.py pull
+          git add postman/
+          if ! git diff --cached --quiet; then
+            git commit -qm "postman: sync latest from the Postman app" -m "Docs-Agent: true"
+          fi
+
+      - name: Newman environment (staging)
+        env:
+          SUPRSEND_STAGING_WORKSPACE_KEY: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_KEY }}
+          SUPRSEND_STAGING_WORKSPACE_SECRET: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_SECRET }}
+          SUPRSEND_STAGING_SERVICE_TOKEN: ${{ secrets.SUPRSEND_STAGING_SERVICE_TOKEN }}
+          SUPRSEND_STAGING_API_KEY: ${{ secrets.SUPRSEND_STAGING_API_KEY }}
+        run: python3 .docs-agent/scripts/postman_sync.py env "$RUNNER_TEMP/staging.env.json"
+
+      - name: What changed in the API docs
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            git diff --stat ${{ github.event.before }} ${{ github.event.after }} -- reference openapi.yaml > .docs-agent/run/api-changes.txt || true
+            git diff ${{ github.event.before }} ${{ github.event.after }} -- reference openapi.yaml | head -c 80000 >> .docs-agent/run/api-changes.txt || true
+          else
+            echo "Scheduled drift check: no specific change. Compare the whole collection with the docs." > .docs-agent/run/api-changes.txt
+          fi
+
+
+      - name: Postman agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You are the Postman agent. Read and follow .claude/skills/docs-postman/SKILL.md.
+            Collection: postman/collection.json. What changed: .docs-agent/run/api-changes.txt.
+            Newman environment: ${{ runner.temp }}/staging.env.json (never print or copy its values).
+            Commit your changes on the current branch. Write .docs-agent/run/postman-summary.md. Don't push or open a PR.
+          claude_args: |
+            --max-turns 60
+            ${{ vars.DOCS_AGENT_MODEL && format('--model {0}', vars.DOCS_AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git add:*),Bash(git commit:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*),Bash(git clone --depth 50 https://github.com/suprsend/:*),Bash(npx --yes newman run:*),Bash(grep:*),Bash(ls:*)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Secret scan, push branch, open PR
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          SLACK_INTERNAL_BOT_TOKEN: ${{ secrets.SLACK_INTERNAL_BOT_TOKEN }}
+          SUPRSEND_STAGING_WORKSPACE_KEY: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_KEY }}
+          SUPRSEND_STAGING_WORKSPACE_SECRET: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_SECRET }}
+          SUPRSEND_STAGING_SERVICE_TOKEN: ${{ secrets.SUPRSEND_STAGING_SERVICE_TOKEN }}
+          SUPRSEND_STAGING_API_KEY: ${{ secrets.SUPRSEND_STAGING_API_KEY }}
+        run: |
+          python3 .docs-agent/scripts/postman_sync.py check
+          if git diff --name-only origin/main...HEAD | grep -vE '^postman/'; then
+            echo "::error::Postman agent may only change postman/"; exit 1
+          fi
+          if [ -z "$(git log origin/main..HEAD --oneline)" ]; then echo "Collection already matches the docs."; exit 0; fi
+          git push -q -u origin HEAD
+          gh label create postman-update --force --color 0B7285 >/dev/null
+          summary=".docs-agent/run/postman-summary.md"; [ -f "$summary" ] || echo "Postman collection update." > "$summary"
+          url=$(gh pr create --base main --label postman-update \
+            --title "postman: $(head -1 "$summary" | sed 's/^#* *//' | cut -c1-70)" \
+            --body-file "$summary" \
+            --reviewer "$(python3 -c "import yaml;print(','.join(yaml.safe_load(open('.docs-agent/config.yml'))['docs']['reviewers']))")")
+          python3 .docs-agent/scripts/notify_slack.py --announce "${url##*/}" --status tested || true
+
+  publish:
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'postman-update')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: docs-staging
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: main}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install --quiet pyyaml
+      - name: Upload to Postman
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          SUPRSEND_STAGING_WORKSPACE_KEY: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_KEY }}
+          SUPRSEND_STAGING_WORKSPACE_SECRET: ${{ secrets.SUPRSEND_STAGING_WORKSPACE_SECRET }}
+          SUPRSEND_STAGING_SERVICE_TOKEN: ${{ secrets.SUPRSEND_STAGING_SERVICE_TOKEN }}
+          SUPRSEND_STAGING_API_KEY: ${{ secrets.SUPRSEND_STAGING_API_KEY }}
+        run: |
+          python3 .docs-agent/scripts/postman_sync.py check
+          python3 .docs-agent/scripts/postman_sync.py push

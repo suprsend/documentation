@@ -1,0 +1,57 @@
+# Weekly: run every documented dashboard flow in a real browser against staging.
+# Broken click-paths and outdated screenshots become docs briefs, so the docs catch
+# UI changes even when the dashboard code isn't in a watched repo.
+name: docs-ui-drift
+
+on:
+  schedule:
+    - cron: "23 5 * * 2"            # Tuesdays 05:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-ui-drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: docs-staging
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: .github/actions}
+      - id: setup
+        uses: ./.github/actions/docs-agent-setup
+        with:
+          token: ${{ secrets.DOCS_AGENT_TOKEN }}
+          ref: main
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+      - name: Install browser
+        working-directory: .docs-agent/browser
+        run: npm install --silent && npx playwright install --with-deps chromium
+
+      - name: Run all flows (verify mode)
+        env:
+          DASHBOARD_STORAGE_STATE: ${{ secrets.DASHBOARD_STORAGE_STATE }}
+          DASHBOARD_EMAIL: ${{ secrets.DASHBOARD_EMAIL }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+        run: node .docs-agent/browser/run_flow.mjs --mode verify --all || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-drift
+          path: |
+            .docs-agent/run/browser.json
+            .docs-agent/run/browser/
+          retention-days: 30
+
+      - name: File briefs for broken flows and stale screenshots
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .docs-agent/scripts/ui_drift.py
