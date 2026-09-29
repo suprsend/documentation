@@ -101,7 +101,8 @@ def announce(pr: int, status: str):
     data = json.loads(gh("pr", "view", str(pr), "--json", "title,url,body,labels,files,number"))
     labels = {l["name"] for l in data["labels"]}
     L = CFG["docs"]["labels"]
-    kind = "postman" if L["postman"] in labels else "skill_update" if L["skill_update"] in labels else "docs"
+    kind = ("postman" if L["postman"] in labels else "skill_update" if L["skill_update"] in labels
+            else "local" if L.get("local") in labels else "docs")
     if kind not in a.get("kinds", ["docs"]):
         return
     body = data.get("body") or ""
@@ -112,7 +113,8 @@ def announce(pr: int, status: str):
     if m:  # follow-up in the PR's thread
         _post(a["workspace"], m.group(1), line, m.group(2))
         return
-    what = {"docs": "New docs PR", "postman": "Postman collection update", "skill_update": "Skill update from the learner"}[kind]
+    what = {"docs": "New docs PR", "local": "New docs PR (written by hand)",
+            "postman": "Postman collection update", "skill_update": "Skill update from the learner"}[kind]
     files = [f["path"] for f in data.get("files", [])]
     pages = [f for f in files if f.endswith((".mdx", ".md")) or f == "openapi.yaml"] or files
     shown = ", ".join(f"`{p}`" for p in pages[:5]) + (f" +{len(pages) - 5} more" if len(pages) > 5 else "")

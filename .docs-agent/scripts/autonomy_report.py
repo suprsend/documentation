@@ -15,7 +15,7 @@ import statistics
 import sys
 from collections import defaultdict
 
-from common import AGENT_DIR, config
+from common import AGENT_DIR, LOCAL, STATE_DIR, config
 
 A = config()["autonomy"]
 WINDOW, MAX_RATIO = A["graduation_window"], A["graduation_max_human_edit_ratio"]
@@ -23,8 +23,11 @@ WINDOW, MAX_RATIO = A["graduation_window"], A["graduation_max_human_edit_ratio"]
 
 def report() -> list[dict]:
     rows = defaultdict(list)
-    for f in sorted((AGENT_DIR / "metrics" / "prs").glob("*.json")):
+    src = STATE_DIR / "metrics" if LOCAL else AGENT_DIR / "metrics" / "prs"
+    for f in sorted(src.glob("*.json")):
         m = json.loads(f.read_text())
+        if m["category"] == "local":      # hand-written PRs say nothing about agent quality
+            continue
         rows[m["category"]].append(m)
     out = []
     for cat, ms in sorted(rows.items()):

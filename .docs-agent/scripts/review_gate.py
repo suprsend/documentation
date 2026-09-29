@@ -31,7 +31,8 @@ def main(pr: int):
     review = json.loads(path.read_text()) if path.exists() else {"verdict": "needs_human"}
     verdict = review.get("verdict", "needs_human")
 
-    data = json.loads(gh("pr", "view", str(pr), "--json", "body,commits,comments"))
+    data = json.loads(gh("pr", "view", str(pr), "--json", "body,commits,comments,labels"))
+    local = L["local"] in {l["name"] for l in data.get("labels", [])}
     rounds = sum(  # includes the comment the reviewer just posted
         "<!-- docs-reviewer -->" in (c.get("body") or "") for c in data["comments"])
     last_msg = data["commits"][-1]["messageBody"] + data["commits"][-1]["messageHeadline"] \
@@ -40,6 +41,11 @@ def main(pr: int):
     reviewers = ",".join(CFG["docs"]["reviewers"])
 
     print(f"verdict={verdict} rounds={rounds} human_pushed_last={human_pushed_last}")
+
+    if local:  # a human wrote it: report only, never auto-fix, never auto-merge
+        print("local PR: leaving the review comment for the author")
+        _announce(pr, "tested" if verdict == "pass" else "needs_you")
+        return
 
     if verdict == "fix" and not human_pushed_last and rounds <= CFG["reviewer"]["max_rounds"]:
         gh("pr", "edit", str(pr), "--add-label", L["fix"])

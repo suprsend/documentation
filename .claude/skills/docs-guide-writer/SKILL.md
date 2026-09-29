@@ -1,6 +1,6 @@
 ---
 name: docs-guide-writer
-description: Specialist writing lane for SuprSend concept and usage docs — concept pages, implementation guides, quickstarts, AI-integration guides, troubleshooting/FAQ additions and changelog entries. Used by the docs executor for any brief page whose doc_type is concept, guide, quickstart, ai_integration, faq or changelog. Focus is understanding: a fresh outline built from the reader's questions, simple language, and one real customer scenario carried through the page.
+description: "Specialist writing lane for SuprSend concept and usage docs — concept pages, implementation guides, quickstarts, AI-integration guides, troubleshooting/FAQ additions and changelog entries. Used by the docs executor for any brief page whose doc_type is concept, guide, quickstart, ai_integration, faq or changelog. Focus is understanding: a fresh outline built from the reader's questions, simple language, and one real customer scenario carried through the page."
 ---
 
 # Guide writer

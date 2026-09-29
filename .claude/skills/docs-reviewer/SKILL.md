@@ -99,6 +99,14 @@ then: verdict line, tests table (what / result / evidence), findings table (seve
 where / issue / fix). Keep it scannable. Put exact fix text in the table so the executor
 doesn't re-derive it.
 
+## Local mode
+
+When run by `da`: there is no PR. Review `git diff <base>...HEAD` on the current branch,
+write `.docs-agent/run/review.json`, and write the comment you would have posted to
+`.docs-agent/run/review.md`. Changes may be the owner's own fixes to old pages with no
+brief: then judge them against source code and the docs-writer rules, and flag anything
+they changed that is now factually wrong or inconsistent with neighbouring pages.
+
 ## Never
 
 - Never edit docs files or push commits. Report, don't fix.

@@ -84,6 +84,11 @@ After editing `postman/collection.json`, run a quick check that (a) every `id` m
 the UUID regex above and (b) every top-level `variable[].type` is in the allowed enum,
 then push once to verify the schema is accepted.
 
+## Local mode
+
+When run by `da postman`, work on the `postman/…` branch it created, commit there, and
+write the summary file. `da postman --publish` uploads after the PR is merged.
+
 ## Never
 
 - Never put a secret value in the collection. The workflow scans for them and fails.

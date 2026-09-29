@@ -34,6 +34,8 @@ Inputs: `BRIEF_ISSUE` (issue number). Read it with
 `gh issue view $BRIEF_ISSUE --json title,body,comments`. The JSON block in the body is the
 brief; human comments on the issue override it (they often answer open questions).
 
+0. **Check nobody else has it.** If the issue has the label `docs-brief:local`, or an open
+   PR already says `Closes #$BRIEF_ISSUE`, a human is writing it. Stop without changes.
 1. **Check the brief is actionable.** If a fact you need is missing and not answered in
    the comments, stop: comment on the issue with the exact question, relabel it
    `docs-brief:needs-info`, and exit. Do not guess.
@@ -110,6 +112,13 @@ Test plan from the brief (the reviewer runs this on staging):
 ## Where I was unsure
 <assumptions, or "Nothing — every statement maps to a fact in the brief.">
 ```
+
+## Local mode
+
+When run by `da`: the brief is a local file (`.docs-agent/local/state/briefs/<id>.md`), you
+are already on the right branch, and you never push, call `gh` or open a PR. Commit with
+the `Docs-Agent: true` trailer and `Refs: <brief id>`. The owner may also commit their own
+edits on the same branch: never rewrite or revert their commits.
 
 ## Never
 

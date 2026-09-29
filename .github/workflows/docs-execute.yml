@@ -39,7 +39,20 @@ jobs:
         working-directory: .docs-agent/browser
         run: npm install --silent && npx playwright install --with-deps chromium
 
+      - name: Skip if a human is already on this brief
+        id: taken
+        env:
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
+          N: ${{ github.event.issue.number }}
+        run: |
+          labels=$(gh issue view "$N" --json labels --jq '[.labels[].name] | join(",")')
+          prs=$(gh pr list --state open --search "\"Closes #$N\" in:body" --json number --jq length)
+          if [[ ",$labels," == *",docs-brief:local,"* ]] || [ "$prs" != "0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Brief #$N is taken (local label or open PR). Not starting the executor."
+          fi
+
       - name: Executor (Mode A)
+        if: steps.taken.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
