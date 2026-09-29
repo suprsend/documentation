@@ -66,6 +66,7 @@ interface SuprSendFeedProviderProps {
   pageSize?: number;
   stores?: IStore[] | null;
   host?: { socketHost?: string, apiHost?: string };
+  reachability?: boolean;
 }
 ````
 
@@ -74,6 +75,8 @@ interface SuprSendFeedProviderProps {
 `tenantId` defaults to the active tenant set in [SuprSendProvider](/docs/react-sdk#suprsendprovider), else the `default` tenant. Passing it here pins the feed instance to that tenant — it takes priority over the active tenant and the feed ignores later tenant changes. Without it, the feed re-initializes automatically whenever the active tenant changes.
 
 If you are passing `tenantId` in feed, make sure it matches `scope.tenant_id` passed while creating [userToken](/docs/client-authentication#2-creating-signed-user-jwt-token) else error will be thrown due to scope mismatching.
+
+`reachability` defaults to `false`. Pass it to track whether the feed is working for this user. See [Tracking reachability](#tracking-reachability).
 
 ### useFeedClient
 
@@ -120,6 +123,122 @@ function MyComponent() {
 ````
 
 </CodeGroup>
+
+### Tracking reachability
+
+Reachability tells you whether the feed is working for this user right now. It combines three checks into one status — the browser is online, the feed socket is live, and the feed API is reachable — so you can show your own dot or banner when new notifications may be missing.
+
+It's off by default. Pass `reachability` to `SuprSendFeedProvider`, then read it with `useFeed()` inside that provider. `reachability` is React state, so your component re-renders when the overall `status`, `socket.status`, `api.status` or `api.authError` changes. It's `undefined` when the provider doesn't have `reachability` set.
+
+The status is one of `ONLINE`, `CONNECTING`, `DEGRADED`, `AUTH_ERROR`, `OFFLINE` or `UNKNOWN`. The React [`Inbox`](/docs/react-in-app-feed#connection-status) component renders a coloured dot and a banner for each status. Here's how to render the same states in a custom feed:
+
+<Tabs>
+  <Tab title="Online">
+    <Frame>
+      <img src="/images/inbox-connected.png" width="280" alt="Inbox with a green connected dot on the bell and beside the panel title" />
+    </Frame>
+  </Tab>
+  <Tab title="Connecting">
+    <Frame>
+      <img src="/images/inbox-connecting.png" width="280" alt="Inbox with a spinner dot and 'Connecting…' banner" />
+    </Frame>
+  </Tab>
+  <Tab title="Connection issue">
+    | Default banner | After **Report an issue** | Report limit reached |
+    | --- | --- | --- |
+    | <img src="/images/inbox-connection-issue.png" width="220" alt="Inbox with amber dot and connection issue banner" /> | <img src="/images/inbox-issue-reported.png" width="220" alt="Inbox banner showing 'Issue reported'" /> | <img src="/images/inbox-report-limit-reached.png" width="220" alt="Inbox banner showing 'Report limit exceeded'" /> |
+  </Tab>
+  <Tab title="Authentication error">
+    <Frame>
+      <img src="/images/inbox-auth-error.png" width="280" alt="Inbox with amber authentication error dot and banner" />
+    </Frame>
+  </Tab>
+  <Tab title="Offline">
+    <Frame>
+      <img src="/images/inbox-offline.png" width="280" alt="Inbox with hollow grey dot and 'You're offline' banner" />
+    </Frame>
+  </Tab>
+</Tabs>
+
+<CodeGroup>
+```jsx Example.jsx
+import {
+  SuprSendProvider,
+  SuprSendFeedProvider,
+  useFeed,
+  ReachabilityStatus,
+} from "@suprsend/react-core";
+
+// Same dot and banner mapping as the React Inbox component
+const states = {
+  ONLINE:     { dot: "green",   text: "" },
+  CONNECTING: { dot: "spinner", text: "Connecting…" },
+  DEGRADED:   { dot: "amber",   text: "There seems to be a connection issue. New notifications may get delayed or missed." },
+  AUTH_ERROR: { dot: "amber",   text: "Not able to fetch notifications due to authentication or permission issue." },
+  OFFLINE:    { dot: "grey",    text: "You're offline. Reload the page to update notifications when your connection is back." },
+  UNKNOWN:    { dot: "none",    text: "" },
+};
+
+function App() {
+  return (
+    <SuprSendProvider
+      publicApiKey={"YOUR_PUBLIC_API_KEY"}
+      distinctId={"YOUR_DISTINCT_ID"}
+    >
+      <SuprSendFeedProvider reachability>
+        <ConnectionStatus />
+      </SuprSendFeedProvider>
+    </SuprSendProvider>
+  );
+}
+
+function ConnectionStatus() {
+  const { reachability } = useFeed();
+  const status = reachability?.status ?? ReachabilityStatus.UNKNOWN;
+  const state = states[status];
+
+  return (
+    <>
+      <span className={`feed-dot feed-dot--${state.dot}`} />
+      {state.text && <div className="feed-banner">{state.text}</div>}
+    </>
+  );
+}
+```
+
+```typescript TypeDef
+interface IFeedReachability {
+  status: ReachabilityStatus;
+  socket: {
+    status: ChannelStatus;
+    lastConnectedAt?: number;
+    lastDisconnectedAt?: number;
+    disconnectReason?: string;
+    reconnectAttempts?: number;
+  };
+  api: {
+    status: ChannelStatus;
+    lastSuccessAt?: number;
+    lastFailureAt?: number;
+    authError?: boolean;
+  };
+  lastChangedAt: number;
+}
+```
+</CodeGroup>
+
+`status` is one of these values:
+
+| `status`     | Meaning                                                                                |
+| ------------ | -------------------------------------------------------------------------------------- |
+| `OFFLINE`    | The browser reports no internet connection.                                            |
+| `AUTH_ERROR` | The browser is online, but the API answered the initial feed load with `401` or `403`. |
+| `DEGRADED`   | The socket, the API, or both are `DOWN`.                                               |
+| `CONNECTING` | The socket, the API, or both are `CONNECTING`.                                         |
+| `ONLINE`     | The socket and the API are both `UP`.                                                  |
+| `UNKNOWN`    | The browser is online but neither the socket nor the API has been used yet.            |
+
+For the full `IFeedReachability` shape, when the value changes and how each connection is tracked, see [Tracking reachability](/docs/js-inapp-feed#tracking-reachability) in the JavaScript SDK.
 
 ### Example
 <CodeGroup>
