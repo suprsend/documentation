@@ -48,7 +48,10 @@ Read `references/learnings.md` first.
    order and anything the team added by hand unless the docs contradict it.
 3. Run it: `npx --yes newman run postman/collection.json -e <env file> --reporters cli,json
    --reporter-json-export .docs-agent/run/newman.json`. For a large collection, run only
-   the folders you touched with `--folder "<name>"`.
+   the folders you touched with `--folder "<name>"`. Newman success does NOT prove the
+   collection is uploadable — the Postman API schema is stricter. Also run
+   `python3 .docs-agent/scripts/postman_sync.py push` (or a direct `PUT /collections/{uid}`)
+   against a scratch collection to confirm the schema is accepted before merging.
 4. Fix failures that come from the collection (wrong path, missing header, stale body).
    If a request fails because the API behaves differently from the docs, don't bend the
    collection to match. Report it in the summary as a possible docs or product bug.
@@ -58,6 +61,28 @@ Read `references/learnings.md` first.
 7. Write `.docs-agent/run/postman-summary.md`: first line is a short title; then a table of
    requests added / changed / removed, the newman result (passed/failed per folder), and a
    "Docs vs API mismatches" list (or "None").
+
+## Postman schema gotchas (learned from PR #251 → #252)
+
+The Postman `PUT /collections/{uid}` API is stricter than newman. Both of these pass
+newman but return HTTP 400 `malformedRequestError` on push:
+
+- **Every `id` on a request, response, folder or item MUST be a real UUID** generated with
+  `uuid.uuid4()`. Never hand-write human-readable placeholders like
+  `b0011001-ws-key-list-0000-000000000001` — non-hex segments fail validation even when
+  the 8-4-4-4-12 dash pattern looks right. Ids must match the regex
+  `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`. If a stable id is
+  desired for diff hygiene, keep it stable across runs but still a valid UUID.
+  Detection: the push returns `malformedRequestError` with a shape/format error on `id`
+  (e.g. `must be equal to one of the allowed values` on an id-adjacent path).
+- **Top-level `variable[].type` is a small enum**: `string | boolean | any | number`
+  (default to `string`). `"default"` and `"secret"` are **environment**-variable types
+  and are NOT valid at collection scope. Do not copy `type` from an environment file.
+  Detection: `variable/N/type: must be equal to one of the allowed values`.
+
+After editing `postman/collection.json`, run a quick check that (a) every `id` matches
+the UUID regex above and (b) every top-level `variable[].type` is in the allowed enum,
+then push once to verify the schema is accepted.
 
 ## Never
 
