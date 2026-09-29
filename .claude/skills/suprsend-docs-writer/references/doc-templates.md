@@ -341,6 +341,17 @@ Skeleton: What it is (2 sentences) + what it can do (bulleted capabilities with 
 </Update>
 ```
 
+**Show, don't list.** Every changelog with a visible UI change needs at least one screenshot inline. If the capability has multiple visible states (e.g., healthy / issue / offline), a 2- or 3-column comparison row of images beats prose.
+
+**When the change ships across multiple SDKs / packages / channels,** don't structure the body as one bullet per package — that reads like an internal release note. Lead with the capability and image; put "how each SDK exposes it" into a single closing paragraph with links. Example of what NOT to do:
+
+```mdx
+<!-- Bad: SDK-per-bullet, no image, technical framing -->
+- **`@suprsend/react` 1.3.0:** Inbox shows a status dot… Pass `reachability={false}` to turn off.
+- **`@suprsend/react-core` 2.3.0:** pass `reachability` to `SuprSendFeedProvider`…
+- **`@suprsend/web-sdk` 5.3.0:** initialize with `reachability: true` and listen for…
+```
+
 **Never in a changelog:** setup steps, request/response bodies, exhaustive option lists, internal architecture. One doc link at the end carries all of that.
 
 ---
