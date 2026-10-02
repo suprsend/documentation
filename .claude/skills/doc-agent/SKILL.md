@@ -100,7 +100,9 @@ Ask whether to update the collection now. If yes:
    `POSTMAN_API_KEY`) and writes the newman env file.
 2. Run **docs-postman**: "Update `postman/collection.json` for `.docs-agent/run/api-changes.txt`.
    Newman env `<env_file>`. Local mode, commit on this branch."
-3. `python3 .docs-agent/scripts/postman_sync.py check` (no secrets in the collection).
+3. `python3 .docs-agent/scripts/postman_sync.py check` (no secrets anywhere in the file,
+   including saved responses — the sweep now covers `response[*].header` and
+   `response[*].originalRequest.header` and the `SS.ST./SS.WS./SS.API.` prefixes).
    Report the newman result. Uploading to Postman happens after merge with
    `da postman --publish`; mention it, don't run it.
 
@@ -124,6 +126,11 @@ skill or agent files (those go through `da skills-pr`), checks the last review p
 and no commit came after it, pushes, opens the PR with the review in its body and posts it
 in #documentation. If it refuses, tell the user why; `--force` only if they say so; `--draft`
 if they ask for a draft. Give them the PR link.
+
+Owner's standing rule: before pushing, the branch is squashed into a **single commit** off
+`<base>`. `da ship` handles this; if you're shipping by hand, run
+`git reset --soft $(git merge-base HEAD <base>) && git commit -m "<one-line title>"`
+first so the PR lands as one commit, not the agent's round-by-round history.
 
 Not shipping yet is fine: everything is committed on the branch. `/doc-agent continue`
 picks up from `da status`.
