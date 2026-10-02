@@ -35,6 +35,27 @@ Read `references/learnings.md` first.
 - **Variables, never values**: `{{base_url}}`, `{{workspace_key}}`, `{{workspace_secret}}`,
   `{{api_key}}`, `{{distinct_id}}`, `{{workflow_slug}}`, `{{tenant_id}}`. Persona values
   (from the docs example) stay literal in the body.
+- **Sanitise saved responses before committing.** Every `response[*].header` and
+  `response[*].originalRequest.header` carries the exact header values returned/sent
+  during capture — Postman writes real `Bearer <token>` / `ServiceToken <token>`
+  values straight into them. Before commit, walk every saved response and rewrite
+  any `Authorization` header (and any other `SS.ST.`/`SS.WS.`/`SS.API.`-prefixed
+  value) to `ServiceToken {{service_token}}` / `Bearer {{api_key}}`. Hard rule, not
+  a nice-to-have: PR #255 leaked four live staging ServiceTokens this way.
+- **Body generator rules.** When writing or regenerating a request body:
+  - If `openapi.yaml` defines `requestBody.content[...].example` (or
+    `.examples[*]`) for the operation, hydrate `raw` with it. An empty
+    `"raw": ""` is only acceptable when openapi has no `requestBody` at all
+    (and for `DELETE` / parameterless `GET`).
+  - Arrays become `[]` or the openapi example — never `""`. Objects become
+    `{}` or the openapi example — never `""`. The `""` placeholder makes
+    staging return 400 and is a clear generator bug.
+  - Mirror the hydrated body into every `response[*].originalRequest.body.raw`
+    on the same request so saved examples match what the request now sends.
+- **Response `status` strings are HTTP reason phrases.** `response[*].status` must be
+  the standard phrase (`OK`, `Created`, `Accepted`, `No Content`, `Bad Request`,
+  `Not Found`, etc.), never a truncated slice of the openapi response description.
+  Rule of thumb: nothing in that field should exceed ~30 characters.
 - **Tests** on every request: status code, and the presence of the key response fields
   the docs promise (`pm.expect(json).to.have.property("execution_id")`).
 - **Auth** set once at collection level, matching how the docs say to authenticate.
@@ -56,9 +77,19 @@ Read `references/learnings.md` first.
    If a request fails because the API behaves differently from the docs, don't bend the
    collection to match. Report it in the summary as a possible docs or product bug.
 5. Replace saved example responses with the real staging responses from this run (strip
-   ids, timestamps and anything account-specific to stable placeholders).
-6. Commit with `postman: <what changed>` and the trailer `Docs-Agent: true`.
-7. Write `.docs-agent/run/postman-summary.md`: first line is a short title; then a table of
+   ids, timestamps and anything account-specific to stable placeholders). Then re-walk
+   every `response[*].header` and `response[*].originalRequest.header` and swap any
+   literal token value back to `{{service_token}}` / `{{api_key}}` — the capture step
+   silently writes real tokens here.
+6. Run `python3 .docs-agent/scripts/postman_sync.py check`. It fails on known env
+   secrets, on `SS.ST./SS.WS./SS.API.` prefixes anywhere in the file (catches
+   rotated/stale tokens), and on `Bearer <literal>` / `ServiceToken <literal>`
+   header values in any header, including inside saved responses. Fix every hit
+   before commit; don't rely on reviewer or CI to catch leaks.
+7. Commit with `postman: <what changed>` and the trailer `Docs-Agent: true`. At
+   ship time, squash the branch into a single commit off `main` before pushing
+   (owner's standing rule), so the PR has one tidy commit.
+8. Write `.docs-agent/run/postman-summary.md`: first line is a short title; then a table of
    requests added / changed / removed, the newman result (passed/failed per folder), and a
    "Docs vs API mismatches" list (or "None").
 
@@ -91,7 +122,8 @@ write the summary file. `da postman --publish` uploads after the PR is merged.
 
 ## Never
 
-- Never put a secret value in the collection. The workflow scans for them and fails.
+- Never put a secret value in the collection — including inside `response[*].header`
+  or `response[*].originalRequest.header`. The workflow scans for them and fails.
 - Never delete a request the docs still document, or keep one the docs removed without
   flagging it.
 - Never edit anything outside `postman/`.

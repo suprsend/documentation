@@ -64,6 +64,15 @@ Read `references/learnings.md` first: these are things past reviews missed.
    $SUPRSEND_STAGING_API_KEY`, or `ServiceToken $SUPRSEND_STAGING_SERVICE_TOKEN` for the
    management API), and check the real response against the spec's response schema.
    Failure or mismatch → Blocker. `vale.json` errors on changed pages → Should-fix.
+5c. **Postman secret sweep** (any PR that touches `postman/collection.json`). Don't trust
+   `postman_sync.py check` alone — a prior script version missed saved-response leaks.
+   Independently grep the whole file for `SS\.ST\.|SS\.WS\.|SS\.API\.` prefixes, and
+   JSON-walk `response[*].header` and `response[*].originalRequest.header` looking for
+   `Bearer <literal>` or `ServiceToken <literal>` (any value that isn't `{{...}}`). Any
+   hit → Blocker, and name every path so the executor rewrites them in one pass. Also
+   confirm every per-request `Authorization` header is either `{{api_key}}` /
+   `{{service_token}}` or an explicitly empty stub that falls back to collection auth —
+   never a literal.
 6. **Coverage.** `grep` the docs for the changed method/param names. Another page still
    says the old thing → Should-fix, with the path and line.
 7. **Checklist.** Run `suprsend-docs-writer/references/review-checklist.md`. Then two
