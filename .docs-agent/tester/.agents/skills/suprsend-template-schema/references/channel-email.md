@@ -1,0 +1,398 @@
+# Email Content Schema
+
+For variants with `channel: "email"`.
+
+**Schema URL:** `https://schema.suprsend.com/template/v2/channel/email_schema.json`
+
+## Top-level fields
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| $schema | string | No |  |
+| templating_language | string | No |  |
+| from_name | string | No |  |
+| from_address | string | No |  |
+| extra_to | string | No |  |
+| cc | string | No |  |
+| bcc | string | No |  |
+| reply_to | string | No |  |
+| subject | string | Yes |  |
+| body | any | Yes |  |
+
+`subject` and `body` are required. `templating_language` is fixed to `handlebars` — use `{{ variable }}` and standard Handlebars helpers inside string fields.
+
+## Body
+
+`body` is an object whose shape depends on its `type`:
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| type | string | Yes |  |
+| raw | any | No |  |
+| designer | any | No |  |
+| plain_text | any | No |  |
+| email_markup | string | No |  |
+| preheader | string | No |  |
+
+### `type` values
+
+- `raw`
+- `designer`
+- `plain_text`
+
+- `designer` — content authored in the SuprSend visual designer; serialized HTML + optional `design_json`.
+- `raw` — hand-authored HTML (with optional fallback text).
+- `plain_text` — text-only email.
+
+### `designer` body
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| html | string | Yes |  |
+| text | string | No |  |
+| design_json | object | No |  |
+| display_conditions | array | No |  |
+| merge_tags | array | No |  |
+
+`html` is required. `design_json` round-trips the visual designer state. `merge_tags` lists the data references used by the design so the editor can validate them:
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| id | string | No |  |
+| before | string | No |  |
+| after | string | No |  |
+| expression | string | No |  |
+
+### `raw` body
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| html | string | Yes |  |
+| text | string | No |  |
+
+### `plain_text` body
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| text | string | Yes |  |
+
+## Examples
+
+### Plain text email
+
+```json
+{
+  "subject": "Welcome, {{ first_name }}",
+  "body": {
+    "type": "plain_text",
+    "plain_text": { "text": "Thanks for joining Acme." }
+  }
+}
+```
+
+### Raw HTML email
+
+```json
+{
+  "subject": "Your receipt #{{ order.id }}",
+  "from_name": "Acme Billing",
+  "from_address": "billing@acme.com",
+  "reply_to": "support@acme.com",
+  "body": {
+    "type": "raw",
+    "preheader": "Order summary attached",
+    "raw": {
+      "html": "<h1>Thanks for your order</h1><p>Total: {{ order.total_formatted }}</p>",
+      "text": "Thanks for your order. Total: {{ order.total_formatted }}"
+    }
+  }
+}
+```
+
+### Designer email with merge tags
+
+```json
+{
+  "subject": "{{ campaign.subject }}",
+  "body": {
+    "type": "designer",
+    "designer": {
+      "html": "<table>...rendered html...</table>",
+      "text": "...plain fallback...",
+      "design_json": { "version": 1, "rows": [] },
+      "merge_tags": [
+        { "id": "first_name", "expression": "{{ first_name }}" }
+      ]
+    }
+  }
+}
+```
+
+## Documentation
+
+```
+# Email
+
+> Design email templates using the drag-and-drop editor, raw HTML, or plain text - with variables, tenant branding, display conditions, and email markup.
+
+The email editor has three modes - **Design Editor** (drag-and-drop), **HTML Editor** (raw code), and **Plain Text** (text fallback). Plain Text is always sent alongside HTML - you don't choose between them, both go out.
+
+
+***
+
+## HTML Editor
+
+For full control, switch to the **HTML** tab. Write or paste HTML directly - the live preview renders on the right. Supports Handlebars variables inside the HTML (`{{order_id}}`, `{{{tracking_url}}}`).
+
+
+> **Warning:**
+  Email clients strip many HTML/CSS features:
+
+  * **Gmail** - strips `<style>` in head (partially), `position`, `float`, `<form>` elements
+  * **Outlook** - uses Word rendering engine. No `<div>` layouts, `max-width`, `float`, `border-radius`. Use `<table>` for everything.
+  * **Yahoo** - strips `<style>`, rewrites class names
+  * **Apple Mail** - most permissive (supports `<style>`, media queries, web fonts)
+  * **All clients** - no JavaScript, no `<form>`, no external fonts (except Apple Mail)
+
+  Check support at [Can I Email](https://www.caniemail.com/) and [Campaign Monitor CSS](https://www.campaignmonitor.com/css/).
+
+
+<Tip>
+  **AI prompt - generate email HTML:** *"Generate a responsive HTML email template for \[describe use case]. Use these variables: \[list with sample values]. Use table-based layout, inline CSS, and web-safe fonts for Gmail, Outlook, and Apple Mail."*
+</Tip>
+
+<Tip>
+  **AI prompt - validate HTML:** *"Check this email HTML for compatibility across Gmail, Outlook, Apple Mail, and Yahoo. Flag tags or CSS that will be stripped. Suggest inline-style alternatives. \[paste HTML]"*
+</Tip>
+
+***
+
+## Design Editor
+
+The drag-and-drop editor builds responsive emails by default - layouts adapt to mobile automatically. No media queries needed. (If you use the HTML Editor instead, responsive behaviour depends on your code.)
+
+The bottom toolbar has **Undo / Redo**, a **Preview** button (eye icon) for a full rendered preview, and a **Desktop / Mobile** toggle to check how the email looks on each device.
+
+The right sidebar has five panels: **Content** (drag blocks), **Blocks** (saved reusable rows), **Body** (global defaults), **Images** (free stock photos from Unsplash, Pexels, Pixabay), and **Uploads** (your own uploaded images - hosted by SuprSend, available across all templates).
+
+### Body defaults (set these first)
+
+Before adding content, configure the **Body** panel (right sidebar) - these are the global defaults that apply to every block unless overridden.
+
+
+**Content Width** - default is 600px. This is the standard for email. Increase only if you have a specific reason.
+
+**Font Family** - not all fonts render in all email clients. Web-safe fonts that work everywhere: Arial, Helvetica, Georgia, Times New Roman, Verdana, Tahoma. Google Fonts and custom fonts may fall back to system defaults in Outlook and Gmail. If you need a specific custom font uploaded, reach out to support.
+
+**Text Colour** / **Background Colour** - set your brand defaults here so you don't repeat them on every block.
+
+**Link Colour** / **Underline** - global link styling.
+
+
+### Content blocks
+
+Drag blocks from the **Content** panel into a row. Click any block to see its settings.
+
+**Heading** - for section titles. Renders as h1, h2, h3, or h4 depending on the font size you set. Use the rich toolbar for bold, italic, colour, and alignment.
+
+**Paragraph** - body text. Rich toolbar for bold, italic, underline, links, lists, and merge tags. Supports Handlebars variables inline.
+
+**Button** - CTA button. Set the URL (supports variables like `{{{action_url}}}`), background colour, text colour, border radius (for rounded corners). **Width** is auto by default - turn auto off and set a fixed pixel width for consistent sizing across clients. If you want tenant-branded buttons, use the **Tenant** block instead.
+
+**Image** - three ways to add: upload directly, paste a public URL, or browse the **Images** panel (free stock photos). The Image URL field supports variables (e.g., `{{product_image_url}}`). Always set **Alt Text** - it can be static ("Product image") or dynamic (`{{product_name}}`). Alt text shows when images are blocked and helps accessibility.
+
+**Divider** - horizontal line separator. Configure colour, thickness, width percentage, and padding.
+
+**HTML** - raw HTML block for custom code. Supports Handlebars variables inside the HTML. Useful for custom tables, embedded widgets, or code from external tools.
+
+**Table** - data table for order line items, pricing breakdowns, comparison grids. Cell contents support variables.
+
+**Menu** - horizontal navigation links (header or footer). Configure labels, URLs, separator character, font, and alignment.
+
+**Tenant** - pre-built branded header, footer, or button that auto-renders each tenant's logo, colours, and links. See [Tenant branding](#tenant-branding).
+
+### Rows and columns
+
+Emails are structured as **rows** containing **columns**. Drag the **Columns** block to add a row with your preferred layout (1-col, 2-col, 3-col, asymmetric).
+
+
+Each row has: background colour, background image, display condition, and device-specific overrides (Desktop/Mobile tabs). Use the row header icons to delete, duplicate, or save as a reusable block.
+
+Each column has: its own background, padding, and border. Drag column edges to resize. Add or remove columns with the **+** and **delete** icons.
+
+### Merge Tags (dynamic lists)
+
+Merge Tags let you associate a row with an array variable - the row repeats for each item at send time. This is how you build order line items, product lists, or batched notification digests.
+
+1. Declare an array in the Variables panel (Input Payload).
+2. Click a row - an array association icon appears in the bottom-left.
+3. Select your array. The row turns green.
+4. Inside that row, use Merge Tags or `{{` to insert array item variables (e.g., `{{product_name}}`, `{{price}}`).
+
+Merge Tags work on **rows and columns** - the entire row repeats for each array item. Don't associate both a row and a column inside it with the same array, or it won't work correctly.
+
+> **Note:**
+  Merge Tags only appear in the toolbar when variables are defined in the Variables panel.
+
+
+### Display conditions
+
+Show or hide any row or block based on runtime data - e.g., show a "Pro" badge only for premium users, or a tenant-specific banner.
+
+1. Select the row or block.
+2. Expand **Display Condition** in the settings panel.
+3. Set **Property**, **Operator**, and **Value**. Combine with **+ AND** or **+ OR**.
+
+
+Operators: `==`, `===`, `!=`, `!==`, `>`, `<`, `>=`, `<=`.
+
+### Saved blocks
+
+Save any row as a reusable block - click the **save** icon in the row header, name it, and it appears in the **Blocks** panel for all templates. Saved blocks work at the **row level only** (not individual columns or blocks).
+
+Saved blocks are a copy-on-insert - editing the saved block later doesn't update templates that already use it.
+
+### Tenant branding
+
+The **Tenant** block auto-renders a branded header, footer, or button using the tenant's profile (logo, colours, address). Select a tenant in the Variables panel to preview.
+
+For custom control beyond the Tenant block, use `$brand` variables directly:
+
+* `{{$brand.logo}}`, `{{$brand.primary_color}}`, `{{$brand.secondary_color}}`
+* `{{$brand.brand_name}}`, `{{$brand.properties.address}}`
+* `{{$hosted_preference_url}}` — per-recipient unsubscribe / preference URL (top-level, not under `$brand`)
+
+***
+
+## Adding dynamic content
+
+Variables in email use [Handlebars](/docs/handlebars-helpers) syntax - `{{variable_name}}` for regular values, `{{{variable}}}` for URLs with special characters.
+
+**In the Design Editor** - use the **Merge Tags** button in the text toolbar to insert variables from a dropdown. Or type `{{` in any text field for auto-suggestions. Variables work in text blocks, button URLs, image URLs, alt text, and HTML blocks.
+
+**In the HTML Editor** - write Handlebars directly in the HTML source. Variables render in the live preview.
+
+Set up your variable data in the **Variables panel** (`{}` tab in the left sidebar) before using them. See [The Variables panel](/docs/templates#the-variables-panel) for details on Input Payload, Recipient, Tenant, and Actor.
+
+> **Warning:**
+  If a variable cannot be rendered at send time (missing or mismatched data), SuprSend discards the email for that user. Other channels in the same template group are still sent.
+
+
+***
+
+## Plain Text
+
+Plain text is always sent alongside HTML - you don't choose between them. It's the fallback for recipients who block HTML, and improves deliverability (spam filters score multi-part emails higher).
+
+
+**Auto mode** - leave blank and SuprSend auto-generates plain text from your HTML on every commit.
+
+**Custom mode** - write your own. Click **Fetch from HTML** to pull the current HTML as a starting point, then edit. Once you edit, auto-generation stops.
+
+Best for: sales outreach, OTP/verification codes, internal alerts - anywhere design doesn't matter and deliverability does.
+
+***
+
+## Email Markup (JSON-LD)
+
+Email Markup adds rich interactive features directly in the Gmail inbox - no need to open the email. Add JSON-LD to the **Email Markup JSON** field in Email Settings. Supports Handlebars variables.
+
+**Common use cases:**
+
+* **Order tracking** - delivery status card with tracking link
+* **Event RSVP** - one-click Yes/No/Maybe buttons in the inbox
+* **Flight boarding pass** - flight details, departure, arrival
+* **Review request** - star rating directly in the inbox
+* **Invoice/receipt** - order summary with line items and total
+
+```json theme={"system"}
+{
+  "@context": "http://schema.org",
+  "@type": "Order",
+  "merchant": { "@type": "Organization", "name": "{{$brand.brand_name}}" },
+  "orderNumber": "{{order_id}}",
+  "potentialAction": {
+    "@type": "TrackAction",
+    "target": "{{{tracking_url}}}"
+  }
+}
+```
+
+> **Warning:**
+  **Testing markup:** set the From and To addresses to the **same Gmail account** (e.g., send from and to `you@gmail.com`) with any body content. Gmail allows markup testing when sender = recipient without registration. For production use, you must [register with Google](https://developers.google.com/gmail/markup/registering-with-google).
+
+
+<Tip>
+  **AI prompt - generate email markup:** *"Generate schema.org JSON-LD email markup for \[describe use case]. Use these Handlebars variables: \[list]. Return valid JSON-LD for the Email Markup field. Use triple braces for URLs."*
+</Tip>
+
+***
+
+## Email settings
+
+Before previewing or committing, configure subject, sender, and preheader. Click the **pencil icon** above the editor to open Email Settings.
+
+
+**Subject** - keep under 50 characters (mobile clients truncate). Supports variables like `{{order_id}}`.
+
+**From Name** / **From Email** - display name and sender address. Left blank = picked from your [vendor settings](/docs/vendors). Domain must be verified.
+
+**Preheader** - preview text next to the subject in the inbox. If blank, email clients pull the first body text (often unhelpful). Set this explicitly. 40–140 characters.
+
+**CC / BCC / Reply To / Add Multiple Tos** - all optional, all support variables.
+
+<Tip>
+  **AI prompt - optimize subject + preheader:** *"I'm sending a \[transactional/marketing] email for \[describe notification]. Current subject: \[subject]. Current preheader: \[preheader]. Suggest 3 pairs that work together (subject under 50 chars, preheader 40-90 chars). Preserve Handlebars variables."*
+</Tip>
+
+***
+
+## Preview and test
+
+Use the **eye icon** in the bottom toolbar for a full preview. Toggle **Desktop** / **Mobile** to check responsive behaviour.
+
+Click **Test** (top-right) to send a real email. See [Testing](/docs/templates#test) for the full guide.
+
+## Commit
+
+Click **Commit** to publish. The commit snapshots: editor content, Plain Text, and all Email Settings.
+
+* Design Editor, HTML Editor, and Plain Text all save independently. **Whatever editor is open at the time you commit - that version gets committed and published.** Always verify you're on the right tab before committing.
+* If Plain Text is blank, it's auto-generated from HTML at commit time.
+
+***
+
+## Frequently asked questions
+
+
+  ### Which fonts work reliably across email clients?
+    Web-safe fonts that render everywhere: Arial, Helvetica, Georgia, Times New Roman, Verdana, Tahoma, Courier New. Google Fonts and custom fonts may fall back to system defaults in Outlook and many webmail clients. Apple Mail is the most permissive. If you need a specific custom font, contact support to get it uploaded.
+  
+
+  ### Design Editor or HTML - which gets committed?
+    Whichever tab is **active when you click Commit**. They save independently. Always verify you're on the right tab before committing.
+  
+
+  ### What happens if Plain Text is blank?
+    SuprSend auto-generates it from the HTML on every commit. Click **Fetch from HTML** to preview what it looks like. Once you edit the plain text manually, auto-generation stops.
+  
+
+  ### How do Merge Tags work with arrays?
+    Associate a row with an array variable - the row repeats for each item. Inside the row, variables refer to array item properties (e.g., `{{product_name}}`). This works on rows and columns. Don't associate both a row and a column inside it with the same array.
+  
+
+  ### Can I use variables in image URLs and alt text?
+    Yes. The Image URL field supports variables like `{{product_image_url}}`. Alt text also supports variables - use `{{product_name}}` for dynamic alt text or a static string for fixed descriptions.
+  
+
+  ### Why does my email look different in Gmail vs Outlook?
+    Each email client has different CSS support. Gmail strips `<style>` blocks; Outlook uses Word's rendering engine (no border-radius, max-width, div layouts). Use inline styles, table-based layouts, and web-safe fonts. Check [Can I Email](https://www.caniemail.com/) for specifics.
+  
+
+  ### Can I use Handlebars inside the HTML block?
+    Yes. The HTML content block in the Design Editor supports Handlebars variables - write them directly in the HTML source.
+  
+
+  ### How do Saved Blocks work?
+    Save any row as a reusable block from the row header. Saved blocks are available in the **Blocks** panel across all templates. They're a copy-on-insert - editing the original doesn't update existing templates. Saved blocks work at the row level only, not individual columns or content blocks.
+```
