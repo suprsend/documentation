@@ -1,52 +1,51 @@
 ---
 title: "Quickstart: VS Code + Copilot"
 sidebarTitle: "VS Code + Copilot"
-description: "Add the hosted SuprSend MCP server to VS Code with GitHub Copilot Chat. Install via the SuprSend agent plugin or edit .vscode/mcp.json directly."
+description: "Add the hosted SuprSend MCP server to VS Code with GitHub Copilot Chat, through the SuprSend agent plugin or mcp.json, and sign in with your SuprSend account."
 ---
 
-<Note>
-  **Beta — launched 2026-10-08.** The hosted SuprSend MCP server is in Beta. The endpoint, auth flow, and tool list may still change before general availability.
-</Note>
+## Set up the connection
 
-Add the hosted SuprSend MCP server to VS Code with GitHub Copilot Chat and drive your SuprSend account in natural language — manage workflows, templates, broadcasts, and preferences, or query delivery analytics.
+<Tabs>
 
-## Install via the SuprSend agent plugin (recommended)
+<Tab title="Agent plugin">
 
-<Warning>
-  VS Code [Agent Plugins](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) are a preview feature. The host requires the `chat.plugins.enabled` setting to be on; it's managed at the organization level. If it's disabled, contact your admin before continuing.
-</Warning>
+VS Code [Agent Plugins](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) are a preview feature. They need the `chat.plugins.enabled` setting, which your organization manages.
 
 <Steps>
-  <Step title="Install the plugin from source">
-    1. Open the command palette (`Cmd/Ctrl + Shift + P`).
-    2. Run **`Chat: Install Plugin From Source`**.
-    3. Enter the plugin URL:
+  <Step title="Install the plugin">
+    Run **`Chat: Install Plugin From Source`** from the command palette (`Cmd/Ctrl + Shift + P`) and enter:
 
     ```
     https://github.com/suprsend/agent-plugin
     ```
-  </Step>
 
-  <Step title="Enable the plugin">
-    In the Extensions sidebar, search `@agentPlugins` and confirm **suprsend** is enabled under **Agent Plugins → Installed**.
+    The plugin adds the hosted server on the US endpoint. If your workspace's data is in the EU or India, use the `mcp.json` tab instead.
   </Step>
 
   <Step title="Sign in with your SuprSend account">
-    On the first tool call, VS Code prompts a browser sign-in. Sign in with the SuprSend account that has access to the workspace you want to reach.
+    On the first tool call, VS Code opens your browser. Sign in with your SuprSend account. The agent gets the same permissions your role has in the SuprSend dashboard.
+  </Step>
+
+  <Step title="Verify the connection">
+    In Copilot Chat, ask:
+
+    ```
+    List my SuprSend workspaces.
+    ```
+
+    Copilot answers with your SuprSend workspaces.
   </Step>
 </Steps>
 
-See [Agent plugin](/reference/agent-plugin) for the full plugin install matrix.
+</Tab>
 
-## Alternative: edit `mcp.json` directly
+<Tab title="mcp.json">
 
 <Steps>
-  <Step title="Open the MCP config file">
-    - **Workspace-level:** create `.vscode/mcp.json` in your project.
-    - **User-level:** run **`MCP: Open User Configuration`** from the command palette.
-  </Step>
-
   <Step title="Add the SuprSend MCP server">
+    Add this to `.vscode/mcp.json` in your project, or to your user configuration (**`MCP: Open User Configuration`**):
+
     ```json
     {
       "servers": {
@@ -58,51 +57,71 @@ See [Agent plugin](/reference/agent-plugin) for the full plugin install matrix.
     }
     ```
 
-    `type: "http"` is the one supported value for remote servers in VS Code. To pin a workspace, use `https://mcp.suprsend.com/mcp/staging`.
+    This is the US endpoint. Use the endpoint for your workspace's data region:
+
+    | Region | Endpoint |
+    |---|---|
+    | US | `https://mcp.suprsend.com/mcp` |
+    | EU | `https://mcp.eu.suprsend.com/mcp` |
+    | India | `https://mcp.in.suprsend.com/mcp` |
   </Step>
 
   <Step title="Sign in with your SuprSend account">
-    Reload VS Code (`Developer: Reload Window`). On the first tool call, Copilot Chat prompts a browser sign-in. Approve the first tool call, and you're done.
+    Reload VS Code (**`Developer: Reload Window`**). On the first tool call, VS Code opens your browser. Sign in with your SuprSend account. The agent gets the same permissions your role has in the SuprSend dashboard.
+  </Step>
+
+  <Step title="Verify the connection">
+    In Copilot Chat, ask:
+
+    ```
+    List my SuprSend workspaces.
+    ```
+
+    Copilot answers with your SuprSend workspaces.
   </Step>
 </Steps>
 
-<Tip>
-  Scope the agent's reach by appending `?tools=` to the URL — for example `https://mcp.suprsend.com/mcp?tools=users.*,data.*`. See the [tool list](/reference/mcp-tool-list) for group names.
-</Tip>
+</Tab>
 
-## Verify the connection
+</Tabs>
 
-In a Copilot Chat panel, try:
+## Pin a workspace and restrict tools
 
-```
-List all workflows in my SuprSend workspace.
-```
+By default, Copilot can use every workspace and tool your role allows. To keep it on one workspace, or to give it only the tools a job needs, use one of these URLs in `mcp.json`:
 
-If the server is connected and signed in, Copilot calls `workflows.list` and returns your workflows.
+- **Pin a workspace** by adding its slug to the path. The agent then can't switch to another workspace:
+
+  ```
+  https://mcp.suprsend.com/mcp/staging
+  ```
+
+- **Restrict tools** with `?tools=`, a comma-separated list of tool names or groups:
+
+  ```
+  https://mcp.suprsend.com/mcp/staging?tools=users.*,data.*
+  ```
+
+See [Scope the connection](/reference/mcp-overview#scope-the-connection) for every URL pattern, and the [tool list](/reference/mcp-tool-list) for every tool.
 
 ## Troubleshooting
 
 <AccordionGroup>
+  <Accordion title="Server shows disconnected or refuses the connection">
+    Check the workspace slug in the URL. It must match a workspace in your SuprSend account exactly, for example `staging`, not the workspace's display name. A slug that doesn't exist fails with `403 workspace_forbidden`. To see your slugs, remove the slug, reconnect, and ask: "List my SuprSend workspaces."
+  </Accordion>
   <Accordion title="Tool list is empty after sign-in">
-    Your SuprSend role may be a member with no read tools on the pinned workspace, or the `?tools=` filter may be too strict. Remove the filter, confirm your role at [app.suprsend.com](https://app.suprsend.com), then reload the window.
+    The `?tools=` filter may be too strict. Remove it and reload the window.
   </Accordion>
-
-  <Accordion title="Permissions dialog on first tool call">
-    Copilot asks for permission before each tool runs for the first time. Approve the specific tool (not "always allow") until you're confident in the agent's behaviour on this workspace.
-  </Accordion>
-
   <Accordion title="Settings Sync overwrites my config">
-    User-level `mcp.json` syncs through VS Code's Settings Sync. If a different machine's sync replaces your SuprSend entry, re-add it on the current machine and sync will push the merged config.
+    User-level `mcp.json` syncs through VS Code's Settings Sync. If another machine's sync replaces your SuprSend entry, re-add it on the current machine and sync pushes the merged config.
   </Accordion>
 </AccordionGroup>
 
----
-
 <CardGroup cols={2}>
-  <Card title="Tool list" icon="wrench" href="/reference/mcp-tool-list">
+  <Card title="Tool list" icon="list" href="/reference/mcp-tool-list">
     Every tool, grouped by category, with read vs write labels.
   </Card>
-  <Card title="Prompt cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
+  <Card title="Prompt cheatsheet" icon="message" href="/reference/mcp-prompts">
     Ready-to-use prompts to get started fast.
   </Card>
 </CardGroup>

@@ -1,36 +1,20 @@
 ---
 title: "Quickstart: Claude"
 sidebarTitle: "Claude"
-description: "Connect the hosted SuprSend MCP server to Claude Code, Claude Desktop, or Claude.ai. Sign in with your SuprSend account via WorkOS; no service token needed."
+description: "Connect the hosted SuprSend MCP server to Claude Code, Claude Desktop, or Claude.ai. Sign in with your SuprSend account; no service token needed."
 ---
-
-<Note>
-  **Beta — launched 2026-10-08.** The hosted SuprSend MCP server is in Beta. The endpoint, auth flow, and tool list may still change before general availability.
-</Note>
-
-<Note>
-  **Not sure which client you're using?** Claude Code runs in your terminal or IDE and is invoked with the `claude` command. Claude Desktop is the standalone chat app from [claude.ai/download](https://claude.ai/download); Claude.ai is the web client at [claude.ai](https://claude.ai). Setup differs for each — pick the matching tab below.
-</Note>
 
 <Tip>
   Prefer a one-command install? The **SuprSend Claude plugin** wires the hosted server into Claude Code, Claude Desktop, Claude.ai, mobile, and Cowork — run `/plugin marketplace add suprsend/claude-plugin` then `/plugin install suprsend@suprsend`. See the [Agent plugin](/reference/agent-plugin) page.
 </Tip>
+
+## Set up the connection
 
 <Tabs>
 
 <Tab title="Claude Code">
 
 <Steps>
-  <Step title="Install Claude Code">
-    Claude Code is distributed as an npm package and requires [Node.js](https://nodejs.org/) 18+.
-
-    ```bash
-    npm install -g @anthropic-ai/claude-code
-    ```
-
-    Run `claude` once and complete the one-time browser login it prompts.
-  </Step>
-
   <Step title="Add the SuprSend MCP server">
     From your **regular terminal** (not inside a running `claude` session):
 
@@ -38,44 +22,27 @@ description: "Connect the hosted SuprSend MCP server to Claude Code, Claude Desk
     claude mcp add --transport http suprsend https://mcp.suprsend.com/mcp
     ```
 
-    This writes the server to `~/.claude.json` with `type: "http"` (an alias of `streamable-http`). Short form: `-t http` works the same as `--transport http`.
+    This is the US endpoint. Use the endpoint for your workspace's data region:
 
-    **Pin a workspace** by appending its slug to the URL path:
-
-    ```bash
-    claude mcp add --transport http suprsend https://mcp.suprsend.com/mcp/staging
-    ```
-
-    **Scope to specific tool groups** with `?tools=`:
-
-    ```bash
-    claude mcp add --transport http suprsend-read https://mcp.suprsend.com/mcp?tools=users.*,data.*
-    ```
+    | Region | Endpoint |
+    |---|---|
+    | US | `https://mcp.suprsend.com/mcp` |
+    | EU | `https://mcp.eu.suprsend.com/mcp` |
+    | India | `https://mcp.in.suprsend.com/mcp` |
   </Step>
 
   <Step title="Sign in with your SuprSend account">
-    The first time Claude Code connects, it opens a browser window for a WorkOS sign-in. Sign in with the SuprSend account that has access to the workspace you pinned (or any workspace, if you didn't pin one). After sign-in, your SuprSend role decides which tools you see — members get read tools, admins get every tool.
+    On first connect, Claude Code opens your browser. Sign in with your SuprSend account. The agent gets the same permissions your role has in the SuprSend dashboard.
   </Step>
 
   <Step title="Verify the connection">
-    ```bash
-    claude mcp list
-    ```
-
-    You should see `suprsend` listed as connected. Then start a Claude Code session:
-
-    ```bash
-    cd ~/any-project
-    claude
-    ```
-
-    Inside the session, type `/mcp` to see the tool count. Try a read-only prompt to confirm the loop works:
+    Start `claude` and ask:
 
     ```
-    Search the SuprSend docs for how preference categories work.
+    List my SuprSend workspaces.
     ```
 
-    Claude asks for permission before the first tool call — approve it, and you're done.
+    Claude answers with your SuprSend workspaces.
   </Step>
 </Steps>
 
@@ -85,28 +52,27 @@ description: "Connect the hosted SuprSend MCP server to Claude Code, Claude Desk
 
 <Steps>
   <Step title="Open the connectors settings">
-    In Claude Desktop or at [claude.ai](https://claude.ai), go to **Settings → Connectors**. For the generic flow, see Anthropic's [Connect to Remote MCP Servers](https://modelcontextprotocol.io/docs/develop/connect-remote-servers) walkthrough.
+    In Claude Desktop or at [claude.ai](https://claude.ai), go to **Settings → Connectors**. On Team and Enterprise plans, an owner may need to allow the connector first.
   </Step>
 
   <Step title="Add a custom connector">
     1. Click **Add** → **Add custom connector**.
-    2. Paste the URL: `https://mcp.suprsend.com/mcp`.
-    3. To pin a workspace, use `https://mcp.suprsend.com/mcp/<workspace>` instead.
-    4. Save.
+    2. Paste the endpoint for your workspace's data region: `https://mcp.suprsend.com/mcp` (US), `https://mcp.eu.suprsend.com/mcp` (EU) or `https://mcp.in.suprsend.com/mcp` (India).
+    3. Save.
   </Step>
 
   <Step title="Sign in with your SuprSend account">
-    Claude prompts a browser sign-in on the first tool call. Sign in with your SuprSend account. Your role (admin or member) decides which tools you see.
+    Claude prompts a browser sign-in on the first tool call. Sign in with your SuprSend account. The agent gets the same permissions your role has in the SuprSend dashboard.
   </Step>
 
   <Step title="Verify the connection">
-    In a new conversation, click the **tools icon** in the input area — SuprSend's tools should appear. Try:
+    In a new conversation, ask:
 
     ```
-    Search the SuprSend docs for how preference categories work.
+    List my SuprSend workspaces.
     ```
 
-    Approve the first tool call, and you're set.
+    Claude answers with your SuprSend workspaces.
   </Step>
 </Steps>
 
@@ -114,21 +80,23 @@ description: "Connect the hosted SuprSend MCP server to Claude Code, Claude Desk
 
 </Tabs>
 
-## Restricting which tools Claude can access
+## Pin a workspace and restrict tools
 
-The SuprSend MCP server limits tools in two ways:
+By default, Claude can use every workspace and tool your role allows. To keep it on one workspace, or to give it only the tools a job needs, change the URL when you add the server:
 
-- **By URL** — append `?tools=` to the endpoint to restrict which tool groups the client sees. For example:
+- **Pin a workspace** by adding its slug to the path. The agent then can't switch to another workspace:
 
+  ```bash
+  claude mcp add --transport http suprsend https://mcp.suprsend.com/mcp/staging
   ```
-  https://mcp.suprsend.com/mcp?tools=users.*,data.*
+
+- **Restrict tools** with `?tools=`, a comma-separated list of tool names or groups:
+
+  ```bash
+  claude mcp add --transport http suprsend https://mcp.suprsend.com/mcp/staging?tools=users.*,data.*
   ```
 
-  Scope can only reduce access, never widen it.
-
-- **By role** — your SuprSend role decides what the agent can do. Members see only read tools; admins see every tool, including the ones that send real notifications (`workflows.trigger`, `broadcasts.trigger`, `workflows.test_run`, `events.track`, `templates.send_test`).
-
-See the [tool list](/reference/mcp-tool-list) for every tool and its read/write label.
+See [Scope the connection](/reference/mcp-overview#scope-the-connection) for every URL pattern, and the [tool list](/reference/mcp-tool-list) for every tool.
 
 ## Troubleshooting
 
@@ -138,7 +106,7 @@ See the [tool list](/reference/mcp-tool-list) for every tool and its read/write 
   </Accordion>
 
   <Accordion title="Server shows disconnected">
-    Check that the SuprSend account you signed in with has access to the workspace in the URL. If you pinned `/mcp/staging` but your account is only on `production`, the server rejects the connection. Re-add with a workspace you can access, or drop the slug to let the server pick one.
+    Check the workspace slug in the URL. It must match a workspace in your SuprSend account exactly, for example `staging`, not the workspace's display name. A slug that doesn't exist fails with `403 workspace_forbidden`. To see your slugs, re-add the server without a slug and ask: "List my SuprSend workspaces."
   </Accordion>
 
   <Accordion title="Tools icon missing after restart on Claude Desktop">

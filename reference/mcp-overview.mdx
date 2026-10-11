@@ -1,14 +1,46 @@
 ---
-title: "MCP Server"
+title: "SuprSend MCP server (Beta)"
 sidebarTitle: "Overview"
-description: "Connect SuprSend to Claude, ChatGPT, Cursor, VS Code, Codex, Gemini, or Windsurf over the Model Context Protocol - manage users, workflows, templates, broadcasts, preferences, and analytics in natural language."
+tag: "BETA"
+description: "Connect SuprSend MCP to your AI clients (Claude, ChatGPT, Codex, Gemini and more) so your team can run notifications from the tools they already work in, without logging in to the SuprSend dashboard."
 ---
 
-<Note>
-  **Beta — launched 2026-10-08.** The hosted SuprSend MCP server is live in Beta. The endpoint, auth flow, and tool list may still change before general availability.
-</Note>
+## Overview
 
-The SuprSend MCP server is the first public step toward a headless SuprSend. Any AI client — Claude, ChatGPT, Cursor, VS Code with GitHub Copilot, Codex, Gemini, Windsurf — can now drive your SuprSend account over MCP. Manage users, lists, workflows, templates, broadcasts, preferences, messages, and delivery analytics in natural language, without opening the dashboard or writing SDK code.
+SuprSend MCP exposes your SuprSend workspace (users, objects, tenants, lists, workflows, templates, preferences, translations, vendors and delivery data) as tools that an AI client such as Claude, ChatGPT, Codex or Gemini can call over OAuth. From natural-language prompts, it reads delivery logs and analytics, debugs why a notification didn't reach a user, edits workflows, templates and translations as drafts, updates user and tenant preferences, sends test notifications, and publishes the changes to production. You run the whole notification lifecycle without writing SQL, calling the API or opening the SuprSend dashboard.
+
+Use SuprSend MCP when you want an AI client to read and change your notifications with your account permissions. It uses the role on your SuprSend account, the same one the dashboard uses, so the agent can't do more than you can.
+
+Sign in with your SuprSend account from any MCP-capable client, such as Claude Code, the Claude app, ChatGPT, VS Code, Codex, Gemini CLI or Windsurf. The server is hosted, so there is nothing to install.
+
+## How to connect
+
+Each data region has its own server. Use the endpoint for your workspace's data region:
+
+| Region | Endpoint |
+|---|---|
+| US | `https://mcp.suprsend.com/mcp` |
+| EU | `https://mcp.eu.suprsend.com/mcp` |
+| India | `https://mcp.in.suprsend.com/mcp` |
+
+The setup is the same in every client:
+
+<Steps>
+  <Step title="Pick your URL">
+    Start from your region's endpoint. To pin a workspace, add its slug: `https://mcp.suprsend.com/mcp/staging`. To limit the tools, add a `tools` filter: `https://mcp.suprsend.com/mcp/staging?tools=users.*,data.*` gives only the user and data tools. See [Scope the connection](#scope-the-connection).
+  </Step>
+  <Step title="Add it to your AI client">
+    Add the URL as a remote MCP server, or as a custom connector in apps like Claude and ChatGPT. Some clients install it through the SuprSend agent plugin instead.
+  </Step>
+  <Step title="Sign in with SuprSend">
+    On first connect, your client opens a browser window. Sign in with your SuprSend account and approve access for the client.
+  </Step>
+  <Step title="Check the connection">
+    Ask the agent: "List my SuprSend workspaces." It should answer with your SuprSend workspaces.
+  </Step>
+</Steps>
+
+For the exact steps in your client:
 
 <CardGroup cols={2}>
   <Card title="Claude Code" icon="terminal" href="/reference/mcp-quickstart-claude">
@@ -17,17 +49,11 @@ The SuprSend MCP server is the first public step toward a headless SuprSend. Any
   <Card title="Claude Desktop & Claude.ai" icon="comments" href="/reference/mcp-quickstart-claude">
     Add a custom connector in the Claude app.
   </Card>
-  <Card title="Cursor" icon="arrow-pointer" href="/reference/mcp-quickstart-cursor">
-    Install the SuprSend agent plugin for Cursor.
+  <Card title="ChatGPT and Codex" icon="message" href="/reference/mcp-quickstart-chatgpt">
+    Add a custom MCP server in ChatGPT, or run `codex mcp add` in Codex CLI.
   </Card>
   <Card title="VS Code + Copilot" icon="code" href="/reference/mcp-quickstart-vscode">
     Add it in `.vscode/mcp.json` for Copilot Chat.
-  </Card>
-  <Card title="ChatGPT" icon="message" href="/reference/mcp-quickstart-chatgpt">
-    Add a custom MCP server from the Plugins menu.
-  </Card>
-  <Card title="Codex CLI" icon="rectangle-terminal" href="/reference/mcp-quickstart-codex">
-    Install the SuprSend agent plugin for Codex.
   </Card>
   <Card title="Gemini CLI" icon="sparkles" href="/reference/mcp-quickstart-gemini">
     Add it to `~/.gemini/settings.json`.
@@ -37,104 +63,185 @@ The SuprSend MCP server is the first public step toward a headless SuprSend. Any
   </Card>
 </CardGroup>
 
----
+More clients that support remote MCP servers:
 
-## What you can do
+{/* TODO(verify): sign-in from these clients has not been tested against the SuprSend server (DCR is off; the client must support the Client ID Metadata Document flow). Rork and GitHub Copilot coding agent are left out until eng confirms them. Kiro sign-in is known not to work yet (DCR). */}
 
-<AccordionGroup>
-  <Accordion title="Set up your account and seed test data" icon="wand-magic-sparkles">
-    - "Create a tenant called `routewise-eu` and set the `shipment-updates` category to opt-in by default."
-    - Seed test users with channel addresses, then subscribe them to objects so they inherit the right preferences.
-    - Configure a preference hierarchy: category defaults, tenant overrides, user choices.
-    - Add users to lists and objects before writing any code.
-  </Accordion>
-  <Accordion title="Build workflows, templates, and broadcasts in natural language" icon="screwdriver-wrench">
-    - "Build a quote-expiring reminder workflow that sends email 2 hours before expiry, then falls back to WhatsApp."
-    - Publish templates and translations from draft to live.
-    - Dry-run a broadcast to confirm the list size and template exist before sending.
-  </Accordion>
-  <Accordion title="Query delivery analytics" icon="chart-line">
-    - "Show me the email delivery rate by tenant for the last 7 days as a line chart."
-    - "Which workflows failed most often this week?"
-    - Results render as a chart or table in clients that support MCP Apps (see below).
-  </Accordion>
-  <Accordion title="Debug a user's experience" icon="bug">
-    - "User `usr_8f3k2m` says they never got the invite — show me their profile, channel addresses, and preferences."
-    - Preview a message with images and links masked.
-    - Check whether a preference category is opted out at the user, tenant, or object level.
-  </Accordion>
-</AccordionGroup>
+<CardGroup cols={3}>
+  <Card title="Replit" icon="laptop-code" href="/reference/mcp-quickstart-replit">
+    Add a custom MCP server to Replit Agent.
+  </Card>
+  <Card title="Lovable" icon="heart" href="/reference/mcp-quickstart-lovable">
+    Add a custom MCP server as a chat connector.
+  </Card>
+  <Card title="Figma Make" icon="figma" href="/reference/mcp-quickstart-figma-make">
+    Create a custom MCP connector. Needs a paid Figma plan.
+  </Card>
+  <Card title="Grok" icon="robot" href="/reference/mcp-quickstart-grok">
+    Add a custom connector in Grok, or run `grok mcp add` in Grok Build.
+  </Card>
+  <Card title="Kiro" icon="ghost" href="/reference/mcp-quickstart-kiro">
+    Add it to `~/.kiro/settings/mcp.json`. Sign-in isn't available yet.
+  </Card>
+</CardGroup>
 
----
+## What you can do with MCP
 
-## How it works
+Use SuprSend MCP for these jobs:
 
-The SuprSend MCP server is a remote Streamable HTTP server. Your AI client connects directly to a hosted endpoint — there is nothing to install locally and no CLI to run.
+- **Integrate SuprSend into your product.** In a coding client like Claude Code or VS Code, the agent reads the SuprSend docs and your workspace's workflows, events and payload schemas, then writes the code: install or upgrade an SDK, identify users, add the Inbox, or adopt a new SuprSend feature.
+- **Build and edit notifications.** Describe the notification you need, and the agent creates the workflow and its templates for every channel, then adds the matching workflow trigger or event call to your codebase with a payload that fits the schema. Changes stay drafts until you publish them, so you can test first.
+- **Debug a missed notification.** Ask why a user didn't get a message. The agent loads the workflow run first and finds the step where it stopped, then checks the user's profile, active channels, preferences and subscriptions, and the vendor routing. If your role allows it, the agent can also preview the message that was sent, with codes and link tokens masked.
+- **Query analytics and logs.** Ask questions in plain words: how many quote-expiring emails were delivered last week by tenant, which workflows failed most this month, or which API calls returned errors today. The agent writes read-only SQL over your logs and, in clients that support MCP Apps, shows the answer as a chart or table.
+- **Manage assets and data.** Create and update users, objects and tenants, set user and tenant preferences, build static or dynamic lists, and edit translations, preference categories and schemas. Add vendors, set the primary vendor and fallbacks for each channel, and upload images and PDFs to the SuprSend CDN.
+- **Test notifications.** Validate workflows and templates, dry-run a send to check the payload without sending, run a draft workflow for test recipients, send a test of a template to one user, and evaluate Handlebars, JSONNET and jq expressions on sample data.
+- **Send and control live notifications.** Trigger a workflow for up to 100 recipients, track an event, or broadcast a template to a list, now or on a schedule. Cancel a broadcast or a pending run, or turn a workflow off.
 
-- **Endpoint:** `https://mcp.suprsend.com/mcp`
-- **Protocol:** built for MCP spec `2026-07-28`. Clients built against the 2025 spec also connect, but they do not get the `skills/list` and `skills/get` methods.
-- **Workspace scoping:** append the workspace slug to the URL path to pin the connection — for example `https://mcp.suprsend.com/mcp/staging`. Without a slug, the server picks the workspace it finds first.
-- **Tool scoping:** add a `?tools=` query to limit which tool groups the client sees — for example `https://mcp.suprsend.com/mcp?tools=users.*,data.*`. Scope can only reduce access, never widen it.
+Don't use SuprSend MCP for these jobs:
 
-```mermaid
-flowchart TD
-    A["Your AI client (Claude / ChatGPT / Cursor / VS Code / Codex / Gemini / Windsurf)"] -->|"Natural-language prompt"| B["Hosted SuprSend MCP Server (https://mcp.suprsend.com/mcp)"]
-    B -->|"Signs you in via WorkOS<br/>Selects a tool, validates input"| C["SuprSend"]
-    C -->|"Users, workflows, templates, broadcasts, preferences, messages, data"| D["Your workspace"]
+- **Ongoing product notifications.** Notifications your product sends as users act, such as sign-up, payment or quote-expiring messages, belong in your code. Set them up with the [API or an SDK](/docs/integrate-suprsend). A one-off campaign or broadcast is fine to run from MCP.
+- **Automation in CI/CD.** For changes that run in a pipeline without a person, use the [SuprSend CLI](/reference/cli-intro). To copy a few workflows or templates from one workspace to another, MCP works: connect to `/mcp` without a workspace slug and ask the agent to copy them. The copies land as drafts, so review them before you publish. For a full workspace sync, use the CLI's `sync`.
+- **Keys and workspace setup.** API keys, workspace keys and signing keys, and new workspaces, are managed in the SuprSend dashboard. The server has no tools for them, so these keys never reach the model.
 
-    style A fill:#4F46E5,stroke:#4F46E5,color:#fff
-    style B fill:#0EA5E9,stroke:#0EA5E9,color:#fff
-    style C fill:#10B981,stroke:#10B981,color:#fff
-    style D fill:#F59E0B,stroke:#F59E0B,color:#fff
+## What comes with the connection
+
+Everything below comes from the server when you connect. You don't install or configure anything.
+
+### Tools
+
+Tools are named `<group>.<action>`, for example `users.get` or `workflows.publish`. The groups:
+
+| Group | What the tools cover |
+|---|---|
+| `users`, `objects`, `tenants` | Profiles, channels, subscriptions and preferences |
+| `lists`, `broadcasts` | Static and dynamic lists, and broadcasts to them |
+| `workflows`, `events`, `schemas` | Workflow drafts, publishing, runs, events and payload schemas |
+| `templates`, `translations` | Template content for every channel, test sends and translations |
+| `preferences` | Preference categories and their translations |
+| `vendors` | Vendors and per-channel routing with fallbacks |
+| `data`, `messages` | Read-only SQL over logs and analytics, and sent-message previews |
+| `assets`, `expressions` | Uploads to the SuprSend CDN, and testing Handlebars, JSONNET and jq |
+| `workspaces`, `docs` | Your workspaces, SuprSend docs search and skills |
+
+See the [full tool list](/reference/mcp-tool-list) for every tool, whether it reads, writes or sends, and which ones need write access.
+
+### Agent skills
+
+Skills are packaged SuprSend knowledge that the agent reads before it writes JSON or SQL, so it gets the format right the first time. The server serves four:
+
+| Skill | What it teaches the agent |
+|---|---|
+| [`suprsend-workflow-schema`](/reference/agent-skill-workflow-schema) | Workflow JSON and every node type |
+| [`suprsend-template-schema`](/reference/agent-skill-template-schema) | Template variant JSON for every channel |
+| `suprsend-semantic-layer` | The tables, columns and SQL rules for `data.query` |
+| [`suprsend-docs-support`](/reference/agent-skill-docs-support) | How to read the SuprSend docs and get help |
+
+Clients with the MCP Skills extension load them directly. Other clients get the same files through the `docs.get_skill` tool, and the server instructions tell the model to read the matching skill first.
+
+### MCP Apps
+
+In clients that support MCP Apps, two tools show interactive results instead of plain text:
+
+- **`data.query`** shows the answer as a chart (metric, line, bar, stacked bar or pie) or a table, with a Refresh button that runs the query again.
+- **`messages.get_content`** shows a preview of a sent email, Inbox, SMS or push message, with images and links off and codes masked. Slack messages show as JSON with a link to Slack's Block Kit Builder.
+
+In other clients, the same tools return text.
+
+### Server instructions
+
+A short text the client puts in the model's context: what SuprSend is, which tools to use, and the rules for workspaces, sends and drafts. It names only the tools on your connection.
+
+The server is built for MCP spec `2026-07-28`. Clients built against the 2025 spec also connect.
+
+## Scope the connection
+
+The URL you connect to decides which workspace and which tools the agent gets. Scope can only take access away. Your SuprSend role still applies on top of it.
+
+| URL | Workspace | Tools |
+|---|---|---|
+| `/mcp` | Every workspace in your account. The agent names one on each call. | All tools your role allows |
+| `/mcp/staging` | Only `staging` | All tools your role allows |
+| `/mcp/staging?tools=users.*` | Only `staging` | Only the `users` tools |
+| `/mcp?tools=users.*,lists.*` | Every workspace in your account | Only the `users` and `lists` tools |
+
+Add the path and filter to your region's endpoint, for example `https://mcp.eu.suprsend.com/mcp/staging`. One sign-in works on every URL of the same server.
+
+- **Pin a workspace.** With a slug in the path, the tools lose their `workspace` input and the agent can't switch to another workspace. If the slug doesn't match a workspace in your account, the server refuses the connection with `403 workspace_forbidden`.
+- **Filter the tools.** `?tools=` takes a comma-separated list of exact tool names (`users.get`) or groups (`users.*`). Any other pattern, or one that matches no tool, fails with `400 invalid_tools_filter`.
+- **Watch what a group includes.** A group brings its write and send tools with it: `templates.*` includes `templates.publish` and `templates.send_test`. For a read-only connection, list the read tools by name.
+
+For example, this URL lets an agent debug delivery in production without changing anything:
+
+```text
+https://mcp.suprsend.com/mcp/production?tools=data.*,users.find,users.get,users.get_preferences,workflows.list,workflows.get
 ```
 
-### Authentication
+The server instructions follow the scope. They name only the tools on the connection, and on a pinned URL they name only that workspace.
 
-Sign in with your SuprSend account. When your AI client connects for the first time, it opens a browser window and the SuprSend MCP server runs an OAuth handshake through WorkOS. After sign-in, your SuprSend role decides what the agent can do:
+## Security and privacy
 
-- **Members** see only read tools.
-- **Admins** see every tool, including the ones that send real notifications.
+### Data access
 
-OAuth via WorkOS is the only supported auth path today. JWT bearer tokens for programmatic agents are coming soon.
+- The agent gets the same permissions your role has in the SuprSend dashboard. The server checks this on every call, and tools your role can't use don't appear in the client.
+- Sign-in uses OAuth. The access token works only for the SuprSend MCP server, not for the SuprSend dashboard or API.
+- API keys, workspace keys and signing keys aren't available through MCP. Codes and link tokens in sent messages are masked before the model sees them.
 
-### MCP Apps and Skills
+{/* TODO(verify): channel secrets (Slack bot tokens, webhook URLs, push device tokens) on user and object profiles are not masked yet (server TODO, security audit F1). Don't claim profiles are secret-free until the backend masks them. */}
 
-Hosts that implement the MCP Apps extension get richer output than plain text:
+### Limit access with roles and scope
 
-- **`data.query`** results render as a chart (metric, line, bar, stacked bar, or pie) or as a table with a Refresh button.
-- **`messages.get_content`** renders an actual message preview — email, Inbox, SMS, and push — with images and links off and OTPs or link queries masked. Slack messages render as JSON.
+In addition to role-based access, you can scope a connection further with its URL:
 
-Clients that implement the MCP Skills extension get four SuprSend Skills on top of the tool list:
+- Pin one workspace, for example `/mcp/staging`, so the agent can't touch production.
+- Add a `tools` filter to hide the tools a job doesn't need.
+- Tools outside your scope don't appear in the client, and the server refuses them if called.
 
-- `suprsend-semantic-layer` — maps your workspace concepts (tenants, categories, channels) to data queries.
-- `suprsend-template-schema` — the full template schema for every channel.
-- `suprsend-workflow-schema` — the full workflow node schema.
-- `suprsend-docs-support` — pulls answers from SuprSend's docs.
+See [Scope the connection](#scope-the-connection) for the URL patterns.
 
-### Easier install: the SuprSend plugins
+### Guardrails on changes and sends
 
-Two plugin packages wrap the hosted server install so your client picks it up in one step:
+Tools that update data or send notifications are marked as such, so your AI client asks for your approval before they run. Only the server's guardrails below hold in every client.
 
-- **`suprsend/claude-plugin`** — for Claude on web, Desktop, mobile, Cowork, and Claude Code.
-- **`suprsend/agent-plugin`** — for VS Code, GitHub Copilot CLI, Codex, Cursor, Kiro, and other Agent Plugins 1.0.0 clients.
+| Enforced by | Guardrail | How strong |
+|---|---|---|
+| **The SuprSend server** | A dry run sends nothing. A retry of `workflows.trigger` with the same idempotency key within 24 hours sends nothing again. Draft changes don't go live until publish. | Holds in every client |
+| **The model** | The server's instructions tell the model to call send tools only when you ask to send, and to use production only when you ask for it. | Depends on the model following them |
+| **Your AI client** | Asks you to approve each update and send, based on the tool's marks. | Depends on your client and its approval settings. Don't auto-approve send tools. |
 
-Both plugins ship a config that connects to `https://mcp.suprsend.com/mcp` — nothing runs on your machine. The per-client quickstarts above include the plugin command alongside the manual MCP config.
+{/* TODO(verify): org-level admin control to turn MCP access on or off — not found in the server code. Add a subsection if one exists. */}
 
----
+### Privacy considerations
 
-## Learn more
+The AI client you connect, and the model behind it, processes the SuprSend data that the tools return, such as user profiles and delivery logs. Check your AI provider's data policies and your own compliance requirements before you connect a production workspace.
+
+The model can misread a result or pick the wrong tool. Review what the agent plans to change or send before you approve it.
+
+{/* TODO(verify): if product analytics is on in production, say here what SuprSend records about tool calls (no tool results; only marked arguments). */}
+
+## Tell us what's missing
+
+SuprSend MCP is still evolving, and your feedback decides what we build next. Two tools send it straight to the SuprSend team from your chat:
+
+- **`get_more_tools`** reports a tool the agent needed but didn't have. Ask: "Tell SuprSend you need a tool to clone a workflow."
+- **`send_feedback`** reports a problem, or something that worked well. Ask: "Send SuprSend feedback that the template preview cut off my email."
+
+The agent can also call them on its own when it gets stuck. Feedback goes to the SuprSend team, along with your account and workspace, but never the results of your tool calls.
+
+{/* TODO(verify): send_feedback and get_more_tools exist only when PostHog analytics is on (POSTHOG_PROJECT_TOKEN). Confirm analytics is on in production in every region before publishing. */}
+
+## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Tool list" icon="wrench" href="/reference/mcp-tool-list">
-    Every tool in the server, grouped by category, with read vs write labels.
+  <Card title="Quickstart" icon="bolt" href="/reference/mcp-quickstart">
+    Connect to a staging workspace and walk the steps from read to test send.
   </Card>
-  <Card title="Prompt cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
-    Copy-paste prompts for workflows, users, templates, broadcasts, and analytics.
+  <Card title="Recipes" icon="book-open" href="/reference/mcp-recipes">
+    Prompts for debugging users, building workflows and checking delivery.
   </Card>
-  <Card title="Agent plugin" icon="plug" href="/reference/agent-plugin">
-    Install the SuprSend plugin in Claude, VS Code, Copilot CLI, Codex, Cursor, or Kiro.
+  <Card title="Reference" icon="wrench" href="/reference/mcp-tool-list">
+    Tools, skills, MCP Apps and the server instructions.
   </Card>
-  <Card title="Task Management example app" icon="rocket" href="/reference/mcp-example-task-management-app">
-    Build a notification system end to end using MCP prompts.
+  <Card title="Troubleshooting" icon="life-ring" href="/reference/mcp-troubleshooting">
+    Fix sign-in, scope and send errors.
   </Card>
 </CardGroup>
