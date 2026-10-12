@@ -1,100 +1,274 @@
 ---
-title: "Tool List"
-sidebarTitle: "Tool List"
-description: "Browse every tool exposed by the SuprSend MCP server, grouped by category, covering users, workflows, tenants, templates, preferences, and docs."
+title: "Tool list"
+sidebarTitle: "Tool list"
+description: "Every tool the SuprSend MCP server exposes, grouped by category, with what each one does, an example prompt, and whether it reads, writes or sends."
 ---
+
+The SuprSend MCP server exposes **92 tools in 18 groups**. Tools are named `<group>_<action>`. This page lists every one, with an example prompt that makes the agent call it.
 
 <Note>
-  All tools listed here are also available in Agent on the dashboard.
+  Tool names use an underscore separator — `users_get`, not the earlier `users.get`. The dotted names still work in `?tools=` filters so saved connector URLs don't break.
 </Note>
 
-## Documentation
+The **Access** column says what a tool does to your account:
 
-| Tool | Description |
-|---|---|
-| `documentation.search` | Search SuprSend docs for a topic or example |
-| `documentation.fetch` | Fetch the full content of a documentation page by URI |
+- **Read** looks things up and changes nothing.
+- **Write** changes data in your workspace. Drafts stay drafts until you publish them.
+- **Sends** delivers real notifications to real recipients.
 
-## Users
-
-| Tool | Description | API |
-|---|---|---|
-| `users.get` | Get a user's profile, channel addresses, and properties | [Fetch User](https://docs.suprsend.com/reference/get-user-profile.md) |
-| `users.upsert` | Create or update a user | [Create / Update User](https://docs.suprsend.com/reference/create-update-users.md) |
-| `users.get_preferences` | Get a user's preferences across categories and channels | [Full Preference](https://docs.suprsend.com/reference/get-user-full-preference.md) |
-| `users.update_preferences` | Update a user's preference for a specific category | [Update Category](https://docs.suprsend.com/reference/update-user-category-preference.md) |
-| `users.update_channel_preference` | Update global channel-level restrictions for a user | [Update Channel](https://docs.suprsend.com/reference/update-user-channel-preference.md) |
-| `users.get_list_subscriptions` | Get all lists a user belongs to | [Fetch Subscriptions](https://docs.suprsend.com/reference/fetch-user-list-subscriptions.md) |
-| `users.get_objects_subscriptions` | Get all objects a user is subscribed to | [Fetch Object Subscriptions](https://docs.suprsend.com/reference/fetch-user-object-subscriptions.md) |
-
-## Tenants
-
-| Tool | Description | API |
-|---|---|---|
-| `tenants.get` | Get a tenant's configuration, branding, and properties | [Get Tenant](https://docs.suprsend.com/reference/get-tenant-data.md) |
-| `tenants.get_all` | List all tenants in the workspace | [List Tenants](https://docs.suprsend.com/reference/get-tenant-list.md) |
-| `tenants.upsert` | Create or update a tenant | [Create / Update Tenant](https://docs.suprsend.com/reference/create-update-tenants.md) |
-| `tenants.get_preferences` | Get a tenant's default preferences across all categories | [Get Tenant Preferences](https://docs.suprsend.com/reference/get-tenant-category-preferences.md) |
-| `tenants.update_preferences` | Update a tenant's preference overrides for a category | [Update Tenant Preference](https://docs.suprsend.com/reference/update-tenant-preference-single-category.md) |
-
-## Objects
-
-| Tool | Description | API |
-|---|---|---|
-| `objects.get` | Get an object's profile, channels, and subscriber count | [Fetch Object](https://docs.suprsend.com/reference/get-object-by-id.md) |
-| `objects.upsert` | Create or update an object | [Create / Update Object](https://docs.suprsend.com/reference/create-update-objects.md) |
-| `objects.get_preferences` | Get an object's preferences across categories and channels | [Full Preference](https://docs.suprsend.com/reference/get-object-full-preference.md) |
-| `objects.update_preferences` | Update an object's preference for a specific category | [Update Category](https://docs.suprsend.com/reference/object-preference-category.md) |
-| `objects.update_channel_preference` | Update global channel-level restrictions for an object | [Update Channel](https://docs.suprsend.com/reference/update-object-channel-preference.md) |
-
-## Workflows
-
-| Tool | Description | API |
-|---|---|---|
-| `workflows.list` | List all workflows in the workspace | [List Workflows](https://docs.suprsend.com/reference/list-workflows.md) |
-| `workflows.get` | Get a workflow's configuration, steps, and metadata | [Get Workflow](https://docs.suprsend.com/reference/get-workflow.md) |
-| `workflows.create` | Create a new workflow with channels, steps, and routing | [Create / Update Workflow](https://docs.suprsend.com/reference/create-update-workflow.md) |
-| `workflows.update` | Update an existing workflow's configuration | [Create / Update Workflow](https://docs.suprsend.com/reference/create-update-workflow.md) |
-| `workflows.trigger` | Trigger a workflow for one or more recipients | [Trigger Workflow](https://docs.suprsend.com/reference/trigger-workflow-api.md) |
-
----
+The agent gets the tools your SuprSend role allows. Tools your role can't use don't appear in your client. Your AI client asks for your approval before a write or send tool runs.
 
 ## Scoping tool access
 
-By default, the MCP server exposes all tools. Use `--tools` to restrict access - useful for production workspaces where you want read-only or limited scope.
+Add `?tools=` to the server URL to limit which tools a client sees. Use a comma-separated list of tool names or group patterns:
 
-The flag accepts a comma-separated list of tool identifiers. Use `*` as a wildcard for all tools in a category.
-
-```json
-{
-  "mcpServers": {
-    "suprsend": {
-      "command": "suprsend",
-      "args": [
-        "start-mcp-server",
-        "--tools", "users.get,users.upsert,tenants.*"
-      ],
-      "env": {
-        "SUPRSEND_SERVICE_TOKEN": "your_service_token_here"
-      }
-    }
-  }
-}
 ```
+https://mcp.suprsend.com/mcp?tools=users_*,data_*
+```
+
+```
+https://mcp.suprsend.com/mcp/staging?tools=data_*
+```
+
+A pattern that matches no tool is an error. URL scope can only reduce access, never widen it. A group pattern includes the group's write and send tools: for read-only access, list the read tools by name. See [Scope the connection](/reference/mcp-overview#scope-the-connection).
 
 | Pattern | What it allows |
 |---|---|
-| `users.*` | All user tools |
-| `users.get` | Only the get user tool |
-| `tenants.*,workflows.*` | All tenant and workflow tools |
+| `users_*` | All user tools |
+| `users_get` | Only the `users_get` tool |
+| `tenants_*,workflows_*` | All tenant and workflow tools |
+| `data_*` | Only the delivery-analytics tools |
+
+---
+
+## Workspaces
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `workspaces_list` | Lists the workspaces this connection can use, such as staging and production. On a pinned URL it returns only that workspace. | "Which SuprSend workspaces can you see?" | Read |
+
+## Users
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `users_find` | Finds users by exact email, phone number or distinct_id, and filters by active channel, locale or tenant. | "Find the user with the email emily.carter@routewise-demo.com." | Read |
+| `users_get` | Gets a user's full profile: channel addresses, locale, timezone and custom properties. With a tenant, also the user's profile in that tenant. | "Show me the profile of usr_8f3k2m." | Read |
+| `users_get_preferences` | Gets a user's opt-in or opt-out for each category and channel, and the channels they blocked everywhere. | "Is usr_8f3k2m opted out of quote reminders?" | Read |
+| `users_list_subscriptions` | Lists the subscriber lists or the objects, such as teams, that a user belongs to. | "Which lists is usr_8f3k2m on?" | Read |
+| `users_upsert` | Creates a user, or merges properties and adds channel addresses to an existing one. Nothing is removed. | "Create a user usr_4k2p9q with the email james.miller@routewise-demo.com." | Write |
+| `users_update` | Changes a user with operations in order: set, set once, add to a number, unset, append, remove, and add or remove a channel. | "Remove the old phone number from usr_8f3k2m." | Write |
+| `users_set_preferences` | Opts a user in or out of categories, and blocks or unblocks channels across all categories. Reports any change SuprSend didn't apply. | "Turn off SMS for usr_8f3k2m in the quote reminders category." | Write |
+| `users_reset_preferences` | Resets 1 to 100 users' preferences to the category or tenant defaults, removing every choice they made. | "Reset usr_8f3k2m's preferences to the defaults." | Write |
+
+## Objects
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `objects_get` | Gets an object, such as a team or project, with its channels, properties and number of subscribers. | "Show me the object team/dispatch-east." | Read |
+| `objects_list_subscribers` | Lists the users and child objects subscribed to an object. A notification sent to the object reaches them. | "Who is subscribed to team/dispatch-east?" | Read |
+| `objects_list_subscriptions` | Lists the parent objects an object belongs to, for example the organization of a team. | "Which organization does team/dispatch-east belong to?" | Read |
+| `objects_upsert` | Creates an object, or merges properties and adds channel values to an existing one. | "Create a team object dispatch-west named West Coast Dispatch." | Write |
+| `objects_update` | Changes an object with operations, such as setting or deleting properties and removing channel values. | "Remove the Slack webhook from team/dispatch-east." | Write |
+| `objects_add_subscribers` | Adds up to 100 users or child objects as subscribers of an object. | "Add usr_8f3k2m and usr_4k2p9q to team/dispatch-east." | Write |
+| `objects_remove_subscribers` | Removes users or child objects from an object's subscribers. Profiles don't change. | "Remove usr_4k2p9q from team/dispatch-east." | Write |
+
+## Tenants
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `tenants_get` | Gets a tenant: branding, preference page URLs, blocked channels, social links, properties and its place in the tenant tree. | "Show me the tenant freightco-us." | Read |
+| `tenants_get_preferences` | Gets a tenant's settings for each category: the default, the tenant override, visibility, and mandatory, opt-in and blocked channels. | "What are the category settings for freightco-us?" | Read |
+| `tenants_upsert` | Creates a tenant, or changes only the fields you give on an existing one. | "Create a tenant freightco-us named FreightCo US with the logo from our site." | Write |
+| `tenants_set_category_preference` | Sets one category's settings for all users of a tenant: on or off, visibility, default preference and channels. | "Make quote reminders opt-in by default for freightco-us." | Write |
+
+## Vendors
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `vendors_list_types` | Lists the vendor types SuprSend supports for a channel, such as SendGrid or Twilio. | "Which email vendors does SuprSend support?" | Read |
+| `vendors_list` | Lists the vendors a tenant has set up for a channel. Secrets and settings are never shown. | "Which SMS vendors do we have set up?" | Read |
+| `vendors_get_routing` | Shows which vendor carries a tenant's traffic for each channel and category, with the fallbacks in order. | "Which vendor sends email for freightco-us, and what's the fallback?" | Read |
+| `vendors_upsert` | Adds a vendor to a tenant, or replaces an existing vendor's whole config. It gets traffic only after routing is set. | "Add our SendGrid account as an email vendor." | Write |
+| `vendors_set_routing` | Sets the primary vendor and the fallbacks, with the wait before each, for one channel and category. | "Use SendGrid first for email, and fall back to Amazon SES after 60 seconds." | Write |
+
+## Lists
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `lists_list` | Finds subscriber lists by ID, name or type, with their status and number of subscribers. | "Show me our dynamic lists." | Read |
+| `lists_list_subscribers` | Lists the users in a subscriber list. | "Who is on the freightco-us-shippers list?" | Read |
+| `lists_preview_query` | Runs a dynamic list query without saving it, and returns sample rows and the total count. | "How many users signed up in the last 7 days?" | Read |
+| `lists_get_sync` | Gets a dynamic list's live and draft query, whether its scheduled sync is on, and the last run. | "What query fills the active-shippers list?" | Read |
+| `lists_list_sync_runs` | Gives a dynamic list's sync runs, newest first, with status, progress and failure reason. | "Did the last sync of active-shippers finish?" | Read |
+| `lists_upsert` | Creates a static or dynamic list, or updates one. A dynamic list's new query goes live and syncs at once. | "Create a dynamic list of shippers who requested a quote this week." | Write |
+| `lists_add_users` | Adds up to 10,000 existing users to a static list per call. | "Add these 50 users to the beta-testers list." | Write |
+| `lists_remove_users` | Removes up to 10,000 users from a static list per call. | "Remove usr_4k2p9q from the beta-testers list." | Write |
+| `lists_start_replace` | Starts replacing all members of a static list, for example from a CSV, as a draft. | "Replace the beta-testers list with the users in this CSV." | Write |
+| `lists_finish_replace` | Makes the replacement draft live, so the list holds exactly the users in the draft. | "Finish the replace of beta-testers." | Write |
+| `lists_cancel_replace` | Drops the replacement draft. The live list doesn't change. | "Cancel the replace of beta-testers." | Write |
+| `lists_set_sync_enabled` | Turns a dynamic list's scheduled sync on or off. Members stay as they are when it's off. | "Pause the sync of active-shippers." | Write |
+
+## Broadcasts
+
+<Warning>
+  `broadcasts_trigger` sends real notifications to every user on the list. Ask for a dry run first: it checks the list and template and returns the list size.
+</Warning>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `broadcasts_get` | Gets a broadcast's status, with the users processed, completed, skipped and failed. | "Did the port-closure broadcast finish?" | Read |
+| `broadcasts_trigger` | Sends one published template to every user of a list, now or on a schedule. With `dry_run`, checks the list and template and sends nothing. | "Dry-run the port-closure notice to freightco-us-shippers, then send it at 9 AM tomorrow." | Sends |
+| `broadcasts_cancel` | Cancels broadcasts that haven't finished, including scheduled ones. Messages already sent stay. | "Cancel the scheduled port-closure broadcast." | Write |
+
+## Workflows
+
+<Warning>
+  `workflows_trigger` and `workflows_test_run` send real notifications. `workflows_trigger` with `dry_run` checks the data against the payload schema and sends nothing.
+</Warning>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `workflows_list` | Finds workflows by name, slug or description, with their status, trigger type and category. | "Which workflows send quote reminders?" | Read |
+| `workflows_get` | Gets a workflow's trigger, payload schema, category, steps and templates. | "Explain what quote-expiring-reminder does." | Read |
+| `workflows_validate` | Checks a whole workflow definition without saving it. | "Check this workflow JSON before you save it." | Read |
+| `workflows_save_draft` | Saves a whole workflow definition as the draft, or creates the workflow. The live workflow doesn't change. | "Add a WhatsApp fallback to quote-expiring-reminder if the email isn't opened in an hour." | Write |
+| `workflows_publish` | Makes a workflow's draft live. New triggers use it at once. | "Publish quote-expiring-reminder." | Write |
+| `workflows_test_run` | Runs the draft or live version once for test recipients. Sends real notifications. | "Run the draft of quote-expiring-reminder for usr_8f3k2m." | Sends |
+| `workflows_trigger` | Starts the live version of an API-triggered workflow for 1 to 100 recipients. With `dry_run`, checks the data and sends nothing. | "Send the quote reminder for QT-20931 to usr_8f3k2m." | Sends |
+| `workflows_set_enabled` | Turns a workflow off so it starts no new runs, or on again. The emergency stop. | "Turn off quote-expiring-reminder now." | Write |
+| `workflows_cancel_run` | Cancels runs that haven't finished, such as runs waiting in a delay or digest. | "Cancel the pending reminder for usr_8f3k2m, they already accepted the quote." | Write |
+
+## Events
+
+<Warning>
+  `events_track` starts every live workflow that listens for the event, and those can send real notifications. With `dry_run`, it checks the properties and sends nothing.
+</Warning>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `events_get` | Gets an event's description, payload schema, the workflows it starts, and when it last arrived. | "Which workflows start on QUOTE_REQUESTED?" | Read |
+| `events_create` | Creates an event definition so workflows can start on it, or updates its description. Can also link a trigger schema that checks the event's properties. | "Create an event SHIPMENT_DELAYED with the shipment-delayed schema." | Write |
+| `events_track` | Sends an event for a user, which starts every live workflow that listens for it. | "Track SHIPMENT_DELAYED for usr_8f3k2m with shipment SH-4471." | Sends |
+
+## Schemas
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `schemas_list` | Finds trigger schemas, the JSON Schemas that check workflow and event data. | "Which trigger schemas do we have?" | Read |
+| `schemas_get` | Gets a trigger schema with its JSON Schema. | "What fields does the quote-expiring schema need?" | Read |
+| `schemas_save_draft` | Saves a JSON Schema as a schema's draft, or creates the schema. The live schema doesn't change. | "Add an optional lane field to the quote-expiring schema." | Write |
+| `schemas_publish` | Makes a schema's draft live. SuprSend then refuses triggers and events whose data doesn't match. | "Publish the quote-expiring schema." | Write |
+
+## Templates
+
+<Warning>
+  `templates_send_test` sends a real message to the addresses on the user profile you name.
+</Warning>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `templates_list` | Finds templates by name, slug or description, with their status, version and channels. | "Which templates have a WhatsApp channel?" | Read |
+| `templates_get` | Gets a template's status, version, channels and variants, without content. | "Show me the variants of the quote-expiring template." | Read |
+| `templates_get_variant` | Gets the content of one variant: email subject and body, SMS text, and so on. | "Show me the email content of the quote-expiring template." | Read |
+| `templates_list_versions` | Lists a template's published versions with their commit messages. | "When did the quote-expiring template last change, and why?" | Read |
+| `templates_get_mock_data` | Gets the test values a template's previews and test sends use. | "What sample data does the quote-expiring template use?" | Read |
+| `templates_validate` | Checks variant content for errors without saving anything. | "Check this email HTML for errors before you save it." | Read |
+| `templates_upsert` | Creates a template, or changes its draft's name, description, tags and channels. | "Create a template shipment-delayed with email and SMS." | Write |
+| `templates_upsert_variant` | Creates or replaces the content of one variant in the draft. | "Write the SMS for shipment-delayed: short, with the new ETA." | Write |
+| `templates_set_mock_data` | Sets the test values for a template's draft. | "Set the sample shipment ID to SH-4471." | Write |
+| `templates_publish` | Makes a template's draft live. New SMS and WhatsApp content goes to the vendor for approval. | "Publish the shipment-delayed template." | Write |
+| `templates_send_test` | Sends a test of a template to a user's addresses, with its sample data. | "Send me a test of the shipment-delayed email." | Sends |
+
+## Translations
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `translations_list` | Lists the translation files of the workspace, one per locale and namespace. | "Which languages do we have translations for?" | Read |
+| `translations_get` | Gets a translation file with all its keys and text. | "Show me the Spanish translations." | Read |
+| `translations_list_versions` | Lists the published translation versions with their commit messages. | "When were translations last published?" | Read |
+| `translations_get_version` | Shows what changed in each file of one published version. | "What changed in translation version 12?" | Read |
+| `translations_save` | Saves one translation file in the draft, replacing the whole file. | "Add a French translation for the quote reminder." | Write |
+| `translations_delete` | Marks one translation file for deletion in the draft. | "Delete the German translation file." | Write |
+| `translations_publish` | Makes every changed translation file live at once. | "Publish the translation changes." | Write |
+| `translations_rollback` | Makes an archived translation version live again. | "Roll translations back to version 11." | Write |
+
+## Preferences
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `preferences_list_categories` | Gets the preference categories, with their sections and default preferences. | "Which preference categories do we have?" | Read |
+| `preferences_list_category_translations` | Lists the locales that have translated category names. | "Which languages is our preference page translated into?" | Read |
+| `preferences_get_category_translation` | Gets the translated category and section names for one locale. | "Show me the Spanish category names." | Read |
+| `preferences_save_categories` | Changes, adds or removes categories in the draft. | "Add a Shipment alerts category under Transactional, opt-in by default." | Write |
+| `preferences_publish_categories` | Makes the category draft live, with its translations. | "Publish the category changes." | Write |
+| `preferences_save_category_translation` | Saves translated category and section names for one locale. | "Translate our category names into Spanish." | Write |
+| `preferences_delete_category_translation` | Deletes all translated category names for one locale. | "Remove the German category translations." | Write |
+
+## Messages
+
+<Note>
+  In clients that support MCP Apps, `messages_get_content` also shows a preview of the message: email, Inbox, SMS and push, with images and links off and codes masked. Slack messages show as JSON with a link to Slack's Block Kit Builder.
+</Note>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `messages_get_content` | Gets the text of one sent message, with link queries, token-like link paths and codes masked. | "Show me the email usr_8f3k2m got yesterday." | Read |
+
+## Data
+
+<Note>
+  In clients that support MCP Apps, `data_query` results show as a chart (metric, line, bar, stacked bar or pie) or a table, with a Refresh button.
+</Note>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `data_query` | Runs a read-only SQL query over delivery, engagement, logs, workflow runs and configuration. Up to 10 queries a minute for your organization. | "Show the email delivery rate by tenant for the last 7 days as a line chart." | Read |
+| `data_validate` | Checks SQL for `data_query` without running it. | "Check this query before you run it." | Read |
+| `data_retention` | Gives how many days of activity data the workspace keeps, and the earliest date. | "How far back does our delivery data go?" | Read |
+| `data_user_properties_schema` | Gives the custom user properties defined in the workspace, with their types. | "Which custom properties do our users have?" | Read |
+
+## Assets
+
+<Warning>
+  Uploaded files are public. Never upload private files.
+</Warning>
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `assets_upload` | Hosts an image or PDF on the SuprSend CDN from a URL, a small file or a chat attachment, and returns its public URL. | "Upload our logo from routewise.com and use it in the email header." | Write |
+| `assets_create_upload` | Gives a single-use upload URL and a `curl` command, for agents with a shell. | "Upload ./assets/banner.png to the CDN." | Write |
+
+## Expressions
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `expressions_evaluate` | Runs a Handlebars, JSONNET or jq expression on sample data and returns the result or the error. Nothing is saved or sent. | "Test this delay expression with a quote that expires in 3 hours." | Read |
+
+## Docs
+
+| Tool | What it does | Example prompt | Access |
+|---|---|---|---|
+| `docs_search` | Searches the SuprSend documentation and returns matching pages with links. | "How does the digest node work?" | Read |
+| `docs_get_skill` | Gets a SuprSend skill, for clients without the MCP Skills extension. | Called by the agent before it writes workflow JSON, template content or SQL. | Read |
+
+## Feedback tools
+
+Two more tools send feedback to the SuprSend team. They don't count toward the tool groups above.
+
+| Tool | What it does | Example prompt |
+|---|---|---|
+| `get_more_tools` | Reports a tool the agent needed but didn't have. | "Tell SuprSend you need a tool to clone a workflow." |
+| `send_feedback` | Reports a problem with a tool, or something that worked well. | "Send SuprSend feedback that the template preview cut off my email." |
+
+{/* TODO(verify): send_feedback and get_more_tools exist only when PostHog analytics is on. Also messages_preview_content is an app-only tool (visibility app) and is not listed: models can't call it. */}
 
 ---
 
 <CardGroup cols={2}>
-  <Card title="MCP Overview" icon="server" href="/reference/mcp-overview">
-    How the MCP server works and what you can do with it.
+  <Card title="MCP overview" icon="server" href="/reference/mcp-overview">
+    How the hosted MCP server works and what it does.
   </Card>
-  <Card title="Prompt Cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
+  <Card title="Prompt cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
     Copy-paste prompts for common tasks.
   </Card>
 </CardGroup>

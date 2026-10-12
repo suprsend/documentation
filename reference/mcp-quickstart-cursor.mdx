@@ -1,64 +1,82 @@
 ---
 title: "Quickstart: Cursor"
 sidebarTitle: "Cursor"
-description: "Connect the SuprSend MCP server to Cursor with a service token and npx-based configuration so your AI editor can manage workflows and users."
+description: "Add the hosted SuprSend MCP server to Cursor in mcp.json and sign in with your SuprSend account."
 ---
 
+## Set up the connection
+
 <Steps>
-  <Step title="Get a service token">
-    Go to [Dashboard → Account Settings → Service Tokens](https://app.suprsend.com/en/account-settings/service-tokens) and generate a token for your workspace.
-  </Step>
+  <Step title="Add the SuprSend MCP server">
+    Open `~/.cursor/mcp.json` to use SuprSend in every project, or `.cursor/mcp.json` in a project to use it there only:
 
-  <Step title="Add the MCP configuration">
-    The SuprSend MCP server runs through the SuprSend CLI via [`npx`](https://docs.npmjs.com/cli/v10/commands/npx) - no install step, always the latest version. Requires [Node.js](https://nodejs.org/) 18+.
+    ```bash
+    open ~/.cursor/mcp.json
+    ```
 
-    Click the button below to install automatically (Cursor 1.0+ required):
+    Add the server under `mcpServers`:
 
-    [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=suprsend&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInN1cHJzZW5kIiwic3RhcnQtbWNwLXNlcnZlciJdLCJlbnYiOnsiU1VQUlNFTkRfU0VSVklDRV9UT0tFTiI6InlvdXJfc2VydmljZV90b2tlbl9oZXJlIn19)
-
-    Or add manually: **Settings → MCP & Integrations → New MCP Server**, then paste into `mcp.json`:
-
-    ```json
+    ```json mcp.json
     {
       "mcpServers": {
-        "suprsend": {
-          "command": "<your-npx-path>",
-          "args": ["-y", "suprsend", "start-mcp-server"],
-          "env": {
-            "SUPRSEND_SERVICE_TOKEN": "your_token_here"
-          }
+        "SuprSend": {
+          "url": "https://mcp.suprsend.com/mcp",
+          "transport": "streamable-http"
         }
       }
     }
     ```
+  </Step>
 
-    <Note>
-      Prefer a managed install over npx? Install the CLI via [Homebrew, binary, or source build](/reference/cli-installation), then use `"command": "suprsend"` with `"args": ["start-mcp-server"]` instead.
-    </Note>
+  <Step title="Sign in with your SuprSend account">
+    Ask the agent a SuprSend question in Cursor's chat. On the first question, Cursor asks you to authenticate and opens your browser. Sign in with your SuprSend account. The agent gets the same permissions your role has in the SuprSend dashboard.
   </Step>
 
   <Step title="Verify the connection">
-    In a new Cursor Agent chat, try:
+    In the chat, ask:
 
     ```
-    List all workflows in my SuprSend workspace.
+    List my SuprSend workspaces.
     ```
 
-    If the MCP server is connected, Cursor will call the tool and return your workflows.
+    Cursor answers with your SuprSend workspaces.
   </Step>
 </Steps>
 
-<Tip>
-  Restrict which tools Cursor can access using the `--tools` flag. See [Tool List](/reference/mcp-tool-list) for available identifiers.
-</Tip>
+## Pin a workspace and restrict tools
 
----
+By default, Cursor can use every workspace and tool your role allows. To keep it on one workspace, or to give it only the tools a job needs, change the `url` in `mcp.json`:
+
+- **Pin a workspace** by adding its slug to the path. The agent then can't switch to another workspace:
+
+  ```
+  https://mcp.suprsend.com/mcp/staging
+  ```
+
+- **Restrict tools** with `?tools=`, a comma-separated list of tool names or groups:
+
+  ```
+  https://mcp.suprsend.com/mcp/staging?tools=users_*,data_*
+  ```
+
+See [Scope the connection](/reference/mcp-overview#scope-the-connection) for every URL pattern, and the [tool list](/reference/mcp-tool-list) for every tool.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server shows disconnected or refuses the connection">
+    Check the workspace slug in the URL. It must match a workspace in your SuprSend account exactly, for example `staging`, not the workspace's display name. A slug that doesn't exist fails with `403 workspace_forbidden`. To see your slugs, remove the slug, reconnect, and ask: "List my SuprSend workspaces."
+  </Accordion>
+  <Accordion title="Cursor doesn't ask you to sign in">
+    Check that `mcp.json` is valid JSON and that the `SuprSend` entry is inside `mcpServers`. Then ask a SuprSend question in the chat again.
+  </Accordion>
+</AccordionGroup>
 
 <CardGroup cols={2}>
-  <Card title="Tool List" icon="wrench" href="/reference/mcp-tool-list">
-    All available tools and how to scope them.
+  <Card title="Tool list" icon="list" href="/reference/mcp-tool-list">
+    Every tool, grouped by category, with read vs write labels.
   </Card>
-  <Card title="Prompt Cheatsheet" icon="clipboard-list" href="/reference/mcp-prompts">
+  <Card title="Prompt cheatsheet" icon="message" href="/reference/mcp-prompts">
     Ready-to-use prompts to get started fast.
   </Card>
 </CardGroup>
