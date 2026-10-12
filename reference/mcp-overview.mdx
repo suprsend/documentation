@@ -21,7 +21,7 @@ The setup is the same in every client:
 
 <Steps>
   <Step title="Pick your URL">
-    Start from `https://mcp.suprsend.com/mcp`. To pin a workspace, add its slug: `https://mcp.suprsend.com/mcp/staging`. To limit the tools, add a `tools` filter: `https://mcp.suprsend.com/mcp/staging?tools=users.*,data.*` gives only the user and data tools. See [Scope the connection](#scope-the-connection).
+    Start from `https://mcp.suprsend.com/mcp`. To pin a workspace, add its slug: `https://mcp.suprsend.com/mcp/staging`. To limit the tools, add a `tools` filter: `https://mcp.suprsend.com/mcp/staging?tools=users_*,data_*` gives only the user and data tools. See [Scope the connection](#scope-the-connection).
   </Step>
   <Step title="Add it to your AI client">
     Add the URL as a remote MCP server, or as a custom connector in apps like Claude and ChatGPT.
@@ -106,7 +106,7 @@ Everything below comes from the server when you connect. You don't install or co
 
 ### Tools
 
-Tools are named `<group>.<action>`, for example `users.get` or `workflows.publish`. The groups:
+Tools are named `<group>_<action>`, for example `users_get` or `workflows_publish`. The groups:
 
 | Group | What the tools cover |
 |---|---|
@@ -130,17 +130,17 @@ Skills are packaged SuprSend knowledge that the agent reads before it writes JSO
 |---|---|
 | [`suprsend-workflow-schema`](/reference/agent-skill-workflow-schema) | Workflow JSON and every node type |
 | [`suprsend-template-schema`](/reference/agent-skill-template-schema) | Template variant JSON for every channel |
-| `suprsend-semantic-layer` | The tables, columns and SQL rules for `data.query` |
+| `suprsend-semantic-layer` | The tables, columns and SQL rules for `data_query` |
 | [`suprsend-docs-support`](/reference/agent-skill-docs-support) | How to read the SuprSend docs and get help |
 
-Clients with the MCP Skills extension load them directly. Other clients get the same files through the `docs.get_skill` tool, and the server instructions tell the model to read the matching skill first.
+Clients with the MCP Skills extension load them directly. Other clients get the same files through the `docs_get_skill` tool, and the server instructions tell the model to read the matching skill first.
 
 ### MCP Apps
 
 In clients that support MCP Apps, two tools show interactive results instead of plain text:
 
-- **`data.query`** shows the answer as a chart (metric, line, bar, stacked bar or pie) or a table, with a Refresh button that runs the query again.
-- **`messages.get_content`** shows a preview of a sent email, Inbox, SMS or push message, with images and links off and codes masked. Slack messages show as JSON with a link to Slack's Block Kit Builder.
+- **`data_query`** shows the answer as a chart (metric, line, bar, stacked bar or pie) or a table, with a Refresh button that runs the query again.
+- **`messages_get_content`** shows a preview of a sent email, Inbox, SMS or push message, with images and links off and codes masked. Slack messages show as JSON with a link to Slack's Block Kit Builder.
 
 In other clients, the same tools return text.
 
@@ -158,19 +158,19 @@ The URL you connect to decides which workspace and which tools the agent gets. S
 |---|---|---|
 | `/mcp` | Every workspace in your account. The agent names one on each call. | All tools your role allows |
 | `/mcp/staging` | Only `staging` | All tools your role allows |
-| `/mcp/staging?tools=users.*` | Only `staging` | Only the `users` tools |
-| `/mcp?tools=users.*,lists.*` | Every workspace in your account | Only the `users` and `lists` tools |
+| `/mcp/staging?tools=users_*` | Only `staging` | Only the `users` tools |
+| `/mcp?tools=users_*,lists_*` | Every workspace in your account | Only the `users` and `lists` tools |
 
 Add the path and filter to the endpoint, for example `https://mcp.suprsend.com/mcp/staging`. One sign-in works on every URL of the same server.
 
 - **Pin a workspace.** With a slug in the path, the tools lose their `workspace` input and the agent can't switch to another workspace. If the slug doesn't match a workspace in your account, the server refuses the connection with `403 workspace_forbidden`.
-- **Filter the tools.** `?tools=` takes a comma-separated list of exact tool names (`users.get`) or groups (`users.*`). Any other pattern, or one that matches no tool, fails with `400 invalid_tools_filter`.
-- **Watch what a group includes.** A group brings its write and send tools with it: `templates.*` includes `templates.publish` and `templates.send_test`. For a read-only connection, list the read tools by name.
+- **Filter the tools.** `?tools=` takes a comma-separated list of exact tool names (`users_get`) or groups (`users_*`). Any other pattern, or one that matches no tool, fails with `400 invalid_tools_filter`.
+- **Watch what a group includes.** A group brings its write and send tools with it: `templates_*` includes `templates_publish` and `templates_send_test`. For a read-only connection, list the read tools by name.
 
 For example, this URL lets an agent debug delivery in production without changing anything:
 
 ```text
-https://mcp.suprsend.com/mcp/production?tools=data.*,users.find,users.get,users.get_preferences,workflows.list,workflows.get
+https://mcp.suprsend.com/mcp/production?tools=data_*,users_find,users_get,users_get_preferences,workflows_list,workflows_get
 ```
 
 The server instructions follow the scope. They name only the tools on the connection, and on a pinned URL they name only that workspace.
@@ -201,7 +201,7 @@ Tools that update data or send notifications are marked as such, so your AI clie
 
 | Enforced by | Guardrail | How strong |
 |---|---|---|
-| **The SuprSend server** | A dry run sends nothing. A retry of `workflows.trigger` with the same idempotency key within 24 hours sends nothing again. Draft changes don't go live until publish. | Holds in every client |
+| **The SuprSend server** | A dry run sends nothing. A retry of `workflows_trigger` with the same idempotency key within 24 hours sends nothing again. Draft changes don't go live until publish. | Holds in every client |
 | **The model** | The server's instructions tell the model to call send tools only when you ask to send, and to use production only when you ask for it. | Depends on the model following them |
 | **Your AI client** | Asks you to approve each update and send, based on the tool's marks. | Depends on your client and its approval settings. Don't auto-approve send tools. |
 
