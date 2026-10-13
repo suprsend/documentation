@@ -79,11 +79,11 @@ Channel fallback is the workspace-level control that decides which channels are 
 
 | Field | Values | What it does |
 |---|---|---|
-| `user_tenancy_channel_fallback_mode` | `all` \| `allowlist` | `all` (default) — every channel falls back. `allowlist` — only channels named in `user_tenancy_channel_fallback` fall back; everything else is dropped from the send when the tenant profile has no override for it. |
-| `user_tenancy_channel_fallback` | `string[]` of channel keys, e.g. `["$email", "$sms", "$whatsapp"]` | The allowlist. Only meaningful when mode is `allowlist`. |
+| `user_tenancy_channel_fallback_mode` | `all` \| `allowlist` | `all` (default) — every channel falls back. `allowlist` — only channels named in `user_tenancy_channel_fallback` fall back (inbox always falls back); everything else is dropped from the send when the tenant profile has no override for it. |
+| `user_tenancy_channel_fallback` | `string[]` of channel names without the `$` prefix, e.g. `["email", "sms", "whatsapp"]` | The allowlist. Only meaningful when mode is `allowlist`. |
 | `user_tenancy_channel_fallback_applies_to_default_tenant` | `bool`, default `false` | Whether the rule above also governs sends with no `tenant_id`. `false` keeps the default-tenant path permissive (all channels fall back); `true` applies the same allowlist. |
 
-Typical setup for isolated mobile apps: `allowlist` mode with `["$email", "$sms", "$whatsapp"]` — safe channels fall back, while `$androidpush`, `$iospush`, `$webpush`, `$inbox`, and `$slack` are dropped unless the tenant profile carries its own value.
+Typical setup for isolated mobile apps: `allowlist` mode with `["email", "sms", "whatsapp"]` — safe channels fall back, while `androidpush`, `iospush`, `webpush`, and `slack` are dropped unless the tenant profile carries its own value. Inbox always falls back.
 
 ### Default-tenant exemption
 
@@ -91,7 +91,7 @@ A trigger with `tenant_id = null` (or no `tenant_id` at all) uses the default-te
 
 ## Associating a user to a tenant
 
-Every route below writes to the same per-tenant profile store — pick whichever fits your flow. The body accepts the same fields as [Edit User Profile](/reference/edit-user-profile) (channels, properties, `$timezone`, `$locale`, `$preferred_language`).
+Every route below writes to the same per-tenant profile store — pick whichever fits your flow. The body accepts the same fields as [Create / Update Users](/reference/create-update-users) (channels, properties, `$timezone`, `$locale`, `$preferred_language`).
 
 <Tabs>
   <Tab title="Dashboard">
@@ -143,7 +143,7 @@ Every route below writes to the same per-tenant profile store — pick whichever
 </Tabs>
 
 <Note>
-Under `exclusive` mode, calling this on a user already mapped to a different tenant returns `400` with a message like `user is already associated with a different tenant`. Delete the first mapping before creating the new one.
+Under `exclusive` mode, calling this on a user already mapped to a different tenant returns `400` with a message like `[Exclusive-tenancy-mode] subscriber '<distinct_id>' belongs to a different tenant`. Delete the first mapping before creating the new one.
 </Note>
 
 To **fetch** a merged tenant-scoped profile or **list** every tenant a user is mapped to, see [Fetch user-tenant profile](/reference/fetch-user-tenant-profile) and [List user tenant profiles](/reference/list-user-tenant-profiles). To **list every user mapped to a given tenant**, call [List Users](/reference/list-users) with `?tenant_id=<tenant_id>` — the response includes each user's tenant-scoped `properties` and channel overrides alongside their global profile.
@@ -181,10 +181,10 @@ If you're defining a recipient inline and want the profile fields you pass (`$em
 ```
 
 <Warning>
-When both are present, `$context.tenant_id` **must equal** the trigger-level `tenant_id`. A mismatch rejects the request and the workflow does not trigger. Use `$context.tenant_id` to scope the *inline profile write* to the same tenant the trigger is sending under — not to switch tenants per recipient.
+When both are present, `$context.tenant_id` **must equal** the trigger-level `tenant_id`. On a mismatch, that recipient is skipped with a warning and the workflow does not run for them. Use `$context.tenant_id` to scope the *inline profile write* to the same tenant the trigger is sending under — not to switch tenants per recipient.
 </Warning>
 
-`tenant_id` at the trigger level is the send-time tenant context. It does **not** need to match a tenant the user is already associated with — under `shared`, an unrelated `tenant_id` simply resolves to the global profile since there's nothing to merge. Under `exclusive`, an unrelated `tenant_id` returns `400`.
+`tenant_id` at the trigger level is the send-time tenant context. It does **not** need to match a tenant the user is already associated with — under `shared`, an unrelated `tenant_id` simply resolves to the global profile since there's nothing to merge. Under `exclusive`, if the user is already mapped to a different tenant, that recipient is skipped with an `[Exclusive-tenancy-mode] ... belongs to a different tenant` error.
 
 ## Deleting a user-tenant mapping
 
@@ -192,7 +192,7 @@ Removes the per-tenant profile fragment for that user-tenant pair. The global pr
 
 <Tabs>
   <Tab title="Dashboard">
-    Go to **Tenants → *tenant_id* → Associated Users**, click the row menu on the user you want to unmap, and choose **Remove from tenant**. A confirmation modal appears before the mapping is deleted.
+    Go to **Tenants → *tenant_id* → Associated Users**, click the row menu on the user you want to unmap, and choose **Delete**. A confirmation modal appears before the mapping is deleted.
   </Tab>
   <Tab title="REST API">
     ```bash
@@ -214,8 +214,8 @@ Removes the per-tenant profile fragment for that user-tenant pair. The global pr
 ## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title="400 — 'user is already associated with a different tenant'">
-    Your workspace is in `exclusive` mode and this user already has a per-tenant profile on another tenant. Either delete the existing mapping first, switch the workspace to `shared` (contact support@suprsend.com), or use a different `distinct_id` for the new tenant.
+  <Accordion title="400 — 'subscriber belongs to a different tenant'">
+    Your workspace is in `exclusive` mode and this user already has a per-tenant profile on another tenant. Either delete the existing mapping first, switch the workspace to `shared` (**Settings → General → Multi-Tenant User Mapping** or the [workspace config API](/reference/update-workspace-config)), or use a different `distinct_id` for the new tenant.
   </Accordion>
 
   <Accordion title="404 — 'tenant not found' on the upsert call">
@@ -227,7 +227,7 @@ Removes the per-tenant profile fragment for that user-tenant pair. The global pr
   </Accordion>
 
   <Accordion title="Trigger with tenant_id silently used the global profile">
-    Under `shared` mode, an unrelated `tenant_id` (one the user isn't mapped to) simply falls through to the global profile — there's nothing to merge. Double-check the `tenant_id` spelling and confirm the user is actually associated with that tenant on the **Associated Users** tab. If you want the API to reject unrelated tenants outright, use `exclusive` mode.
+    Under `shared` mode, an unrelated `tenant_id` (one the user isn't mapped to) simply falls through to the global profile — there's nothing to merge. Double-check the `tenant_id` spelling and confirm the user is actually associated with that tenant on the **Associated Users** tab. If you want sends to skip users already mapped to a different tenant, use `exclusive` mode.
   </Accordion>
 
   <Accordion title="Merged profile in the dashboard doesn't match what got sent">
@@ -243,7 +243,7 @@ Removes the per-tenant profile fragment for that user-tenant pair. The global pr
   </Accordion>
 
   <Accordion title="What happens if I trigger with a tenant_id the user isn't associated with?">
-    Under `shared`, the send resolves against the user's global profile (nothing to merge). Under `exclusive`, the API throws an error because the user-tenant combination is invalid.
+    Under `shared`, the send resolves against the user's global profile (nothing to merge). Under `exclusive`, the same applies if the user isn't mapped to any tenant; if the user is mapped to a different tenant, that recipient is skipped with an error.
   </Accordion>
 
   <Accordion title="How does this interact with tenant properties like logo and colors?">
@@ -259,7 +259,7 @@ Removes the per-tenant profile fragment for that user-tenant pair. The global pr
   </Accordion>
 
   <Accordion title="What if I use Segment group calls?">
-    Group / identify calls that carry a tenant identifier update the user's per-tenant profile for that tenant, following the same merge rules.
+    The Segment connector doesn't support `group` calls (they return `501`), and `identify` calls update the user's global profile — they don't carry tenant context. Use the [Upsert user-tenant profile](/reference/upsert-user-tenant-profile) API to write per-tenant profiles.
   </Accordion>
 
   <Accordion title="Can I auto-detect the tenant for a user with only one association?">

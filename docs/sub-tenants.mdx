@@ -62,7 +62,7 @@ Here's how each field type resolves:
 
 #### Tenant properties
 
-Tenant's custom and reserved properties (`logo`, colors, `preference_page_url`, `social_links`) are shallow merged from parent to child.
+Tenant's custom and reserved properties (`logo`, colors, `embedded_preference_url`, `hosted_preference_domain`, `social_links`) are shallow merged from parent to child.
 
 - **Inheritance is per key**. Overriding `support_email` on a child still lets `company_name`, `region`, etc. inherit from above.
 - `id` and `name` are never inherited; each tenant has its own.
@@ -191,7 +191,7 @@ Effective at Cycle (Level 2):
 
 #### Per-tenant user preference
 
-A user can set their own preferences on any tenant they belong to. Every user preference — category or channel — is always saved against a tenant; there is no workspace-wide user preference. At trigger time, walk up from where the notification fired; the *first* value the user has explicitly set wins. Update via the [Update User Category Preference](/reference/update-user-category-preference) or [Update User Channel Preference](/reference/update-user-channel-preference) endpoint — the `tenant_id` query param scopes each write to a specific tenant and is required:
+A user can set their own preferences on any tenant they belong to. Every user preference — category or channel — is always saved against a tenant; there is no workspace-wide user preference. At trigger time, walk up from where the notification fired; the *first* value the user has explicitly set wins. Update via the [Update User Category Preference](/reference/update-user-category-preference) or [Update User Channel Preference](/reference/update-user-channel-preference) endpoint — the `tenant_id` query param scopes each write to a specific tenant (omit it and the write lands on the `default` tenant):
 
 ```bash cURL
 # Category preference (scoped to tenant-1)
@@ -422,7 +422,7 @@ Deleting a tenant is permanent — its settings, preferences, and per-tenant pro
 | `children_action` | What happens to the children |
 |---|---|
 | `"orphan"` (default, also applied when omitted) | Children become **root tenants**. Their data stays; the deleted parent is dropped from their ancestor chain. |
-| `"reassign"` | Children move under the tenant given in `reassign_to`. SuprSend checks the new subtree still fits within 5 levels. `reassign_to` is required — if omitted or `null`, the API returns `400`. |
+| `"reassign"` | Children move under the tenant given in `reassign_to`. SuprSend checks the new subtree still fits within 5 levels. If `reassign_to` is omitted or `null`, the children become root tenants (same as `orphan`). |
 | `"delete"` | Every child (and their children, all the way down) is deleted too. |
 
 <Tabs>
@@ -510,7 +510,7 @@ Combine them to narrow further — e.g. ancestor `acme` + level `1` returns ever
   </Accordion>
 
   <Accordion title="Do preferences, vendors, template variants, and user-tenant mapping cascade?">
-    Not in this phase. Only `properties`, brand fields, tenant-level `blocked_channels`, and the category-level block settings (`enabled_for_tenant`, `visible_to_subscriber`, per-category `blocked_channels`) cascade. Everything else applies to the triggered tenant only. Hierarchy support for the rest ships in a later phase — reach out to [support@suprsend.com](mailto:support@suprsend.com) if you have a use case that needs it sooner.
+    Partly. `properties`, brand fields, tenant-level `blocked_channels`, tenant category preferences, user preferences, and vendors cascade today. Template variants and per-tenant user profiles apply to the triggered tenant only. Hierarchy support for those ships in a later phase — reach out to [support@suprsend.com](mailto:support@suprsend.com) if you have a use case that needs it sooner.
   </Accordion>
 
   <Accordion title="Can I re-parent a tenant that has children?">
@@ -534,7 +534,7 @@ Combine them to narrow further — e.g. ancestor `acme` + level `1` returns ever
   </Accordion>
 
   <Accordion title="Can users have a global preference in a workspace?">
-    No. Every user preference — category or channel — is always saved against a tenant. Preference writes require a `tenant_id` query param; without one, the API rejects the request. If your workspace uses just the built-in `default` tenant, all writes land there and behave workspace-wide in practice, but there is no global-across-all-tenants preference on a user.
+    No. Every user preference — category or channel — is always saved against a tenant. Preference writes are scoped by the `tenant_id` query param; without one, the write lands on the built-in `default` tenant. If your workspace uses just the `default` tenant, all writes land there and behave workspace-wide in practice, but there is no global-across-all-tenants preference on a user.
 
     If you need a **workspace-wide default preference** that individual tenants can then override per user, model your tenants as **sub-tenants of the `default` tenant**. For example, keep the Company at `default`, nest Projects under it, and nest Cycles under each Project. The user's preference at `default` acts as the global default; a preference set on a Project (or a Cycle) wins for triggers scoped to that subtree.
   </Accordion>

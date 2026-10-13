@@ -9,7 +9,7 @@ SuprSend identifies users with immutable `distinct_id`. It's best to map the sam
 
 ## Create User
 
-To create a new user or to update an existing user, you'll have to fetch user instance. Call `supr_client.user.get_instance` to instantiate user object.
+To create a new user or to update an existing user, you'll have to fetch user instance. Call `suprClient.Users.GetInstance` to instantiate user object.
 
 ```go
 user := suprClient.Users.GetInstance("_distinct_id_") // Unique identifier of user in your application
@@ -23,21 +23,21 @@ if err != nil {
 
 ## Edit User
 
-To Edit user, you need to first fetch user instance, call all the update methods and save changes using `users.Save()` method.
+To Edit user, you need to first fetch user edit instance, call all the update methods and send the changes using `suprClient.Users.AsyncEdit()` method.
 
 <CodeGroup>
 
 ```go Request
 func main() {
-	// Fetch user instance
+	// Fetch user edit instance
 	user := suprClient.Users.GetEditInstance("_distinct_id_")
 
 	// Call user update methods
 	user.SetTimezone("America/Los_Angeles")
-	user.Set("name", "John Doe")
+	user.SetKV("name", "John Doe")
 
 	// Save Changes
-	res, err := user.Save()
+	res, err := suprClient.Users.AsyncEdit(context.Background(), user)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -177,8 +177,8 @@ Here's a list of all edit methods:
     Set is used to add custom user properties. It is an upsert function, meaning any existing property value with the same key will be overwritten on subsequent updates.
 
     ```go
-    user.Set("key", "value")
-    user.Set("name","John Doe")
+    user.SetKV("key", "value")
+    user.SetKV("name","John Doe")
 
     user.Set(map[string]interface{}{"prop1": "val1", "prop2": "val2"})
     user.Set(map[string]interface{}{"name": "John Doe","city": "San Francisco"})
@@ -197,8 +197,8 @@ Here's a list of all edit methods:
     This method will append a value to the array list.
 
     ```go
-    user.Append("key", "value")
-    user.Append("played_games", "game_1")
+    user.AppendKV("key", "value")
+    user.AppendKV("played_games", "game_1")
 
     user.Append(map[string]interface{}{"key1": "val1", "key2": "val2"})
     user.Append(map[string]interface{}{"played_games": "game_1", "liked_games": "game_2"})
@@ -208,8 +208,8 @@ Here's a list of all edit methods:
     This method will remove a value from the array list.
 
     ```go
-    user.Remove("key", "value")
-    user.Remove("played_games", "game_1")
+    user.RemoveKV("key", "value")
+    user.RemoveKV("played_games", "game_1")
 
     user.Remove(map[string]interface{}{"key1": "val1", "key2": "val2"})
     user.Remove(map[string]interface{}{"played_games": "game_1", "liked_games": "game_2"})
@@ -220,8 +220,8 @@ Here's a list of all edit methods:
     Works just like user.Set, except it will not override already existing property values. This is useful for properties like first_login_date.
 
     ```go
-    user.SetOnce(key, value)
-    user.SetOnce("first_login","2021-11-02")
+    user.SetOnceKV(key, value)
+    user.SetOnceKV("first_login","2021-11-02")
 
     user.SetOnce(map[string]interface{}{ key1: value1, key2: value2 })
     user.SetOnce(map[string]interface{}{"first_login": "2021-11-02","signup_date": "2021-11-02"})
@@ -232,7 +232,7 @@ Here's a list of all edit methods:
     Increase or decrease integer values on consecutive action, like login count. To reduce a property, provide a negative number for the value.
 
     ```go
-    user.Increment("login_count", 1)
+    user.IncrementKV("login_count", 1)
 
     user.Increment(map[string]interface{}{"login_count" : 1, "order_count" : 1})
     ```
@@ -241,14 +241,14 @@ Here's a list of all edit methods:
 </AccordionGroup>
 
 <Warning>
-  After calling `Add/Remove/Unset` methods, don't forget to call `user.Save()` since user edit is async update and the changes will be sent to SuprSend only after calling this method.
+  After calling `Add/Remove/Unset` methods, don't forget to call `user.Save()` (for `GetInstance`) or `suprClient.Users.AsyncEdit()` (for `GetEditInstance`) since user edit is async update and the changes will be sent to SuprSend only after calling this method.
 </Warning>
 
 
 ## Bulk Update Users
 
 Bulk operations use **UPSERT** to create or update users.
-There isn't any limit on number-of-records that can be added to `bulk_users` instance. Use `.append()` on bulk_users instance to add however-many-records to call in bulk.
+There isn't any limit on number-of-records that can be added to `bulk_users` instance. Use `.Append()` on bulk_users instance to add however-many-records to call in bulk.
 
 <Tip>
   **Rate limit:** 1000 requests per second. The SDK automatically chunks requests based on the size of the payload. So, you don't need to worry about these rate limits while using bulk operations.
@@ -310,7 +310,7 @@ log.Println(bulkResponse)
 ```go Request
 func main() {
 	// Fetch user instance
-	res, err := suprClient.Users.Get("_distinct_id_")
+	res, err := suprClient.Users.Get(context.Background(), "_distinct_id_")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -341,21 +341,18 @@ func main() {
 ```go Request
 func main() {
 	// Delete user instance
-	res, err := suprClient.Users.Delete("_distinct_id_")
+	err := suprClient.Users.Delete(context.Background(), "_distinct_id_")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	fmt.Println(res)
+	fmt.Println("user deleted")
 }
 ```
 
 
 ```go Response
- {
- "success": True,
- "status_code": 204
- }
+// Delete returns only an error. On success (HTTP 204) err is nil.
 ```
 
 </CodeGroup>
@@ -369,12 +366,12 @@ You can pass optional query parameters -`limit`, `before`, `after`
 ```go Request
 func main() {
 	// Get objects the user is subscribed to
-	params := map[string]interface{}{
-		"after": "01JJW6HXXXXPB59ARDW85G0KN",
-		"limit": 1,
+	params := &suprsend.CursorListApiOptions{
+		After: "01JJW6HXXXXPB59ARDW85G0KN",
+		Limit: 1,
 	}
 
-	res, err := suprClient.Users.GetObjectsSubscribedTo("_distinct_id_", params)
+	res, err := suprClient.Users.GetObjectsSubscribedTo(context.Background(), "_distinct_id_", params)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -386,17 +383,30 @@ func main() {
 
 ```go Response
 {
-    "objects": [
+    "meta": {
+      "count": 4,
+      "limit": 1,
+      "has_prev": false,
+      "before": null,
+      "has_next": false,
+      "after": null
+    },
+    "results": [
       {
-        "object_id": "Frontend",
-        "type": "Developers",
-        "subscribed_at": "2024-02-20T10:15:30Z"
+        "properties": {
+          "role": "manager"
+        },
+        "object": {
+          "id": "frontend",
+          "object_type": "department",
+          "properties": {},
+          "subscriptions_count": 10,
+          "updated_at": "2025-01-28T16:49:23.695448+00:00"
+        },
+        "created_at": "2025-01-23T16:34:56.093683+00:00",
+        "updated_at": "2025-01-23T16:34:56.093683+00:00"
       }
-    ],
-    "paging": {
-      "after": "01JJW6HXXXXPB59ARDW85G0KN",
-      "has_more": false
-    }
+    ]
   }
 ```
 
@@ -411,12 +421,12 @@ You can pass optional query parameters -`limit`, `before`, `after`
 ```go Request
 func main() {
 	// Get lists the user is subscribed to
-	params := map[string]interface{}{
-		"after": "01JJW6HXXXXPB59ARDW85G0KN",
-		"limit": 1,
+	params := &suprsend.CursorListApiOptions{
+		After: "01JJW6HXXXXPB59ARDW85G0KN",
+		Limit: 1,
 	}
 
-	res, err := suprClient.Users.GetListsSubscribedTo("_distinct_id_", params)
+	res, err := suprClient.Users.GetListsSubscribedTo(context.Background(), "_distinct_id_", params)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -428,17 +438,28 @@ func main() {
 
 ```go Response
 {
-  "lists": [
+  "meta": {
+    "count": 8,
+    "limit": 1,
+    "has_prev": false,
+    "before": null,
+    "has_next": true,
+    "after": "01HPMFF5V2CFCF5882QX9FQXYB"
+  },
+  "results": [
     {
-      "list_id": "product_updates",
-      "subscribed_at": "2024-02-20T12:00:00Z",
-      "status": "subscribed"
+      "list": {
+        "list_id": "product_updates",
+        "list_name": "Product Updates",
+        "list_description": "List of users to send product updates to",
+        "list_type": "static_list",
+        "source": "csv_upload",
+        "subscribers_count": 2,
+        "updated_at": "2024-09-26T10:20:33.636698+00:00"
+      },
+      "created_at": "2024-08-04T13:16:12.825+00:00"
     }
-  ],
-  "paging": {
-    "after": "01JJW6HXXXXPB59ARDW85G0KN",
-    "has_more": true
-  }
+  ]
 }
 ```
 

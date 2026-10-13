@@ -52,6 +52,7 @@ HAVING aggregate_condition
 SELECT distinct_id
 FROM events
 WHERE event_name = 'PAYMENT_FAILED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING count(*) > 3
 ```
@@ -76,6 +77,7 @@ WHERE distinct_id IN (
   SELECT distinct_id
   FROM events
   WHERE event_name = 'PURCHASE'
+    AND requested_at >= NOW() - INTERVAL '30 days'
 )
 ```
 
@@ -99,14 +101,18 @@ FROM users u
 JOIN events e ON e.distinct_id = u.distinct_id
 WHERE u.user_properties->>'plan' = 'pro'
   AND e.event_name = 'APP_OPENED'
+  AND e.requested_at >= NOW() - INTERVAL '30 days'
 ```
 
 ```sql Users who never made a purchase (left-join anti-join)
 SELECT u.distinct_id
 FROM users u
-LEFT JOIN events e
-  ON e.distinct_id = u.distinct_id
-  AND e.event_name = 'PURCHASE'
+LEFT JOIN (
+  SELECT distinct_id
+  FROM events
+  WHERE event_name = 'PURCHASE'
+    AND requested_at >= NOW() - INTERVAL '30 days'
+) e ON e.distinct_id = u.distinct_id
 WHERE e.distinct_id IS NULL
 ```
 
@@ -129,6 +135,7 @@ FROM (
   SELECT distinct_id, count(*) AS logins
   FROM events
   WHERE event_name = 'LOGIN'
+    AND requested_at >= NOW() - INTERVAL '30 days'
   GROUP BY distinct_id
 ) AS login_stats
 WHERE logins >= 10
@@ -154,6 +161,7 @@ WITH purchase_counts AS (
   SELECT distinct_id, count(*) AS purchases
   FROM events
   WHERE event_name = 'PURCHASE'
+    AND requested_at >= NOW() - INTERVAL '30 days'
   GROUP BY distinct_id
 )
 SELECT distinct_id
@@ -178,6 +186,7 @@ FROM ...
 SELECT DISTINCT distinct_id
 FROM events
 WHERE event_name = 'APP_OPENED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 ```
 
 ## UNION / UNION ALL
@@ -198,10 +207,12 @@ SELECT ...
 SELECT distinct_id
 FROM events
 WHERE event_name = 'PURCHASE'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 UNION
 SELECT distinct_id
 FROM events
 WHERE event_name = 'SUBSCRIPTION_STARTED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 ```
 
 ## DISTINCT ON
@@ -221,6 +232,7 @@ ORDER BY expression, sort_key
 ```sql One row per user, keyed to their latest event
 SELECT DISTINCT ON (distinct_id) distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 ORDER BY distinct_id, requested_at DESC
 ```
 
@@ -242,6 +254,7 @@ GROUP BY CUBE (expression_1, expression_2)
 SELECT DISTINCT distinct_id
 FROM events
 WHERE event_name = 'PAGE_VIEW'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY CUBE (distinct_id, properties->>'page')
 HAVING distinct_id IS NOT NULL
 ```
@@ -264,58 +277,7 @@ GROUP BY ROLLUP (expression_1, expression_2)
 SELECT DISTINCT distinct_id
 FROM events
 WHERE event_name = 'PURCHASE'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY ROLLUP (distinct_id, properties->>'category')
 HAVING distinct_id IS NOT NULL
-```
-
-## EXISTS (correlated subquery)
-
-Tests whether a correlated subquery returns at least one row, letting you keep users who have a related event. The subquery references the outer query, so it is evaluated per outer row (PostgreSQL only).
-
-**Syntax**
-
-```sql
-SELECT ...
-WHERE EXISTS (
-  SELECT 1 FROM ... WHERE correlated_condition
-)
-```
-
-**Example**
-
-```sql Users who have at least one purchase
-SELECT distinct_id
-FROM users u
-WHERE EXISTS (
-  SELECT 1
-  FROM events e
-  WHERE e.distinct_id = u.distinct_id
-    AND e.event_name = 'PURCHASE'
-)
-```
-
-## NOT EXISTS
-
-The negation of EXISTS: keeps users for whom the correlated subquery returns no rows. Ideal for exclusion segments such as users who never performed an action (PostgreSQL only).
-
-**Syntax**
-
-```sql
-SELECT ...
-WHERE NOT EXISTS (
-  SELECT 1 FROM ... WHERE correlated_condition
-)
-```
-
-**Example**
-
-```sql Users who have never made a purchase
-SELECT distinct_id
-FROM users u
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM events e
-  WHERE e.distinct_id = u.distinct_id
-    AND e.event_name = 'PURCHASE'
-)
 ```

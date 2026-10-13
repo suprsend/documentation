@@ -29,7 +29,7 @@ supr_client = Suprsend("workspace_key", "workspace_secret")
 
 response = supr_client.messages.list({
     # Pagination
-    "limit": 20,                            # records per page (default: 1000, max: 1000)
+    "limit": 20,                            # records per page (default: 10, max: 1000)
     "after": "__cursor__",                  # cursor for next page (from meta.after)
     "before": "__cursor__",                 # cursor for previous page (from meta.before)
 
@@ -50,7 +50,7 @@ response = supr_client.messages.list({
     "execution_id": "__execution_id__",
 
     # Channel filter
-    # valid: email, sms, whatsapp, androidpush, iospush, webpush, slack, ms_teams
+    # valid: email, sms, whatsapp, androidpush, iospush, webpush, inbox, slack, ms_teams
     "channel": "email",
 
     # status[] - valid: triggered, delivered, delivery_failed, seen, clicked, dismissed, read, archived, unread
@@ -75,10 +75,10 @@ print(response)
     "meta": {
         "count": 150,       # total matching messages
         "limit": 20,        # limit used for this request
-        "has_prev": True,   # whether a previous page exists
+        "has_prev": False,  # whether a previous page exists
         "has_next": True,   # whether a next page exists
         "before": None,     # cursor for previous page, null if none
-        "after": None,      # cursor for next page, null if none
+        "after": "01KQVGPW9ZJKH6T5TSxxxxxxx",  # cursor for next page, null if none
     },
     "results": [
         {
@@ -140,7 +140,7 @@ print(response)
 
 | Parameter         | Type                  | Description                                                                                                                                                                                                       |
 | ----------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `limit`           | `integer`             | Records per page. Default `1000`, max `1000`.                                                                                                                                                                     |
+| `limit`           | `integer`             | Records per page. Default `10`, max `1000`.                                                                                                                                                                       |
 | `after`           | `string`              | Opaque cursor for the next page. Pass the `meta.after` value from a previous response.                                                                                                                            |
 | `before`          | `string`              | Opaque cursor for the previous page. Pass the `meta.before` value from a previous response.                                                                                                                       |
 | `message_id`      | `string`              | Filter by a specific message id.                                                                                                                                                                                  |
@@ -151,7 +151,7 @@ print(response)
 | `object_id`       | `string`              | Filter messages sent to an object. Must be provided together with `object_type`.                                                                                                                                  |
 | `workflow_slug`   | `string`              | Filter messages triggered from a specific workflow.                                                                                                                                                               |
 | `execution_id`    | `string`              | Filter by workflow execution id (matches `wf_exec_id` or `broadcast_id`).                                                                                                                                         |
-| `channel`         | `string`              | Filter by delivery channel. Valid values: `email`, `sms`, `whatsapp`, `androidpush`, `iospush`, `webpush`, `slack`, `ms_teams`.                                                                                   |
+| `channel`         | `string`              | Filter by delivery channel. Valid values: `email`, `sms`, `whatsapp`, `androidpush`, `iospush`, `webpush`, `inbox`, `slack`, `ms_teams`.                                                                                   |
 | `status`          | `array of string`     | Filter by one or more derived statuses. Multiple values are OR-ed. Valid values: `triggered`, `delivered`, `delivery_failed`, `seen`, `clicked`, `dismissed`, `read`, `unread`, `archived`.                       |
 | `category`        | `array of string`     | Filter by one or more preference categories. Multiple values are OR-ed.                                                                                                                                         |
 | `is_campaign`     | `boolean`             | Set `True` to return only messages sent as part of a broadcast/campaign.                                                                                                                                          |
@@ -184,10 +184,10 @@ print(response)
     "records": [
         {
             "message_id": "__message_id_1__",
-            "status_code": 404,     # 202 success, 404 not found, 422 action not supported, 500 error
+            "status_code": 404,     # 202 success, 404 not found, 422 status blocked / action not supported, 500 error
             "error": {              # present only on failure
                 "type": "not_found",
-                "message": "message not found"
+                "message": "not found"
             }
         },
         {
@@ -206,9 +206,9 @@ Available actions and their descriptions:
 | ------------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | `seen`       | Mark the message as viewed/opened by the user.                                                             | All channels                       |
 | `clicked`    | Mark the message as clicked by the user.                                                                   | All channels                       |
-| `dismissed`  | Mark the push notification as dismissed by the user (for example, swiped away from the notification tray).        | `androidpush`, `iospush`           |
-| `read`       | Mark the inbox message as read. Doesn't change the message status on update, instead sets `is_read` flag and `read_at` timestamp.                                                                         | `inbox` only                       |
-| `unread`     | Revert a previously read inbox message back to unread. Doesn't change the message status on update, instead unsets `is_read` flag and record `unread_at` timestamp.                                                     | `inbox` only                       |
+| `dismissed`  | Mark the push notification as dismissed by the user (for example, swiped away from the notification tray).        | `androidpush`, `iospush`, `webpush`, `whatsapp`, `slack`, `ms_teams` |
+| `read`       | Mark the inbox message as read. Sets `is_read` flag and `read_at` timestamp; the message `status` shows `read` unless it is already `clicked` or `dismissed`.                                                                         | `inbox` only                       |
+| `unread`     | Revert a previously read inbox message back to unread. Unsets `is_read` flag and records `unread_at` timestamp; the message `status` shows `unread` unless it is already `clicked` or `dismissed`.                                                     | `inbox` only                       |
 | `archived`   | Move the inbox message to the archive. Doesn't change the message status on update, instead sets `is_archived` flag and marks `archived_at` timestamp.                                                                   | `inbox` only                       |
 | `unarchived` | Restore a previously archived inbox message back to the active list. Doesn't change the message status on update, instead unsets `is_archived` flag and record `unarchived_at` timestamp.                                                                   | `inbox` only                       |
 

@@ -130,7 +130,8 @@ date_trunc('unit', timestamp)
 ```sql Event counts by month
 SELECT distinct_id
 FROM events
-WHERE date_trunc('month', requested_at) = date_trunc('month', now());
+WHERE date_trunc('month', requested_at) = date_trunc('month', now())
+  AND requested_at >= NOW() - INTERVAL '31 days';
 ```
 
 ## extract
@@ -157,7 +158,8 @@ extract(field FROM timestamp)
 ```sql Events grouped by hour of day
 SELECT distinct_id
 FROM events
-WHERE extract(HOUR FROM requested_at) = 9;
+WHERE extract(HOUR FROM requested_at) = 9
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## toStartOfMinute / toStartOfFiveMinutes / toStartOfTenMinutes / toStartOfFifteenMinutes / toStartOfHour / toStartOfDay
@@ -188,7 +190,8 @@ toStartOfDay(datetime)
 ```sql Event volume per 15-minute bucket
 SELECT distinct_id
 FROM events
-WHERE toStartOfFifteenMinutes(requested_at) = toStartOfFifteenMinutes(now());
+WHERE toStartOfFifteenMinutes(requested_at) = toStartOfFifteenMinutes(now())
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## toStartOfWeek / toStartOfMonth / toStartOfQuarter / toStartOfYear
@@ -243,6 +246,7 @@ toDate(datetime)
 ```sql Distinct active days per event
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING count(DISTINCT toDate(requested_at)) >= 5;
 ```
@@ -275,20 +279,19 @@ WHERE updated_at - created_at > INTERVAL '30 days';
 
 ## timestampadd / timestampsub
 
-Add or subtract a whole number of calendar units to or from a timestamp. Equivalent to adding or subtracting an interval, but the unit and count are passed as arguments.
+Add or subtract an interval to or from a timestamp. Equivalent to `timestamp + INTERVAL` / `timestamp - INTERVAL`, written as a function call.
 
 **Syntax**
 
 ```sql
-timestampadd(unit, count, timestamp)
-timestampsub(unit, count, timestamp)
+timestampadd(timestamp, INTERVAL 'quantity unit')
+timestampsub(timestamp, INTERVAL 'quantity unit')
 ```
 
 **Arguments**
 
-- `unit` — the calendar unit to add or subtract, such as `day`, `hour`, `minute`, `second`, `week`, `month`, `quarter`, or `year`.
-- `count` — the whole number of units to add (`timestampadd`) or subtract (`timestampsub`).
 - `timestamp` — the timestamp to shift.
+- `INTERVAL 'quantity unit'` — the interval to add (`timestampadd`) or subtract (`timestampsub`), such as `INTERVAL '90 days'`.
 
 **Returned value**
 
@@ -299,7 +302,7 @@ timestampsub(unit, count, timestamp)
 ```sql Users created within 90 days
 SELECT distinct_id
 FROM users
-WHERE created_at >= timestampsub(day, 90, now());
+WHERE created_at >= timestampsub(now(), INTERVAL '90 days');
 ```
 
 ## add_months
@@ -359,7 +362,8 @@ addYears(datetime, n)
 ```sql Expiry 14 days after an event
 SELECT distinct_id
 FROM events
-WHERE addDays(requested_at, 14) <= now();
+WHERE addDays(requested_at, 14) <= now()
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## subtractDays / subtractHours / subtractMinutes / subtractSeconds / subtractWeeks / subtractMonths / subtractQuarters / subtractYears
@@ -420,7 +424,8 @@ timestamp AT TIME ZONE 'zone'
 ```sql Event time in New York local time
 SELECT distinct_id
 FROM events
-WHERE toDate(requested_at AT TIME ZONE 'America/New_York') = current_date;
+WHERE toDate(requested_at AT TIME ZONE 'America/New_York') = current_date
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## to_char
@@ -475,7 +480,8 @@ make_date(year, month, day)
 ```sql Events on or after the start of the fiscal year
 SELECT distinct_id
 FROM events
-WHERE toDate(requested_at) >= make_date(2026, 4, 1);
+WHERE toDate(requested_at) >= make_date(2026, 4, 1)
+  AND requested_at >= '2026-04-01';
 ```
 
 ## toYYYYMM / toYYYYMMDD / toYYYYMMDDhhmmss
@@ -503,7 +509,8 @@ toYYYYMMDDhhmmss(datetime)
 ```sql Events grouped by month key
 SELECT distinct_id
 FROM events
-WHERE toYYYYMM(requested_at) = toYYYYMM(now());
+WHERE toYYYYMM(requested_at) = toYYYYMM(now())
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## unix_timestamp
@@ -582,7 +589,8 @@ dateName(datepart, datetime)
 ```sql Events grouped by weekday name
 SELECT distinct_id
 FROM events
-WHERE dateName('weekday', requested_at) = 'Monday';
+WHERE dateName('weekday', requested_at) = 'Monday'
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## monthName
@@ -608,7 +616,8 @@ monthName(datetime)
 ```sql Events grouped by month name
 SELECT distinct_id
 FROM events
-WHERE monthName(requested_at) = 'January';
+WHERE monthName(requested_at) = 'January'
+  AND requested_at >= NOW() - INTERVAL '365 days';
 ```
 
 ## timeSlot
@@ -634,7 +643,8 @@ timeSlot(datetime)
 ```sql Event volume per half-hour slot
 SELECT distinct_id
 FROM events
-WHERE timeSlot(requested_at) = timeSlot(now());
+WHERE timeSlot(requested_at) = timeSlot(now())
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## timeZoneOffset
@@ -660,7 +670,8 @@ timeZoneOffset(datetime)
 ```sql UTC offset at event time
 SELECT distinct_id
 FROM events
-WHERE timeZoneOffset(requested_at) = 0;
+WHERE timeZoneOffset(requested_at) = 0
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## toISOWeek / toISOYear
@@ -687,7 +698,8 @@ toISOYear(datetime)
 ```sql Events grouped by ISO week
 SELECT distinct_id
 FROM events
-WHERE toISOWeek(requested_at) = toISOWeek(now()) AND toISOYear(requested_at) = toISOYear(now());
+WHERE toISOWeek(requested_at) = toISOWeek(now()) AND toISOYear(requested_at) = toISOYear(now())
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## toWeek / toYearWeek
@@ -714,7 +726,8 @@ toYearWeek(datetime)
 ```sql Events per year-week
 SELECT distinct_id
 FROM events
-WHERE toYearWeek(requested_at) = toYearWeek(now());
+WHERE toYearWeek(requested_at) = toYearWeek(now())
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## toLastDayOfMonth / toLastDayOfWeek
@@ -767,7 +780,8 @@ toUnixTimestamp64Milli(datetime)
 ```sql Epoch milliseconds for each event
 SELECT distinct_id
 FROM events
-WHERE toUnixTimestamp64Milli(requested_at) >= 1735689600000;
+WHERE toUnixTimestamp64Milli(requested_at) >= 1735689600000
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## yesterday
@@ -789,7 +803,8 @@ yesterday()
 ```sql Events that happened yesterday
 SELECT distinct_id
 FROM events
-WHERE toDate(requested_at) = yesterday();
+WHERE toDate(requested_at) = yesterday()
+  AND requested_at >= NOW() - INTERVAL '2 days';
 ```
 
 ## from_utc_timestamp / to_utc_timestamp
@@ -817,32 +832,32 @@ to_utc_timestamp(timestamp, timezone)
 ```sql Show event time in the user's local zone
 SELECT distinct_id
 FROM events
-WHERE toDate(from_utc_timestamp(requested_at, 'America/New_York')) = current_date;
+WHERE toDate(from_utc_timestamp(requested_at, 'America/New_York')) = current_date
+  AND requested_at >= NOW() - INTERVAL '30 days';
 ```
 
 ## age
 
-Returns the symbolic difference between two timestamps as years, months, and days. With a single argument, the difference is measured from the current date at midnight (PostgreSQL only).
+Returns the elapsed time between two timestamps. Segment SQL runs on ClickHouse, where `age(end, start)` is computed as `end - start`; the single-argument form `age(timestamp)` is PostgreSQL only and is rejected.
 
 **Syntax**
 
 ```sql
-age(timestamp)
 age(timestamp, timestamp)
 ```
 
 **Arguments**
 
-- `timestamp` — with two arguments, the second is subtracted from the first. With one argument, the timestamp is subtracted from `current_date`.
+- `timestamp` — the second timestamp is subtracted from the first.
 
 **Returned value**
 
-- An interval expressed in years, months, and days.
+- The difference as a number of seconds (not a PostgreSQL interval).
 
 **Example**
 
-```sql Account age as years and months
+```sql Accounts older than one year
 SELECT distinct_id
 FROM users
-WHERE age(now(), created_at) > INTERVAL '1 year';
+WHERE age(now(), created_at) > 365 * 86400;
 ```

@@ -51,7 +51,7 @@ https://api.yourdomain.com/v1/workos_webhook/
 
 Enable the following event:
 
-- `magic_auth.created` - **required** for magic-link login emails
+- `magic_auth.created` - on self-hosted deployments WorkOS sends the magic-link login email itself; SuprSend only verifies and acknowledges this event
 
 Copy the **Webhook Secret** that WorkOS generates - you will need it in the next step.
 
@@ -114,7 +114,7 @@ suprsendApp:
     # email editor token, contact suprsend to get one
     viteEmailEditorToken: "<your-token>"
 
-    # Set to "false" (or omit) to activate the WorkOS login flow.
+    # Set to "false" to activate the WorkOS login flow.
     # Set to "true" to force the default email+code login.
     viteDisableWorkosLoginFlow: "false"
 ```
@@ -177,18 +177,18 @@ sequenceDiagram
 
 ## Webhook integration
 
-SuprSend registers a webhook endpoint at `/v1/workos_webhook/` to receive events from WorkOS. For self-hosted deployments, the only required event is:
+SuprSend registers a webhook endpoint at `/v1/workos_webhook/` to receive events from WorkOS. For self-hosted deployments, the relevant event is:
 
 | Event | Purpose |
 | --- | --- |
-| `magic_auth.created` | When a user requests a magic-link login, WorkOS fires this event. SuprSend receives it and sends the login code email directly via your configured SMTP. Without this webhook, magic-link login emails will not be delivered. |
+| `magic_auth.created` | When a user requests a magic-link login, WorkOS fires this event. On self-hosted deployments SuprSend acknowledges it but does not send an email - WorkOS sends the magic-link login email itself. |
 
 **How it works**
 
 1. User requests a magic-link login via WorkOS AuthKit.
 2. WorkOS fires `magic_auth.created` to `https://api.yourdomain.com/v1/workos_webhook/`.
 3. SuprSend verifies the webhook signature using `WORKOS_WEBHOOK_SECRET`.
-4. SuprSend fetches the magic-auth code from WorkOS and sends the login email via direct SMTP.
+4. On self-hosted deployments SuprSend does not send the login email - WorkOS delivers the magic-link email itself.
 5. Duplicate events are deduplicated using Redis (event IDs are cached for 3 days).
 
 <Note>
@@ -201,7 +201,7 @@ SuprSend registers a webhook endpoint at `/v1/workos_webhook/` to receive events
 
 <AccordionGroup>
   <Accordion title="Why does the dashboard still show email+code instead of WorkOS?">
-    Ensure `viteDisableWorkosLoginFlow` is `"false"` or unset in `suprsendApp.config` (do not use the legacy `viteEnableWorkosLoginFlow` name - it is not in current charts). Run `helm upgrade` with your values file so the dashboard image is rebuilt with the updated setting; the frontend reads this flag at build time.
+    Ensure `viteDisableWorkosLoginFlow` is `"false"` in `suprsendApp.config` (do not use the legacy `viteEnableWorkosLoginFlow` name - it is not in current charts). Run `helm upgrade` with your values file so the dashboard pod restarts with the updated setting; the frontend reads this flag at runtime from the pod's environment.
   </Accordion>
 
   <Accordion title="Why do I see LINK_INVALID after returning from WorkOS?">
@@ -211,9 +211,6 @@ SuprSend registers a webhook endpoint at `/v1/workos_webhook/` to receive events
   </Accordion>
 
   <Accordion title="Why aren't magic-link login emails being delivered?">
-    - Enable the `magic_auth.created` event on the WorkOS webhook endpoint.
-    - Ensure `WORKOS_WEBHOOK_SECRET` in your Kubernetes secret matches the signing secret shown in the WorkOS webhook settings.
-    - Confirm `https://api.yourdomain.com/v1/workos_webhook/` is reachable from the public internet (WorkOS must be able to POST to it).
-    - Verify SMTP is configured correctly - in self-hosted mode, SuprSend sends the login code email directly via your SMTP.
+    - In self-hosted mode, the magic-link login email is sent by WorkOS, not by SuprSend - check the email settings in your WorkOS dashboard.
   </Accordion>
 </AccordionGroup>

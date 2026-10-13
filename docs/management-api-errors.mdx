@@ -21,6 +21,7 @@ SuprSend uses standard HTTP response codes to indicate the success or failure of
 | `400` | Bad Request - Invalid request syntax or parameters |
 | `401` | Unauthorized - Authentication required or failed |
 | `404` | Not Found - Resource not found |
+| `409` | Conflict - No uncommitted changes to commit, or duplicate entry |
 | `5xx` | Internal Server Error - Unexpected server error |
 
 
@@ -31,20 +32,22 @@ All error responses follow a consistent format:
 ```json
 {
   "code": 400,
-  "error_code": "validation_error",
+  "error_code": "error",
   "type": "ValidationError",
-  "message": "Invalid request parameters",
-  "detail": "The 'name' field is required"
+  "message": "{\"name\": [\"This field is required.\"]}",
+  "detail": {
+    "name": ["This field is required."]
+  }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `code` | integer | HTTP status code |
-| `error_code` | string | Machine-readable error identifier |
+| `error_code` | string | Machine-readable error identifier (e.g. `authentication_failed`, `not_found`, `invalid`, `error`, `no_changes_to_commit`) |
 | `type` | string | Error type classification |
-| `message` | string | Human-readable error message |
-| `detail` | string | Additional error details (optional) |
+| `message` | string | Human-readable error message. For field-level validation errors this is the JSON-encoded `detail` object |
+| `detail` | string or object | Additional error details. A string for simple errors, or an object keyed by field name for validation errors |
 
 ## Common Error Codes and their solutions
 
@@ -52,17 +55,17 @@ All error responses follow a consistent format:
 
 **Causes**:
 - Missing or invalid service token
-- Expired service token
+- Disabled (revoked) service token
 - Using environment API key instead of service token
 
 **Correct Syntax to authorize Management API**:
 ```bash
 # Ensure you're using a valid service token
 curl -H "Authorization: ServiceToken YOUR_SERVICE_TOKEN" \
-     https://management-api.suprsend.com/v1/workflows
+     https://management-api.suprsend.com/v1/<WORKSPACE_SLUG>/workflow/
 ```
 
-#### 400 Bad Request - `validation_error`
+#### 400 Bad Request - `error` / `invalid`
 
 **Common Causes**:
 - Missing required fields
@@ -73,10 +76,12 @@ curl -H "Authorization: ServiceToken YOUR_SERVICE_TOKEN" \
 ```json
 {
   "code": 400,
-  "error_code": "validation_error",
+  "error_code": "error",
   "type": "ValidationError",
-  "message": "Invalid request parameters",
-  "detail": "The 'name' field is required and cannot be empty"
+  "message": "{\"name\": [\"This field is required.\"]}",
+  "detail": {
+    "name": ["This field is required."]
+  }
 }
 ```
 
@@ -91,7 +96,23 @@ curl -H "Authorization: ServiceToken YOUR_SERVICE_TOKEN" \
   "code": 404,
   "error_code": "not_found",
   "type": "NotFound",
-  "message": "Workflow not found",
-  "detail": "Workflow with slug 'welcome-sequence' does not exist"
+  "message": "workflow (slug: 'welcome-sequence') not found",
+  "detail": "workflow (slug: 'welcome-sequence') not found"
+}
+```
+
+#### 409 Conflict - `no_changes_to_commit`
+
+**Common Causes**:
+- Calling a commit endpoint when the draft is identical to the live version
+
+**Example**:
+```json
+{
+  "code": 409,
+  "error_code": "no_changes_to_commit",
+  "type": "NoChangesToCommitError",
+  "message": "no uncommitted changes detected in workflow",
+  "detail": "no uncommitted changes detected in workflow"
 }
 ```
