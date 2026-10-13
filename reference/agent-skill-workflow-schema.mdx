@@ -40,17 +40,26 @@ The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` s
       "$schema": "https://schema.suprsend.com/workflow/v1/schema.json",
       "slug": "payment-failed",
       "name": "Payment Failed",
+      "category": "transactional",
+      "trigger_type": "api",
       "tree": {
         "nodes": [
-          { "node_type": "send_email", "...": "..." },
+          { "node_type": "send_email", "properties": { "template": "payment-failed" } },
           {
             "node_type": "branch_waituntil",
+            "properties": {},
             "branches": [
-              { "conditions": [{ "type": "future_event", "...": "..." }], "nodes": [] },
               {
+                "name": "Payment retried",
+                "is_default": false,
+                "conditions": [{ "type": "future_event", "event_name": "payment_retried" }],
+                "nodes": []
+              },
+              {
+                "name": "After 24 hours",
                 "is_default": true,
                 "conditions": [{ "type": "delay", "delay_properties": { "delay_type": "fixed", "value": "24h" } }],
-                "nodes": [{ "node_type": "send_sms", "...": "..." }]
+                "nodes": [{ "node_type": "send_sms", "properties": { "template": "payment-failed-reminder" } }]
               }
             ]
           }
@@ -110,7 +119,7 @@ suprsend/
         └── workflow.json
 ```
 
-A `slug` inside the file is optional; if it differs, the directory name wins:
+A `slug` inside the file is optional - the directory name always wins - but a plain `suprsend workflow push` warns when it's missing or differs, so keep it in sync:
 
 ```json
 {

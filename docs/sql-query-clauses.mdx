@@ -83,7 +83,7 @@ WHERE distinct_id IN (
 
 ## JOIN / LEFT JOIN
 
-Combines rows from two tables on a join condition. A plain (inner) JOIN keeps only matching rows; a LEFT JOIN keeps every row from the left table and fills unmatched right-side columns with NULL, which is useful for building anti-joins.
+Combines rows from two tables on a join condition. A plain (inner) JOIN keeps only matching rows; a LEFT JOIN keeps every row from the left table. Unmatched right-side columns are filled with their type's default value (an empty string for text), not NULL, so `IS NULL` can't find rows without a match; use `NOT IN (subquery)` to build anti-joins.
 
 **Syntax**
 
@@ -104,16 +104,15 @@ WHERE u.user_properties->>'plan' = 'pro'
   AND e.requested_at >= NOW() - INTERVAL '30 days'
 ```
 
-```sql Users who never made a purchase (left-join anti-join)
-SELECT u.distinct_id
-FROM users u
-LEFT JOIN (
+```sql Users with no purchase in the last 30 days (NOT IN anti-join)
+SELECT distinct_id
+FROM users
+WHERE distinct_id NOT IN (
   SELECT distinct_id
   FROM events
   WHERE event_name = 'PURCHASE'
     AND requested_at >= NOW() - INTERVAL '30 days'
-) e ON e.distinct_id = u.distinct_id
-WHERE e.distinct_id IS NULL
+)
 ```
 
 ## Derived table (subquery in FROM)

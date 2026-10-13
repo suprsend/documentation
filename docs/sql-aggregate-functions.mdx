@@ -115,7 +115,7 @@ min(col)
 
 **Example**
 
-```sql First and last activity timestamps per user
+```sql First and last activity in the last 365 days, per user
 SELECT distinct_id
 FROM events
 WHERE requested_at >= NOW() - INTERVAL '365 days'
@@ -212,7 +212,7 @@ arg_max(arg, val)
 
 **Example**
 
-```sql Each user's first and most recent event name
+```sql Each user's first and most recent event name in the last 30 days
 SELECT distinct_id
 FROM events
 WHERE requested_at >= NOW() - INTERVAL '30 days'
@@ -479,12 +479,12 @@ retention(cond1, cond2, ..., condN)
 ```sql Day-0, day-1, and day-7 retention flags per user
 SELECT distinct_id
 FROM events
-WHERE requested_at >= '2026-07-01' AND requested_at < '2026-07-09'
+WHERE requested_at >= NOW() - INTERVAL '8 days'
 GROUP BY distinct_id
 HAVING retention(
-         requested_at >= '2026-07-01' AND requested_at < '2026-07-02',
-         requested_at >= '2026-07-02' AND requested_at < '2026-07-03',
-         requested_at >= '2026-07-08' AND requested_at < '2026-07-09'
+         requested_at >= NOW() - INTERVAL '8 days' AND requested_at < NOW() - INTERVAL '7 days',
+         requested_at >= NOW() - INTERVAL '7 days' AND requested_at < NOW() - INTERVAL '6 days',
+         requested_at >= NOW() - INTERVAL '1 day'
        )[3] = 1
 ```
 
@@ -618,7 +618,7 @@ HAVING bool_and(properties->>'status' = 'delivered')
 
 ## mode
 
-Returns the most frequently occurring value in the group. Ties are broken by the ordering of the input.
+Returns the most frequently occurring value across all the rows the query reads. It works only as a whole-query aggregate, such as the scalar subquery in the example; it can't be combined with `GROUP BY`. Ties are broken by the ordering of the input.
 
 **Syntax**
 
