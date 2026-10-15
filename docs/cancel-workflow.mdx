@@ -1,0 +1,154 @@
+---
+title: "Cancel Workflow"
+description: "Use the Cancel Workflow node to stop running workflows from inside another workflow when a downstream event invalidates them — a payment, an approval, a slot change — using filters on workflow slug, recipient, and a cancellation key."
+---
+
+Use this node to **stop running workflows** from inside another workflow when a downstream event invalidates them. When execution reaches the Cancel Workflow node, it looks for running executions that match the filters you set and halts them — future nodes don't run, and nodes already waiting (delay, batch, digest, time window) are interrupted.
+
+**Common use cases:**
+
+- **Payment received** — Workflow A sends an invoice and weekly payment reminders. The customer pays, which triggers Workflow B. Workflow B's Cancel Workflow node stops Workflow A for that invoice and customer so the reminders stop.
+- **Slot change** — A booking slot moves. The slot-change event triggers a workflow whose Cancel Workflow node stops the old slot's reminders (matched by recipient + cancellation key), and a fresh workflow starts reminders for the new slot.
+- **Approval received** — A purchase request needs approval from any one of several admins. Workflow A sends recurring reminders to every approver (one execution per admin, all tagged with the same `request_id`). One admin approves, triggering Workflow B. Workflow B's Cancel Workflow node stops every Workflow A execution matching that `request_id`, so the remaining admins stop being reminded.
+
+## How it works
+
+1. You drag a **Cancel Workflow** node from the **Functions** group onto the canvas (next to **Invoke Workflow**).
+2. In the config panel, you add one or more **filters** — Workflow Slug, Recipient(s), Cancellation Key. All filters are **ANDed**: a running execution must match every filter you added.
+3. On the target workflow's **Trigger node**, you set an optional **Cancellation Key** (a JSONNET expression such as `data.booking_id`). SuprSend evaluates the expression at trigger time and stores the value on the running execution, so the Cancel Workflow node can match against it.
+4. At runtime, when execution reaches the Cancel Workflow node, SuprSend finds every running execution matching all the filters and cancels them. If **zero** executions match, it's a silent success — the cancelling workflow carries on to the next node.
+5. Messages that already left SuprSend (an email delivered, a push received) are **not recalled**. Cancellation halts future execution only.
+
+<Note>
+  The Cancel Workflow node is **fire-and-forget** — it doesn't branch on how many executions were cancelled. The cancelling workflow continues regardless, and the result is recorded in execution logs on both sides.
+</Note>
+
+## Configuring the Cancel Workflow node
+
+Open the Cancel Workflow node's config panel and click **+ Add Filter**. Add one filter at a time; every filter you add gets ANDed with the others. You can combine up to three.
+
+<Frame caption="Adding a filter in the Cancel Workflow config panel">
+  <img src="/images/cancel-workflow-filters.png" />
+</Frame>
+
+| Filter | What it matches | Input |
+|---|---|---|
+| **Workflow Slug** | One or more target workflow slugs. | Searchable multi-select of existing workflows. |
+| **Recipient(s)** | The recipient on the target workflow's execution. | Dropdown: **Recipient** (the current workflow's recipient), **Actor** (the current workflow's actor), or **Input Payload** (a JSONNET expression against the node's input data, for example `data.user_id`). |
+| **Cancellation Key** | The value stored on the target execution's `cancellation_key` field (set on its Trigger node). | JSONNET expression, for example `data.booking_id`. |
+
+<Note>
+  Values are resolved from the current workflow run data. All filters you add must match for an execution to be cancelled.
+</Note>
+
+### JSONNET expression format
+
+Where a filter takes a JSONNET expression (the Recipient's **Input Payload** option and the Cancellation Key), reference workflow data as follows — the same format used across other workflow fields such as [Invoke Workflow](/docs/invoke-workflow#recipient).
+
+| Data type | Format |
+|---|---|
+| Input payload | `data.<property_key>` — for example `data.booking_id` |
+| Actor | `data["$actor"].<property_key>` — for example `data["$actor"].role` |
+| Recipient | `data["$recipient"].<property_key>` — for example `data["$recipient"].plan` |
+| Tenant | `data["$tenant"].<property_key>` — for example `data["$tenant"].timezone` |
+
+For the full language reference, see the [Jsonnet reference](https://jsonnet.org/ref/language.html).
+
+## Setting the Cancellation Key on the target workflow
+
+For a Cancel Workflow node to match on something more specific than slug + recipient — for example "cancel the reminders for *this* booking" — the target workflow has to declare what makes one of its runs cancellable. You do that on the **Trigger node** of the target workflow, in the **Cancellation Key** field at the bottom of the form.
+
+<Frame caption="Cancellation Key field on the target workflow's Trigger node">
+  <img src="/images/cancel-workflow-trigger-key.png" />
+</Frame>
+
+The field accepts a JSONNET expression against the trigger payload. SuprSend evaluates it at trigger time and stores the resulting value on the running execution, so the Cancel Workflow node can look it up efficiently.
+
+**Examples:**
+
+- `data.booking_id` — cancel one booking's reminders.
+- `data.request_id` — cancel all approver reminders for one request.
+- `data.user_id + "-" + data.slot_id` — cancel reminders for one user's specific slot.
+
+<Note>
+  The Cancellation Key is **optional**. If a Cancel Workflow node can target what you want using **Workflow Slug** and **Recipient(s)** alone, you don't need to set one on the Trigger node.
+</Note>
+
+## Execution behaviour
+
+### What gets cancelled
+
+- **Nodes that haven't started yet** — don't execute.
+- **Nodes in a waiting state** (delay, batch, digest, time window) — are interrupted immediately. The execution's status moves to `cancelled`.
+- **Messages already dispatched** (an email that left the vendor, a push that reached the device, an inbox message that's live) — are **not** recalled. Cancellation only halts future execution.
+
+### Logs on the cancelling workflow
+
+On the canvas, the Cancel Workflow node shows a one-line **"Cancels: {slug(s)}"** subtitle so you can see what it targets without opening the panel. Once the node runs, its execution history records how many executions it matched and lists their ids.
+
+<Frame caption="Execution history for a Cancel Workflow node — summary line, matched execution ids, and the filters used">
+  <img src="/images/cancel-workflow-logs.png" />
+</Frame>
+
+The structured output on the right has three fields:
+
+| Field | Meaning |
+|---|---|
+| `cancelled_count` | How many running executions this node cancelled. `0` when nothing matched (silent success). |
+| `cancelled_exec_ids` | The ids of the cancelled executions, so you can open each one from the logs. |
+| `filters` | The filter values the node resolved from the current run — `workflows`, `recipient`, and `cancellation_key`. Fields you didn't configure are returned as empty. Useful when debugging why a cancel caught more or fewer executions than you expected. |
+
+Whether `cancelled_count` is zero or many, the cancelling workflow continues to the next node — the Cancel Workflow node is fire-and-forget.
+
+### Logs on the cancelled workflow
+
+Each execution that got cancelled shows:
+
+- **Execution status**: `cancelled` (terminal).
+- **Cancellation reference**: *"Cancelled by workflow {slug} (execution {id})"* with a link back to the cancelling execution.
+- **Interrupted node**: if a delay, batch, or digest was open when the cancel landed, the log records how much time was remaining when it was interrupted.
+
+## Patterns and edge cases
+
+| Scenario | Behaviour |
+|---|---|
+| **Cancel after a delay** | Recommended pattern for *"cancel if nothing has happened after X time"* — the delay gives the target workflow a grace period before the cancel node fires. |
+| **Cancel node inside a branch** | Only executes when the branch condition is met — use it for conditional cancellation. |
+| **Self-cancellation** (the cancel node targets its own workflow slug) | Allowed. The cancel node runs; subsequent nodes in the cancelling workflow are skipped because its own execution is now `cancelled`. |
+| **Cascading** (the cancelled workflow contains its own cancel nodes) | The cancelled workflow's un-executed nodes don't fire — including any cancel nodes it contained. Cancellation does not cascade through them. |
+| **Two cancel nodes target the same running execution** | The first one cancels it. The second finds zero matches and succeeds silently. |
+| **Cancel + trigger fire for the same key at almost the same time** | Eventual consistency: a recently-triggered execution is still caught by the cancel. A millisecond gap is acceptable. |
+| **A workflow slug in the filter has been deleted** | The Cancel Workflow node still functions — it simply matches zero executions for that slug. No validation error on save. |
+| **Three sequential cancel nodes with overlapping targets** | Each one runs independently. Executions already cancelled by an earlier node appear as zero-matches for later nodes. |
+| **Draft vs published** | A cancel node only takes effect after the workflow is published. Standard version-control model. |
+| **Member role viewing production** | Read-only: all filter values are visible but inputs are disabled. See [roles and permissions](/docs/managing-members#roles-and-permissions). |
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Does cancellation stop messages that have already been sent?">
+    No. Cancellation halts **future** execution only — nodes not yet started and nodes waiting (delay, batch, digest, time window). An email that already left the vendor, a push that already reached the device, or an inbox message that's already live is not recalled.
+  </Accordion>
+
+  <Accordion title="What happens if the cancel node matches zero executions?">
+    Silent success. The execution log records `cancelled_count: 0` with an empty `cancelled_exec_ids` list, and the cancelling workflow continues to the next node. There's no error branch — the cancel node is fire-and-forget.
+  </Accordion>
+
+  <Accordion title="Do I always need to set a Cancellation Key on the target workflow's Trigger node?">
+    No. The Cancellation Key is only needed when **Workflow Slug** and **Recipient(s)** alone can't uniquely target what you want to cancel. For example, if a user has three concurrent runs of the same workflow (one per booking) and you want to cancel just one, set `data.booking_id` as the Cancellation Key on the Trigger node and match on it in the Cancel Workflow node.
+  </Accordion>
+
+  <Accordion title="Can I cancel the workflow I'm currently in?">
+    Yes. If a Cancel Workflow node targets its own workflow's slug, the cancel runs normally. Because the cancelling workflow's own execution is now `cancelled`, every node after the cancel node is skipped.
+  </Accordion>
+
+  <Accordion title="If I cancel a workflow that itself has Cancel Workflow nodes, do those nodes still fire?">
+    No. Cancellation halts the cancelled workflow's un-executed nodes — including any cancel nodes it was going to run — so cancellation does not cascade through them.
+  </Accordion>
+
+  <Accordion title="Can the cancel node branch on how many executions it stopped?">
+    Not in v1. The cancel node is fire-and-forget: it reports the count in the execution log, but the workflow continues to the next node regardless of whether it matched zero or many executions.
+  </Accordion>
+</AccordionGroup>
+
+***
