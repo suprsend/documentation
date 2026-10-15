@@ -10,6 +10,26 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
 
 ## Active
 
+- **2026-10-15** (local `docs/verify-claims-against-source`) — Across one full-page
+  audit the owner caught claims that past reviewers had missed because they only
+  checked the diff and the brief's `facts[]`: `dismissed` status falsely listed on
+  webpush/whatsapp/slack/ms_teams (code is mobile-only), member edit access framed
+  as "everywhere except production" when `isSandboxEnv` in
+  `suprsend-app-new/src/utils/index.js` is a whitelist of `staging`/`sandbox` only,
+  a Segment "default channel mapping" claim that doesn't exist in
+  `collector/SegmentHandler.js`, a `user.save → async_edit` rename that picked the
+  wrong SDK method as the primary save (`users.edit` is the sync path across all
+  four backend SDKs), OTel connector latency documented as "1–2 minutes" when it is
+  sub-second, and an inactive-marking period claim ("15 days for both WhatsApp and
+  email") that contradicts a sibling page. → Rule now in SKILL.md step 3 "Facts vs
+  code": validate every behavioural claim on each changed page (not just the diff),
+  and on neighbouring pages the diff references, against the authoritative source.
+  Step 3 now also lists the authoritative repos so the reviewer knows where to look:
+  `suprsend-api`, `kinesis-consumer`, `collector`, `suprsend-app-new`,
+  `suprsend-inbox-api`, `mcp-server`, and the four SDK repos. Contradictions across
+  docs now have to be flagged with the repo that would resolve them, not silently
+  resolved by preferring one doc over another.
+
 - **2026-10-01** (local `docs/postman-sync-full`) — Round 1 of the postman full
   reconcile shipped four live staging `ServiceToken SS.ST.*` values in saved
   responses. The reviewer caught them, but only because they happened to grep
