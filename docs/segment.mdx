@@ -286,7 +286,7 @@ Your setup is now complete, enabling events and users data to flow from Segment 
 
 ### Handling anonymous users
 
-SuprSend's Segment integration requires a `userId` on every event. Segment's `userId` is what maps to the user's `distinct_id` in SuprSend, so events that carry only an `anonymousId` (anonymous `identify`, `track`, or `page` calls) can't be attributed to a user and aren't supported.
+SuprSend's Segment integration expects a `userId` on every event. Segment's `userId` is what maps to the user's `distinct_id` in SuprSend, so events that carry only an `anonymousId` can't be reliably attributed to a user — an anonymous `identify` call is rejected outright, and an anonymous `track` is ingested with the `anonymousId` as the `distinct_id`.
 
 The cleanest way to handle this is to stop anonymous events at Segment so they never reach SuprSend. There are two ways to do this, depending on your Segment plan.
 <br/>
@@ -394,6 +394,11 @@ You can also create the same filter programmatically with the [Segment Public AP
 
 **What happens if an anonymous event still reaches SuprSend**
 
-If an anonymous `identify` call is sent without being filtered, SuprSend rejects it with an HTTP **`400 Bad Request`** and an error message indicating that a `userId` is required. Segment records this as a **discarded** event and does **not** retry it, so a missing `userId` won't cause repeated failed deliveries. Anonymous `track` calls are not rejected: SuprSend records them with the `anonymousId` as the `distinct_id`. Filtering at the source (Option 1 or 2) is still recommended, as it keeps these events out of your delivery metrics entirely.
+If an anonymous event still reaches SuprSend without being filtered, the outcome depends on the event type:
+
+- **Anonymous `identify`** — SuprSend rejects it with an HTTP **`400 Bad Request`** and an error message indicating that a `userId` is required. Segment records this as a **discarded** event and does **not** retry it, so a missing `userId` won't cause repeated failed deliveries.
+- **Anonymous `track`** — SuprSend accepts it and records it with the `anonymousId` as the `distinct_id`.
+
+Filtering at the source (Option 1 or 2) is still recommended, as it keeps these events out of your delivery metrics entirely.
 
 ***
