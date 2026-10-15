@@ -35,18 +35,44 @@ The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` s
   <Step title="Your agent generates the file">
     The skill activates and produces `suprsend/workflow/payment-failed.json`:
 
-    ```json
+    ```json norun
     {
       "$schema": "https://schema.suprsend.com/workflow/v1/schema.json",
       "slug": "payment-failed",
       "name": "Payment Failed",
       "nodes": [
         { "node_type": "send_email", "...": "..." },
-        { "node_type": "branch_waituntil", "duration": "24h", "...": "..." },
-        { "node_type": "send_sms", "...": "..." }
+        {
+          "node_type": "branch_waituntil",
+          "branches": [
+            {
+              "name": "Payment retried",
+              "is_default": false,
+              "conditions": [
+                { "type": "future_event", "event_name": "payment_retried", "event_conditions": [] }
+              ],
+              "nodes": []
+            },
+            {
+              "name": "Not retried after 1 day",
+              "is_default": true,
+              "conditions": [
+                { "type": "delay", "delay_properties": { "delay_type": "fixed", "value": "1d" } }
+              ],
+              "nodes": [
+                { "node_type": "send_sms", "...": "..." }
+              ]
+            }
+          ]
+        }
       ]
     }
     ```
+
+    This is a sketch. Two things the skill gets right:
+
+    - **`send_sms` sits inside the branch that continues.** Only one branch runs, and `is_terminal` has no runtime effect. So follow-on nodes go inside the branch that should continue, here the "not retried" path.
+    - **The wait is `1d`, not `24h`.** Durations allow hours 0-23 only, so the skill writes `48h` as `2d`.
   </Step>
 
   <Step title="Push it live">
@@ -116,6 +142,8 @@ Every file must include a `slug`:
 
 The skill knows every node below. You'll rarely need to look these up by hand, but they're useful for verifying generated output.
 
+**Action-node rule:** a workflow needs at least one action node - a delivery node (`send_*`), `httpapi_webhook`, a list or object node, `userupdate`, `invokeworkflow` or `cancelworkflow`. Nothing constrains which node comes last.
+
 <AccordionGroup>
   <Accordion title="Delivery nodes" icon="paper-plane">
     | Node | `node_type` | Docs |
@@ -153,6 +181,7 @@ The skill knows every node below. You'll rarely need to look these up by hand, b
     | Transform | `transform` | [Data Transform](https://docs.suprsend.com/docs/data-transform.md) |
     | Invoke Workflow | `invokeworkflow` | [Invoke Workflow](https://docs.suprsend.com/docs/invoke-workflow.md) |
     | Update User Profile | `userupdate` | [Update User Profile](https://docs.suprsend.com/docs/update-user-profile.md) |
+    | Cancel Workflow | `cancelworkflow` | [Skill reference](https://github.com/suprsend/skills/blob/main/skills/suprsend-workflow-schema/references/node-cancel-workflow.md). Related API: [Cancel workflow](/reference/cancel-workflow) |
   </Accordion>
   <Accordion title="List and Object nodes" icon="layer-group">
     | Node | `node_type` | Docs |
@@ -171,6 +200,12 @@ The skill knows every node below. You'll rarely need to look these up by hand, b
 <Warning>
   Agents sometimes produce incorrect `expression_v1` conditions inside `branch_waituntil` nodes. Always review branch logic before pushing to production. See [Wait Until](https://docs.suprsend.com/docs/wait-until.md) for correct syntax.
 </Warning>
+
+The skill now enforces these rules for `branch_waituntil`, so check for them when you review:
+
+- Event conditions use `"type": "future_event"`.
+- `expression_v1.op` is always `AND`.
+- The default (timeout) branch holds exactly one `"type": "delay"` condition. On a `branch` node, the default branch takes `"conditions": []` instead.
 
 ---
 
