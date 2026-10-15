@@ -36,11 +36,43 @@ Read `references/learnings.md` first: these are things past reviews missed.
    staging). Beyond the happy path, try the one error case most likely to hit readers
    (missing required field, wrong type) and check the doc names that error correctly.
    For dashboard-only changes you can't run, write a 3-step manual check for the human.
-3. **Facts vs code.** Pick every behavioural claim in the diff (param, default, limit,
-   enum, error string). Confirm it against the brief's `facts[]` and, for anything not
-   in `facts[]`, against source code (clone the repo read-only). Unsupported claim → Blocker.
-   For updates, also check every removed or rewritten line: anything changed outside the
-   brief's scope → Blocker.
+3. **Facts vs code.** Validate every behavioural claim (param, default, limit, enum,
+   error string, status code, retention period, UI step, role/plan gate, SDK method
+   signature) against source — not just the ones in the diff. Pick:
+   - every claim added or changed in the diff,
+   - every claim on each changed page even if the diff didn't touch it (a page is a
+     unit, and stale claims around a correct edit still mislead readers),
+   - every related claim on neighbouring pages the diff references.
+
+   Confirm each against the brief's `facts[]` first; for anything not covered, verify
+   against the authoritative source. Clone the repo read-only; prefer the latest `main`
+   or the tag/commit the brief pins. Authoritative repos:
+   - **`suprsend/suprsend-api`** — HTTP + management API, integrations config, user and
+     workspace models, RBAC, workspace settings, serializers, validators.
+   - **`suprsend/kinesis-consumer`** — delivery pipeline, workflow executions, status
+     webhook handling, channel-identity inactive marking, send-time behaviour.
+   - **`suprsend/collector`** — Cloudflare-worker ingestion for Segment and other
+     connectors (event mapping, prefix handling, anonymous-user handling).
+   - **`suprsend/suprsend-app-new`** — dashboard behaviour, in-UI gates (role-based
+     access, feature-plan gates), form defaults, labels, flows.
+   - **`suprsend/suprsend-inbox-api`** — inbox channel API and realtime behaviour.
+   - **`suprsend/mcp-server`** — MCP server and its tool definitions.
+   - SDK repos: **`suprsend-node-sdk`**, **`suprsend-py-sdk`**, **`suprsend-go`**,
+     **`suprsend-java-sdk`** — method names, parameter signatures, defaults, the
+     recommended primary flow in each SDK's README.
+
+   When the same claim appears in two docs with different values, flag the contradiction
+   and name the repo that would resolve it (don't let the reviewer silently prefer one
+   doc over the other). Unsupported claim → Blocker. For updates, also check every
+   removed or rewritten line: anything changed outside the brief's scope → Blocker.
+   Private repos not reachable in this session → say so explicitly in the finding
+   rather than guessing from docs alone.
+
+   **Order of truth: code > PRD/brief > existing docs.** When any two of these
+   disagree, treat the current state of the authoritative source code as the final
+   answer. A brief fact or an existing doc paragraph that doesn't match the code is a
+   Blocker on the code's side, not a reason to leave the diff untouched — flag it
+   with the file and line in code that proves it.
 4. **Reference completeness** (API/SDK/schema pages). Compare the page's field list with
    the code or OpenAPI spec: a field in code but not on the page, a field without a
    description, or a type/default that differs → Blocker. Every variant the code supports
