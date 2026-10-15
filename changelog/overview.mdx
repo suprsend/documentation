@@ -83,6 +83,31 @@ mode: "wide"
   <Warning>Unlike API keys, the workspace `secret` is returned in plain text on every response - list, detail, create and rotate. Handle every response as sensitive data.</Warning>
 </Update>
 
+<Update label="17 September 2026" tags={["Workflows"]}>
+  ## Cancel a running workflow from inside another workflow
+
+  Add a **Cancel Workflow** node from the Functions group — next to Invoke Workflow — to stop running executions when a downstream event invalidates them. A payment lands and the invoice reminders stop; a slot moves and the old reminders stop; one approver signs off and the rest stop being paged.
+
+  <Frame>
+    <img src="/images/cancel-workflow-filters.png" width="500" alt="Cancel Workflow node config panel with the Add Filter dropdown showing Workflow Slug, Recipient(s), and Cancellation Key" />
+  </Frame>
+
+  ### How to target what to cancel
+
+  The node takes up to three filters, all ANDed together: **Workflow Slug** (searchable multi-select, up to 20), **Recipient(s)** (the current run's recipient, actor, or a JSONNET expression against the input payload), and **Cancellation Key** (a JSONNET expression that matches a value stored on the target execution). At least one filter is required.
+
+  For the matching key itself, the target workflow has two ways to declare it:
+
+  - **On the Trigger node** — set a **Cancellation Key** JSONNET expression (for example `data.booking_id`). SuprSend evaluates it at trigger time and stores the result on the running execution.
+  - **In the trigger payload** — pass a literal `cancellation_key` string at the top level of any trigger payload (direct trigger, event, broadcast, or test run). If both are present, the payload value wins.
+
+  ### What happens at runtime
+
+  The node is fire-and-forget. When it runs, it finds every running execution matching the filters and halts them — nodes not yet started don't run, nodes already waiting (delay, batch, digest, time window) are interrupted, and anything already completed stays completed, so messages already dispatched are not recalled. The cancelling workflow's log records `cancelled_count`, `cancelled_exec_ids`, and the resolved `filters` for the node; each cancelled execution is marked `cancelled` in its own log.
+
+  See the full [Cancel Workflow node docs](/docs/cancel-workflow) and the new [`cancellation_key` field in the trigger payload](/docs/trigger-workflow#triggering-workflow-via-api).
+</Update>
+
 <Update label="10 September 2026" tags={["Microsoft Teams", "Vendors"]}>
   ## Microsoft Teams: support for single-tenant bots
 
