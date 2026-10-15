@@ -85,7 +85,9 @@ For a Cancel Workflow node to match on something more specific than slug + recip
 
 The field accepts a JSONNET expression against the trigger payload. SuprSend evaluates it at trigger time and stores the resulting value on the running execution, so the Cancel Workflow node can look it up efficiently.
 
-If the expression fails to evaluate — for example, the referenced field is missing from the payload — **the execution still runs**. The failure is captured as a warning on the execution, and the stored cancellation key is left empty, so later Cancel Workflow nodes matching on that key won't find this execution.
+<Note>
+  If the expression fails to evaluate — for example, the referenced field is missing from the payload — **the execution still runs**. The failure is captured as a warning on the execution, and the stored cancellation key is left empty, so later Cancel Workflow nodes matching on that key won't find this execution.
+</Note>
 
 **Examples:**
 
@@ -159,7 +161,6 @@ The cancelled execution does not carry a reference back to the workflow that can
 | **Cancel + trigger fire for the same key at almost the same time** | Eventual consistency: a recently-triggered execution is still caught by the cancel. A millisecond gap is acceptable. |
 | **A workflow slug in the filter has been deleted** | Cancellation matches against the stored slug on *existing* running executions, not against the workflow catalog, so any run still in flight for that slug is cancelled normally. The node also doesn't error at save time. |
 | **Draft vs published** | A cancel node runs when its workflow runs — that includes test workflow runs from the draft, so you can validate the behaviour before publishing. Standard workflow runs still use the published version. |
-| **A Member opens the node in a workspace they can't edit** | Members can edit only in staging and sandbox workspaces. In production (or any other non-sandbox workspace), the Cancel Workflow node is read-only — the configured filter values are visible but every input is disabled. See [roles and permissions](/docs/managing-members#roles-and-permissions). |
 
 ## Frequently Asked Questions
 
@@ -174,6 +175,8 @@ The cancelled execution does not carry a reference back to the workflow that can
 
   <Accordion title="Do I always need to set a Cancellation Key on the target workflow's Trigger node?">
     No. The Cancellation Key is only needed when **Workflow Slug** and **Recipient(s)** alone can't uniquely target what you want to cancel. For example, if a user has three concurrent runs of the same workflow (one per booking) and you want to cancel just one, set `data.booking_id` as the Cancellation Key on the Trigger node and match on it in the Cancel Workflow node.
+
+    You can also skip the Trigger-node field and pass a literal `cancellation_key` string in the [workflow trigger API payload](/docs/trigger-workflow#triggering-workflow-via-api) instead. When both are present, the payload value wins.
   </Accordion>
 
   <Accordion title="Can I cancel the workflow I'm currently in?">
