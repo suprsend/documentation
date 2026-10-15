@@ -67,6 +67,12 @@ Read `references/learnings.md` first: these are things past reviews missed.
    removed or rewritten line: anything changed outside the brief's scope → Blocker.
    Private repos not reachable in this session → say so explicitly in the finding
    rather than guessing from docs alone.
+
+   **Order of truth: code > PRD/brief > existing docs.** When any two of these
+   disagree, treat the current state of the authoritative source code as the final
+   answer. A brief fact or an existing doc paragraph that doesn't match the code is a
+   Blocker on the code's side, not a reason to leave the diff untouched — flag it
+   with the file and line in code that proves it.
 4. **Reference completeness** (API/SDK/schema pages). Compare the page's field list with
    the code or OpenAPI spec: a field in code but not on the page, a field without a
    description, or a type/default that differs → Blocker. Every variant the code supports

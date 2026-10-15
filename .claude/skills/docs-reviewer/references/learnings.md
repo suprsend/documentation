@@ -10,6 +10,18 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
 
 ## Active
 
+- **2026-10-15** (local `docs/verify-claims-against-source`) — While reviewing
+  claims the owner called out that the reviewer needs a clear tiebreaker when
+  sources disagree. Several of the misstatements this review surfaced lived in a
+  brief or an existing doc paragraph long before the diff touched them, and the
+  reviewer was tempted to defer to the written word rather than open the
+  authoritative code. → Rule now in SKILL.md step 3 "Facts vs code": the order of
+  truth is **code > PRD/brief > existing docs**. When any two of these disagree,
+  treat the current state of the authoritative source code as the final answer;
+  a brief fact or an existing doc paragraph that doesn't match the code is a
+  Blocker on the code's side, flagged with the file and line in code that proves
+  it.
+
 - **2026-10-15** (local `docs/verify-claims-against-source`) — Across one full-page
   audit the owner caught claims that past reviewers had missed because they only
   checked the diff and the brief's `facts[]`: `dismissed` status falsely listed on
