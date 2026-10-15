@@ -1,0 +1,125 @@
+# Data Transform Node
+
+**Schema `node_type`:** `transform`
+
+## Documentation
+
+# Data Transform
+
+> Guide to help you transform input data and generate new variables in workflow.
+
+The Data Transform node is used to dynamically generate or modify variables within your workflow based on specific conditions or the execution of other steps. This allows you to create variables at one place that can be utilized across multiple templates and in workflow settings, without having to write the same transformation in each template or workflow settings.
+
+for example, if you have to batch your workflow for some users and not for others—you can use a single template and adjust the variable values with the Data Transform node. Similarly, if you're offering different Thanksgiving discount to users based on their past activity or billing, you can calculate the appropriate discount slab in the workflow and apply it to your templates.
+
+## How data transform works
+
+The Data Transform node generates or modifies variables in your trigger data, which are then merged into the main payload used by the workflow and templates to render dynamic content. You can write these transformations using [Handlebars](/docs/handlebars-helpers) or [JSONNET](https://jsonnet.org/ref/language.html) language. We use a shallow merge strategy where keys with the same name as the input payload will be overridden.
+
+Example: Given the following trigger data for two users:
+
+
+  ```json json theme={"system"}
+  // User 1
+
+  {
+    "time_period": "4 years",
+    "monthly_bill_amount($)":"1500",
+    "discount":"10%"
+  }
+
+  // User 2
+
+  {
+    "time_period": "1 year",
+    "monthly_bill_amount($)":"500",
+    "discount":"10%"
+  }
+  ```
+
+
+If you want to apply below transformation to give a 15% discount to users whose monthly bill amount exceeds \$1000
+
+
+The transformation would modify the discount for User 1, resulting in
+
+
+  ```json json theme={"system"}
+  // User 1
+
+  {
+    "time_period": "4 years",
+    "monthly_bill_amount($)":"1500",
+    "discount":"15%"     // Updated by Data Transform node
+  }
+
+  // User 2
+
+  {
+    "time_period": "1 year",
+    "monthly_bill_amount($)":"500",
+    "discount":"10%"
+  }
+  ```
+
+
+## Modifying list of variables in data transform
+
+You can generate up to 25 variables in this step. Each key-value pair represents a variable and its value. You can choose to write transformation in [Handlebars](/docs/handlebars-helpers) or [JSONNET](https://jsonnet.org/ref/language.html) language. Handlebar is a simpler language suitable for simple string outputs, while JSONNET can handle more complex data structures such as arrays or JSON objects.
+
+## Some common notification use cases
+
+* **Use `$batched_variables` or Handlebar helpers in SMS and WhatsApp templates**
+
+  where approval is required. Since these templates are pre-approved, the type of variable content can't be changed dynamically for these templates, limiting the use of handlebars helpers in these templates. You can use data transform node to write transformation outside template editor and pass the generated variable in template.
+
+* Generating variables for use in workflow settings. for example, dynamically manage user preferences for notifications within a workflow. For instance, if users have different digest preference on channels and want to receive digest notifications on some channels and immediate alerts on others, you can create an array of channels for each type of notification. This array can then be used in the override channel settings of the multi-channel delivery node to handle both digest and immediate alerts appropriately.
+
+* **Fetch Response Modification**: Adjust the structure of responses from fetch operations as needed.
+
+* Apply batching conditions where some users receive batched notifications and others get immediate alerts. Use the Data Transform node to ensure a consistent data structure in both cases for use in templates.
+
+***
+
+## Schema Properties
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| variables | array | Yes |  |
+
+### Variable item properties
+
+Each item in the `variables` array:
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| key | string | Yes | Literal string. key for the variable |
+| value_lang | string | Yes | language to use to derive value at runtime |
+| value | string | Yes | script in selected language to derive the value of variable |
+
+### Supported languages (`value_lang`)
+
+- `jsonnet`
+- `handlebars`
+
+## Example
+
+```json
+{
+  "node_type": "transform",
+  "properties": {
+    "variables": [
+      {
+        "key": "greeting",
+        "value_lang": "handlebars",
+        "value": "Hello , welcome!"
+      },
+      {
+        "key": "discount_rate",
+        "value_lang": "jsonnet",
+        "value": "if data[\"$recipient\"].monthly_spend > 1000 then 15 else 10"
+      }
+    ]
+  }
+}
+```

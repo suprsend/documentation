@@ -1,0 +1,625 @@
+# Handlebars Helpers
+
+Most text-bearing fields in a variant's `content` are rendered with Handlebars at send time. Use `{{ variable }}` for substitution. SuprSend extends standard Handlebars with the helpers below — use them inside any string content field (subject, body, button text, etc.).
+
+This applies to every channel where `templating_language` is `handlebars` (the default for all channels). Slack and MS Teams additionally support `jsonnet` — for those, see the channel reference.
+
+> **Brand variables:** the tenant display name is `{{$brand.brand_name}}`, not `{{$brand.name}}`. Custom tenant properties always go under `{{$brand.properties.<key>}}`. There is no `$brand.<custom_key>` shorthand — `{{$brand.address}}`, `{{$brand.support_url}}`, `{{$brand.unsubscribe_url}}` will not resolve. See [Multi-tenant Variants](references/multi-tenant-variants.md) for the full reserved-key list and the per-recipient `{{$hosted_preference_url}}` / `{{$embedded_preference_url}}` variables.
+
+## Documentation
+
+```
+# Handlebars
+
+> Handlebars syntax and list of supported handlebars helpers that can be used in a template to format data.
+
+SuprSend template editor uses handlebars as the default templating language to add variables in all templates except Slack and MS Teams JSONNET templates.
+You'll find the generic syntax and list of helpers supported. Helpers are used to format data or add conditions on the data passed in the template.
+
+## Variable types and their syntax
+
+| Syntax                          | Behavior                                                                                                                                                                                         |
+| :------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{{ var }}`                     | **Default syntax for variables**. This is **HTML-escaped**, so characters like `<`, `>`, `"`, `'`, `&` are converted into random strings (like &, ??, =??, etc.) when they are rendered as text. |
+| `{{{ var }}}`                   | Use when you have special characters in the value (like &, ?, =, etc.) and want to avoid HTML-escaping. Renders the HTML as is. So, it can pose the risk of HTML injection.                      |
+| `{{array.[0].name}}`            | To print the value of the first element of the array `array`. You can change the index to print the value of the nth element of the array by changing the index to `[1]`, `[2]`, etc.            |
+| `{{[first name]}}`              | Enclose the variable name in square brackets to print the value of the variable which has spaces, capital letters or special characters in it.                                                   |
+| `{{$batched_events_count}}`     | Print the count of the batch events.                                                                                                                                                             |
+| `{{$batched_events.[0].name}}`  | Print the value of the nth element of the batch events array. O refers to first element, 1 refers to second element, etc.                                                                        |
+| `{{$recipient.name}}`           | Print the value of the recipient property `name`.                                                                                                                                                |
+| `{{$actor.name}}`               | Print the value of the actor property `name`.                                                                                                                                                    |
+| `{{$brand.brand_name}}`         | Print the value of the tenant reserved properties like brand_name.                                                                                                                              |
+| `{{$brand.properties.address}}` | Print the value of the tenant custom property like address, phone number, etc.                                                                                                                   |
+
+## Handlebars Helpers
+
+You can find the list of inbuilt handlebars helpers [here](https://handlebarsjs.com/guide/builtin-helpers.html).
+
+Apart from the inbuilt helper functions, we have also created some custom helper functions which you can use in template editors.
+
+> **Warning:**
+  **Not supported in SMS and Whatsapp:**
+
+  Since, SMS (in India) and Whatsapp require pre-approved templates to send messages, we can't support conditional content rendering in SMS and Whatsapp templates. You can use handlebars helpers if you are sending SMS in US with vendors like Twilio and Messagebird.
+
+
+<Tip>
+  **AI prompt — write a Handlebars expression:** *"Write a Handlebars expression for SuprSend that \[describe task — for example 'shows a comma-separated list from an array', 'formats a date as Mon DD YYYY', 'shows different content for premium vs free users']. My variables: \[paste JSON]. SuprSend supports custom helpers: formatDate, math, capitalize, default, formatCurrency."*
+</Tip>
+
+### default
+
+Can be used to add a default value if the variable values are `" "` , `null` , `undefined`.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{default variable "default_value" }}
+  ```
+
+  ```Example theme={"system"}
+  {{default name "user" }}
+  ```
+
+
+> **Returns:**
+>
+> * Variable value if the variable value is present. For instance, the above example with data `{"name":"Joe"}` will return `Joe`
+> * Default value if variable value is in `" "` , `null` , `undefined`. For instance, the above example with data `{"name":""}`, `{"name":null}` or `{"city":"Bangalore"}` will return `user`
+
+### compare
+
+Can be used to show some content in the template based on a condition. For email, you can use [display condition](/docs/email-template#display-email-blocks-based-on-condition) to show or hide a particular content block
+
+
+  ```handlebars Syntax theme={"system"}
+  {{#compare name '==' "Mike"}}
+  true_block
+  {{else}}
+  false_block
+  {{/compare}}
+  ```
+
+  ```Example Example theme={"system"}
+  Example-1: with else statement
+  {{#compare candidate_count '==' 1}}
+  is
+  {{else}}
+  are
+  {{/compare}}
+
+  Example-2: without else statement
+  {{#compare candidate_count '==' 1}}
+  is
+  {{/compare}}
+  ```
+
+
+> **Returns:**
+>
+> * Returns  if the condition inside compare statement returns truthy value. For instance, the above example with data`{"candidate_count":1}`will return`is`
+> * Returns  (in case else statement is present) if the condition inside compare statement returns falsy value. For instance, Example-1 with data`{"candidate_count":3}`will return`are`
+> * or Returns  if the else statement is not present. For instance, Example-2 with data`{"candidate_count":3}`will not return anything
+
+**Supported Conditional operators in compare statement:**
+
+| Operator | Returns truthy when                             | Sample Statement       |
+| :------- | :---------------------------------------------- | :--------------------- |
+| `==`     | LHS equals RHS                                  | 1 `==` "1"             |
+| `===`    | LHS value as well as data type matches with RHS | 1 `===` 1              |
+| `>`      | LHS is greater than RHS                         | 2 `>` 1                |
+| `\<`     | LHS is less than RHS                            | 1 `\<` 2               |
+| `>=`     | LHS is greater than equals to RHS               | 2 `>=` 2 or 3 `>=` 2   |
+| `\<=`    | LHS is less than equal to RHS                   | 2 `\<=` 2 or 1 `\<=` 2 |
+| `!=`     | LHS is not equal RHS                            | 3 `!=` 1               |
+| `!==`    | LHS value or data type does not equal RHS       | 1 `!==` "1"            |
+
+> **Warning:**
+  Builtin helpers and custom helpers in handlebars can only work with nested objects if the value of parent key is present.
+
+  For instance, `{{default place.city "San Francisco"}}` will return `"San Francisco"` only if `place` key is present, that is `{"place":[]}`
+
+
+However, you can use the nested `if` condition to check if the parent is present and if so, then render nested objects value. Refer below example:
+
+
+  ```text Sample text theme={"system"}
+  {{#if place}}
+    {{default place.city "San Francisco"}}
+  {{else}}
+    San Francisco
+  {{/if}}
+
+  {{#if person.address}}
+    {{#if person.address.current}}
+      {{{default person.address.current.city "Los Angeles"}}
+    {{/if}}
+  {{/if}}
+  ```
+
+
+### each
+
+You can iterate over a static or dynamic length list using each helper. Inside the block, you add the array object key which you want to iterate over.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{#each array_object}}
+  {{variable_key}}
+  {{/each}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {{#each admins}}
+  {{name}}
+  {{/each}}
+  ```
+
+  ```File Response Return theme={"system"}
+  {
+    "admins":[
+      {
+        "name":"steve",
+        "id":"1",
+        "city":"Palo Alto"
+      },
+      {
+        "name":"Olivia",
+        "id":2,
+        "city":"Houston"
+      }
+    ]
+  }
+  ```
+
+
+> **Returns:**  Above example for below mock data will return `steve Olivia`
+
+### datetime-format
+
+Returns a formatted date string. This helper will throw error if an invalid date is provided.
+
+
+  ```Syntax Syntax theme={"system"}
+  {{datetime-format variable "format string" "timezone"}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "date":"2023-09-26T00:00:00Z"
+  }
+  ```
+
+
+| parameter         | Obligation  | description                                                                                                                                                                                                                                                            |
+| :---------------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **variable**      | *mandatory* | should be a date or timestamp. It will throw an error for invalid date format. To get today's date (date on which template is getting rendered) you can use `"now"` string.                                                                                            |
+| **format string** | *mandatory* | date string defining the format in which date should be printed. See all [formatting options here](https://momentjs.com/docs/#/displaying/format/). for example **"dddd, MMMM Do YYYY, h:mm:ss a"** will return datetime as **"Sunday, February 14 2010, 3:25:50 PM"** |
+| **timezone**      | *optional*  | you can add timezone as a third parameter to convert time in a given timezone. See the list of [all possible timezones here](https://support.sendwithus.com/jinja/jinja_time/#complete-list-of-all-available-timezones)                                                |
+
+**Examples:**
+
+| Example                                                      | Output                            |
+| :----------------------------------------------------------- | :-------------------------------- |
+| `{{datetime-format date "ddd, MMM Do YYYY, h:mm:ss a"}}`     | `Tue, Sep 26th 2023, 12:00:00 am` |
+| `{{datetime-format date "[Today is] dddd"}}`                 | `Today is Tuesday`                |
+| `{{datetime-format date "Do MMMM, YYYY" "America/Chicago"}}` | `25th September, 2023`            |
+
+### jsonStringify
+
+Coverts any type of JSON input to a string. Can be used to print JSON and array directly in templates without having to convert it into individual strings. One of the common use case is to pass complete JSON in Inbox template -> custom JSON field to generate custom UI.
+
+
+  ```Syntax Syntax theme={"system"}
+  {{jsonStringify variable}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "likes":3,
+    "comments":4,
+    "users":["Olivia","Steve"]
+  }
+  ```
+
+
+> **Note:**
+  variable should be a valid JSON input.
+
+
+**Examples:**
+
+| Example                   | Output                                                  |
+| :------------------------ | :------------------------------------------------------ |
+| `{{jsonStringify this}}`  | `\{"likes":3,"comments":4,"users":\["Olivia","Steve"]}` |
+| `{{jsonStringify users}}` | `\["Olivia","Steve"]`                                   |
+
+### lowercase
+
+This handlebar helper is used to convert string to lowercase. If non string values are provided empty string `''` is returned.
+
+
+  ```Syntax Syntax theme={"system"}
+  {{lowercase "string"}}
+  ```
+
+
+### uppercase
+
+This handlebar helper is used to convert string to uppercase. If non string values are provided empty string `''` is returned.
+
+
+  ```Syntax Syntax theme={"system"}
+  {{uppercase "string"}}
+  ```
+
+
+### capitalize
+
+This handlebar helper is used to capitalize the first character in provided string. If non string values are provided empty string `''` is returned.
+
+
+  ```Syntax Syntax theme={"system"}
+  {{capitalize "string"}}
+  ```
+
+
+## Math Operators:
+
+### add
+
+Returns the sum of two operands. Both input values should be numbers, else it will throw an error.
+
+
+  ```Syntax Syntax theme={"system"}
+  {{add number1 number2}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "likes":3,
+    "comments":4
+  }
+  ```
+
+
+**Examples:**
+
+| Example                  | Output |
+| :----------------------- | :----- |
+| `{{add 9 4}}`            | `13`   |
+| `{{add likes comments}}` | `7`    |
+
+### subtract
+
+Returns the difference between two operands. Both input values should be numbers, else it will throw an error.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{subtract number1 number2}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "likes":3,
+    "comments":4
+  }
+  ```
+
+
+**Examples:**
+
+| Example                | Output |
+| :--------------------- | :----- |
+| `{{subtract 9 4}}`     | `5`    |
+| `{{subtract likes 1}}` | `2`    |
+
+### multiply
+
+Returns the product of two operands. Both input values should be numbers, else it will throw an error.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{multiply number1 number2}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "ARR":300,
+    "billing_months":12
+  }
+  ```
+
+
+**Examples:**
+
+| Example                           | Output |
+| :-------------------------------- | :----- |
+| `{{multiply 9 4}}`                | `36`   |
+| `{{multiply ARR billing_months}}` | `3600` |
+
+### divide
+
+Returns the quotient of the left operand divided by the right operand. Both input values should be numbers; else it will throw an error.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{divide dividend divisor}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "total_bill":3600,
+    "billing_months":12
+  }
+  ```
+
+
+**Examples:**
+
+| Example                                | Output |
+| :------------------------------------- | :----- |
+| `{{divide 14 4}}`                      | `3.5`  |
+| `{{divide total_bill billing_months}}` | `300`  |
+
+### round
+
+Returns the value of a number rounded to the nearest integer. The input value should be a number; else it will throw an error.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{round number}}
+  ```
+
+
+**Examples:**
+
+| Example                   | Output |
+| :------------------------ | :----- |
+| `{{round 12.5}}`          | `13`   |
+| `{{round (divide 15 4)}}` | `4`    |
+
+### mod
+
+Returns the remainder left over when one operand is divided by a second operand. It always takes the sign of the dividend. This helper will throw an error if it encounters an input value that is not a number or if the divisor is 0.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{mod dividend divisor}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+     "total_bill":3600,
+     "billing_months":12
+  }
+  ```
+
+
+**Examples:**
+
+| Example                             | Output |
+| :---------------------------------- | :----- |
+| `{{mod 14 4}}`                      | `2`    |
+| `{{mod total_bill billing_months}}` | `0`    |
+
+## Array Operators
+
+### unique
+
+Returns unique items in an array.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{unique variable "key_string" }}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "array": [
+      {
+        "city": "San Francisco",
+        "name": "Mike"
+      },
+      {
+        "city": "Austin",
+        "name": "Juliana"
+      },
+      {
+        "city": "Austin",
+        "name": "Nova"
+      }
+    ],
+    "personal_details": [
+      {
+        "name": {
+          "first_name": "john",
+          "last_name": "doe"
+        }
+      },
+      {
+        "name": {
+          "first_name": "mike",
+          "last_name": "waz"
+        }
+      }
+    ],
+    "email": [
+      "joe@abc.com",
+      "steve@abc.com",
+      "joe@abc.com"
+    ]
+  }
+  ```
+
+
+| parameter       | description                                                                                                                                                             |
+| :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **variable**    | should be an array. If not helper function will throw an error.                                                                                                         |
+| **key_string** | mandatory only if items in the array are objects. If a *unique* operation needs to be performed on nested objects, then object notation *(a.b or a\['b'])* can be used. |
+
+**Examples:**
+
+| Example                                          | Output                       |
+| :----------------------------------------------- | :--------------------------- |
+| `{{unique email }}`                              | `joe@abc.com, steve@abc.com` |
+| `{{unique array "city" }}`                       | `San Francisco, Austin`      |
+| `{{unique personal_details "name.first_name" }}` | `john, mike`                 |
+
+### itemAt
+
+Returns item at a particular index in the array. It can be useful in scenarios where you want to display a message like `liked by Mike and 3 others`.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{itemAt variable index }}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "array": [
+      {
+        "city": "San Francisco",
+        "name": "Mike"
+      },
+      {
+        "city": "Austin",
+        "name": "Juliana"
+      },
+      {
+        "city": "Austin",
+        "name": "Nova"
+      }
+    ],
+    "email":["joe@abc.com","steve@abc.com","joe@abc.com"]
+  }
+  ```
+
+
+| Parameter    | Description                                                        |
+| :----------- | :----------------------------------------------------------------- |
+| **variable** | should be an array else the helper function will throw an error.   |
+| **index**    | should be an integer else the helper function will throw an error. |
+
+**Examples:**
+
+| Example              | Output          |
+| :------------------- | :-------------- |
+| `{{itemAt email 1}}` | `steve@abc.com` |
+
+> **Note:**
+  **Note:**
+
+  This helper only works with an array of primitive data types like string, boolean, etc. If you have an array with objects in it, you can combine it with a unique helper to return the indexed value of a particular key inside the object. For instance, `{{itemAt (unique array "city") 0}}` in above mock will return `San Francisco`.
+
+
+### join
+
+Concatenates all the values in an array, using a specified separator string between each value.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{join variable "separator"}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "array": [
+      {
+        "city": "San Francisco",
+        "name": "Mike"
+      },
+      {
+        "city": "Austin",
+        "name": "Juliana"
+      },
+      {
+        "city": "Austin",
+        "name": "Nova"
+      }
+    ],
+    "email":["joe@abc.com","steve@abc.com","joe@abc.com"]
+  }
+  ```
+
+
+| Parameter     | Description                                                                                                                                         |
+| :------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **variable**  | should be an array and items in the array should be of primitive data types like string, number, etc, else the helper function will throw an error. |
+| **separator** | should be string else by default separator `,` will be used. If not provided `,` is used.                                                           |
+
+**Examples:**
+
+| Example                | Output                                      |
+| :--------------------- | :------------------------------------------ |
+| `{{join email }}`      | `joe@abc.com , steve@abc.com , joe@abc.com` |
+| `{{join email ' - '}}` | `joe@abc.com - steve@abc.com - joe@abc.com` |
+
+> **Note:**
+  **Note:**
+
+  This helper only works with an array of primitive data types like string, boolean, etc. If you have an array with objects in it, you can combine them with a unique helper to join the value of a particular key inside the object. For instance, `{{join (unique array "city")}}` in above mock will return `San Francisco, Austin`
+
+
+### length
+
+Can be used to get the number of items in an array or the character length of a string. It can be useful in scenarios where you want to display a message like `your post has got 100 likes`.
+
+
+  ```handlebars Syntax theme={"system"}
+  {{length variable}}
+  ```
+
+  ```json Mock JSON Data theme={"system"}
+  {
+    "array": [
+      {
+        "city": "San Francisco",
+        "name": "Mike"
+      },
+      {
+        "city": "Austin",
+        "name": "Juliana"
+      },
+      {
+        "city": "Austin",
+        "name": "Nova"
+      }
+    ],
+    "email":["joe@abc.com","steve@abc.com","joe@abc.com"],
+    "name":"Justin",
+    "active":true
+  }
+  ```
+
+
+| Property     | Description                                                                                                |
+| :----------- | :--------------------------------------------------------------------------------------------------------- |
+| **variable** | should be an array or string to get the actual count of items in the variable provided, else it returns 0. |
+
+**Examples:**
+
+| Example             | Output |
+| :------------------ | :----- |
+| `{{length array}}`  | 3      |
+| `{{length name}}`   | 6      |
+| `{{length active}}` | 0      |
+
+> **Note:**
+  We are adding further helpers to this list. If you have a use case that is not covered, ping us on our [Slack Support Channel](https://join.slack.com/t/suprsendcommunity/shared_invite/zt-3932rw936-XNWY1RC8bsffh4if4ZyoXQ)
+
+
+***
+
+<Tip>
+  **AI prompt - debug rendering:** *"My SuprSend template isn't rendering. Template: \[paste]. Variables JSON: \[paste]. Expected: \[describe]. Actual: \[blank/raw syntax/error]. Check for: path mismatch, double vs triple braces for URLs, #each on non-array, missing closing tags, missing $on$recipient/\$brand."*
+</Tip>
+
+## Frequently Asked Questions
+
+### We're seeing an issue where apostrophes (`'`) in push notification text are getting converted to `&`#x27;` in the preview.
+  This is happening because handlebars by default does url encoding, use triple curly braces syntax like `{{{ variable }}}` whenever you need to print the value of the variable as is without any encoding.
+
+
+### How does SuprSend avoid HTML injection when printing variables?
+  SuprSend uses the default syntax for variables `{{ var }}` to print the value of the variable. This is **HTML-escaped**, so characters like `<`, `>`, `"`, `'`, `&` are converted into their HTML entity equivalents when rendered as text.
+```
