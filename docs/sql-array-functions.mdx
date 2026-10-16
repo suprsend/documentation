@@ -779,9 +779,12 @@ unnest(arr)
 **Example**
 
 ```sql One row per active channel per user
-SELECT distinct_id
-FROM users
-WHERE 'email' IN (SELECT unnest(active_channels))
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id, unnest(active_channels) AS channel
+  FROM users
+) t
+WHERE channel = 'email'
 ```
 
 ## range
@@ -846,7 +849,7 @@ Removes consecutive duplicate elements from an array. Non-adjacent duplicates ar
 **Syntax**
 
 ```sql
-arrayCompact(arr)
+array_compact(arr)
 ```
 
 **Arguments**
@@ -862,7 +865,7 @@ arrayCompact(arr)
 ```sql Collapse repeated adjacent channels
 SELECT distinct_id
 FROM users
-WHERE array_length(arrayCompact(active_channels), 1) < array_length(active_channels, 1)
+WHERE array_length(array_compact(active_channels), 1) < array_length(active_channels, 1)
 ```
 
 ## array_resize
@@ -872,7 +875,7 @@ Changes the length of an array, truncating from the end or padding with a fill v
 **Syntax**
 
 ```sql
-arrayResize(arr, size [, extender])
+array_resize(arr, size [, extender])
 ```
 
 **Arguments**
@@ -890,5 +893,5 @@ arrayResize(arr, size [, extender])
 ```sql Normalize email lists to length 3
 SELECT distinct_id
 FROM users
-WHERE arrayResize(active_emails, 3, '')[3] <> ''
+WHERE array_resize(active_emails, 3, '')[3] <> ''
 ```

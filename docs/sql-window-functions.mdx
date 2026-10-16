@@ -31,6 +31,7 @@ SELECT distinct_id FROM (
   SELECT distinct_id, event_name, requested_at,
          row_number() OVER (PARTITION BY distinct_id ORDER BY requested_at DESC) AS rn
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE rn = 1
 ```
@@ -60,6 +61,7 @@ SELECT DISTINCT distinct_id FROM (
   SELECT distinct_id,
          rank() OVER (PARTITION BY distinct_id ORDER BY requested_at DESC) AS recency_rank
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE recency_rank = 1
 ```
@@ -89,6 +91,7 @@ SELECT DISTINCT distinct_id FROM (
   SELECT distinct_id,
          dense_rank() OVER (PARTITION BY distinct_id ORDER BY requested_at DESC) AS recency_rank
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE recency_rank = 1
 ```
@@ -122,6 +125,7 @@ SELECT DISTINCT distinct_id FROM (
                    lag(requested_at) OVER (PARTITION BY distinct_id ORDER BY requested_at),
                    requested_at) AS seconds_since_prev
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE seconds_since_prev > 3600
 ```
@@ -153,6 +157,7 @@ SELECT DISTINCT distinct_id FROM (
   SELECT distinct_id, event_name,
          lead(event_name) OVER (PARTITION BY distinct_id ORDER BY requested_at) AS next_event
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE event_name = 'ADD_TO_CART' AND next_event = 'CHECKOUT_STARTED'
 ```
@@ -177,12 +182,13 @@ first_value(expr) OVER (PARTITION BY ... ORDER BY ...)
 
 **Example**
 
-```sql Users whose first-ever event was a signup
+```sql Users whose first event in the last 30 days was a signup
 SELECT DISTINCT distinct_id
 FROM (
   SELECT distinct_id,
          first_value(event_name) OVER (PARTITION BY distinct_id ORDER BY requested_at) AS first_event
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE first_event = 'SIGNED_UP'
 ```
@@ -219,6 +225,7 @@ FROM (
            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
          ) AS last_event
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE last_event = 'SUBSCRIPTION_CANCELLED'
 ```
@@ -244,12 +251,13 @@ count(*) OVER (PARTITION BY ... ORDER BY ...)
 
 **Example**
 
-```sql Keep users with more than 100 total events
+```sql Keep users with more than 100 events in the last 30 days
 SELECT DISTINCT distinct_id
 FROM (
   SELECT distinct_id,
          count(*) OVER (PARTITION BY distinct_id) AS event_count
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE event_count > 100
 ```
@@ -279,6 +287,7 @@ SELECT DISTINCT distinct_id FROM (
   SELECT distinct_id,
          ntile(4) OVER (PARTITION BY distinct_id ORDER BY requested_at) AS quartile
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE quartile = 4
 ```
@@ -316,6 +325,7 @@ FROM (
            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
          ) AS second_event
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE second_event = 'ADD_TO_CART'
 ```
@@ -346,6 +356,7 @@ FROM (
   SELECT distinct_id,
          percent_rank() OVER (PARTITION BY distinct_id ORDER BY requested_at) AS pr
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE pr <= 0.25
 ```
@@ -376,6 +387,7 @@ FROM (
   SELECT distinct_id,
          cume_dist() OVER (PARTITION BY distinct_id ORDER BY requested_at) AS position
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE position >= 0.9
 ```
@@ -412,6 +424,7 @@ SELECT DISTINCT distinct_id FROM (
            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
          ) AS rolling_event_count
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
 ) t
 WHERE rolling_event_count = 3
 ```

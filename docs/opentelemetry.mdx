@@ -3,7 +3,7 @@ title: "OpenTelemetry"
 description: "Stream real-time notification metrics from SuprSend to any OpenTelemetry-compatible observability platform via OTLP for API, delivery, and vendor tracking."
 ---
 
-The SuprSend OTel connector streams notification metrics via the [OpenTelemetry Protocol (OTLP)](https://opentelemetry.io/) over HTTP in near real-time - with latency under **1 minute**. It covers three key areas of your notification pipeline:
+The SuprSend OTel connector streams notification metrics via the [OpenTelemetry Protocol (OTLP)](https://opentelemetry.io/) over HTTP or gRPC in real time, with **sub-second latency**. It covers three key areas of your notification pipeline:
 
 <CardGroup cols={3}>
   <Card title="API Requests" icon="server" href="#reported-metrics">
@@ -29,11 +29,11 @@ Use it to connect SuprSend to any platform that accepts OTLP, including Grafana 
 
 ## How it works
 
-SuprSend exports `suprsend.*` metrics via OTLP over HTTP. You provide your **OTLP endpoint** and **authentication headers**, choose which events to sync, and SuprSend streams them in near real-time - with latency **under 1 minute**.
+SuprSend exports `suprsend.*` metrics via OTLP over HTTP or gRPC. You provide your **OTLP endpoint** and **authentication headers**, choose which events to sync, and SuprSend streams them in real time, with **sub-second latency**.
 
-Once connected you can **build custom dashboards**, **set up alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, channel, vendor, template), and **correlate notification health with your infrastructure and APM data**.
+Once connected you can **build custom dashboards**, **set up alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, category, channel, vendor), and **correlate notification health with your infrastructure and APM data**.
 
-All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, template, node, and error details. See [Reported metrics](#reported-metrics) for the full list.
+All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, and error details. See [Reported metrics](#reported-metrics) for the full list.
 
 <Warning>
   Please refer to your observability platform's pricing agreement for information on how custom metrics ingested via OTLP are priced.
@@ -59,10 +59,10 @@ All metrics are tagged by workspace, tenant, workflow, category, channel, vendor
     |-------|-------------|
     | **Connector Name** | A label to identify this connector (for example `Grafana Cloud Production`) |
     | **Tool Used** | The name of the observability tool you are connecting to (for example `Grafana Cloud`) |
-    | **OTLP Endpoint** | Your platform's OTLP HTTP endpoint URL (for example `https://otlp-gateway-prod-us-east-0.grafana.net/otlp/v1/metrics`) |
+    | **OTLP Endpoint** | Your platform's OTLP endpoint URL (for example `https://otlp-gateway-prod-us-east-0.grafana.net/otlp/v1/metrics`) |
     | **Headers** | One or more HTTP headers for authentication. Click **+ Add Header** to add key/value pairs (see [Authentication](#authentication) below) |
     | **Events to sync** | One or more metric events to export (see [Reported metrics](#reported-metrics)) |
-    | **Protocol** | HTTP |
+    | **Protocol** | `HTTP` or `gRPC` |
 
     {/* TODO: Add OTel connector settings screenshot */}
   </Step>
@@ -80,7 +80,8 @@ SuprSend passes authentication credentials as HTTP headers. The header format de
 
 | Auth type | Header key | Header value | Used by |
 |-----------|------------|--------------|---------|
-| Bearer token | `Authorization` | `Bearer <your-api-key>` | Datadog, Honeycomb, Dynatrace |
+| Bearer token | `Authorization` | `Bearer <your-api-key>` | Honeycomb, Dynatrace |
+| API key header | `dd-api-key` (Datadog), `api-key` (New Relic) | `<your-api-key>` | Datadog, New Relic |
 | Basic auth | `Authorization` | `Basic <base64(username:password)>` | Grafana Cloud |
 | Custom header | varies | varies | Self-hosted collectors |
 
@@ -92,7 +93,7 @@ SuprSend passes authentication credentials as HTTP headers. The header format de
 
 ## Reported metrics
 
-SuprSend streams the following `suprsend.*` counter metrics. All counters are monotonically increasing and represent cumulative counts from the time the connector is enabled.
+SuprSend streams the following `suprsend.*` counter metrics. All counters are monotonic sums exported with delta temporality - each data point carries the count for that export window, not a running total.
 
 ### API Requests
 
@@ -100,7 +101,7 @@ Track the volume and health of every API call made to SuprSend.
 
 | Metric |  Description |
 |--------|-------------|
-| `suprsend.api_request.total` | Total number of API requests received by SuprSend. Use the `status` tag to break down by outcome - `sent`, `in_progress`, `success`, `failed`, or `partial_failure`. |
+| `suprsend.api_request.total` | Total number of API requests received by SuprSend. Use the `status` tag to break down by outcome - `completed`, `partial_failure`, or `failed`. |
 | `suprsend.api_request.errors` | API requests that failed to process due to an error. Group by `api_type` to identify which endpoint is failing, and by `error_severity` to prioritize investigation. |
 
 **Tags on API Request metrics**
@@ -109,11 +110,11 @@ Track the volume and health of every API call made to SuprSend.
 |-----|-------------|----------------|
 | `api_type` | The SuprSend API endpoint that was called | `workflow_trigger`, `broadcast_trigger`, `user_edit`, `event` |
 | `method` | HTTP method of the request | `POST`, `GET`, `PUT`, `PATCH` |
-| `status` | Outcome of the request | `sent`, `in_progress`, `success`, `failed`, `partial_failure` |
+| `status` | Outcome of the request | `completed`, `partial_failure`, `failed` |
 | `ws_uid` | Identifier of the SuprSend workspace (environment) | `your_ws_uid` |
-| `ws_slug` | Slug of the SuprSend workspace. Eg. `staging` |
+| `ws_slug` | Slug of the SuprSend workspace | `staging` |
 | `tenant_id` | Tenant ID if the request is scoped to a tenant | `tenant_abc` |
-| `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
+| `error_severity` | Severity level of the error (on error metrics only) | `error`, `warning` |
 
 ### Workflow Executions
 
@@ -121,7 +122,7 @@ Monitor how your workflows and broadcasts are performing and quickly spot execut
 
 | Metric | Description |
 |--------|-------------|
-| `suprsend.workflow_execution.total` | Total number of workflow executions started. Workflow executions are counted per-recipient. Use `workflow_slug` and `category` tags to drill down into specific workflows. |
+| `suprsend.workflow_execution.total` | Total number of workflow executions started. Workflow executions are counted per-recipient. Use `workflow_slug` and `tenant_id` tags to drill down into specific workflows. |
 | `suprsend.workflow_execution.errors` | Workflow executions that failed to process due to an error. |
 | `suprsend.broadcast_execution.errors` | Broadcast executions that failed to process due to an error. |
 
@@ -130,11 +131,10 @@ Monitor how your workflows and broadcasts are performing and quickly spot execut
 | Tag | Description | Example values |
 |-----|-------------|----------------|
 | `workflow_slug` | Slug of the workflow that was executed | `welcome-flow`, `order-confirmation` |
-| `category` | Preference category of the workflow | `transactional`, `promotional` |
 | `ws_slug` | Slug of the SuprSend workspace | `my-workspace` |
 | `ws_uid` | Identifier of the SuprSend workspace (environment) | `your_ws_uid` |
 | `tenant_id` | Tenant ID if the workflow is scoped to a tenant | `tenant_abc` |
-| `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
+| `error_severity` | Severity level of the error (on error metrics only) | `error` |
 
 ### Messages
 
@@ -156,7 +156,8 @@ Follow the full lifecycle of every message - from trigger through delivery, open
 | `ws_uid` | Identifier of the SuprSend workspace (environment) | `your_ws_uid` |
 | `tenant_id` | Tenant ID if the message is scoped to a tenant | `tenant_abc` |
 | `category` | Preference category of the parent workflow | `transactional`, `promotional` |
-| `channel` | Delivery channel used for the message | `email`, `sms`, `push`, `whatsapp`, `inbox`, `slack`, `ms_teams` |
+| `root_category` | Root category that the preference category belongs to | `system`, `transactional`, `promotional` |
+| `channel` | Delivery channel used for the message | `email`, `sms`, `androidpush`, `iospush`, `webpush`, `whatsapp`, `inbox`, `slack`, `ms_teams` |
 | `vendor` | Vendor used to deliver the message | `mailgun`, `twilio`, `firebase`, `sendgrid`, etc. |
 | `workflow_slug` | Slug of the workflow that generated the message | `welcome-flow`, `order-confirmation` |
 

@@ -13,8 +13,8 @@ SuprSend templates use Handlebars to insert variables and format data. This page
 
 | Syntax | What it does |
 | :----- | :----------- |
-| `{{ var }}` | Default. HTML-escapes `<`, `>`, `"`, `'`, `&` into HTML entities. |
-| `{{{ var }}}` | Unescaped. Use for URLs and values that must keep `&`, `?`, `=`. Can inject HTML. |
+| `{{ var }}` | Default. HTML-escapes `<`, `>`, `"`, `'`, `&`, `` ` ``, `=` into HTML entities (`&lt;`, `&gt;`, `&quot;`, `&#x27;`, `&amp;`, `&#x60;`, `&#x3D;`). |
+| `{{{ var }}}` | Unescaped. Use for URLs and values that must keep `&`, `=`, `'`. Can inject HTML. |
 | `{{array.[0].name}}` | First element of `array`. Use `[1]`, `[2]`, … for later items. |
 | `{{[first name]}}` | Names with spaces, capitals, or special characters. |
 
@@ -25,7 +25,7 @@ These are injected at render time, not by your trigger payload. Full preview con
 | Syntax | Source |
 | :----- | :----- |
 | `{{$recipient.name}}` | Recipient profile. |
-| `{{$actor.name}}` | Actor on the trigger. Empty if the trigger has no actor. |
+| `{{$actor.name}}` | Actor on the trigger. Not set if the trigger has no actor, so the render fails - guard it with `{{#if $actor}}`. |
 | `{{$tenant.name}}` | Tenant reserved property. Custom values: `{{$tenant.properties.address}}`. Full list: [Tenant templates](/docs/tenant-templates). |
 | `{{$batched_events_count}}` | Count of events in a [batch](/docs/batch) or [digest](/docs/digest). |
 | `{{$batched_events.[0].name}}` | Field on the nth batched event (`[0]` is the first). |
@@ -96,7 +96,7 @@ Free plan
 {{/if}}
 ```
 
-Falsy values: `false`, `0`, `""`, `null`, `undefined`. An empty array `[]` is truthy in Handlebars.
+Falsy values: `false`, `0`, `""`, `null`, `undefined`. An empty array `[]` is also falsy for `if`.
 
 ### unless
 
@@ -445,7 +445,7 @@ Returns a formatted date string. Throws an error if the value is not a valid dat
 | Parameter | Required | Description |
 | :-------- | :------- | :---------- |
 | `variable` | yes | A date or timestamp. Use `"now"` for the time the template renders. Throws an error if the date is invalid. |
-| `format string` | yes | Moment.js format. See [format tokens](https://momentjs.com/docs/#/displaying/format/). Example: `"dddd, MMMM Do YYYY, h:mm:ss a"` → `Sunday, February 14 2010, 3:25:50 PM`. |
+| `format string` | yes | Moment.js format. See [format tokens](https://momentjs.com/docs/#/displaying/format/). Example: `"dddd, MMMM Do YYYY, h:mm:ss a"` → `Sunday, February 14th 2010, 3:25:50 pm`. |
 | `timezone` | no | IANA timezone to convert into. See the [tz database list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones). |
 
 **Example**
@@ -717,7 +717,7 @@ Rounds to the nearest integer.
 
 ### mod
 
-Returns the remainder of `dividend / divisor`. The result takes the sign of the dividend. Throws an error if an input is not a number, or if the divisor is `0`.
+Returns the remainder of `dividend / divisor`. The result takes the sign of the dividend. Throws an error if an input is not a number. If the divisor is `0`, it returns `NaN`.
 
 **Syntax**
 
@@ -755,9 +755,9 @@ Returns unique items from an array. Duplicate values are dropped.
 
 | Expression | Data | Output |
 | :--------- | :--- | :----- |
-| `{{unique email}}` | `{"email":["joe@abc.com","steve@abc.com","joe@abc.com"]}` | `joe@abc.com, steve@abc.com` |
-| `{{unique cities "city"}}` | `{"cities":[{"city":"San Francisco"},{"city":"Austin"},{"city":"Austin"}]}` | `San Francisco, Austin` |
-| `{{unique personal_details "name.first_name"}}` | `{"personal_details":[{"name":{"first_name":"john"}},{"name":{"first_name":"mike"}}]}` | `john, mike` |
+| `{{unique email}}` | `{"email":["joe@abc.com","steve@abc.com","joe@abc.com"]}` | `joe@abc.com,steve@abc.com` |
+| `{{unique cities "city"}}` | `{"cities":[{"city":"San Francisco"},{"city":"Austin"},{"city":"Austin"}]}` | `San Francisco,Austin` |
+| `{{unique personal_details "name.first_name"}}` | `{"personal_details":[{"name":{"first_name":"john"}},{"name":{"first_name":"mike"}}]}` | `john,mike` |
 
 ### list-agg
 
@@ -821,13 +821,13 @@ Concatenates array values with a separator between each item.
 | Parameter | Required | Description |
 | :-------- | :------- | :---------- |
 | `variable` | yes | Array of primitives (string, number, boolean). Throws an error otherwise. |
-| `separator` | no | String inserted between items. Defaults to `,`. |
+| `separator` | no | String inserted between items. Defaults to `, ` (comma and space). |
 
 **Examples**
 
 | Expression | Data | Output |
 | :--------- | :--- | :----- |
-| `{{join email}}` | `{"email":["joe@abc.com","steve@abc.com","joe@abc.com"]}` | `joe@abc.com , steve@abc.com , joe@abc.com` |
+| `{{join email}}` | `{"email":["joe@abc.com","steve@abc.com","joe@abc.com"]}` | `joe@abc.com, steve@abc.com, joe@abc.com` |
 | `{{join email ' - '}}` | `{"email":["joe@abc.com","steve@abc.com","joe@abc.com"]}` | `joe@abc.com - steve@abc.com - joe@abc.com` |
 
 <Note>
@@ -945,7 +945,7 @@ Guard the parent first:
     To print the value exactly as stored — apostrophes, `&`, or URLs — use triple braces: `{{{ variable }}}`.
   </Accordion>
   <Accordion title="How does SuprSend avoid HTML injection when printing variables?">
-    By default, `{{ var }}` converts characters that could change the page (`<`, `>`, `"`, `'`, `&`) into safe text codes (HTML entities). That way a variable can't inject HTML or scripts into the message.
+    By default, `{{ var }}` converts characters that could change the page (`<`, `>`, `"`, `'`, `&`, `` ` ``, `=`) into safe text codes (HTML entities). That way a variable can't inject HTML or scripts into the message.
 
     Use `{{{ var }}}` only when you need the raw character, such as a URL, and only for values you trust.
   </Accordion>

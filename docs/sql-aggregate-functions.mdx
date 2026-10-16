@@ -31,6 +31,7 @@ count(distinct col)
 ```sql Total and distinct event counts per active user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING count(*) > 10 AND count(distinct event_name) >= 3
 ```
@@ -59,6 +60,7 @@ sum(col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING sum((properties->>'amount')::float) > 1000
 ```
@@ -87,6 +89,7 @@ avg(col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING avg((properties->>'amount')::float) > 100
 ```
@@ -112,9 +115,10 @@ min(col)
 
 **Example**
 
-```sql First and last activity timestamps per user
+```sql First and last activity in the last 365 days, per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '365 days'
 GROUP BY distinct_id
 HAVING min(requested_at) >= '2026-01-01' AND max(requested_at) >= '2026-07-01'
 ```
@@ -149,10 +153,11 @@ uniq_if(col, cond)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
-HAVING count_if(status = 'delivered') >= 5
-       AND sum_if((properties->>'amount')::float, status = 'delivered') > 500
-       AND avg_if((properties->>'amount')::float, status = 'delivered') > 100
+HAVING count_if(properties->>'status' = 'delivered') >= 5
+       AND sum_if((properties->>'amount')::float, properties->>'status' = 'delivered') > 500
+       AND avg_if((properties->>'amount')::float, properties->>'status' = 'delivered') > 100
 ```
 
 ## median
@@ -179,6 +184,7 @@ median(col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING median((properties->>'amount')::float) > 50
 ```
@@ -206,9 +212,10 @@ arg_max(arg, val)
 
 **Example**
 
-```sql Each user's first and most recent event name
+```sql Each user's first and most recent event name in the last 30 days
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING arg_max(event_name, requested_at) = 'ORDER_PLACED'
        AND arg_min(event_name, requested_at) = 'SIGNED_UP'
@@ -237,6 +244,7 @@ array_agg(col)
 ```sql Collect every event name per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING 'ORDER_PLACED' = ANY(array_agg(event_name))
 ```
@@ -264,6 +272,7 @@ groupUniqArray(col)
 ```sql Distinct statuses seen per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING length(groupUniqArray(status)) > 1
 ```
@@ -293,6 +302,7 @@ string_agg(distinct col, delimiter)
 ```sql Comma-separated event names per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING string_agg(distinct event_name, ', ') LIKE '%ORDER_PLACED%'
 ```
@@ -319,8 +329,9 @@ json_agg(col)
 ```sql Collect event names into a JSON array per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
-HAVING json_array_length(json_agg(event_name)) > 5
+HAVING jsonb_array_length(json_agg(event_name)) > 5
 ```
 
 ## json_object_agg
@@ -349,10 +360,11 @@ SELECT distinct_id
 FROM (
   SELECT distinct_id, status, count(*) AS cnt
   FROM events
+  WHERE requested_at >= NOW() - INTERVAL '30 days'
   GROUP BY distinct_id, status
 ) t
 GROUP BY distinct_id
-HAVING (json_object_agg(status, cnt) ->> 'delivered')::int > 5
+HAVING (json_object_agg(status, cnt) ->> 'failure')::int > 5
 ```
 
 ## uniqExact
@@ -378,6 +390,7 @@ uniqExact(col)
 ```sql Exact number of distinct event types per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING uniqExact(event_name) >= 5
 ```
@@ -408,6 +421,7 @@ percentile_disc(fraction) WITHIN GROUP (ORDER BY col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING percentile_cont(0.5) WITHIN GROUP (ORDER BY (properties->>'amount')::float) > 50
        AND percentile_disc(0.9) WITHIN GROUP (ORDER BY (properties->>'amount')::float) > 500
@@ -437,6 +451,7 @@ topK(n, col)
 ```sql Three most frequent events per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING has(topK(3, event_name), 'ORDER_PLACED')
 ```
@@ -464,11 +479,12 @@ retention(cond1, cond2, ..., condN)
 ```sql Day-0, day-1, and day-7 retention flags per user
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '8 days'
 GROUP BY distinct_id
 HAVING retention(
-         requested_at >= '2026-07-01' AND requested_at < '2026-07-02',
-         requested_at >= '2026-07-02' AND requested_at < '2026-07-03',
-         requested_at >= '2026-07-08' AND requested_at < '2026-07-09'
+         requested_at >= NOW() - INTERVAL '8 days' AND requested_at < NOW() - INTERVAL '7 days',
+         requested_at >= NOW() - INTERVAL '7 days' AND requested_at < NOW() - INTERVAL '6 days',
+         requested_at >= NOW() - INTERVAL '1 day'
        )[3] = 1
 ```
 
@@ -497,6 +513,7 @@ windowFunnel(window, timestamp, cond1, ..., condN)
 ```sql Deepest step reached in a view, cart, purchase funnel (7-day window)
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING windowFunnel(604800,
          unix_timestamp(requested_at),
@@ -532,6 +549,7 @@ quantileTDigest(level, col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING quantile(0.95, (properties->>'amount')::float) > 500
        AND quantileExact(0.95, (properties->>'amount')::float) > 500
@@ -561,6 +579,7 @@ approx_distinct(col)
 ```sql Users who triggered many distinct event types
 SELECT distinct_id
 FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING approx_distinct(event_name) >= 5
 ```
@@ -592,13 +611,14 @@ bool_or(col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
-HAVING bool_and(status = 'delivered')
+HAVING bool_and(properties->>'status' = 'delivered')
 ```
 
 ## mode
 
-Returns the most frequently occurring value in the group. Ties are broken by the ordering of the input.
+Returns the most frequently occurring value across all the rows the query reads. It works only as a whole-query aggregate, such as the scalar subquery in the example; it can't be combined with `GROUP BY`. Ties are broken by the ordering of the input.
 
 **Syntax**
 
@@ -616,11 +636,15 @@ mode() WITHIN GROUP (ORDER BY col)
 
 **Example**
 
-```sql Most common event per user
-SELECT distinct_id
+```sql Users who triggered the most common event
+SELECT DISTINCT distinct_id
 FROM events
-GROUP BY distinct_id
-HAVING mode() WITHIN GROUP (ORDER BY event_name) = 'ORDER_PLACED'
+WHERE requested_at >= NOW() - INTERVAL '30 days'
+  AND event_name = (
+    SELECT mode() WITHIN GROUP (ORDER BY event_name)
+    FROM events
+    WHERE requested_at >= NOW() - INTERVAL '30 days'
+  )
 ```
 
 ## approx_percentile_cont
@@ -648,6 +672,7 @@ approx_percentile_cont(col, level)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING approx_percentile_cont((properties->>'amount')::float, 0.9) > 500
 ```
@@ -677,6 +702,7 @@ stddev_samp(col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING stddev_pop((properties->>'amount')::float) > 20
        AND stddev_samp((properties->>'amount')::float) > 20
@@ -708,6 +734,7 @@ variance(col)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING var_pop((properties->>'amount')::float) > 400
        AND var_samp((properties->>'amount')::float) > 400
@@ -738,6 +765,7 @@ corr(y, x)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING corr((properties->>'amount')::float, (properties->>'items')::float) > 0.5
 ```
@@ -768,6 +796,7 @@ covar_samp(y, x)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING covar_samp((properties->>'amount')::float, (properties->>'items')::float) > 0
 ```
@@ -805,6 +834,7 @@ regr_sxy(y, x)
 SELECT distinct_id
 FROM events
 WHERE event_name = 'ORDER_PLACED'
+  AND requested_at >= NOW() - INTERVAL '30 days'
 GROUP BY distinct_id
 HAVING regr_slope((properties->>'amount')::float, (properties->>'items')::float) > 0
        AND regr_r2((properties->>'amount')::float, (properties->>'items')::float) > 0.5

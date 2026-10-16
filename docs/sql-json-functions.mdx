@@ -275,6 +275,7 @@ is_json_valid(text)
 SELECT distinct_id
 FROM events
 WHERE is_json_valid(properties)
+  AND requested_at >= NOW() - INTERVAL '30 days'
 ```
 
 ## is_json_object
@@ -332,29 +333,31 @@ WHERE json_path_exists(user_properties, '$.address.country')
 
 ## json_has_any
 
-Tests whether a JSON object contains any of the given top-level keys.
+Tests whether any element of a JSON array (or a map) has the given key set to the given value. It is shorthand for `col @> '[{"key":"value"}]'`, so it applies to array and map columns such as `events.properties`, not to a plain JSON object column like `user_properties` (use `@>` there).
 
 **Syntax**
 
 ```sql
-json_has_any(json, keys)
+json_has_any(json_array, key, value)
 ```
 
 **Arguments**
 
-- `json` — the JSON object to inspect.
-- `keys` — an array of key names to look for.
+- `json_array` — the JSON array or map column to inspect.
+- `key` — the key to look for.
+- `value` — the value the key must have.
 
 **Returned value**
 
-- `true` if at least one of `keys` is present as a top-level key, otherwise `false`. Boolean.
+- `true` if at least one element has `key` equal to `value`, otherwise `false`. Boolean.
 
 **Example**
 
-```sql Users with a plan or tier property
-SELECT distinct_id
-FROM users
-WHERE json_has_any(user_properties, ['plan', 'tier'])
+```sql Users who sent an event with plan set to pro
+SELECT DISTINCT distinct_id
+FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
+  AND json_has_any(properties, 'plan', 'pro')
 ```
 
 ## jsonb_array_length
@@ -404,9 +407,12 @@ jsonb_object_keys(json)
 **Example**
 
 ```sql One row per property key per user
-SELECT distinct_id
-FROM users
-WHERE 'plan' IN (SELECT jsonb_object_keys(user_properties))
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id, jsonb_object_keys(user_properties) AS property_key
+  FROM users
+) t
+WHERE property_key = 'plan'
 ```
 
 ## jsonb_array_elements_text
@@ -425,14 +431,17 @@ jsonb_array_elements_text(json_array)
 
 **Returned value**
 
-- A set of rows, each carrying one array element as text. Set of text values.
+- A set of rows, each carrying one array element as text. Set of text values. Each element keeps its raw JSON form, so a string element includes its double quotes (`"vip"`, not `vip`).
 
 **Example**
 
 ```sql One row per tag per user
-SELECT distinct_id
-FROM users
-WHERE 'vip' IN (SELECT jsonb_array_elements_text(user_properties -> 'tags'))
+SELECT DISTINCT distinct_id
+FROM (
+  SELECT distinct_id, jsonb_array_elements_text(user_properties -> 'tags') AS tag
+  FROM users
+) t
+WHERE tag = '"vip"'
 ```
 
 ## jsonb_build_object
@@ -457,9 +466,10 @@ jsonb_build_object(key1, value1 [, key2, value2, ...])
 **Example**
 
 ```sql Repackage plan and country into an object
-SELECT distinct_id
+SELECT distinct_id,
+       jsonb_build_object('plan', user_properties ->> 'plan', 'country', user_properties -> 'address' ->> 'country') AS profile
 FROM users
-WHERE jsonb_build_object('plan', user_properties ->> 'plan', 'country', user_properties -> 'address' ->> 'country') @> '{"plan": "pro"}'
+WHERE user_properties ->> 'plan' = 'pro'
 ```
 
 ## jsonb_build_array
@@ -483,9 +493,10 @@ jsonb_build_array(value1 [, value2, ...])
 **Example**
 
 ```sql A JSON array of a user's plan and country
-SELECT distinct_id
+SELECT distinct_id,
+       jsonb_build_array(user_properties ->> 'plan', user_properties -> 'address' ->> 'country') AS plan_and_country
 FROM users
-WHERE jsonb_build_array(user_properties ->> 'plan', user_properties -> 'address' ->> 'country') @> '["pro"]'
+WHERE user_properties ->> 'plan' = 'pro'
 ```
 
 ## ::jsonb
@@ -537,10 +548,11 @@ mapContains(map, key)
 
 **Example**
 
-```sql Users whose metrics map tracks logins
-SELECT distinct_id
-FROM users
-WHERE mapContains(JSONExtract(user_properties, 'metrics', 'Map(String, Float64)'), 'logins')
+```sql Users who sent an event with a coupon_code property
+SELECT DISTINCT distinct_id
+FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
+  AND mapContains(properties, 'coupon_code')
 ```
 
 ## mapKeys
@@ -563,10 +575,11 @@ mapKeys(map)
 
 **Example**
 
-```sql The set of metric names per user
-SELECT distinct_id
-FROM users
-WHERE has(mapKeys(JSONExtract(user_properties, 'metrics', 'Map(String, Float64)')), 'logins')
+```sql Users whose event properties include coupon_code
+SELECT DISTINCT distinct_id
+FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
+  AND has(mapKeys(properties), 'coupon_code')
 ```
 
 ## mapValues
@@ -589,10 +602,11 @@ mapValues(map)
 
 **Example**
 
-```sql All metric values per user
-SELECT distinct_id
-FROM users
-WHERE arraySum(mapValues(JSONExtract(user_properties, 'metrics', 'Map(String, Float64)'))) > 1000
+```sql Users who sent an event with any property set to express
+SELECT DISTINCT distinct_id
+FROM events
+WHERE requested_at >= NOW() - INTERVAL '30 days'
+  AND has(mapValues(properties), 'express')
 ```
 
 ## mapAdd
@@ -619,10 +633,10 @@ mapAdd(map1, map2)
 ```sql Combine two quarterly usage maps
 SELECT distinct_id
 FROM users
-WHERE mapAdd(
-        JSONExtract(user_properties, 'q1_usage', 'Map(String, Int64)'),
-        JSONExtract(user_properties, 'q2_usage', 'Map(String, Int64)')
-      )['api_calls'] > 100
+WHERE arraySum(mapValues(mapAdd(
+        map('api_calls', CAST(user_properties -> 'q1_usage' ->> 'api_calls' AS INT)),
+        map('api_calls', CAST(user_properties -> 'q2_usage' ->> 'api_calls' AS INT))
+      ))) > 100
 ```
 
 ## mapSubtract
@@ -649,10 +663,10 @@ mapSubtract(map1, map2)
 ```sql Change in usage from Q1 to Q2
 SELECT distinct_id
 FROM users
-WHERE mapSubtract(
-        JSONExtract(user_properties, 'q2_usage', 'Map(String, Int64)'),
-        JSONExtract(user_properties, 'q1_usage', 'Map(String, Int64)')
-      )['api_calls'] < 0
+WHERE arraySum(mapValues(mapSubtract(
+        map('api_calls', CAST(user_properties -> 'q2_usage' ->> 'api_calls' AS INT)),
+        map('api_calls', CAST(user_properties -> 'q1_usage' ->> 'api_calls' AS INT))
+      ))) < 0
 ```
 
 ## mapPopulateSeries
@@ -677,33 +691,12 @@ mapPopulateSeries(map [, max])
 **Example**
 
 ```sql Dense day-of-week login counts up to day 7
-SELECT distinct_id
+SELECT distinct_id,
+       mapPopulateSeries(
+         map(1, CAST(user_properties -> 'daily_logins' ->> '1' AS INT),
+             5, CAST(user_properties -> 'daily_logins' ->> '5' AS INT)),
+         7
+       ) AS logins_by_day
 FROM users
-WHERE mapPopulateSeries(JSONExtract(user_properties, 'daily_logins', 'Map(Int64, Int64)'), 7)[7] = 0
-```
-
-## jsonb_strip_nulls
-
-Returns a copy of a JSON value with every object field whose value is JSON `null` removed. Null array elements are left untouched (PostgreSQL only).
-
-**Syntax**
-
-```sql
-jsonb_strip_nulls(json)
-```
-
-**Arguments**
-
-- `json` — the JSON value to clean.
-
-**Returned value**
-
-- The JSON value with null-valued object fields removed. JSON.
-
-**Example**
-
-```sql Drop null-valued properties
-SELECT distinct_id
-FROM users
-WHERE jsonb_strip_nulls(user_properties) @> '{"plan": "pro"}'
+WHERE user_properties @? '$.daily_logins'
 ```

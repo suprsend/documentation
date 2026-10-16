@@ -1,9 +1,9 @@
 ---
 title: "Datadog"
-description: "Stream real time SuprSend notification metrics, API requests, and delivery events to your Datadog account via OpenTelemetry OTLP with sub minute latency."
+description: "Stream real time SuprSend notification metrics, API requests, and delivery events to your Datadog account via OpenTelemetry OTLP with sub-second latency."
 ---
 
-The SuprSend Datadog connector streams notification metrics to your Datadog account via [OpenTelemetry (OTLP)](https://opentelemetry.io/) in near real-time - with latency under **1 minute**. It covers three key areas of your notification pipeline:
+The SuprSend Datadog connector streams notification metrics to your Datadog account via [OpenTelemetry (OTLP)](https://opentelemetry.io/) in real time, with **sub-second latency**. It covers three key areas of your notification pipeline:
 
 <CardGroup cols={3}>
   <Card title="API Requests" icon="server" href="#reported-metrics">
@@ -23,11 +23,11 @@ The SuprSend Datadog connector streams notification metrics to your Datadog acco
 
 ## How it works
 
-SuprSend exports `suprsend.*` metrics to Datadog via OTLP over HTTP. You provide your **Datadog OTLP endpoint** and **API key**, choose which events to sync, and SuprSend streams them in near real-time - with latency **under 1 minute**.
+SuprSend exports `suprsend.*` metrics to Datadog via OTLP over HTTP. You provide your **Datadog OTLP endpoint** and **API key**, choose which events to sync, and SuprSend streams them in real time, with **sub-second latency**.
 
-Once connected you can **build custom dashboards**, **set up monitors and alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, channel, vendor, template), and **correlate notification health with your infrastructure and APM data** in Datadog.
+Once connected you can **build custom dashboards**, **set up monitors and alerts** for delivery failures or API errors, **slice by any dimension** (workspace, tenant, workflow, category, channel, vendor), and **correlate notification health with your infrastructure and APM data** in Datadog.
 
-All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, template, node, and error details. See [Reported metrics](#reported-metrics) for the full list.
+All metrics are tagged by workspace, tenant, workflow, category, channel, vendor, and error details. See [Reported metrics](#reported-metrics) for the full list.
 
 <Warning>
   Please refer to your Datadog pricing agreement for information on how custom metrics sent to Datadog are priced for your account.
@@ -152,7 +152,7 @@ Alert when delivered message volume drops unexpectedly - useful for catching sil
 
 ## Reported metrics
 
-SuprSend streams the following `suprsend.*` counter metrics to Datadog. All counters are monotonically increasing and represent cumulative counts from the time the connector is enabled.
+SuprSend streams the following `suprsend.*` counter metrics to Datadog. All counters are monotonic sums exported with delta temporality - each data point carries the count for that export window, not a running total.
 
 ### API Requests
 
@@ -160,7 +160,7 @@ Track the volume and health of every API call made to SuprSend.
 
 | Metric | Description |
 |--------|-------------|
-| `suprsend.api_request.total` | Total number of API requests received by SuprSend. Use the `status` tag to break down by outcome - `sent`, `in_progress`, `success`, `failed`, or `partial_failure`. |
+| `suprsend.api_request.total` | Total number of API requests received by SuprSend. Use the `status` tag to break down by outcome - `completed`, `partial_failure`, or `failed`. |
 | `suprsend.api_request.errors` | API requests that failed to process due to an error. Group by `api_type` to identify which endpoint is failing, and by `error_severity` to prioritize investigation. |
 
 **Tags on API Request metrics**
@@ -169,11 +169,11 @@ Track the volume and health of every API call made to SuprSend.
 |-----|-------------|----------------|
 | `api_type` | The SuprSend API endpoint that was called | `workflow_trigger`, `broadcast_trigger`, `user_edit`, `event` |
 | `method` | HTTP method of the request | `POST`, `GET`, `PUT`, `PATCH` |
-| `status` | Outcome of the request | `sent`, `in_progress`, `success`, `failed`, `partial_failure` |
+| `status` | Outcome of the request | `completed`, `partial_failure`, `failed` |
 | `ws_uid` | Identifier of the SuprSend workspace (environment) | `your_ws_uid` |
-| `ws_slug` | Slug of the SuprSend workspace. Eg. `staging` |
+| `ws_slug` | Slug of the SuprSend workspace | `staging` |
 | `tenant_id` | Tenant ID if the request is scoped to a tenant | `tenant_abc` |
-| `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
+| `error_severity` | Severity level of the error (on error metrics only) | `error`, `warning` |
 
 ### Workflow Executions
 
@@ -181,7 +181,7 @@ Monitor how your workflows and broadcasts are performing and quickly spot execut
 
 | Metric | Description |
 |--------|-------------|
-| `suprsend.workflow_execution.total` | Total number of workflow executions started. Workflow executions are counted per-recipient. Use `workflow_slug` and `category` tags to drill down into specific workflows. |
+| `suprsend.workflow_execution.total` | Total number of workflow executions started. Workflow executions are counted per-recipient. Use `workflow_slug` and `tenant_id` tags to drill down into specific workflows. |
 | `suprsend.workflow_execution.errors` | Workflow executions that failed to process due to an error. |
 | `suprsend.broadcast_execution.errors` | Broadcast executions that failed to process due to an error. |
 
@@ -190,13 +190,10 @@ Monitor how your workflows and broadcasts are performing and quickly spot execut
 | Tag | Description | Example values |
 |-----|-------------|----------------|
 | `workflow_slug` | Slug of the workflow that was executed | `welcome-flow`, `order-confirmation` |
-| `trigger_type` | How the workflow was triggered | `api`, `event` |
-| `category` | Preference category of the workflow | `transactional`, `promotional` |
-| `root_category` | Top-level category when categories are nested | `marketing` |
 | `ws_slug` | Slug of the SuprSend workspace | `my-workspace` |
 | `ws_uid` | Identifier of the SuprSend workspace (environment) | `your_ws_uid` |
 | `tenant_id` | Tenant ID if the workflow is scoped to a tenant | `tenant_abc` |
-| `error_severity` | Severity level of the error (on error metrics only) | `critical`, `warning`, `info` |
+| `error_severity` | Severity level of the error (on error metrics only) | `error` |
 
 ### Messages
 
@@ -218,7 +215,8 @@ Follow the full lifecycle of every message - from trigger through delivery, open
 | `ws_uid` | Identifier of the SuprSend workspace (environment) | `your_ws_uid` |
 | `tenant_id` | Tenant ID if the message is scoped to a tenant | `tenant_abc` |
 | `category` | Preference category of the parent workflow | `transactional`, `promotional` |
-| `channel` | Delivery channel used for the message | `email`, `sms`, `push`, `whatsapp`, `inbox`, `slack`, `ms_teams` |
+| `root_category` | Root category that the preference category belongs to | `system`, `transactional`, `promotional` |
+| `channel` | Delivery channel used for the message | `email`, `sms`, `androidpush`, `iospush`, `webpush`, `whatsapp`, `inbox`, `slack`, `ms_teams` |
 | `vendor` | Vendor used to deliver the message | `mailgun`, `twilio`, `firebase`, `sendgrid`, etc. |
 | `workflow_slug` | Slug of the workflow that generated the message | `welcome-flow`, `order-confirmation` |
 

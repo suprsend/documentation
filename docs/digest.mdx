@@ -72,7 +72,7 @@ It is the recurring schedule when an open digest should be closed. This schedule
     ```json Dynamic Schedule Schema
     {
       "frequency": "minutely"/"hourly"/"daily"/"weekly_mo2fr"/"weekly"/"monthly",
-      "interval": 1, //you can pass any integer value here, default value 1
+      "interval": 1, // default value 1; max depends on frequency: minutely 1440, hourly 100, daily 100, weekly_mo2fr 25, weekly 25, monthly 6
 
       //mandatory to pass for weekly frequency, weekly_mo2fr assumes weekdays: [ "mo", "tu", "we", "th", "fr"]
       "weekdays": ["su", "mo", "tu", "we", "th", "fr", "sa"],
@@ -81,7 +81,7 @@ It is the recurring schedule when an open digest should be closed. This schedule
       //pass first 2 character of weekday to set frequency like 1st Monday of the month
       "monthdays": [{"pos": 1, "day": ""/"<weekday>"}],
 
-      "time": "08:00", // defaults to 00:00 if not passed
+      "time": "08:00", // mandatory for daily/weekly/weekly_mo2fr/monthly frequency; optional for minutely/hourly
 
       "dtstart": "2024-08-01T10:40:50", // defaults to current_timestamp if not passed
 
@@ -94,10 +94,10 @@ It is the recurring schedule when an open digest should be closed. This schedule
     | Variable     | Type                                         | Description |
     |-------------|----------------------------------------------|-------------|
     | `frequency` | string (mandatory)                          | Choose from one of the below options:  **minutely**  **hourly**  **daily**  **weekly** (mandatory to pass `weekdays` in this case)  **weekly_mo2fr** (weekly on Monday to Friday)  **monthly** (mandatory to pass `monthdays` in this case) |
-    | `interval`  | integer (optional)                          | Interval at which the frequency will repeat. Interval `2` with frequency `daily` would mean repeat every 2 days. Defaults to `1` if not set. |
+    | `interval`  | integer (optional)                          | Interval at which the frequency will repeat. Interval `2` with frequency `daily` would mean repeat every 2 days. Defaults to `1` if not set. Maximum value depends on frequency: `minutely` 1440, `hourly` 100, `daily` 100, `weekly_mo2fr` 25, `weekly` 25, `monthly` 6. |
     | `weekdays`  | array[] (mandatory for `weekly` frequency)  | Days of the week for weekly frequency. Pass the first 2 characters of days of the week in an array as `["su", "mo", "tu", "we", "th", "fr", "sa"]` |
     | `monthdays` | array[map] (mandatory for `monthly` frequency) | Days of the month for monthly frequency (for example 1st, 3rd, and 5th Mondays of the month or 1st - 5th day of the month). Pass as `[{"pos": 1, "day": "mo"}]`, where `pos` defines the day index and `day` defines the type of day (can be referred to define the day of the week). for example, `1st,2nd day of the month` will be set as `[{"pos": 1, "day": ""},{"pos": 2, "day": ""}]`. |
-    | `time`      | string (optional)                           | Time for daily, weekly, or monthly frequency when the digest will close. Defined in hour and minute as `hh:mm`. Defaults to `00:00` if not set. |
+    | `time`      | string (mandatory for `daily`, `weekly`, `weekly_mo2fr`, `monthly` frequency; optional for `minutely`, `hourly`) | Time for daily, weekly, or monthly frequency when the digest will close. Defined in hour and minute as `hh:mm`. |
     | `dtstart`   | datetime (ISO-8601 format) (optional)       | Starting time from which the first schedule will be calculated. Set as `2024-08-01T10:40:50` in ISO-8601 format. Defaults to `current_timestamp` at the time of setting the schedule if not defined. |
     | `tz_selection` | string (optional)                        | Timezone selection. `time` and `dtstart` will both be in this timezone.  - Leave empty `""` for fixed timezone  - Set to `"recipient"` if the timezone needs to be picked dynamically from user property or trigger data. |
     | `tz_fixed`  | string (mandatory if `"tz_selection": ""`)  | Timezone to pick in case of fixed `tz_selection`. Add timezone in [IANA (TZ identifier)](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List) format as `America/New_York`. Defaults to `UTC` if not set. |
@@ -162,7 +162,7 @@ It is the recurring schedule when an open digest should be closed. This schedule
 
 <AccordionGroup>
   <Accordion title="Retain Items" >
-    Defines the number of trigger data that will be included in your Digest Batch. You have the option to display either the first n triggers or the last n triggers in your digest output. By default, the first 10 triggers are included. You can customize the number of triggers to any value between 2 and 100.
+    Defines the number of trigger data that will be included in your Digest Batch. You have the option to display either the first n triggers or the last n triggers in your digest output. By default, the first 10 triggers are included. You can customize the number of triggers to any value between 1 and 100.
   </Accordion>
   <Accordion title="Min Trigger Count" >
     Specifies the minimum number of triggers required to proceed with the digest. Workflow will exit and the next steps will not be executed if the number of triggers in the digest is less than this count. This is quite useful for cases where you are sending individual alerts and also a digest of all alerts at the end of the day. Now, In this case, if only two alerts are triggered in a day, sending a digest might be unnecessary.
@@ -174,7 +174,7 @@ It is the recurring schedule when an open digest should be closed. This schedule
 Batch output variable has 2 type of variables:
 
 1. `$batched_events`array : All the event properties corresponding to a batched event is appended to this array and can be used in the template in the array format. The number of event properties returned here is limited by retain batch events.
-2. `$batched_event_count`: This count represents the number of events in a batch and is utilized to render the batch count in a template. For instance, you might send a message like,`Joe left 5 comments in the last 1 hour`where 5 corresponds to $batched_event_count.
+2. `$batched_events_count`: This count represents the number of events in a batch and is utilized to render the batch count in a template. For instance, you might send a message like,`Joe left 5 comments in the last 1 hour`where 5 corresponds to $batched_events_count.
 
 <Note>
   📘 Please note that **Retain items** setting doesn't impact the count, it just limits the number of trigger data returned in `$batched_events` array.

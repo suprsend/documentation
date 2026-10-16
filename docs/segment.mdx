@@ -66,7 +66,7 @@ Next setup how events and users will be mapped to segment events inside SuprSend
 
 By default, events sync to SuprSend exactly as they are named in your Segment `track` call — the event name is passed through unchanged. You don't need to configure anything here for events to flow through.
 
-**Adding a prefix is an optional setting** (off by default). Turn it on only if you send the *same* event to SuprSend from more than one source — for example, from both the SuprSend SDK and Segment — and want to tell them apart. When enabled, SuprSend prepends `segment : ` to every event name coming from Segment.
+**Adding a prefix is an optional setting** (off by default). Turn it on only if you send the *same* event to SuprSend from more than one source — for example, from both the SuprSend SDK and Segment — and want to tell them apart. When enabled, SuprSend prepends `Segment : ` to every event name coming from Segment.
 
 For example, given this [Segment track](https://segment.com/docs/connections/spec/track/) call:
 
@@ -96,7 +96,7 @@ Only the `event_name` changes — the properties are synced as-is either way:
   ```
 
   ```javascript Prefix enabled
-  event_name = "segment : User Registered"
+  event_name = "Segment : User Registered"
 
   properties = {
     "plan": "Pro Annual",
@@ -144,7 +144,7 @@ All properties inside `traits` are synced as user properties. For example, this 
 By default, every trait syncs to SuprSend as a **custom property**. To set SuprSend's **reserved properties** — like `$locale`, `$timezone`, or channel values (`$email`, `$sms`, `$whatsapp`, …) — you map the corresponding Segment trait explicitly in the connector form fields:
 
 - **User preference mapping** — map traits to reserved profile fields such as **Locale** (`$locale`) and **Timezone** (`$timezone`). For example, mapping the `language` trait to Locale means the value in `language` (`hi` above) becomes the user's preferred language.
-- **User channel mapping** — map each SuprSend channel to the Segment trait that carries its value. Channels are **not** mapped automatically; you must define each one here for it to work. Use the channel keys below:
+- **User channel mapping** — map each SuprSend channel to the Segment trait that carries its value. Use the channel keys below:
 
 <Frame caption="Reserved property and channel mapping in Segment connector settings">
   <img src="/images/docs/user-channel-reserved-property-mapping.png" alt="Reserved property and channel mapping in Segment connector settings" />
@@ -286,7 +286,7 @@ Your setup is now complete, enabling events and users data to flow from Segment 
 
 ### Handling anonymous users
 
-SuprSend's Segment integration requires a `userId` on every event. Segment's `userId` is what maps to the user's `distinct_id` in SuprSend, so events that carry only an `anonymousId` (anonymous `identify`, `track`, or `page` calls) can't be attributed to a user and aren't supported.
+SuprSend's Segment integration expects a `userId` on every event. Segment's `userId` is what maps to the user's `distinct_id` in SuprSend, so events that carry only an `anonymousId` can't be reliably attributed to a user — an anonymous `identify` call is rejected outright, and an anonymous `track` is ingested with the `anonymousId` as the `distinct_id`.
 
 The cleanest way to handle this is to stop anonymous events at Segment so they never reach SuprSend. There are two ways to do this, depending on your Segment plan.
 <br/>
@@ -394,6 +394,11 @@ You can also create the same filter programmatically with the [Segment Public AP
 
 **What happens if an anonymous event still reaches SuprSend**
 
-If an anonymous event is sent without being filtered, SuprSend rejects it with an HTTP **`400 Bad Request`** and an error message indicating that a `userId` is required. Segment records this as a **discarded** event and does **not** retry it, so a missing `userId` won't cause repeated failed deliveries. Filtering at the source (Option 1 or 2) is still recommended, as it keeps these events out of your delivery metrics entirely.
+If an anonymous event still reaches SuprSend without being filtered, the outcome depends on the event type:
+
+- **Anonymous `identify`** — SuprSend rejects it with an HTTP **`400 Bad Request`** and an error message indicating that a `userId` is required. Segment records this as a **discarded** event and does **not** retry it, so a missing `userId` won't cause repeated failed deliveries.
+- **Anonymous `track`** — SuprSend accepts it and records it with the `anonymousId` as the `distinct_id`.
+
+Filtering at the source (Option 1 or 2) is still recommended, as it keeps these events out of your delivery metrics entirely.
 
 ***

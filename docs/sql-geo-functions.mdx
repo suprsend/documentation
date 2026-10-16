@@ -82,8 +82,8 @@ pointInPolygon((x, y), [(a, b), (c, d), ...])
 
 **Arguments**
 
-- `(x, y)` — The point to test, as a tuple of coordinates (Tuple).
-- `[(a, b), (c, d), ...]` — The polygon, as an array of vertex tuples forming a closed ring (Array of Tuple).
+- `(x, y)` — The point to test, as a tuple of coordinates (Tuple). Each element must be a column name or a literal, so compute coordinates in a subquery first (see the example).
+- `[(a, b), (c, d), ...]` — The polygon, as an array of vertex tuples forming a closed ring (Array of Tuple). A vertex tuple can't start with a negative number; the example puts latitude first for this reason.
 
 **Returned value**
 
@@ -93,13 +93,15 @@ pointInPolygon((x, y), [(a, b), (c, d), ...])
 
 ```sql Users inside a bounding-box polygon
 SELECT distinct_id
-FROM users
+FROM (
+  SELECT distinct_id,
+         CAST(user_properties ->> 'lat' AS DOUBLE PRECISION) AS lat,
+         CAST(user_properties ->> 'lng' AS DOUBLE PRECISION) AS lng
+  FROM users
+) t
 WHERE pointInPolygon(
-  (
-    CAST(user_properties ->> 'lng' AS DOUBLE PRECISION),
-    CAST(user_properties ->> 'lat' AS DOUBLE PRECISION)
-  ),
-  [(-0.51, 51.28), (0.33, 51.28), (0.33, 51.69), (-0.51, 51.69)]
+  (lat, lng),
+  [(51.28, -0.51), (51.28, 0.33), (51.69, 0.33), (51.69, -0.51)]
 ) = 1
 ```
 

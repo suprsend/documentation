@@ -6,7 +6,7 @@ description: "Generate valid SuprSend workflow JSON from plain English. This ski
 
 **Use this skill when** you want your AI agent to generate, edit, or refactor SuprSend workflow JSON - without making up `node_type` values or missing required fields.
 
-The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` spec into your agent's context whenever it detects a workflow task. Every generated file lands in `suprsend/workflow/` and is ready to push with the [`suprsend-cli`](/reference/agent-skill-cli) skill.
+The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` spec into your agent's context whenever it detects a workflow task. Every generated file lands in `suprsend/workflows/<slug>/workflow.json` and is ready to push with the [`suprsend-cli`](/reference/agent-skill-cli) skill.
 
 <CardGroup cols={2}>
   <Card title="Install" icon="download">
@@ -33,18 +33,38 @@ The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` s
   </Step>
 
   <Step title="Your agent generates the file">
-    The skill activates and produces `suprsend/workflow/payment-failed.json`:
+    The skill activates and produces `suprsend/workflows/payment-failed/workflow.json`:
 
     ```json
     {
       "$schema": "https://schema.suprsend.com/workflow/v1/schema.json",
       "slug": "payment-failed",
       "name": "Payment Failed",
-      "nodes": [
-        { "node_type": "send_email", "...": "..." },
-        { "node_type": "branch_waituntil", "duration": "24h", "...": "..." },
-        { "node_type": "send_sms", "...": "..." }
-      ]
+      "category": "transactional",
+      "trigger_type": "api",
+      "tree": {
+        "nodes": [
+          { "node_type": "send_email", "properties": { "template": "payment-failed" } },
+          {
+            "node_type": "branch_waituntil",
+            "properties": {},
+            "branches": [
+              {
+                "name": "Payment retried",
+                "is_default": false,
+                "conditions": [{ "type": "future_event", "event_name": "payment_retried" }],
+                "nodes": []
+              },
+              {
+                "name": "After 24 hours",
+                "is_default": true,
+                "conditions": [{ "type": "delay", "delay_properties": { "delay_type": "fixed", "value": "24h" } }],
+                "nodes": [{ "node_type": "send_sms", "properties": { "template": "payment-failed-reminder" } }]
+              }
+            ]
+          }
+        ]
+      }
     }
     ```
   </Step>
@@ -86,17 +106,20 @@ The skill loads the full `https://schema.suprsend.com/workflow/v1/schema.json` s
 
 ## File layout
 
-Every workflow JSON file lives under `suprsend/workflow/`. The filename doesn't matter - but the `slug` field inside does, since that's what the CLI uses to target the workflow.
+Every workflow lives in its own directory under `suprsend/workflows/`, as `<slug>/workflow.json`. The directory name is the slug - that's what the CLI uses to target the workflow.
 
 ```
 suprsend/
-└── workflow/
-    ├── cart-abandonment.json
-    ├── payment-failed.json
-    └── onboarding.json
+└── workflows/
+    ├── cart-abandonment/
+    │   └── workflow.json
+    ├── payment-failed/
+    │   └── workflow.json
+    └── onboarding/
+        └── workflow.json
 ```
 
-Every file must include a `slug`:
+A `slug` inside the file is optional - the directory name always wins - but a plain `suprsend workflow push` warns when it's missing or differs, so keep it in sync:
 
 ```json
 {
@@ -107,7 +130,7 @@ Every file must include a `slug`:
 ```
 
 <Warning>
-  Without `slug`, you can't target the workflow with `suprsend workflow push --slug`. The skill always includes it - but double-check after edits.
+  `suprsend workflow push --slug <slug>` reads `suprsend/workflows/<slug>/workflow.json` and pushes it as `<slug>`, whatever the file's `slug` says. A plain `suprsend workflow push` uses each directory name and warns when the file's `slug` differs - double-check after edits.
 </Warning>
 
 ---
