@@ -1,42 +1,152 @@
 ---
 title: "What is SuprSend?"
-description: "Learn what SuprSend is and how to use it as a multi-channel notification platform for product alerts, transactional messages, and customer comms at scale."
+description: "An overview of SuprSend's notification infrastructure: what it does, how a notification moves through it, and where developers, product and marketing teams, engineering leaders and AI-native teams should start."
 ---
 
-SuprSend is a notification infrastructure platform that lets you send reliable, scalable notifications across channels — without building a notification service in-house.
+SuprSend sends your product's notifications. Your code makes one API call or sends one event. SuprSend works out who gets it, when, on which channel, in which language and with whose branding. It sends the message through your providers and logs what happened to it.
 
-## Benefits of using SuprSend as your notification stack
+Channels include email, SMS, WhatsApp, mobile and web push, an In-App Inbox, Slack and Microsoft Teams. Your team doesn't have to build or maintain its own notification service.
 
-* **No vendor integration code** — add, remove, or prioritize vendors and channels from your SuprSend account without touching your codebase.
+## What teams send with SuprSend
 
-* **Unified template management** — design templates for all channels together and manage them from a single place.
+Every workflow belongs to one of three root [notification categories](/docs/notification-category). Each category has its own queue, so a large marketing send doesn't delay a password reset.
 
-* **Ship faster** — experiment with notifications and improve end-user experience without writing code.
+| Category | What it covers |
+|---|---|
+| **System** | Essential messages users can't opt out of, such as one-time passwords, password resets and incident reports |
+| **Transactional** | Responses to something a user did, such as payment confirmations, bookings, account updates and activity on their posts |
+| **Promotional** | Messages that promote your product or bring users back, such as newsletters, announcements, product updates and deals |
 
-## Introduction to workflows
+## How a notification moves through SuprSend
 
-Communications are made up of multiple components - trigger, logic, content, variables, target user, channels, vendors, etc. Typical communication solutions have one or more components intertwined with each other. SuprSend solves communications from a different and more powerful approach, which we call **Workflows.**
+```mermaid
+flowchart TD
+    T["<b>Trigger</b><br/>API call, event, list or broadcast"] -->|"skips users who opted out"| W["<b>Workflow</b><br/>delay, batch, digest, branch"]
+    W --> S["<b>Send step</b><br/>channel preferences, template, channel order"]
+    S --> D["<b>Delivery</b><br/>provider routing and fallback"]
+    D --> U["<b>User</b><br/>email, SMS, WhatsApp, push, inbox, Slack, Teams"]
+    W -.-> L["<b>Logs and analytics</b>"]
+    D -.-> L
+```
 
-At SuprSend, all the constituent components are decoupled from each other, making it modular in nature. The components can come from any source. All these components are configured as nodes in Workflows, where the processing happens for delivery and optimisation. This allows Workflows to handle any complexity possible in your communication use cases.
+1. **Trigger.** Your backend calls the [workflow API](/docs/trigger-workflow) or sends an [event](/docs/events). A workflow can also start when a user enters or leaves a [list](/docs/lists). A [broadcast](/docs/broadcast) sends one message to a whole list.
+2. **Timing.** A [workflow](/docs/workflows) can [delay](/docs/delay) a message, [batch](/docs/batch) many triggers into one, send a daily or weekly [digest](/docs/digest), or [branch](/docs/branch) on your data.
+3. **Preferences.** Users choose which categories and channels they want. SuprSend checks this before the workflow runs and again at each send step. See [preference evaluation](/docs/preference-evaluation).
+4. **Channels.** Send on one channel, several at once, or one at a time with [Smart Channel Routing](/docs/smart-delivery), which stops as soon as the user engages.
+5. **Content.** One [template](/docs/templates) holds the content for every channel. [Translations](/docs/translations) localize it and [variants](/docs/template-variants) change it per customer, language or condition. Content changes don't need a code deploy.
+6. **Providers.** Connect your own [providers](/docs/vendors) for each channel. Add a [fallback provider](/docs/vendor-fallback) so messages reroute when one fails. You change providers in SuprSend, not in your code.
+7. **Logs.** Follow every request, workflow run and message in [logs](/docs/logging). Track delivery and engagement in [analytics](/docs/analytics), or send status events to your systems with [webhooks](/docs/outbound-webhook).
 
-<Frame>
-  <img src="/images/docs/0a53544-Copy_of_SuprSend2x_3.png" />
-</Frame>
+Triggering a workflow is one request:
 
-## How do you trigger notifications?
+<CodeGroup>
+```bash cURL
+curl --request POST \
+  --url https://hub.suprsend.com/trigger/ \
+  --header "Authorization: Bearer __YOUR_API_KEY__" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "workflow": "order-shipped-notification",
+    "recipients": [{ "distinct_id": "user_1a2b3c" }],
+    "data": { "order_id": "ORD-1234" }
+  }'
+```
 
-You can trigger notifications in one of the two ways:
+```javascript Node.js
+const { Suprsend, WorkflowTriggerRequest } = require("@suprsend/node-sdk");
+const supr_client = new Suprsend("_workspace_key_", "_workspace_secret_");
 
-1. Send events to SuprSend from your frontend clients (android app, website, etc) via SuprSend Client SDK, and create a Workflow on SuprSend platform to trigger notification on an event.
+const w1 = new WorkflowTriggerRequest({
+  workflow: "order-shipped-notification",
+  recipients: [{ distinct_id: "user_1a2b3c" }],
+  data: { order_id: "ORD-1234" },
+});
 
-2. Create workflow and trigger notification from your backend itself using an omni-channel HTTPS API method, or you can use our Backend SDK.
+supr_client.workflows.trigger(w1).then((res) => console.log(res));
+```
 
-All the other components (like vendors, templates, optimisation, scaling, etc.) are created and managed on SuprSend platform. You can check the 'Core Concepts' section that lists down the components used in the platform, so you can navigate the platform and use all the features with ease.
+```python Python
+from suprsend import Suprsend, WorkflowTriggerRequest
 
-To run SuprSend in your own infrastructure, see the [Self-Hosted documentation](/docs/self-hosted/introduction). Self-hosted deployment is available only for **enterprise customers**.
+supr_client = Suprsend("_workspace_key_", "_workspace_secret_")
 
-## SuprSend APIs
+w1 = WorkflowTriggerRequest(body={
+    "workflow": "order-shipped-notification",
+    "recipients": [{"distinct_id": "user_1a2b3c"}],
+    "data": {"order_id": "ORD-1234"},
+})
 
-You can try out SuprSend APIs from our [Postman collection](https://www.postman.com/suprsend/workspace/suprsend/collection/27786422-d77a13c1-8f59-406d-9669-078a10d52521)
+res = supr_client.workflows.trigger(w1)
+```
+</CodeGroup>
 
-***
+## Four ways to build the same workflow
+
+Workflows, templates and preferences are the same objects wherever you edit them. People can use whichever way suits their role.
+
+| Way | Usually used by | What you do there |
+|---|---|---|
+| **Dashboard** | Product, marketing and support teams | Build workflows and templates visually, send broadcasts, read logs and analytics |
+| **API and SDKs** | Developers | Trigger workflows and sync users with the [REST API](/docs/developer/rest-api) or SDKs for [Python, Node.js, Java and Go](/docs/developer/sdk-overview). Add the [Inbox](/docs/inbox-overview) and preference center with client SDKs for web and mobile. Manage assets with the [Management API](/docs/management-api-overview). |
+| **CLI** | Developers and platform teams | Keep workflows and templates in Git, then [sync them](/reference/cli-sync) from staging to production with the [CLI](/reference/cli-intro) |
+| **AI** | Anyone | Ask an AI client to build, change or debug notifications through the [MCP server](/reference/mcp-overview), or use the [In-Product Agent](/reference/agent) in the dashboard and the [Slack Agent](/reference/slack-agent) |
+
+## What non-engineers can run
+
+Engineering connects SuprSend once: it sends users and events, and adds a provider for each channel. After that, product, marketing and support teams can do this in the dashboard:
+
+- **Change content** in each channel's editor, and preview and test it before it goes live. See [templates](/docs/templates).
+- **Send campaigns** to a [list](/docs/lists) as a [broadcast](/docs/broadcast), now or on a schedule.
+- **Build audiences** from a database sync, a CSV, Mixpanel, or a SQL [segment](/docs/segment-lists) (beta) that the AI agent can write for you.
+- **Let users choose** what they receive with a hosted or embedded [preference center](/docs/user-preferences).
+- **See results** by channel, workflow and category in [analytics](/docs/analytics).
+
+## Built for products that serve other businesses
+
+If your customers are companies, each one can get its own notification setup without separate code:
+
+- **[Tenants](/docs/tenants)** hold each customer's branding, preferences and providers. They're available on the Enterprise plan and as an add-on for the Business plan.
+- **[Sub-tenants](/docs/sub-tenants)** nest up to 5 levels, so a child account inherits its parent's setup.
+- **[Tenant preferences](/docs/tenant-preference)** let a customer's admin set defaults for their own users.
+- **[Tenant providers](/docs/tenant-vendor)** send through your customer's own email or SMS accounts.
+- **[Objects](/docs/objects)** represent teams, projects or channels that people subscribe to, so you notify the group instead of listing every member.
+- **[Slack](/docs/slack)** and **[Microsoft Teams](/docs/microsoft-teams)** messages can go into your customers' own workspaces.
+
+To choose between workspaces, tenants and objects, see [multi-tenant modelling](/docs/guides/multi-tenant-modelling).
+
+## For AI-native teams
+
+SuprSend works with AI agents in three ways:
+
+- **Agents that operate SuprSend.** The hosted [MCP server](/reference/mcp-overview) (beta) gives AI clients such as Claude, ChatGPT, Codex, Gemini and VS Code access to your workspace. They sign in with your SuprSend account and can't do more than your role allows. [Agent Skills](/reference/agent-skills) (beta) give coding agents SuprSend's schemas, CLI flags and examples, so they work from the real spec instead of guessing.
+- **Agents that send notifications.** The [Agent SDK](/reference/agent-sdk) (beta, early access) turns your workflows into schema-checked tools that production agents can call when they need to tell a person something.
+- **Docs agents can read.** Every page is available as Markdown by adding `.md` to its URL. [llms.txt](https://docs.suprsend.com/llms.txt) lists every page, and [llms-full.txt](https://docs.suprsend.com/llms-full.txt) holds the whole site in one file.
+
+AI features are optional. An admin can turn them all off for the account.
+
+Start with [Build with AI](/reference/build-with-ai).
+
+## Running SuprSend in production
+
+| Question | Answer |
+|---|---|
+| Can we test without messaging real users? | Every account has Sandbox, Staging and Production [workspaces](/docs/workspaces), which share no data. [Test Mode](/docs/developer/test-mode) in staging sends only to your testers. |
+| How do changes go live? | Workflow and template edits stay drafts until you commit them. Move them between workspaces with the dashboard, the [CLI](/reference/cli-sync) or the Management API. Check the [go-live checklist](/docs/go-live-checklist) before launch. |
+| What if our code retries a request? | Pass an [idempotency key](/reference/idempotent-requests). SuprSend skips repeats of the same key for 24 hours. |
+| What if a provider goes down? | [Provider fallback](/docs/vendor-fallback) reroutes messages to your next provider. |
+| Is our data secure? | SuprSend is SOC 2 Type II and ISO 27001 compliant and supports GDPR, HIPAA and CPRA requirements. Each workspace has a data region, including the EU. See [security](/docs/security). |
+| Who can see and change what? | Admins and members have [different permissions](/docs/managing-members). Members can't see user PII in production. [SAML SSO](/docs/authentication-methods) and [audit logs](/docs/audit-logs) are on the Enterprise plan. |
+| Can we monitor it with our own tools? | Stream notification metrics to [OpenTelemetry](/docs/opentelemetry), [Datadog](/docs/datadog) or [New Relic](/docs/new-relic) on the Enterprise plan, or export data to [Amazon S3](/docs/amazon_s3_v2). |
+| Where can SuprSend run? | SuprSend cloud, your own cloud (BYOC), or fully [self-hosted](/docs/self-hosted/introduction). Self-hosting needs an Enterprise license. |
+| We already send notifications. Can we move over gradually? | Yes. Start with a few key notifications and add the rest over time. See [migrating your existing notifications](/docs/migrating-your-existing-notifications). |
+
+## Where to go next
+
+| If you want to | Start here | Then read |
+|---|---|---|
+| Send your first notification from code | [Integrate SuprSend](/docs/integrate-suprsend) | [Core concepts](/docs/core-concepts) |
+| Send a campaign without engineering help | [Send a broadcast](/docs/send-a-broadcast) | [Segment lists](/docs/segment-lists) |
+| Review security, scale and deployment | [Security](/docs/security) | [Self-hosted overview](/docs/self-hosted/introduction) |
+| Set up notifications for each of your customers | [Tenants](/docs/tenants) | [Multi-tenant modelling](/docs/guides/multi-tenant-modelling) |
+| Build with an AI agent | [Build with AI](/reference/build-with-ai) | [MCP server](/reference/mcp-overview) |
+| Try the API without writing code | [Postman collection](/docs/developer/postman-collection) | [API reference](/reference/overview) |
