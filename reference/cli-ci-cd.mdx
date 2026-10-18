@@ -1,0 +1,163 @@
+---
+title: "CI/CD with the SuprSend CLI"
+sidebarTitle: "CI/CD"
+description: "Release SuprSend workflows, templates and other notification assets from a CI/CD pipeline with the SuprSend CLI, using GitHub Actions examples."
+keywords:
+  - suprsend ci/cd
+  - suprsend github actions
+  - suprsend cli pipeline
+  - notifications as code
+---
+
+Use the SuprSend CLI in a pipeline to release notification changes the way you release code: keep workflows, templates and the rest as files in Git, review them in pull requests, and push them to production when you merge. The CLI is the right tool here because a pipeline has no person to sign in. It runs with a service token, while the [MCP server](/reference/mcp-overview) needs someone to sign in with a SuprSend account.
+
+## What you need
+
+- A [service token](/docs/developer/service-tokens), saved as a secret in your CI system, for example `SUPRSEND_SERVICE_TOKEN` in GitHub Actions.
+- Node.js 18 or later on the runner, to run the CLI with `npx`. You can also [install the CLI](/reference/cli-installation) another way.
+- Your notification assets in the repo, in the folder layout the CLI uses (default `./suprsend/`).
+
+<Warning>
+  Service tokens are account-wide: a token can act on every workspace in your account. Keep it in your CI system's secret store, and limit who can run jobs that use it, for example with GitHub environment protection rules.
+</Warning>
+
+## Keep your assets in Git
+
+Pull the current live state from your staging workspace into the repo, then commit it:
+
+```bash
+npx --yes suprsend@1.1.0 category pull -w staging
+npx --yes suprsend@1.1.0 schema pull -w staging
+npx --yes suprsend@1.1.0 event pull -w staging
+npx --yes suprsend@1.1.0 template pull -w staging
+npx --yes suprsend@1.1.0 workflow pull -w staging
+npx --yes suprsend@1.1.0 translation pull -w staging
+```
+
+Each command writes to its own folder under `./suprsend/`, for example `./suprsend/workflows/<slug>/workflow.json`, and overwrites the files it pulls. From then on, change the files in pull requests, or pull again after building in the dashboard.
+
+## Release to production on merge
+
+This GitHub Actions workflow pushes the assets in `./suprsend/` to production and commits them when changes reach `main`. It pushes them in the same order [`suprsend sync`](/reference/cli-sync) uses, so categories and schemas exist before the templates and workflows that use them.
+
+```yaml .github/workflows/suprsend-release.yml
+name: Release SuprSend notifications
+
+on:
+  push:
+    branches: [main]
+    paths: ["suprsend/**"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment to approve each release.
+    environment: production
+    env:
+      SUPRSEND_SERVICE_TOKEN: ${{ secrets.SUPRSEND_SERVICE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Push and commit to production
+        run: |
+          npx --yes suprsend@1.1.0 category push -w production --commit
+          npx --yes suprsend@1.1.0 schema push -w production --commit
+          npx --yes suprsend@1.1.0 event push -w production
+          npx --yes suprsend@1.1.0 template push -w production --commit
+          npx --yes suprsend@1.1.0 workflow push -w production --commit
+          npx --yes suprsend@1.1.0 translation push -w production --commit
+```
+
+Without `--commit`, `push` saves drafts in the destination and nothing goes live. Leave it off if you want someone to review and commit the drafts in the dashboard. The step stops at the first command that fails, because GitHub Actions runs `run` scripts with `bash -e`.
+
+Keep only the commands for asset types you store in the repo. A push fails with exit code 2 when its folder, for example `./suprsend/templates`, doesn't exist.
+
+## Check files in pull requests
+
+`--dry-run` reads and parses the local files without calling SuprSend, so it catches broken JSON before merge. A file that doesn't parse fails the check with exit code 2. The CLI still needs a token value to start, but a dry run never uses it, so a placeholder works and keeps your real token out of pull-request jobs.
+
+```yaml .github/workflows/suprsend-check.yml
+name: Check SuprSend files
+
+on:
+  pull_request:
+    paths: ["suprsend/**"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # --dry-run makes no API calls, but the CLI needs a token value to start.
+      SUPRSEND_SERVICE_TOKEN: dry-run-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Parse local files
+        run: |
+          npx --yes suprsend@1.1.0 schema push --dry-run
+          npx --yes suprsend@1.1.0 template push --dry-run
+          npx --yes suprsend@1.1.0 workflow push --dry-run
+```
+
+A dry run validates only that the files parse. SuprSend validates the content itself when you push.
+
+## Promote staging to production with sync
+
+If you build in the staging workspace instead of in files, promote everything at once with [`suprsend sync`](/reference/cli-sync). Run it from a manual job so a person decides when to release:
+
+```yaml .github/workflows/suprsend-promote.yml
+name: Promote SuprSend staging to production
+
+on: workflow_dispatch
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPRSEND_SERVICE_TOKEN: ${{ secrets.SUPRSEND_SERVICE_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Sync staging to production
+        run: npx --yes suprsend@1.1.0 sync --from staging --to production --dir ./sync-tmp
+```
+
+<Warning>
+  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately. It also pushes any asset already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed.
+</Warning>
+
+## Keep generated types in step
+
+If your code uses [types generated](/docs/type-generation) from your payload schemas, regenerate them in CI and fail the build when they're out of date:
+
+```bash
+npx --yes suprsend@1.1.0 generate-types typescript -w staging --output-file ./types/suprsend-types.ts
+git diff --exit-code ./types/suprsend-types.ts
+```
+
+## How the CLI behaves in CI
+
+- **No prompts.** Confirmation prompts appear only in an interactive terminal. In CI, `--commit`, `sync` and `workflow disable` run straight away, so check `-w` before you run them.
+- **Logs are hidden.** When output isn't a terminal, as in most CI runners, the CLI hides its log lines and prints only command output and a JSON error. Rely on the exit code.
+- **Re-runs are safe.** When there's nothing new to commit, the CLI reports "no changes to commit" and exits with 0.
+- **Self-hosted or BYOC.** Point the CLI at your deployment with the `SUPRSEND_BASE_URL` and `SUPRSEND_MGMNT_URL` environment variables, or use a [CLI profile](/docs/self-hosted/cli-profiles).
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | General or API error, including a partial failure |
+| `2` | Validation error, for example a file that doesn't parse |
+| `3` | Authentication failed, for example a missing or invalid token |
+| `4` | Resource not found |
+| `5` | Rate limited |
+| `64` | Invalid usage, such as a missing flag |
+
+## Let a coding agent write the pipeline
+
+If you use a coding agent such as Claude Code or Cursor, add the [`suprsend-cli` skill](/reference/agent-skill-cli) so it uses the right commands and flags when it writes or changes these workflows.
