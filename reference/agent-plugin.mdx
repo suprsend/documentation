@@ -1,17 +1,18 @@
 ---
-title: "Agent Plugin"
-sidebarTitle: "Agent Plugin"
-description: "Install the SuprSend plugin in Claude, VS Code, GitHub Copilot CLI, Codex, Cursor, or Kiro. The plugin wires in the hosted MCP server and the SuprSend skill."
+title: "SuprSend plugins"
+sidebarTitle: "Plugins"
+description: "Install the SuprSend plugin in Claude, VS Code, GitHub Copilot CLI, Codex, Cursor, or Kiro. One install connects the hosted MCP server and a skill that guides the agent."
 ---
 
-{/*
-  NOTE FOR OWNER (not published): the docs owner is asking whether a separate
-  plugin is even needed now that the plugin and the hosted MCP server share the
-  same install path - users can just add the hosted server URL directly in each
-  client, bypassing the plugin marketplace. Flagged as a product decision.
-*/}
+The SuprSend plugin is the recommended way to connect an AI client to SuprSend. One install adds the hosted [MCP server](/reference/mcp-overview) (`https://mcp.suprsend.com/mcp`) and a small `suprsend` skill that tells the agent which tool to call, and when to read SuprSend's detailed skills from the server. Nothing runs on your machine; you sign in with your SuprSend account.
 
-The SuprSend plugin wires the hosted SuprSend MCP server (`https://mcp.suprsend.com/mcp`) into your AI client in one step and adds the `suprsend` skill that tells the agent when to call which tool. Nothing runs on your machine; sign in with your SuprSend account.
+<Note>
+  You don't need to install [Agent Skills](/reference/agent-skills) as well. The server serves the workflow, template, SQL and docs skills, and the plugin tells the agent to read them. The only skill the server doesn't serve is [`suprsend-cli`](/reference/agent-skill-cli). Add it only if your agent runs the SuprSend CLI:
+
+  ```bash
+  npx skills add https://github.com/suprsend/skills --skill suprsend-cli
+  ```
+</Note>
 
 Two plugin packages cover every supported client:
 
@@ -21,7 +22,7 @@ Two plugin packages cover every supported client:
 | **`suprsend/agent-plugin`** | VS Code, GitHub Copilot CLI, Codex, Cursor, Kiro, and other [Agent Plugins 1.0.0](https://agent-plugins.org) clients. |
 
 <Tip>
-  No API key, no service token. Sign-in uses OAuth via WorkOS. The agent gets the same permissions your role has in the SuprSend dashboard.
+  No API key, no service token: you sign in with your SuprSend account (OAuth). Admins get every tool; members get the read-only tools. The agent sees only the workspaces your account can open.
 </Tip>
 
 ## Install
@@ -48,9 +49,9 @@ On Team and Enterprise plans, an owner may need to allow the connector first.
 </Tab>
 
 <Tab title="VS Code">
-<Warning>
-  VS Code [Agent Plugins](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) are a preview feature. The host requires the `chat.plugins.enabled` setting to be on; it's managed at the organization level. If it's disabled, contact your admin.
-</Warning>
+<Note>
+  VS Code [Agent Plugins](https://code.visualstudio.com/docs/copilot/customization/agent-plugins) need the `chat.plugins.enabled` setting to be on. Your organization may manage this setting.
+</Note>
 
 1. Open the Command Palette (`Cmd/Ctrl + Shift + P`).
 2. Run **`Chat: Install Plugin From Source`**.
@@ -86,13 +87,15 @@ codex mcp login suprsend
 </Tab>
 
 <Tab title="Cursor">
-**Customize** → **Plugins** → **Add** → **From GitHub Repository**, and paste:
+On Cursor's Teams and Enterprise plans, an admin adds the plugin as a team marketplace: **Dashboard** → **Plugins & MCPs** → **Add Marketplace** → **Import from Repo**, and paste:
 
 ```
 https://github.com/suprsend/agent-plugin
 ```
 
-On the first SuprSend question in Cursor's chat, Cursor opens your browser so you can sign in with your SuprSend account.
+Then install **suprsend** from **Customize**. Cursor asks you to sign in when the server first connects.
+
+On other Cursor plans, add the MCP server directly. See the [Cursor quickstart](/reference/mcp-quickstart-cursor).
 </Tab>
 
 <Tab title="Kiro">
@@ -102,16 +105,14 @@ On the first SuprSend question in Cursor's chat, Cursor opens your browser so yo
 https://github.com/suprsend/agent-plugin
 ```
 
-<Warning>
-  Kiro sign-in is **not yet** available by default. Kiro uses Dynamic Client Registration; the SuprSend server uses Client ID Metadata Documents (CIMD).
-</Warning>
+Kiro asks you to sign in on first use.
 </Tab>
 
 </Tabs>
 
 ## Limit the scope
 
-To fix one workspace or a set of tool groups, add the server with a custom URL instead of the plugin's default:
+The plugin always connects to the default URL, which can reach every workspace and tool your role allows. To pin one workspace or a set of tool groups, add the server yourself with a custom URL instead of installing the plugin:
 
 - `https://mcp.suprsend.com/mcp/staging` — only the `staging` workspace.
 - `https://mcp.suprsend.com/mcp?tools=users_*,lists_*` — only the listed tool groups.
@@ -126,7 +127,11 @@ See the [tool list](/reference/mcp-tool-list) for the full group reference.
 /plugin marketplace update suprsend-marketplace
 ```
 
-For a clean setup, remove the old marketplace and add `suprsend/claude-plugin`.
+For a clean setup, remove the old marketplace and add `suprsend/claude-plugin`. The old repository is archived.
+
+## Updates
+
+The detailed skills live on the server, so the agent always reads the current version. The plugin itself changes only when a new version is published. In Claude Code, third-party marketplaces don't update automatically by default; run `/plugin marketplace update suprsend` to get a new version.
 
 ---
 
@@ -153,7 +158,7 @@ Create a workflow that sends the "welcome" email when the event USER_SIGNUP come
 ```
 > List all my workflows
 
-> Pull the "order-confirmed" workflow and explain each node
+> Show the "order-confirmed" workflow and explain each node
 
 > Which workflows are currently disabled?
 
@@ -197,7 +202,7 @@ Create a workflow that sends the "welcome" email when the event USER_SIGNUP come
 
 ## CI/CD
 
-The plugin and MCP server are for interactive AI-client sessions. For CI, use the [SuprSend SDKs](/docs/developer/sdk-overview) or the [Agent SDK](/reference/agent-sdk).
+The plugin and MCP server are for interactive sessions with a person signed in. For CI/CD pipelines, use the [SuprSend CLI](/reference/cli-intro) with a service token. If a coding agent writes or runs those CLI commands for you, add the [`suprsend-cli`](/reference/agent-skill-cli) skill.
 
 ---
 
@@ -209,11 +214,7 @@ The plugin and MCP server are for interactive AI-client sessions. For CI, use th
   </Accordion>
 
   <Accordion title="Plugin marketplace not found">
-    Confirm the marketplace name is exactly `suprsend/claude-plugin` or `suprsend/agent-plugin`. The old `suprsend/claude-code-plugin` marketplace forwards to the new one; if you still see 404s, remove the old marketplace and add the new one directly.
-  </Accordion>
-
-  <Accordion title="Kiro: sign-in says 'not yet'">
-    The SuprSend MCP server signs clients in through Client ID Metadata Documents (CIMD). Kiro signs in only through Dynamic Client Registration (DCR) by default. Until it supports CIMD, the plugin registers the server for you but can't complete the sign-in handshake. Use another client (Claude, Cursor, VS Code, Codex, Gemini, Windsurf) in the meantime.
+    Add the marketplace from the repository `suprsend/claude-plugin` or `suprsend/agent-plugin`. In Claude Code, the marketplace is named `suprsend` (the old one was `suprsend-marketplace`). The old `suprsend/claude-code-plugin` marketplace forwards to the new one; if you still see 404s, remove the old marketplace and add the new one directly.
   </Accordion>
 
   <Accordion title="Server shows disconnected">
