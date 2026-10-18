@@ -26,15 +26,15 @@ Use the SuprSend CLI in a pipeline to release notification changes the way you r
 Pull the current live state from your staging workspace into the repo, then commit it:
 
 ```bash
-npx --yes suprsend@1.1.0 category pull -w staging
-npx --yes suprsend@1.1.0 schema pull -w staging
-npx --yes suprsend@1.1.0 event pull -w staging
-npx --yes suprsend@1.1.0 template pull -w staging
-npx --yes suprsend@1.1.0 workflow pull -w staging
-npx --yes suprsend@1.1.0 translation pull -w staging
+npx --yes suprsend@1.1.0 category pull -w staging -F
+npx --yes suprsend@1.1.0 schema pull -w staging -F
+npx --yes suprsend@1.1.0 event pull -w staging -F
+npx --yes suprsend@1.1.0 template pull -w staging -F
+npx --yes suprsend@1.1.0 workflow pull -w staging -F
+npx --yes suprsend@1.1.0 translation pull -w staging -F
 ```
 
-Each command writes to its own folder under `./suprsend/`, for example `./suprsend/workflows/<slug>/workflow.json`, and overwrites the files it pulls. From then on, change the files in pull requests, or pull again after building in the dashboard.
+Each command writes to its own folder under `./suprsend/`, for example `./suprsend/workflows/<slug>/workflow.json`, and overwrites the files it pulls. `-F` uses the default folder without asking; without it, a pull asks for the folder in a terminal and fails in a non-interactive shell. From then on, change the files in pull requests, or pull again after building in the dashboard.
 
 ## Release to production on merge
 
@@ -47,6 +47,11 @@ on:
   push:
     branches: [main]
     paths: ["suprsend/**"]
+
+# Run one release at a time, so an older commit can't overwrite a newer one.
+concurrency:
+  group: suprsend-production
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -70,7 +75,9 @@ jobs:
           npx --yes suprsend@1.1.0 translation push -w production --commit
 ```
 
-Without `--commit`, `push` saves drafts in the destination and nothing goes live. Leave it off if you want someone to review and commit the drafts in the dashboard. The step stops at the first command that fails, because GitHub Actions runs `run` scripts with `bash -e`.
+Without `--commit`, workflows, templates, schemas, categories and translations are saved as drafts in the destination. Events have no draft state, and `category push` sends preference-category translations live straight away. Leave `--commit` off if you want someone to review and commit the drafts in the dashboard. In that case `event push` fails for events linked to schemas that aren't live yet.
+
+The step stops at the first command that fails, because GitHub Actions runs `run` scripts with `bash -e`. A release isn't all-or-nothing: the asset types pushed before the failure, and the items that succeeded in the failing command, are already live. Fix the cause and re-run the job.
 
 Keep only the commands for asset types you store in the repo. A push fails with exit code 2 when its folder, for example `./suprsend/templates`, doesn't exist.
 
@@ -103,7 +110,7 @@ jobs:
           npx --yes suprsend@1.1.0 workflow push --dry-run
 ```
 
-A dry run validates only that the files parse. SuprSend validates the content itself when you push.
+A dry run checks only local files: that they parse, and for schemas that `payload_schema.json` compiles as a JSON Schema. SuprSend validates the content itself when you push.
 
 ## Promote staging to production with sync
 
@@ -129,23 +136,26 @@ jobs:
 ```
 
 <Warning>
-  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately. It also pushes any asset already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed.
+  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately. It also pushes any asset already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed. Template variants that fail validation are skipped with a warning, which CI logs hide, and the command still exits with 0, so check the destination after a sync.
 </Warning>
 
 ## Keep generated types in step
 
-If your code uses [types generated](/docs/type-generation) from your payload schemas, regenerate them in CI and fail the build when they're out of date:
+If your code uses [types generated](/docs/type-generation) from your payload schemas, regenerate them in CI and fail the build when they're out of date. This needs your real service token, not the placeholder.
 
 ```bash
-npx --yes suprsend@1.1.0 generate-types typescript -w staging --output-file ./types/suprsend-types.ts
+rm -f ./types/suprsend-types.ts
+npx --yes suprsend@1.1.0 generate-types typescript --workspace staging --output-file ./types/suprsend-types.ts
 git diff --exit-code ./types/suprsend-types.ts
 ```
+
+Deleting the file first matters: if generation fails, for example on an expired token, the command still exits with 0, and the missing file then shows up in `git diff`.
 
 ## How the CLI behaves in CI
 
 - **No prompts.** Confirmation prompts appear only in an interactive terminal. In CI, `--commit`, `sync` and `workflow disable` run straight away, so check `-w` before you run them.
 - **Logs are hidden.** When output isn't a terminal, as in most CI runners, the CLI hides its log lines and prints only command output and a JSON error. Rely on the exit code.
-- **Re-runs are safe.** When there's nothing new to commit, the CLI reports "no changes to commit" and exits with 0.
+- **Re-runs are safe.** When there's nothing new to commit, the command exits with 0. In a terminal, it also logs "no changes to commit".
 - **Self-hosted or BYOC.** Point the CLI at your deployment with the `SUPRSEND_BASE_URL` and `SUPRSEND_MGMNT_URL` environment variables, or use a [CLI profile](/docs/self-hosted/cli-profiles).
 
 | Exit code | Meaning |
@@ -153,9 +163,9 @@ git diff --exit-code ./types/suprsend-types.ts
 | `0` | Success |
 | `1` | General or API error, including a partial failure |
 | `2` | Validation error, for example a file that doesn't parse |
-| `3` | Authentication failed, for example a missing or invalid token |
+| `3` | Authentication failed, for example a missing token. A bulk push that the API rejects with a 401 exits with `1`. |
 | `4` | Resource not found |
-| `5` | Rate limited |
+| `5` | Reserved for rate limiting. CLI 1.1.0 reports a rate-limit error as `1`. |
 | `64` | Invalid usage, such as a missing flag |
 
 ## Let a coding agent write the pipeline
