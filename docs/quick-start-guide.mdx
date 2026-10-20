@@ -4,56 +4,183 @@ sidebarTitle: "Overview"
 description: "Send your first SuprSend notification from your Sandbox workspace with an AI agent, your own code or the dashboard, then add channels and go live."
 ---
 
-This quick start takes you from a new account to a delivered notification, then to production. You can do every step in three ways: ask an AI agent, write code, or use the dashboard. All three work on the same workflows, templates and users, so you can switch at any step.
+This quick start takes you from a new account to a delivered notification, then to production. You can do every step in three ways: with an AI agent, in code, or in the dashboard. All three work on the same workflows, templates and users, so you can switch at any step.
 
-## Pick how you want to work
+## Before you start
 
-| Way | Best for | Start with |
-|---|---|---|
-| **AI agent** | Claude Code, the Claude app, ChatGPT, Codex, Cursor, VS Code, Gemini CLI and other AI clients that support MCP | Install the SuprSend plugin, or connect the MCP server (below) |
-| **Code** | Backends in Node.js, Python, Java or Go, or any language through the REST API | [Integrate SuprSend](/docs/integrate-suprsend) |
-| **Dashboard** | Product and marketing teams | [Send a broadcast](/docs/send-a-broadcast) |
-
-To work with an agent, install the [SuprSend plugin](/reference/agent-plugin). One install connects your AI client to the hosted [MCP server](/reference/mcp-overview) (beta) and adds a skill that tells the agent which tools to use. In Claude Code, run:
-
-```text
-/plugin marketplace add suprsend/claude-plugin
-/plugin install suprsend@suprsend
-```
-
-Then run `/mcp`, select **suprsend** and choose **Authenticate** to sign in with your SuprSend account. The agent can't do more than your role allows. Check it worked by asking: "List my SuprSend workspaces." For VS Code, GitHub Copilot CLI, Codex, Kiro and Cursor (Teams and Enterprise plans), see [plugins](/reference/agent-plugin). For other clients, see [how to connect](/reference/mcp-overview#how-to-connect).
-
-The server already gives the agent SuprSend's workflow, template and docs skills, so you don't need to install them. Add the CLI skill only if your agent will run the SuprSend CLI:
-
-```bash
-npx skills add https://github.com/suprsend/skills --skill suprsend-cli
-```
-
-## What's already set up in Sandbox
-
-Every account starts with a **Sandbox** [workspace](/docs/workspaces) for trying SuprSend:
+[Create your SuprSend account](https://auth.suprsend.com/sign-up). Every account starts with a **Sandbox** [workspace](/docs/workspaces) for trying SuprSend, and this quick start runs there:
 
 - Email, SMS, WhatsApp and Inbox providers are already connected.
+- Push, Slack and Microsoft Teams aren't set up, because they send through your own apps: a Firebase or APNs account for push, and a Slack app or Teams bot for those channels. [Add a channel](/docs/add-a-channel) covers each one.
 - A sample workflow and a sample user, created from your registered email, are ready to use.
-- Email, SMS and WhatsApp only deliver to [verified channels](https://app.suprsend.com/en/sandbox/developers/verified-channels), up to 5 per channel type. Slack, Teams, Inbox and push have no such limit.
+- Email, SMS and WhatsApp only deliver to [verified channels](https://app.suprsend.com/en/sandbox/developers/verified-channels), up to 5 per channel type. Your registered email is a good first recipient. Slack, Teams, Inbox and push have no such limit.
 - Sandbox is a trial workspace. It expires 30 days after you sign up.
 
-When you work with an agent, name the `sandbox` workspace in your prompt so the agent works there.
+Your account also has **Staging** and **Production** workspaces. That's where you build your real notifications, with your own providers (SuprSend calls them [vendors](/docs/vendors)). Add them in Staging to test before you go live.
+
+## Set up how you'll work
+
+<Tabs>
+  <Tab title="AI agent">
+    In Claude Code, the [SuprSend plugin](/reference/agent-plugin) adds the hosted MCP server and a skill that tells the agent which tools to use, in one install:
+
+    ```text
+    /plugin marketplace add suprsend/claude-plugin
+    /plugin install suprsend@suprsend
+    ```
+
+    Then run `/mcp`, select **suprsend** and choose **Authenticate** to sign in with your SuprSend account. The plugin also works in VS Code, GitHub Copilot CLI, Codex, Kiro and Cursor (Teams and Enterprise plans): see [plugins](/reference/agent-plugin).
+
+    In any other AI client, add the hosted [MCP server](/reference/mcp-overview) (beta) at `https://mcp.suprsend.com/mcp`. There's nothing to install. In Claude Code without the plugin, run:
+
+    ```bash
+    claude mcp add --transport http suprsend https://mcp.suprsend.com/mcp
+    ```
+
+    For ChatGPT, Codex, Cursor, VS Code, Gemini CLI and others, see [how to connect](/reference/mcp-overview#how-to-connect). On first use, your client opens a browser window so you can sign in with your SuprSend account.
+
+    The server already gives the agent SuprSend's workflow, template and docs skills, so you don't need to install [Agent Skills](/reference/agent-skills). Add the CLI skill only if your agent will run the SuprSend CLI:
+
+    ```bash
+    npx skills add https://github.com/suprsend/skills --skill suprsend-cli
+    ```
+
+    The agent can't do more than your role allows. Check it worked by asking: "List my SuprSend workspaces."
+
+    Name the `sandbox` workspace in your prompts so the agent works there.
+  </Tab>
+  <Tab title="Code">
+    Copy your **Workspace Key** and **Workspace Secret** from [Developers → API Keys](https://app.suprsend.com/en/sandbox/developers/api-keys) in Sandbox, and store them as environment variables:
+
+    ```bash .env
+    SUPRSEND_WORKSPACE_KEY=your_workspace_key
+    SUPRSEND_WORKSPACE_SECRET=your_workspace_secret
+    ```
+
+    Install the SDK for your backend and create the client once:
+
+    <CodeGroup>
+    ```javascript Node.js
+    // npm install @suprsend/node-sdk
+    const { Suprsend } = require("@suprsend/node-sdk");
+
+    const supr_client = new Suprsend(
+      process.env.SUPRSEND_WORKSPACE_KEY,
+      process.env.SUPRSEND_WORKSPACE_SECRET
+    );
+    ```
+
+    ```python Python
+    # pip install suprsend-py-sdk
+    import os
+    from suprsend import Suprsend
+
+    supr_client = Suprsend(
+        os.environ["SUPRSEND_WORKSPACE_KEY"],
+        os.environ["SUPRSEND_WORKSPACE_SECRET"],
+    )
+    ```
+    </CodeGroup>
+
+    Java, Go and the REST API are covered in [Integrate SuprSend](/docs/integrate-suprsend#get-your-credentials).
+  </Tab>
+  <Tab title="Dashboard">
+    Nothing to set up. Open [app.suprsend.com](https://app.suprsend.com) and switch to **Sandbox** from the top navigation bar. You can also ask the SuprSend Agent in the dashboard to do any step for you: open it with `Cmd+/`.
+  </Tab>
+</Tabs>
 
 ## Step by step
 
+A **[template](/docs/templates)** holds the content, a **[user](/docs/users)** holds the addresses to send to, and a **[workflow](/docs/workflows)** decides what to send and when. A **[list](/docs/lists)** groups users so you can send one message to all of them, or send users down a workflow as they enter or exit the list. See [core concepts](/docs/core-concepts) for more.
+
 <Steps>
-  <Step title="Learn the three building blocks">
-    A **template** holds the content, a **user** holds the addresses to send to, and a **workflow** decides what to send and when. Read [core concepts](/docs/core-concepts) for the details.
+  <Step title="Build your first notification">
+    Create an email template, `order-shipped`, with one variable, `order_id`, and a workflow, `order-shipped-notification`, that sends it.
 
-    **With your agent:** "Using the SuprSend docs, explain how templates, users and workflows fit together."
+    <Tabs>
+      <Tab title="AI agent">
+        "In my SuprSend sandbox workspace, create an email template called order-shipped with the subject 'Your order has shipped' and the body 'Order #\{\{order_id\}\} is on its way.' Then create an API-triggered workflow called order-shipped-notification that sends it. Publish both."
+      </Tab>
+      <Tab title="Code">
+        Build the template and workflow with an agent or in the dashboard (see the other tabs). Your code triggers the workflow in the next step. To manage templates and workflows as code instead, use the [CLI](/reference/cli-intro).
+      </Tab>
+      <Tab title="Dashboard">
+        1. Go to **Templates → + New Template**, name it `Order Shipped` and pick **Email**.
+        2. Set the subject to `Your order has shipped` and the body to `Order #{{order_id}} is on its way.` Then click **Commit**.
+        3. Go to **Workflows → + New Workflow**, name it `Order Shipped Notification` and pick the `Transactional` category.
+        4. Add a **Single Channel** delivery node, choose **Email** and the `order-shipped` template, and click **Commit**.
+
+        [Integrate SuprSend](/docs/integrate-suprsend#build-the-notification) walks through each screen.
+      </Tab>
+    </Tabs>
   </Step>
-  <Step title="Send your first notification">
-    Build an email template and a workflow, add yourself as a user, trigger the workflow, and check the logs. [Integrate SuprSend](/docs/integrate-suprsend) shows each step in code and in the dashboard.
+  <Step title="Send it">
+    Send the notification to yourself, at an email address that's verified in Sandbox.
 
-    **With your agent:** "In my SuprSend sandbox workspace, create an email template and an API-triggered workflow called order-shipped that sends it with an order_id. Publish both, send it to me at my verified email address, and then show me the delivery log."
+    <Tabs>
+      <Tab title="AI agent">
+        "Trigger order-shipped-notification in my SuprSend sandbox workspace for me at my verified email address, with order_id ORD-1234."
+      </Tab>
+      <Tab title="Code">
+        Identify the user once, then trigger the workflow when the event happens:
 
-    Ask for the delivery log every time. Starting a workflow only means SuprSend accepted the request, and the log shows whether the message actually went out.
+        <CodeGroup>
+        ```javascript Node.js
+        const { WorkflowTriggerRequest } = require("@suprsend/node-sdk");
+
+        const user = supr_client.user.get_instance("user_1a2b3c");
+        user.add_email("you@example.com"); // a verified email in Sandbox
+        await user.save();
+
+        const w1 = new WorkflowTriggerRequest({
+          workflow: "order-shipped-notification",
+          recipients: [{ distinct_id: "user_1a2b3c" }],
+          data: { order_id: "ORD-1234" },
+        });
+        const res = await supr_client.workflows.trigger(w1);
+        console.log(res);
+        ```
+
+        ```python Python
+        from suprsend import WorkflowTriggerRequest
+
+        user = supr_client.user.get_instance("user_1a2b3c")
+        user.add_email("you@example.com")  # a verified email in Sandbox
+        user.save()
+
+        w1 = WorkflowTriggerRequest(body={
+            "workflow": "order-shipped-notification",
+            "recipients": [{"distinct_id": "user_1a2b3c"}],
+            "data": {"order_id": "ORD-1234"},
+        })
+        res = supr_client.workflows.trigger(w1)
+        print(res)
+        ```
+        </CodeGroup>
+
+        `distinct_id` is your own ID for the user. The keys in `data` fill the template's variables.
+      </Tab>
+      <Tab title="Dashboard">
+        Open the SuprSend Agent with `Cmd+/` and ask: "Trigger order-shipped-notification for me with order_id ORD-1234." To check the content alone, [send a test](/docs/templates#test) from the template editor.
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Check the delivery log">
+    Starting a workflow only means SuprSend accepted the request. The log shows whether the message actually went out, and why if it didn't.
+
+    <Tabs>
+      <Tab title="AI agent">
+        "Show me the delivery log for that run."
+      </Tab>
+      <Tab title="Code">
+        Open [Logs](https://app.suprsend.com/en/sandbox/logs) in the dashboard. Under **Requests**, open the `workflow` request to follow it node by node.
+      </Tab>
+      <Tab title="Dashboard">
+        Open [Logs](https://app.suprsend.com/en/sandbox/logs). Under **Requests**, open the `workflow` request to follow it node by node and see the email delivered.
+      </Tab>
+    </Tabs>
+
+    Then check your inbox. See [logs](/docs/logging) for what each status means.
   </Step>
   <Step title="Add more channels">
     Each channel needs an address on the user, and some need a provider or an SDK first:
@@ -67,25 +194,44 @@ When you work with an agent, name the `sandbox` workspace in your prompt so the 
 
     **With your agent:** "Add an in-app inbox version to my order-shipped template in sandbox and publish it."
   </Step>
-  <Step title="Send a broadcast">
-    Send one message to a whole list of users, now or on a schedule. [Send a broadcast](/docs/send-a-broadcast) walks through it in the dashboard, with no code.
+  <Step title="Send a broadcast to a list">
+    Send one message to everyone on a [list](/docs/lists), now or on a schedule. If you don't have a list yet, [create one](/docs/lists#creating-lists) first. [Send a broadcast](/docs/send-a-broadcast) shows each step in the dashboard and with the SuprSend Agent.
 
     **With your agent:** "In my SuprSend sandbox workspace, create a list with only me in it, then send it a broadcast using the order-shipped template."
   </Step>
-  <Step title="Go live">
-    Build and test in **Staging**, then move your workflows and templates to **Production** with your own providers. Work through the [go-live checklist](/docs/go-live-checklist) before you launch.
+  <Step title="Move to Staging, then Production">
+    Sandbox is for trying SuprSend. To build for real:
+
+    1. In **Staging**, connect your own [providers](/docs/vendors) and turn on [Test Mode](/docs/developer/test-mode) so only your testers get messages.
+    2. Build and test your notifications there.
+    3. Sync your workflows and templates to **Production** and connect its providers.
+    4. Work through the [go-live checklist](/docs/go-live-checklist) before you launch.
 
     **With your agent:** "Copy my order-shipped workflow and its template from staging to production as drafts, and tell me what to review before I publish." Copies made through the MCP server land as drafts. To promote everything at once, use [`suprsend sync`](/reference/cli-sync) from the CLI instead. It commits every asset, so the changes go live immediately.
   </Step>
 </Steps>
 
-## Try the API without code
+## Next steps
 
-Run every API call from the [Postman collection](/docs/developer/postman-collection) before you write any code.
+<CardGroup cols={2}>
+  <Card title="Invite your team" icon="users" href="/docs/managing-members">
+    Add teammates from Account Settings → Team and give each a role.
+  </Card>
+  <Card title="Customize notifications per tenant" icon="building" href="/docs/tenants">
+    Give each customer or product app its own branding, providers and preference defaults.
+  </Card>
+  <Card title="See a full build" icon="code" href="/docs/task-management-app-guide">
+    Follow an example app with the Inbox and preferences, end to end.
+  </Card>
+  <Card title="Design notifications users engage with" icon="lightbulb" href="/docs/best-practices-notification-system-design">
+    Best practices for timing, channels and preferences.
+  </Card>
+  <Card title="Try the API without code" icon="flask" href="/docs/developer/postman-collection">
+    Run every API call from the Postman collection.
+  </Card>
+  <Card title="Promote changes across workspaces" icon="code-branch" href="/docs/workspaces#promoting-changes-across-workspaces">
+    Move workflows and templates from Staging to Production by cloning, with the CLI in your CI/CD pipeline, or with the Management API.
+  </Card>
+</CardGroup>
 
-## After the quick start
-
-- **Invite your team** from **Account Settings → Team**. See [managing team members](/docs/managing-members).
-- **Design notifications users want** with the [best practices for notification design](/docs/best-practices-notification-system-design).
-- **See a full build** in the [example apps](/docs/task-management-app-guide).
-- **Set up notifications for each of your customers** with [tenants](/docs/tenants) and the [B2B modelling guide](/docs/guides/modelling-customers-b2b).
+To choose between tenants and separate workspaces for each customer or app, see the [multi-tenant modelling guide](/docs/guides/multi-tenant-modelling).
