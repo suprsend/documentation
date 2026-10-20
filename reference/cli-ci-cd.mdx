@@ -34,7 +34,7 @@ npx --yes suprsend@1.1.0 workflow pull -w staging -F
 npx --yes suprsend@1.1.0 translation pull -w staging -F
 ```
 
-Each command writes to its own folder under `./suprsend/`, for example `./suprsend/workflows/<slug>/workflow.json`, and overwrites the files it pulls. `-F` uses the default folder without asking; without it, a pull asks for the folder in a terminal and fails in a non-interactive shell. From then on, change the files in pull requests, or pull again after building in the dashboard.
+Each command writes to its own folder under `./suprsend/`, for example `./suprsend/workflows/<slug>/workflow.json`, and overwrites the files it pulls. `-F` uses the default folder without asking. Without it, a pull whose folder doesn't exist yet asks for one in a terminal, and fails with exit code 64 in a non-interactive shell. From then on, change the files in pull requests, or pull again after building in the dashboard.
 
 ## Release to production on merge
 
@@ -56,7 +56,8 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Add required reviewers to this environment to approve each release.
+    # Add required reviewers to this environment to approve each release
+    # (private repositories need GitHub Enterprise for this).
     environment: production
     env:
       SUPRSEND_SERVICE_TOKEN: ${{ secrets.SUPRSEND_SERVICE_TOKEN }}
@@ -136,7 +137,7 @@ jobs:
 ```
 
 <Warning>
-  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately. It also pushes any asset already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed. Template variants that fail validation are skipped with a warning, which CI logs hide, and the command still exits with 0, so check the destination after a sync.
+  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately. It also pushes workflows, schemas, events, templates and translations already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed. Template variants that fail validation are skipped with a warning, which CI logs hide, and the valid variants are committed. The command still exits with 0 unless every changed variant of a template fails, so check the destination after a sync.
 </Warning>
 
 ## Keep generated types in step
@@ -146,15 +147,15 @@ If your code uses [types generated](/docs/type-generation) from your payload sch
 ```bash
 rm -f ./types/suprsend-types.ts
 npx --yes suprsend@1.1.0 generate-types typescript --workspace staging --output-file ./types/suprsend-types.ts
-git diff --exit-code ./types/suprsend-types.ts
+git diff --exit-code -- ./types/suprsend-types.ts
 ```
 
 Deleting the file first matters: if generation fails, for example on an expired token, the command still exits with 0, and the missing file then shows up in `git diff`.
 
 ## How the CLI behaves in CI
 
-- **No prompts.** Confirmation prompts appear only in an interactive terminal. In CI, `--commit`, `sync` and `workflow disable` run straight away, so check `-w` before you run them.
-- **Logs are hidden.** When output isn't a terminal, as in most CI runners, the CLI hides its log lines and prints only command output and a JSON error. Rely on the exit code.
+- **No prompts.** Confirmation prompts appear only in an interactive terminal. In CI, `--commit`, `sync` and `workflow disable` run straight away, so check `-w` (`--to` for `sync`) before you run them.
+- **Logs are hidden.** When `stderr` isn't a terminal, as in CI runners, the CLI hides its log lines and prints only command output and a JSON error. Rely on the exit code.
 - **Re-runs are safe.** When there's nothing new to commit, the command exits with 0. In a terminal, it also logs "no changes to commit".
 - **Self-hosted or BYOC.** Point the CLI at your deployment with the `SUPRSEND_BASE_URL` and `SUPRSEND_MGMNT_URL` environment variables, or use a [CLI profile](/docs/self-hosted/cli-profiles).
 
@@ -163,7 +164,7 @@ Deleting the file first matters: if generation fails, for example on an expired 
 | `0` | Success |
 | `1` | General or API error, including a partial failure |
 | `2` | Validation error, for example a file that doesn't parse |
-| `3` | Authentication failed, for example a missing token. A bulk push that the API rejects with a 401 exits with `1`. |
+| `3` | Authentication failed, for example a missing token. A push of several workflows, schemas, templates or categories that the API rejects with a 401 exits with `1`. |
 | `4` | Resource not found |
 | `5` | Reserved for rate limiting. CLI 1.1.0 reports a rate-limit error as `1`. |
 | `64` | Invalid usage, such as a missing flag |
