@@ -83,6 +83,35 @@ mode: "wide"
   <Warning>Unlike API keys, the workspace `secret` is returned in plain text on every response - list, detail, create and rotate. Handle every response as sensitive data.</Warning>
 </Update>
 
+<Update label="17 September 2026" tags={["Workflows"]}>
+  ## Cancel a running workflow from inside another workflow
+
+  Downstream events invalidate upstream notifications all the time: a payment arrives and the invoice reminders stop being relevant, a booking moves and the old slot's nudges are stale, one approver signs off and the rest shouldn't be paged. Stopping those runs mid-flight used to mean calling the Cancel Workflow API from your backend. The new **Cancel Workflow** node moves cancellation into the builder itself, so the workflow that already runs on the triggering event can halt the stale one as a step.
+
+  Add it from the Functions group, next to Invoke Workflow.
+
+  <Frame>
+    <img src="/images/cancel-workflow-logs.png" alt="A workflow with a Cancel Workflow node marked Success, feeding into a Digest and Email step, with its execution history showing 'Cancelled 1 workflow execution(s)' and the matched execution id" />
+  </Frame>
+
+  ### Three filter shapes
+
+  The node takes up to three filters, ANDed together. Which you pick depends on what you're cancelling:
+
+  - **By recipient** — "cancel this user's active run of this workflow." The node reuses the current workflow's recipient (or actor), so a user-scoped event cancels only that user's run.
+  - **By entity** — "cancel every workflow still running for this booking." Target workflows tag each run with a cancellation key, and the node matches on it across any workflow using the same key.
+  - **Combined** — scope by both recipient and entity when you need the tightest match.
+
+  ### Declaring the cancellation key on the target workflow
+
+  Target workflows declare their cancellation key in one of two places:
+
+  - **On the Trigger node** — a JSONNET expression like `data.booking_id`. SuprSend evaluates it at trigger time and stores the resolved value on the execution.
+  - **In the trigger payload** — a literal `cancellation_key` string, accepted on direct trigger, event, list broadcast, and test-run endpoints. Overrides the Trigger-node expression when both are present.
+
+  Full details in the [Cancel Workflow node docs](/docs/cancel-workflow) and the new [`cancellation_key` field](/docs/trigger-workflow#triggering-workflow-via-api) in the trigger payload.
+</Update>
+
 <Update label="10 September 2026" tags={["Microsoft Teams", "Vendors"]}>
   ## Microsoft Teams: support for single-tenant bots
 
