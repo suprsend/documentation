@@ -23,6 +23,9 @@ Read `references/learnings.md` first.
    line), then show the setup, code and result for that same scenario.
 4. **Link to reference, don't copy it.** Show only the fields the scenario uses, then
    link to the API/SDK reference for the full list. Field tables live on reference pages.
+   Keep other cross-links few: when the reader only needs to see something (what the
+   recipient sees, where a setting sits), put the screenshot on this page instead of
+   "see X". One "read more" link to the page with the full details is enough.
 5. **Cover the routes the feature supports:** dashboard, API, SDKs, AI tools (MCP/CLI/Agent
    Skills), as Tabs or signposted sections. Only routes the sources confirm.
 6. **Dashboard steps come from a flow run.** Button and menu names in `<Steps>` are the
@@ -39,3 +42,6 @@ Read `references/learnings.md` first.
   cards that don't point somewhere useful.
 - Never explain internals the reader doesn't need to act.
 - Never mix persona worlds in one page.
+- Never create a new page when the brief's content fits sections of existing pages. If a
+  brief asks for a new page that looks like it belongs in existing ones, say so in the
+  executor summary's Gaps instead of writing it.

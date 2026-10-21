@@ -32,20 +32,37 @@ never has to guess a parameter name, a default, or which page to edit.
 4. **Locate pages.** `grep -rl` the docs for the feature, method, parameter and error
    names. List every page that mentions them, including SDK pages in other languages
    and the API reference. A missed page is the most common planner failure.
-5. **Verify facts.** For every claim the doc will make (param name, type, default,
+   - **Check every API that carries the object.** When a feature adds or changes a field
+     on something SuprSend stores (category, workflow, template, tenant, user, list…),
+     grep `openapi.yaml` for that object's paths and schemas in both the Hub API and the
+     Management API. Add every endpoint whose request or response carries it, including
+     get, list, create/update and commit/publish. A signal that only mentions the CLI or
+     the dashboard still triggers this: if the CLI or dashboard shows a field, an API
+     carries it. Confirm on staging which endpoints actually return the field, and drop
+     any that don't rather than guessing.
+5. **Decide where the content lives: existing pages or a new page.** Default to existing
+   pages. A feature that is a setting on an existing object, or a new way to do something
+   a page already covers, goes into those pages: the concept page introduces it, the setup
+   page shows how to turn it on, the page about the reader's task covers how it behaves.
+   Plan a new page only when no existing page has a natural home and the topic has its own
+   reader journey: several sections a reader would land on directly. If you can't tell,
+   plan both: put the recommended option in `pages[]`, describe the other option and its
+   page list in `open_questions` ("New page `docs/x.mdx` vs sections in A, B and C"), and
+   keep `confidence` below 0.8 so a human picks before anything is written.
+6. **Verify facts.** For every claim the doc will make (param name, type, default,
    enum values, limits, error strings, version it shipped in), find the evidence in code
    or in the thread and cite it (`src/workflow.ts:88`, commit sha, or a short quote).
    Unverifiable → it becomes an `open_question`, not a fact.
-6. **Pick the example.** Real signal → anonymised version of the customer's scenario
+7. **Pick the example.** Real signal → anonymised version of the customer's scenario
    (`from_real_signal: true`). Commit → the persona from `customers.md` whose use case
    this change serves. Write the scenario concretely: entities, event name, payload.
-7. **Write the test plan.** What the reviewer must run on staging to prove the doc is
+8. **Write the test plan.** What the reviewer must run on staging to prove the doc is
    right: the exact API call or SDK method, the input, the expected result. Prose-only
    changes get an empty list.
-8. **Score confidence** (0–1): 0.9+ facts all verified in code, pages obvious;
+9. **Score confidence** (0–1): 0.9+ facts all verified in code, pages obvious;
    0.6–0.8 one assumption; <0.6 missing facts or intent unclear. Anything with open
    questions is not auto-ready regardless of score.
-9. **Write `.docs-agent/run/briefs.json`** matching `.docs-agent/schemas/brief.schema.json`.
+10. **Write `.docs-agent/run/briefs.json`** matching `.docs-agent/schemas/brief.schema.json`.
    Every input signal must appear exactly once: in a brief's `sources`, in `skipped`,
    or in `merged_into_existing`. Read the file back once to check it is valid JSON.
 
@@ -87,6 +104,9 @@ never has to guess a parameter name, a default, or which page to edit.
   reference in `pages[]`, list the variants the code supports in `pages[].what` (e.g.
   "examples: single recipient, list of recipients, with tenant, with idempotency_key,
   error 422"), and set `postman: true`.
+- Keep links to other pages few. When the reader only needs to see something, like what
+  the recipient sees in their inbox, plan the screenshot on the page itself instead of
+  sending them elsewhere. One "read more" link to the page with the full details is enough.
 - Set `changelog: true` for new features, breaking changes and deprecations.
 - `ask`: who can answer open questions (commit author, thread owner).
 
