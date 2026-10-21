@@ -53,8 +53,9 @@ brief; human comments on the issue override it (they often answer open questions
    - Show the real response for API samples in a ```json block right after the request.
    - New page → add it to `docs.json` nav in the right group.
    - `changelog: true` → add an entry using the changelog template.
-4b. **Dashboard steps and screenshots.** If the brief lists `ui_flows`, or a page you
-   edit describes dashboard steps or has `<!-- SCREENSHOT -->` placeholders, follow
+4b. **Dashboard steps and screenshots.** When you rewrite a page, treat its existing
+   screenshots and click-paths as unverified: the dashboard may have changed. If the brief lists `ui_flows`, or a page you
+   edit describes dashboard steps or has `{/* SCREENSHOT */}` placeholders, follow
    `docs-ui-flows`: write or update the flow file, run it in capture mode, look at every
    image, and write the step text from what the browser actually clicked. Commit the
    flow file and the images with the docs change.
@@ -65,6 +66,8 @@ brief; human comments on the issue override it (they often answer open questions
    - `vale <changed .mdx files>` reports no errors. The repo's `.vale.ini` (Google + MDX
      styles, errors only) is the house linter; fix what it flags rather than disabling it.
    - If you changed `openapi.yaml`: `npx mintlify openapi-check openapi.yaml` passes.
+   - Every changed `.mdx` compiles with `@mdx-js/mdx` (a parse error blanks the whole page
+     in Mintlify). Placeholders and notes use `{/* */}`, never `<!-- -->`.
 7. **Commit** with a conventional message and the trailer:
    ```
    docs(<area>): <what changed>

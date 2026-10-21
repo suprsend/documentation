@@ -94,7 +94,7 @@ CodeGroup = same action in multiple languages, shown as tabs on one block. Title
   ID of the created resource.
 </ResponseField>
 
-<Expandable title="properties">   <!-- nested object fields go inside -->
+<Expandable title="properties">   {/* nested object fields go inside */}
   <ResponseField name="nested" type="string">...</ResponseField>
 </Expandable>
 
@@ -141,7 +141,7 @@ curl -X POST ...
 </Frame>
 ```
 
-Always wrap screenshots in `<Frame>`. Always write meaningful alt text. When the image doesn't exist yet, leave `<!-- SCREENSHOT: what to capture -->` and an `<img alt="..."/>` placeholder.
+Always wrap screenshots in `<Frame>`. Always write meaningful alt text. When the image doesn't exist yet, leave `{/* SCREENSHOT: what to capture */}` and an `<img alt="..."/>` placeholder.
 
 ## Mermaid diagrams
 
@@ -180,7 +180,7 @@ npx skills add suprsend/skills
 
 ## Gotchas
 
-- MDX is JSX: unclosed tags break the build; `{` in prose must be escaped or in backticks; HTML comments `<!-- -->` are fine.
+- MDX is JSX: unclosed tags break the build; `{` in prose must be escaped or in backticks; HTML comments `<!-- -->` are **not** allowed: MDX fails to parse them and the page shows a parsing error. Use `{/* comment */}`.
 - Don't deep-nest components (max ~2 levels: AccordionGroup → Accordion → content).
 - Relative links (`/docs/page-slug`) not absolute URLs for internal pages; anchor links use lowercased-hyphenated heading text (`/docs/batch#flush-first-item-immediately`).
 - Headings start at `##` inside a page (`title` is the H1). Keep heading text short — they become the right-hand TOC.

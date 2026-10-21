@@ -54,3 +54,4 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
   script alone.
 
 ## Absorbed
+- **2026-10-21** (PR #286) — Review caught brief claims that contradicted code (fixed 2h `prep_lead`, timestamps in dashboard timezone not UTC, static lists not waited for) and SDK rows for an undeclared field. → Check brief-sourced behaviour against code, and check SDK request schemas before accepting SDK doc changes.

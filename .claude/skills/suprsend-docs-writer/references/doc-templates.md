@@ -110,7 +110,7 @@ Nothing the reader must go research — link everything.]
     If a dashboard step: exact click path in bold — go to **Workflows → Create workflow**.]
 
     <Frame>
-      <!-- SCREENSHOT: [describe exactly what to capture] -->
+      {/* SCREENSHOT: [describe exactly what to capture] */}
       <img alt="[alt text]" />
     </Frame>
   </Step>
@@ -329,7 +329,7 @@ Skeleton: What it is (2 sentences) + what it can do (bulleted capabilities with 
   [1–2 sentences: what you can now do, in "you" voice.]
 
   <Frame>
-    <!-- SCREENSHOT/GIF of the feature -->
+    {/* SCREENSHOT/GIF of the feature */}
     <img alt="..." />
   </Frame>
 
@@ -346,7 +346,7 @@ Skeleton: What it is (2 sentences) + what it can do (bulleted capabilities with 
 **When the change ships across multiple SDKs / packages / channels,** don't structure the body as one bullet per package — that reads like an internal release note. Lead with the capability and image; put "how each SDK exposes it" into a single closing paragraph with links. Example of what NOT to do:
 
 ```mdx
-<!-- Bad: SDK-per-bullet, no image, technical framing -->
+{/* Bad: SDK-per-bullet, no image, technical framing */}
 - **`@suprsend/react` 1.3.0:** Inbox shows a status dot… Pass `reachability={false}` to turn off.
 - **`@suprsend/react-core` 2.3.0:** pass `reachability` to `SuprSendFeedProvider`…
 - **`@suprsend/web-sdk` 5.3.0:** initialize with `reachability: true` and listen for…
