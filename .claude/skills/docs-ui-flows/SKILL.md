@@ -72,7 +72,7 @@ from `config.yml → browser.vars`. Never type real customer data or secrets int
      <img src="/images/batch/batch-node-settings.png" alt="Batch node settings with the batch window field highlighted" />
    </Frame>
    ```
-   Replace any `<!-- SCREENSHOT: ... -->` placeholder the step had.
+   Replace any `{/* SCREENSHOT: ... */}` placeholder the step had (or an old `<!-- SCREENSHOT -->` one, which breaks MDX).
 
 ## Screenshot rules
 

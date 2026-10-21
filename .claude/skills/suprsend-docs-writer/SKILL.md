@@ -78,9 +78,12 @@ Propose the fan-out before writing.
 
 ### Step 1.5 — Research how others explain it (new features and changelogs)
 
-Search how competitors (Knock, Courier, Novu, MagicBell, Braze, Customer.io, OneSignal)
-and pattern-owners (Stripe for reference, Linear/Resend for changelogs) explain the
-same thing. Take away: gaps they have that we don't, words migrating users will search
+Do this for every new feature, **before** the brief is planned and before you outline the
+page or the changelog entry. Search how competitors (Knock, Courier, Novu, MagicBell,
+Braze, Customer.io, OneSignal, and for campaign or broadcast features MoEngage, CleverTap,
+Blueshift, Airship) and pattern-owners (Stripe for reference, Linear/Resend for changelogs)
+explain the same thing. Note what they call it, how they frame the benefit, which
+trade-off they state, and what we do that they don't (that's the changelog's hook). Take away: gaps they have that we don't, words migrating users will search
 for, and questions they had to answer that we should answer too. Never copy wording.
 Never name competitors in published docs. Research shapes framing. It is never a source
 for facts about SuprSend.
@@ -240,6 +243,12 @@ hurry.
   main thing.
 - **Short sentences**, around 20 words or fewer. One idea per sentence. Paragraphs of
   2–3 sentences.
+- **Precise words.** A user has a *channel* (email, phone number, push token), not an
+  "address". Tie durations to their condition ("on a large list, this can take 5 to 30
+  minutes"), or they read as always true. State a benefit concretely ("sending starts at
+  the scheduled time", not "goes out exactly on time").
+- **Say it once.** Don't repeat a sentence or a fact in two sections of the same page;
+  keep it where the reader needs it and link if needed.
 - **Plain words.** use (not utilize/leverage), help (not facilitate), so/to (not in order
   to), start (not initiate), set up (not provision), about (not approximately).
 - **No filler:** simply, just, easily, seamlessly, powerful, robust, in today's world,
@@ -287,6 +296,9 @@ values. In the pipeline, use the brief's `use_case`.
 - **Realistic values that match the persona:** `usr_8f3k2m`, `priya.nair@routewise-demo.com`,
   `freightco-eu`, `₹12,500` or `$1,240.00`.
 - **Never name real customers.**
+- **On concept and guide pages, keep the prose generic** ("say you schedule a pre-market
+  brief for 9:00 AM…"). The persona supplies the scenario and payload values; don't name
+  the fictional company in the prose.
 - **Runnable code:** imports, client setup, real-looking values. Credentials are always
   the house placeholders: SDK samples `"_workspace_key_"`, `"_workspace_secret_"`; REST samples `Bearer __YOUR_API_KEY__`; management API `ServiceToken <SERVICE_TOKEN>`. In the pipeline,
   IDs that must already exist (user, workflow slug, tenant) use the staging fixtures in
@@ -302,7 +314,8 @@ Good: `workflow: "quote-expiring-reminder", data: { quote_id: "QT-20931", lane: 
 - Mermaid for a flow or relationship the reader would otherwise hold in their head.
 - `<Frame>` + a real screenshot at dashboard decision points, captured from the staging
   dashboard (in the docs repo, with a flow: see `docs-ui-flows`). If you can't capture
-  one, leave `<!-- SCREENSHOT: Batch node settings panel open -->`. Never invent image
+  one, leave `{/* SCREENSHOT: Batch node settings panel open */}`. Never use HTML comments
+  (`<!-- -->`) in `.mdx`: MDX can't parse them and the whole page fails. Never invent image
   URLs.
 - `<Tabs>`/`<CodeGroup>` for the same task in several languages. Never repeat prose per
   language.

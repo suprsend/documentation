@@ -33,8 +33,11 @@ Read `references/learnings.md` first.
    One screenshot per decision point, cropped and highlighted.
 7. **Troubleshooting** only from real signals: the errors and confusions in the Slack or
    support thread that triggered the brief are the best FAQ entries you'll ever get.
-8. **Changelog entries** say what the reader can now do and why it matters to them, in
-   2–4 lines, with one link. No setup steps.
+8. **Changelog entries** say what the reader can now do and why it matters to them, with
+   one link. No setup steps. Use the Step 1.5 competitor research for framing: open with
+   the real moment the feature is for, say what's different about ours, and state the one
+   trade-off honestly. Date the entry with the **release** date, not today's date; ask if
+   the source doesn't give it.
 
 ## Never
 
