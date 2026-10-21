@@ -271,6 +271,41 @@ Update your product preference page link on the tenant page and render it in tem
 ![](/images/docs/a2ec79a301149f157c50fcd94378fbe448d2b789d68da8cb4a1b97dccfd15680-image.png)
 </Frame>
 
+### One-click unsubscribe
+
+Recipients can also opt out of an email straight from their mail client, without opening any preference page. SuprSend adds one-click unsubscribe headers to every email sent in a sub-category marked **Is commercial**. Mailbox providers read these headers and show their own **Unsubscribe** option: a link next to the sender name in Gmail and Yahoo, and a banner in Apple Mail. When the recipient clicks it, SuprSend opts them out of email for the sub-category that email was sent in. There's no landing page, login or confirmation step.
+
+- Sub-categories under Promotional are commercial by default.
+- Transactional sub-categories aren't, so their emails don't get the headers. To add the headers to a transactional sub-category, for example one that carries marketing content, turn on **Is commercial** for it from the [dashboard](/docs/managing-notification-categories#enabling-one-click-unsubscribe-for-email) or by passing `is_commercial: true` in the [Create/Update Category API](/reference/create-update-category).
+- Emails sent directly in a root-category, like `promotional`, don't get the headers, so send them in a sub-category instead.
+
+<Frame caption="The Unsubscribe link Gmail shows next to the sender name">
+  <img src="/images/docs/96222900be2910eeaae1edfb7bd8e532ef2b090d828616ac87409085cb1bd89a-image.png" alt="Gmail message header with an Unsubscribe link next to the sender name" />
+</Frame>
+
+<Check>
+  Since February 2024, Google and Yahoo require bulk senders (about 5,000+ messages a day to their users) to support one-click unsubscribe and to honor opt-outs within two days. SuprSend adds the headers for you. If your email vendor adds its own unsubscribe header, for example SendGrid Subscription Tracking or a Postmark Broadcast stream, turn that off so SuprSend's header is used. SuprSend only sends the headers. Each mail client decides whether to show the **Unsubscribe** button, so recipients may not see it every time. See the [FAQ](#faq) for common reasons the button doesn't show.
+</Check>
+
+**How it works**
+
+1. SuprSend sends the email with the `List-Unsubscribe` and `List-Unsubscribe-Post` headers. They carry a unique link for that recipient and notification.
+2. The recipient's mail client shows an **Unsubscribe** option, like a link next to the sender name in Gmail or a banner in Apple Mail.
+3. When they click it, Gmail and Yahoo send an HTTPS POST to the unsubscribe URL in the background. Clients that use the `mailto:` address send an unsubscribe email instead.
+4. SuprSend opts the recipient out of email for the email's sub-category, like `newsletter`. Other channels in that sub-category and all other sub-categories keep arriving.
+
+The opt-out applies only to the email channel of the sub-category the email was sent in. It's saved like any other channel opt-out in a category, so it shows up in the user's preferences and they can turn email back on for that sub-category from the hosted preference page or your own preference center. The unsubscribe link in each email works for 90 days after the email is sent.
+
+| Mail client | What the recipient sees | How SuprSend receives the opt-out |
+|---|---|---|
+| Gmail, Yahoo | Unsubscribe link next to the sender name. The opt-out happens inside the inbox. | HTTPS one-click POST |
+| Apple Mail | "This message is from a mailing list" banner with an Unsubscribe button | Unsubscribe email to the `mailto:` address |
+| Outlook | Unsubscribe control in the message header | Unsubscribe email to the `mailto:` address |
+
+<Frame caption="The unsubscribe banner in Apple Mail">
+  <img src="/images/safari-unsubscribe-header.png" alt="Apple Mail banner reading 'This message is from a mailing list.' with an Unsubscribe button" />
+</Frame>
+
 ---
 
 ## Controlling what categories to show on UI
@@ -384,12 +419,8 @@ For detailed information on the evaluation process, see [Preference Evaluation](
 In addition to the preference center within SuprSend, communication channels provide their own opt-out options, which SuprSend manages internally.
 
 <AccordionGroup>
-  <Accordion title="Email: Unsubscribe URL header" icon="envelope-dot" iconType="solid">
-    Gmail requires an unsubscribe URL in email headers when sending bulk emails (5,000+ emails/day). Most email providers expect you to add your own unsubscription page or offer a basic all-or-nothing opt-out option. You can add `{{$hosted_preference_url}}` here to load the SuprSend hosted preference page from the email header.
-
-    <Frame>
-      <img src="/images/docs/96222900be2910eeaae1edfb7bd8e532ef2b090d828616ac87409085cb1bd89a-image.png" />
-    </Frame>
+  <Accordion title="Email: One-click unsubscribe (Unsubscribe URL header)" icon="envelope-dot" iconType="solid">
+    SuprSend adds one-click unsubscribe headers to emails sent in sub-categories marked **Is commercial**, which are promotional sub-categories by default. Mail clients like Gmail, Yahoo, Apple Mail and Outlook show their own **Unsubscribe** option, and one click opts the recipient out of email for that sub-category. See [One-click unsubscribe](#one-click-unsubscribe) for how it works.
   </Accordion>
   <Accordion title="Inbox (In-App): Render preference page inside your Inbox" icon="inbox-full" iconType="solid">
     Companies also give users the option to load preference settings inside their in-app Inbox or provide a link to redirect users to the Preference center in their product.
@@ -411,6 +442,24 @@ In addition to the preference center within SuprSend, communication channels pro
 ## FAQ
 
 <AccordionGroup>
+  <Accordion title="Why doesn't the one-click Unsubscribe button show in Gmail or other mail clients?">
+    SuprSend adds the `List-Unsubscribe` and `List-Unsubscribe-Post` headers to every email in a commercial sub-category. Whether the recipient sees an **Unsubscribe** button is up to their mail client. The button usually doesn't show when:
+
+    - **The email isn't commercial.** It was sent in a sub-category without **Is commercial**, or directly in a root-category like `promotional`, so SuprSend didn't add the headers. Category changes also aren't live until you publish them.
+    - **Authentication fails.** Your sending domain is missing valid SPF, DKIM or DMARC, or DKIM doesn't sign both unsubscribe headers. If `List-Unsubscribe-Post` isn't signed, Gmail treats the one-click as unverified and hides the button.
+    - **Your sender reputation is low or new.** Gmail and Yahoo show the button mainly for established bulk senders. A new domain or IP, low sending volume, or a history of spam complaints can keep it hidden.
+    - **The email is in the spam folder.** Mail clients show their own spam controls there instead.
+    - **The mail client doesn't support it.** Some clients and apps ignore the headers or show unsubscribe controls only in certain views, for example on desktop but not mobile.
+
+    To confirm SuprSend added the headers, open the email in Gmail and use **Show original**. Look for `List-Unsubscribe` and `List-Unsubscribe-Post`. If they're there, the email client decided not to show the button.
+  </Accordion>
+
+  <Accordion title="A user clicked Unsubscribe in their mail client but still gets some emails. Why?">
+    One-click unsubscribe opts the user out of email for only the sub-category the email was sent in. If they unsubscribed from a `newsletter` email, they still get `newsletter` notifications on other channels, emails from other sub-categories, like `product-launches`, and all transactional and system emails. They can turn off other categories or channels from the preference page.
+
+    The opt-out is also saved for the tenant the email was sent under. If you send the same sub-category under another tenant, those emails still arrive.
+  </Accordion>
+
   <Accordion title="Can users control when they receive digest notifications?">
     Yes. The simplest way is to enable a **digest schedule** on the sub-category. Define cadence options (for example, Instant, Daily, Weekly), and users pick their preferred one from the preference page. In your workflow's [Digest node](/docs/digest), set the schedule type to `category_digest_schedule` and SuprSend sends each recipient's digest on the cadence they chose. See [Configuring digest schedule](/docs/managing-notification-categories#configuring-digest-schedule).
 
