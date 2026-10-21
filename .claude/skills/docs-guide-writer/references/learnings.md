@@ -13,3 +13,5 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
 _None yet._
 
 ## Absorbed
+
+- **2026-10-21** (PR #284) — Too many "see X" links between pages, including one whose only purpose was showing the Gmail Unsubscribe header. → Put a screenshot inline when the reader only needs to see it; one "read more" link per topic (SKILL.md step 4). New pages only when existing pages have no home for the content (SKILL.md, Never).
