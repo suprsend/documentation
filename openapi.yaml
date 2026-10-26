@@ -10102,7 +10102,7 @@ paths:
               properties:
                 list_id:
                   type: string
-                  description: ID of the list whose users you want to notify. The list must exist and be enabled.
+                  description: ID of the list whose users you want to notify. Case-insensitive. The list must exist and be enabled.
                   example: "webinar-registrants"
                 workflow:
                   type: string
@@ -10128,16 +10128,16 @@ paths:
                   type: string
                   format: date-time
                   description: |
-                    Trigger at this date-time, in ISO 8601 format with a timezone (for example, `2026-11-05T09:30:00Z`). Maximum 15 days from now. A time in the past triggers right away. If both `trigger_at` (in the future) and `delay` are set, `trigger_at` wins.
+                    Trigger at this date-time, in ISO 8601 format with a timezone (for example, `2026-11-05T09:30:00Z`). Maximum 15 days from now. If `trigger_at` is in the future, it wins over `delay`. If it's in the past, `delay` applies when set; otherwise the workflow triggers right away.
                   example: "2026-11-05T09:30:00Z"
                 cancellation_key:
                   type: string
                   maxLength: 512
-                  description: Key stored on every run started by this trigger, so you can stop those runs later with the [Cancel Workflow API](/reference/cancel-workflow) or a [Cancel Workflow](/docs/cancel-workflow) node. This value overrides the workflow's Trigger-node cancellation key expression.
+                  description: Key stored on every run started by this trigger, so a [Cancel Workflow](/docs/cancel-workflow) node can stop those runs. This value overrides the workflow's Trigger-node cancellation key expression. To cancel the runs through the [Cancel Workflow API](/reference/cancel-workflow) instead, pass this request's `$idempotency_key` (or the `message_id` from the response) as `idempotency_key`.
                   example: "webinar-2026-11-05"
                 $idempotency_key:
                   type: string
-                  description: Unique key for this request. A second request with the same key is ignored, so retries don't notify the list twice.
+                  description: Unique key for this request, up to 255 characters. Another request with the same key within 24 hours is ignored, so retries don't notify the list twice.
                   example: "webinar-reminder-2026-11-05"
       responses:
         '202':
@@ -10152,7 +10152,7 @@ paths:
                   }
               schema:
                 type: object
-                description: The request is accepted as long as its format is correct. A missing list, workflow or tenant is reported later, in the **Requests** tab under **Logs** on the SuprSend dashboard.
+                description: The request is accepted as long as its format is correct. These problems are reported later, in the **Requests** tab under **Logs** on the SuprSend dashboard - a missing list, workflow or tenant, a disabled list, an invalid `delay`, a `trigger_at` that isn't ISO 8601, or a schedule more than 15 days out.
                 properties:
                   status:
                     type: string
@@ -10184,7 +10184,7 @@ paths:
                   }
               schema:
                 type: object
-                description: Returned when `list_id` or `workflow` is missing, or the body is not a single JSON object. Bulk (array) bodies are not supported on this endpoint.
+                description: Returned when `list_id` or `workflow` is missing, the `Content-Type` header isn't `application/json`, or the body is a JSON array. Bulk (array) bodies are not supported on this endpoint.
                 properties:
                   status:
                     type: string
