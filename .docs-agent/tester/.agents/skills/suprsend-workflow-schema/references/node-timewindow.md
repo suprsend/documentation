@@ -1,0 +1,141 @@
+# Time Window Node
+
+**Schema `node_type`:** `timewindow`
+
+## Documentation
+
+# Time Window
+
+> Use time window in workflow to send notification in a given datetime range and user's timezone.
+
+Time window is used to schedule messages in a fixed time range and user's timezone. for example, if you want to send messages to users only in their office working hours or only on weekends in their timezone. You can also define different schedule for different channels; for example send Inbox messages to users during their working hours and send Email out of their office hours.
+
+## How time window works
+
+Time window introduces a wait until the time window starts and all subsequent steps in the workflow will be delayed by the same time. Let's understand this with below example:
+
+Imagine a workflow that sends alerts when a task status changes. To avoid sending alerts outside of working hours, you set the Time Window to 9:00 AM - 5:00 PM in the recipient's timezone.
+
+* **Trigger**: User updates the task status on July 22 at 9:00 PM UTC.
+
+* **Time Window**: Any day, 9:00 AM - 5:00 PM.
+
+* **Recipient’s Timezone**: Europe/London (UTC+1).
+
+In this case, the workflow will wait for 11 hours (until July 23, 9:00 AM Europe/London) before sending the notification.
+
+
+## Setting up time window
+
+Time window has 3 inputs
+
+1. **Day**: Specify the days of the week or month when the notification should be sent. Options include:
+
+   * Every day
+
+   * Weekdays (Monday - Friday)
+
+   * Selected days of the week (for example Mondays and Wednesdays of the week)
+
+   * Selected days of the month (for example 1st, 3rd, and 5th Mondays of the month or 1st - 5th day of the month).
+
+2. **Time**: Define the time within the selected days when the notification should be sent. This is calculated based on the recipient’s timezone.
+
+3. **Timezone:** Set the timezone for the Time specified. You can set recipient's timezone here which will be dynamically calculated for each recipient. You can set recipient timezone in recipient profile with `$timezone` key in HTTP API or `user.set_timezone()` method from your backend or Frontend SDKs.
+
+   Timezones should be in [IANA (TZ identifier)](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List) format, such as `America/New_York`.
+
+> **Note:**
+  If a recipient's timezone is not set, it will default to the account timezone specified in the [SuprSend dashboard -> Account settings](https://app.suprsend.com/en/account-settings/general). If no account timezone is set, UTC (Coordinated Universal Time) will be used as the final fallback.
+
+
+You can also configure multiple Time Windows in `OR`. for example, send notifications Monday to Thursday from 9:00 AM - 5:00 PM or on Friday from 9:00 AM - 1:00 PM.
+
+## Changing recipient's timezone while they wait in a time window
+
+If a recipient’s timezone is updated while they are waiting in a Time Window, the delay will be recalculated based on the new timezone. If the adjustment results in a time past the end of the current Time Window, the delivery will be pushed to the start of the next schedule.
+
+for example,
+
+* A user enters a Time Window set for 9:00 AM - 5:00 PM (recipient’s timezone) at 7:00 AM UTC.
+
+* The recipient's timezone is America/New_York (UTC-5), so the delay is 7 hours until 9:00 AM (America/New_York).
+
+* If the timezone is updated to Europe/London (UTC+1) while waiting, the delay will be recalculated to 1 hour.
+
+## Some common notification use cases
+
+* Send transactional alerts during user's working hours to avoid disturbances.
+
+* Recommended to use in your engagement notifications to send notification to all users at same time in their timezone.
+
+* Set time window as per country compliance rules for SMS and WhatsApp: Many countries have regulations that require you to send promotional WhatsApp and text messages within specific time windows. For instance, the TCPA restricts text message delivery to between 9 AM and 8 PM in the recipient's local time zone.
+
+* Digest or batch notifications where the batch window is different from sending time. for example, send a summary of all activities performed the previous day at 9:00 AM. Use a batch node to collect alerts within a 24-hour window and then schedule the delivery for 9:00 AM in the recipient's timezone using time window.
+
+## Frequently asked questions
+
+
+  ### Does timezone setting take care of clock changes like day light savings?
+    Yes, one of the reasons for storing timezone in [IANA (TZ identifier)](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List) format was to take care of these clock shifts across the globe.
+  
+
+  ### What happens when I add batch node below time window?
+    Triggers before the Time Window start and during its open time (between start time and end time) will be accumulated in the batch.
+
+    For instance, with a Time Window set from 9:00 AM to 5:00 PM UTC and a 2-hour batch window, triggers from 5:00 PM to 9:00 AM (pre-window open) and 9:00 AM to 11:00 AM (during batch window) will be batched together.
+
+    So, if you have to create a digest of all events coming outside office hours and send it next day at office start time, you can achieve it with time window and batch node in series with batch open for 5 minutes (just to accumulate all events).
+  
+
+
+***
+
+## Schema Properties
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| windows | array | Yes | Array of windows defined using a structure which emulates a Recurrence rule |
+| tz_selection | string | No | While calculating datetime from recurrence rule, where to pick timezone from. If missing/null, uses fixed timezone |
+| tz_fixed | string | No | Fixed timezone (e.g America/New_York) for calculating the datetime in recurrence rule. If missing uses UTC |
+
+### Window frequency values
+
+- `daily`
+- `weekly_mo2fr`
+- `weekly`
+- `monthly`
+
+### Weekday values
+
+- `su`
+- `mo`
+- `tu`
+- `we`
+- `th`
+- `fr`
+- `sa`
+
+### Timezone selection values
+
+- `null`
+- `fixed`
+- `recipient`
+
+## Example
+
+```json
+{
+  "node_type": "timewindow",
+  "properties": {
+    "windows": [
+      {
+        "frequency": "weekly_mo2fr",
+        "stime": "09:00",
+        "etime": "17:00"
+      }
+    ],
+    "tz_selection": "recipient"
+  }
+}
+```
