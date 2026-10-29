@@ -16,13 +16,31 @@ For most use cases, **Translations** is the right choice. It's simpler, easier t
 
 ## Setting the user's language
 
-Before either approach works, each user needs a locale set on their profile. Use any backend SDK or the API:
+Both approaches pick the language from the `$locale` property on the user's profile. Set it with the [Create / Update Users](/reference/create-update-users) API:
 
-- [Python SDK](/docs/python-create-user-profile#set-preferred-language)
-- [Node.js SDK](/docs/node-create-user-profile#set-preferred-language)
-- [REST API](/reference/edit-user-profile) - set the `$locale` property
+```bash
+curl -X POST "https://hub.suprsend.com/v1/user/parent_40213/" \
+  --header 'Authorization: Bearer __YOUR_API_KEY__' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "$locale": "fr-CA"
+  }'
+```
 
-The value should be a standard locale code: `en`, `es`, `fr`, `hi`, `de`, `pt-BR`, etc.
+The backend SDKs set the language with `set_preferred_language()` ([Python](/docs/python-create-user-profile#set-preferred-language), [Node.js](/docs/node-create-user-profile#set-preferred-language)). This writes the older `$preferred_language` property, which SuprSend reads only when `$locale` isn't set.
+
+```python
+import suprsend
+
+supr_client = suprsend.Suprsend("_workspace_key_", "_workspace_secret_")
+
+user = supr_client.users.get_edit_instance("parent_40213")
+user.set_preferred_language("fr")
+res = supr_client.users.edit(user)
+print(res)
+```
+
+Use a code from the [supported locale codes](/docs/translations#supported-locales) list, such as `fr`, `fr-CA` or `hi`.
 
 ---
 
@@ -112,7 +130,13 @@ For cases where the **entire content differs per language** - not just text, but
 4. Author the content for that language. Use [Import content](/docs/templates#import-content) to copy the default English variant as a starting point.
 5. Commit.
 
+{/* SCREENSHOT: Create Variant modal with Locale set to French and ID default-fr. Flow: .docs-agent/flows/templates/add-locale-variant.yml */}
+
+You can also create or update a language variant with the Management API. Call [Create or Update Variant](/reference/upsert-variant-v2) (`POST /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/`) with `locale` set. If no variant with that ID exists, SuprSend creates it.
+
 At send time, SuprSend checks the recipient's locale and sends the matching language variant. If no match, the **default** variant (English) is sent.
+
+Variants are per channel. A template can have a French email variant while SMS sends only the default, and SuprSend picks the variant for each channel separately.
 
 <Tip>
   **AI prompt - translate a template:** *"Translate this notification into [language]. Channel: [email/SMS/push/WhatsApp]. Content: [paste]. Preserve all Handlebars variables exactly as-is. Adapt tone for the locale. Flag anything needing cultural adaptation (dates, currency, idioms). Stay within character limits."*
@@ -122,7 +146,9 @@ At send time, SuprSend checks the recipient's locale and sends the matching lang
 
 For tenants that need both brand customisation and localisation, create variants with combined conditions — for example, locale `es` + tenant `acme` for Acme's Spanish-speaking users.
 
-The fallback order: tenant+locale → tenant+default locale → default tenant+locale → default.
+The fallback order: tenant+locale → tenant+default locale → default tenant+locale → default. The default locale is always `en`.
+
+For example, a template has a tenant variant `greenfield-school-en` and a non-tenant French variant `default-fr`. A French-speaking parent in tenant `greenfield-school` gets `greenfield-school-en`, because the tenant's variant in the default locale comes before a non-tenant variant in their language.
 
 Name these descriptively: `acme-es`, `uber-fr`, `default-hi`.
 
@@ -145,5 +171,37 @@ Name these descriptively: `acme-es`, `uber-fr`, `default-hi`.
 
   <Accordion title="I'm scaling to 10+ languages. Which is easier to maintain?">
     Translations, by far. With variants, you'd need to maintain 10+ content versions per channel per template. With translations, you maintain one template and 10 JSON files that can be managed via CLI or API.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Which user property decides the language?">
+    `$locale` on the user's profile. If `$locale` isn't set, SuprSend uses the older `$preferred_language` property, which the backend SDKs set with `set_preferred_language()`. See [Setting the user's language](#setting-the-users-language).
+  </Accordion>
+
+  <Accordion title="What does a recipient get if no variant or translation matches their locale?">
+    Say a `fee_due` reminder goes out on email and SMS. The email has a French variant `default-fr`. The SMS uses a translation key, with `en.json`, `hi.json` and `fr.json` uploaded:
+
+    ```handlebars
+    {{t "fee_due" amount=amount due_date=due_date}}
+    ```
+
+    - A parent with locale `fr-CA` gets SMS text from `fr.json`, because there is no `fr-CA.json`.
+    - A parent with locale `ta` gets the **default** email variant and SMS text from `en.json`. There is no Tamil variant or `ta.json`, and the default locale is always `en`.
+
+    If a key is missing from every file, including `en.json`, the send fails with a variable missing error. Keep every key in `en.json`.
+  </Accordion>
+
+  <Accordion title="Can each channel use a different language?">
+    Yes, through variants. Each channel picks its own variant, so email can send the French variant while SMS sends the default.
+  </Accordion>
+
+  <Accordion title="Can I create language variants or translation files over the API or CLI?">
+    - **Language variants:** use the Management API variant endpoints, such as [Create or Update Variant](/reference/upsert-variant-v2) and [List All Variants](/reference/list-all-variants-v2).
+    - **Translation files:** use the [Translations API](/reference/add-translation) or the CLI [`translation push`](/reference/cli-translation-push) command.
   </Accordion>
 </AccordionGroup>
