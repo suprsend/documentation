@@ -9,7 +9,14 @@ keywords:
   - notifications as code
 ---
 
-Use the SuprSend CLI in a pipeline to release notification changes the way you release code: keep workflows, templates and the rest as files in Git, review them in pull requests, and push them to production when you merge. The CLI is the right tool here because a pipeline has no person to sign in. It runs with a service token, while the [MCP server](/reference/mcp-overview) needs someone to sign in with a SuprSend account.
+Use the SuprSend CLI in a pipeline to release notification changes the way you release code: keep workflows, templates and the rest as files in Git, review them in pull requests, and push them to production when you merge. The CLI authenticates with a service token, so no one has to sign in.
+
+## Choose an approach
+
+| Approach | How it works | Use it when |
+|---|---|---|
+| [Files in Git](#keep-your-assets-in-git) | Assets live as files in your repo. Pull requests are checked, and merging to `main` pushes them to production. | You want every change reviewed in a pull request, with Git as the record of what's live. |
+| [Sync staging to production](#promote-staging-to-production-with-sync) | You build in the staging workspace in the dashboard, then a manual job copies everything to production. | Your team builds in the dashboard and wants to promote on demand, without keeping files in Git. |
 
 ## What you need
 
@@ -26,12 +33,12 @@ Use the SuprSend CLI in a pipeline to release notification changes the way you r
 Pull the current live state from your staging workspace into the repo, then commit it:
 
 ```bash
-npx --yes suprsend@1.1.0 category pull -w staging -F
-npx --yes suprsend@1.1.0 schema pull -w staging -F
-npx --yes suprsend@1.1.0 event pull -w staging -F
-npx --yes suprsend@1.1.0 template pull -w staging -F
-npx --yes suprsend@1.1.0 workflow pull -w staging -F
-npx --yes suprsend@1.1.0 translation pull -w staging -F
+npx --yes suprsend category pull -w staging -F
+npx --yes suprsend schema pull -w staging -F
+npx --yes suprsend event pull -w staging -F
+npx --yes suprsend template pull -w staging -F
+npx --yes suprsend workflow pull -w staging -F
+npx --yes suprsend translation pull -w staging -F
 ```
 
 Each command writes to its own folder under `./suprsend/`, for example `./suprsend/workflows/<slug>/workflow.json`, and overwrites the files it pulls. `-F` uses the default folder without asking. Without it, a pull whose folder doesn't exist yet asks for one in a terminal, and fails with exit code 64 in a non-interactive shell. From then on, change the files in pull requests, or pull again after building in the dashboard.
@@ -68,19 +75,33 @@ jobs:
           node-version: 20
       - name: Push and commit to production
         run: |
-          npx --yes suprsend@1.1.0 category push -w production --commit
-          npx --yes suprsend@1.1.0 schema push -w production --commit
-          npx --yes suprsend@1.1.0 event push -w production
-          npx --yes suprsend@1.1.0 template push -w production --commit
-          npx --yes suprsend@1.1.0 workflow push -w production --commit
-          npx --yes suprsend@1.1.0 translation push -w production --commit
+          npx --yes suprsend category push -w production --commit
+          npx --yes suprsend schema push -w production --commit
+          npx --yes suprsend event push -w production
+          npx --yes suprsend template push -w production --commit
+          npx --yes suprsend workflow push -w production --commit
+          npx --yes suprsend translation push -w production --commit
 ```
 
-Without `--commit`, workflows, templates, schemas, categories and translations are saved as drafts in the destination. Events have no draft state, and `category push` sends preference-category translations live straight away. Leave `--commit` off if you want someone to review and commit the drafts in the dashboard. In that case `event push` fails for events linked to schemas that aren't live yet.
+What `--commit` changes:
+
+| | With `--commit` | Without `--commit` |
+|---|---|---|
+| Workflows, templates, schemas, categories, translations | Pushed and made live | Saved as drafts; someone reviews and commits them in the dashboard |
+| Events | Live (events have no draft state) | Live, but `event push` fails for events linked to schemas that aren't live yet |
+| Preference-category translations | Live | Live (`category push` always sends them live) |
+
+`template push --commit` commits all of a template's variants together, so one invalid variant fails the whole template with exit code 1. With `-F`, it commits only the variants that pass validation and skips the rest with a warning. Leave `-F` off in CI, as above, so a bad variant fails the job instead of being skipped.
 
 The step stops at the first command that fails, because GitHub Actions runs `run` scripts with `bash -e`. A release isn't all-or-nothing: the asset types pushed before the failure, and the items that succeeded in the failing command, are already live. Fix the cause and re-run the job.
 
+To roll back a release, revert the commit on `main`. The release job then pushes and commits the previous files.
+
 Keep only the commands for asset types you store in the repo. A push fails with exit code 2 when its folder, for example `./suprsend/templates`, doesn't exist.
+
+<Note>
+  Pushes only create and update assets; they never delete them. Removing an asset's folder from the repo doesn't remove the asset from the workspace, so delete it in the dashboard too. Pulling works the same way: a pull doesn't remove local folders for assets that were deleted in the workspace, so delete those folders yourself. A renamed slug counts as a new asset, and the old one stays until you delete it.
+</Note>
 
 ## Check files in pull requests
 
@@ -106,12 +127,17 @@ jobs:
           node-version: 20
       - name: Parse local files
         run: |
-          npx --yes suprsend@1.1.0 schema push --dry-run
-          npx --yes suprsend@1.1.0 template push --dry-run
-          npx --yes suprsend@1.1.0 workflow push --dry-run
+          npx --yes suprsend category push --dry-run
+          npx --yes suprsend schema push --dry-run
+          npx --yes suprsend event push --dry-run
+          npx --yes suprsend template push --dry-run
+          npx --yes suprsend workflow push --dry-run
+          npx --yes suprsend translation push --dry-run
 ```
 
-A dry run checks only local files: that they parse, and for schemas that `payload_schema.json` compiles as a JSON Schema. SuprSend validates the content itself when you push.
+As in the release job, keep only the commands for asset types you store in the repo.
+
+A dry run checks only local files: that they parse, and for schemas that `payload_schema.json` compiles as a JSON Schema. SuprSend validates the content itself when you push. `category push --dry-run` checks `categories.json` but doesn't read the category translation files, so a broken translation file is only caught by a real push.
 
 ## Promote staging to production with sync
 
@@ -133,22 +159,33 @@ jobs:
         with:
           node-version: 20
       - name: Sync staging to production
-        run: npx --yes suprsend@1.1.0 sync --from staging --to production --dir ./sync-tmp
+        run: npx --yes suprsend sync --from staging --to production --dir ./sync-tmp
 ```
 
 <Warning>
-  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately. It also pushes workflows, schemas, events, templates and translations already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed. Template variants that fail validation are skipped with a warning, which CI logs hide, and the valid variants are committed. The command still exits with 0 unless every changed variant of a template fails, so check the destination after a sync.
+  `sync` pushes **and commits** every synced asset, so the changes go live in production immediately.
+
+  - **Local files are pushed too.** It also pushes workflows, schemas, events, templates and translations already in its local directory, not only what it pulled from staging. Use a fresh `--dir`, as above, so only assets from staging are pushed.
+  - **Invalid template variants are skipped.** Unlike `template push --commit`, `sync` commits the valid variants and skips invalid ones with a warning, which CI logs hide. It still exits with 0 unless every changed variant of a template fails, so check the destination after a sync.
 </Warning>
 
 ## Keep generated types in step
 
-If your code uses [types generated](/docs/type-generation) from your payload schemas, regenerate them in CI and fail the build when they're out of date. This needs your real service token, not the placeholder.
+If your code uses [types generated](/docs/type-generation) from your payload schemas, regenerate them in CI and fail the build when they're out of date:
 
 ```bash
 rm -f ./types/suprsend-types.ts
-npx --yes suprsend@1.1.0 generate-types typescript --workspace staging --output-file ./types/suprsend-types.ts
+npx --yes suprsend generate-types typescript --workspace production --output-file ./types/suprsend-types.ts
 git diff --exit-code -- ./types/suprsend-types.ts
 ```
+
+`generate-types` reads the **live schemas in the workspace**, not the `payload_schema.json` files in your repo. So run this check after the release job on `main`, or on a schedule, not on pull requests:
+
+- On a pull request, a schema change in the repo isn't live yet, so the check can't see it.
+- A schema committed in the workspace by someone else would fail the check on unrelated pull requests.
+- The check needs your real service token, which you keep out of pull-request jobs.
+
+Point `--workspace` at the workspace your repo releases to, as above.
 
 Deleting the file first matters: if generation fails, for example on an expired token, the command still exits with 0, and the missing file then shows up in `git diff`.
 
@@ -164,7 +201,7 @@ Deleting the file first matters: if generation fails, for example on an expired 
 | `0` | Success |
 | `1` | General or API error, including a partial failure |
 | `2` | Validation error, for example a file that doesn't parse |
-| `3` | Authentication failed, for example a missing token. A push of several workflows, schemas, templates or categories that the API rejects with a 401 exits with `1`. |
+| `3` | Authentication failed: a missing or invalid token, or a token without permission. When a push of several items gets an auth error from the API, it exits with `1` instead. |
 | `4` | Resource not found |
 | `5` | Reserved for rate limiting. CLI 1.1.0 reports a rate-limit error as `1`. |
 | `64` | Invalid usage, such as a missing flag |
