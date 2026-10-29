@@ -9,15 +9,15 @@ description: "Connect SuprSend MCP to your AI clients (Claude, ChatGPT, Codex, G
 
 SuprSend MCP exposes your SuprSend workspace (users, objects, tenants, lists, workflows, templates, preferences, translations, vendors and delivery data) as tools that an AI client such as Claude, ChatGPT, Codex or Gemini can call over OAuth. From natural-language prompts, it reads delivery logs and analytics, debugs why a notification didn't reach a user, edits workflows, templates and translations as drafts, updates user and tenant preferences, sends test notifications, and publishes the changes to production. You run the whole notification lifecycle without writing SQL, calling the API or opening the SuprSend dashboard.
 
-Use SuprSend MCP when you want an AI client to read and change your notifications with your account permissions. It uses the role on your SuprSend account, the same one the dashboard uses, so the agent can't do more than you can.
+Use SuprSend MCP when you want an AI client to read and change your notifications with your own SuprSend account. Your role on that account decides which tools the agent gets.
 
-Sign in with your SuprSend account from any MCP-capable client, such as Claude Code, the Claude app, ChatGPT, VS Code, Codex, Gemini CLI or Windsurf. The server is hosted, so there is nothing to install.
+Sign in with your SuprSend account from any MCP-capable client, such as Claude Code, the Claude app, ChatGPT, VS Code, Codex, Cursor, Kiro, Gemini CLI or Windsurf. The server is hosted, so nothing runs on your machine.
 
 ## How to connect
 
 The SuprSend MCP server is at `https://mcp.suprsend.com/mcp`. One endpoint works for every workspace, regardless of its data region.
 
-The setup is the same in every client:
+Add the server URL to your AI client. The setup is the same in every client:
 
 <Steps>
   <Step title="Pick your URL">
@@ -62,7 +62,7 @@ For the exact steps in your client:
 
 More clients that support remote MCP servers:
 
-{/* TODO(verify): sign-in from these clients has not been tested against the SuprSend server (DCR is off; the client must support the Client ID Metadata Document flow). Rork and GitHub Copilot coding agent are left out until eng confirms them. */}
+{/* TODO(verify): sign-in from these clients has not been tested against the SuprSend server. The server now supports both Dynamic Client Registration and Client ID Metadata Documents. Rork and GitHub Copilot coding agent are left out until eng confirms them. */}
 
 <CardGroup cols={3}>
   <Card title="Replit" icon="laptop-code" href="/reference/mcp-quickstart-replit">
@@ -81,6 +81,10 @@ More clients that support remote MCP servers:
     Add it to `~/.kiro/settings/mcp.json` and run `/mcp auth suprsend` in Kiro CLI.
   </Card>
 </CardGroup>
+
+<Note>
+  **Used `suprsend start-mcp-server` before?** That local server runs through the SuprSend CLI with a service token, and it's deprecated as of CLI 1.1.0. Use this hosted server instead. Keep the local server only if you need service-token sign-in, or if you run a self-hosted (BYOC) SuprSend install, which the hosted server can't reach.
+</Note>
 
 ## What you can do with MCP
 
@@ -124,16 +128,16 @@ See the [full tool list](/reference/mcp-tool-list) for every tool, whether it re
 
 ### Agent skills
 
-Skills are packaged SuprSend knowledge that the agent reads before it writes JSON or SQL, so it gets the format right the first time. The server serves four:
+Skills are packaged SuprSend knowledge that the agent reads before it writes JSON or SQL, so it gets the format right the first time instead of guessing field names. They come with the server: there's nothing to install. The server serves four:
 
-| Skill | What it teaches the agent |
-|---|---|
-| [`suprsend-workflow-schema`](/reference/agent-skill-workflow-schema) | Workflow JSON and every node type |
-| [`suprsend-template-schema`](/reference/agent-skill-template-schema) | Template variant JSON for every channel |
-| `suprsend-semantic-layer` | The tables, columns and SQL rules for `data_query` |
-| [`suprsend-docs-support`](/reference/agent-skill-docs-support) | How to read the SuprSend docs and get help |
+| Skill | What it does | The agent reads it before |
+|---|---|---|
+| `suprsend-workflow-schema` | Teaches the workflow JSON: every [node type](/docs/design-workflow), its fields and the validation rules. | Creating or editing a workflow (`workflows_save_draft`, `workflows_validate`) |
+| `suprsend-template-schema` | Teaches template variant JSON for every channel, plus Handlebars and JSONNET syntax. | Creating or editing a template variant (`templates_upsert_variant`, `templates_validate`) |
+| `suprsend-semantic-layer` | Describes the tables and columns behind logs and analytics, and the rules for writing SQL against them. | Querying delivery data (`data_query`) or writing a dynamic list query |
+| `suprsend-docs-support` | Maps the SuprSend docs and shows how to fetch any page as Markdown, so answers come from current docs. | Answering a how-to question or debugging |
 
-Clients with the MCP Skills extension load them directly. Other clients get the same files through the `docs_get_skill` tool, and the server instructions tell the model to read the matching skill first.
+Clients with the MCP Skills extension load them directly. Other clients get the same files as `skill://` resources or through the `docs_get_skill` tool, and the server instructions tell the model to read the matching skill first.
 
 ### MCP Apps
 
@@ -179,7 +183,10 @@ The server instructions follow the scope. They name only the tools on the connec
 
 ### Data access
 
-- The agent gets the same permissions your role has in the SuprSend dashboard. The server checks this on every call, and tools your role can't use don't appear in the client.
+- Your role decides which tools the agent gets. The server checks it on every call, and tools your role can't use don't appear in the client.
+- Admins get every tool. Members get every read-only tool except two admin-only reads that show sent message content:
+  - `messages_get_content`: the text of a sent message.
+  - `messages_preview_content`: the message preview shown in clients that support MCP Apps.
 - Sign-in uses OAuth. The access token works only for the SuprSend MCP server, not for the SuprSend dashboard or API.
 - API keys, workspace keys and signing keys aren't available through MCP. Codes and link tokens in sent messages are masked before the model sees them.
 
@@ -229,9 +236,6 @@ The agent can also call them on its own when it gets stuck. Feedback goes to the
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Quickstart" icon="bolt" href="/reference/mcp-quickstart">
-    Connect to a staging workspace and walk the steps from read to test send.
-  </Card>
   <Card title="Prompt cheatsheet" icon="book-open" href="/reference/mcp-prompts">
     Prompts for debugging users, building workflows and checking delivery.
   </Card>
