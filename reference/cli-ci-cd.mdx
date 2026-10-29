@@ -83,24 +83,21 @@ jobs:
           npx --yes suprsend translation push -w production --commit
 ```
 
-What `--commit` changes:
+### How a release behaves
 
-| | With `--commit` | Without `--commit` |
-|---|---|---|
-| Workflows, templates, schemas, categories, translations | Pushed and made live | Saved as drafts; someone reviews and commits them in the dashboard |
-| Events | Live (events have no draft state) | Live, but `event push` fails for events linked to schemas that aren't live yet |
-| Preference-category translations | Live | Live (`category push` always sends them live) |
-
-`template push --commit` commits all of a template's variants together, so one invalid variant fails the whole template with exit code 1. With `-F`, it commits only the variants that pass validation and skips the rest with a warning. Leave `-F` off in CI, as above, so a bad variant fails the job instead of being skipped.
-
-The step stops at the first command that fails, because GitHub Actions runs `run` scripts with `bash -e`. A release isn't all-or-nothing: the asset types pushed before the failure, and the items that succeeded in the failing command, are already live. Fix the cause and re-run the job.
-
-To roll back a release, revert the commit on `main`. The release job then pushes and commits the previous files.
-
-Keep only the commands for asset types you store in the repo. A push fails with exit code 2 when its folder, for example `./suprsend/templates`, doesn't exist.
+- **`--commit` makes changes live.** With `--commit`, workflows, templates, schemas, categories and translations go live. Without it, they're saved as drafts, so someone can review and commit them in the dashboard.
+- **Events and category translations go live without `--commit`.** Events have no draft state, so `event push` doesn't take `--commit`. `category push` sends preference-category translations live either way. If you leave `--commit` off, `event push` fails for events linked to schemas that aren't live yet.
+- **Template variants commit together.** `template push --commit` commits all of a template's variants together, so one invalid variant fails the whole template with exit code 1. With `-F`, it commits only the variants that pass validation and skips the rest with a warning. Leave `-F` off in CI, as above, so a bad variant fails the job instead of being skipped.
+- **A failed step stops the release, but isn't rolled back.** The step stops at the first command that fails, because GitHub Actions runs `run` scripts with `bash -e`. The asset types pushed before the failure, and the items that succeeded in the failing command, are already live. Fix the cause and re-run the job.
+- **Roll back with Git.** To roll back a release, revert the commit on `main`. The release job then pushes and commits the previous files.
+- **Keep only the asset types you use.** Remove the commands for asset types you don't store in the repo. A push fails with exit code 2 when its folder, for example `./suprsend/templates`, doesn't exist.
 
 <Note>
-  Pushes only create and update assets; they never delete them. Removing an asset's folder from the repo doesn't remove the asset from the workspace, so delete it in the dashboard too. Pulling works the same way: a pull doesn't remove local folders for assets that were deleted in the workspace, so delete those folders yourself. A renamed slug counts as a new asset, and the old one stays until you delete it.
+  Pushes and pulls never delete anything:
+
+  - **Deleted in the repo:** the asset stays in the workspace. Delete it in the dashboard too.
+  - **Deleted in the workspace:** its folder stays in the repo after a pull. Delete the folder yourself.
+  - **Renamed slug:** counts as a new asset. The old one stays until you delete it.
 </Note>
 
 ## Check files in pull requests
