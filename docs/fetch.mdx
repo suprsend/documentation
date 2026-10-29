@@ -34,11 +34,31 @@ Fetch node supports JSONNET rendering language. You can add workflow trigger pay
 | Recipient      | properties of recipient in your workflow trigger. In case of event, distinct\_id works both as actor and recipient, unless override recipient is set in workflow trigger settings. In case of override recipient, properties of overridden recipient is picked. | `data["$recipient"].key` |
 | Tenant | properties of the tenant passed in workflow trigger.                                                                                                                                                                                                           | `data["$tenant"].key`     |
 
+### Handling secrets in headers
+
+SuprSend doesn't have a secret store or environment variables that a node header can reference. Each place you can put a secret has a trade-off:
+
+| Where the secret lives | Who can see it |
+| --- | --- |
+| Static header value | Saved in cleartext in the workflow. Anyone who can open the workflow in the dashboard can read it. |
+| Trigger payload, as `data.<key>` | Not saved in the workflow, but stored with the trigger payload. Admins can see the payload in logs. See [roles and permissions](/docs/managing-members#permissions) for what Members can view. |
+| Tenant property, as `data["$tenant"].<key>` | Visible to dashboard users and through the tenant API. Don't use it for credentials. |
+
+The node's logs can also show the rendered request headers, so a secret sent in a header can appear there.
+
+**Recommended:** pass a short-lived, signed token in the trigger payload instead of a long-lived API key. Your backend creates the token just before it triggers the workflow. Your endpoint checks the signature and expiry before it accepts the request. If the token shows up in a log, it stops working once it expires.
+
+For example, set the header key to `Authorization` and the value to:
+
+```jsonnet norun
+"Bearer " + data.access_token
+```
+
 ### Request execution
 
 When executing the request for a fetch function, SuprSend expects the following from your service:
 
-* The response to the request has a 2xx status code (e.g., 200 OK, 201 Created, or 204 No Content).
+* The response to the request has a 2xx status code (for example, 200 OK, 201 Created, or 204 No Content).
 
 * If the request response contains data, it's encoded as JSON and can be decoded into a map/dictionary/hash.
 
