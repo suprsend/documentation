@@ -22362,6 +22362,67 @@ paths:
         '401':
           $ref: '#/components/responses/AuthenticationError'
 
+    delete:
+      summary: Delete Template
+      description: |
+        Delete a template. SuprSend archives it: the template no longer appears in the template list, and `GET` returns `404`. Its slug and name become free to reuse for a new template.
+
+        Deleting isn't blocked when a live workflow uses the template, so check which workflows send it before you delete it. Templates SuprSend created for you, such as the sample template in a Sandbox workspace, can't be deleted.
+      operationId: delete-template-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delete Template
+          source: |
+            curl -X DELETE "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/" \
+              --header 'Authorization: ServiceToken <token>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug.
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Slug of the template to delete.
+      responses:
+        '204':
+          description: Template deleted. No response body.
+        '400':
+          description: The template was created by SuprSend and can't be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "[\"Deleting a system created template is not allowed\"]"
+                detail:
+                  - "Deleting a system created template is not allowed"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          description: No template with this slug, or it's already deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "template (slug: 'order-shipped') not found"
+                detail: "template (slug: 'order-shipped') not found"
+
   /v2/{workspace}/template/{template_slug}/variant/:
     get:
       summary: List All Variants
@@ -22851,6 +22912,79 @@ paths:
           $ref: '#/components/responses/AuthenticationError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      summary: Delete Variant
+      description: |
+        Delete a variant from the template's draft. The variant stays in the live template until you [commit the template](/reference/commit-template-v2); the commit removes it.
+
+        The `default` variant of a channel can't be deleted. To stop sending on a channel, remove it from `enabled_channels` with [Create or Update Template](/reference/upsert-template-v2).
+      operationId: delete-variant-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delete Variant
+          source: |
+            curl -X DELETE "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/" \
+              --header 'Authorization: ServiceToken <token>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug.
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Template slug.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["email", "sms", "whatsapp", "inbox", "androidpush", "iospush", "webpush", "slack", "ms_teams"]
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+          description: ID of the variant to delete.
+      responses:
+        '204':
+          description: Variant deleted from the draft. No response body.
+        '400':
+          description: The `default` variant can't be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "[\"'default' variant cannot be deleted\"]"
+                detail:
+                  - "'default' variant cannot be deleted"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          description: No variant with this ID in the draft, or it's already deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "template (slug: 'order-shipped') version: draft, channel: email, variant: fr-test not found"
+                detail: "template (slug: 'order-shipped') version: draft, channel: email, variant: fr-test not found"
 
   /v2/{workspace}/template/{template_slug}/mock_data/:
     get:
