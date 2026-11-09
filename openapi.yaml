@@ -22362,6 +22362,54 @@ paths:
         '401':
           $ref: '#/components/responses/AuthenticationError'
 
+    delete:
+      summary: Delete Template
+      description: |
+        Delete a template. SuprSend archives it: the template no longer appears in the template list, and `GET` returns `404`. Its slug and name become free to reuse for a new template.
+
+        Deleting isn't blocked when a live workflow uses the template, so check which workflows send it before you delete it.
+      operationId: delete-template-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delete Template
+          source: |
+            curl -X DELETE "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/" \
+              --header 'Authorization: ServiceToken <token>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug.
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Slug of the template to delete.
+      responses:
+        '204':
+          description: Template deleted. No response body.
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          description: No template with this slug, or it's already deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "template (slug: 'order-shipped') not found"
+                detail: "template (slug: 'order-shipped') not found"
+
   /v2/{workspace}/template/{template_slug}/variant/:
     get:
       summary: List All Variants
@@ -22852,6 +22900,79 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
 
+    delete:
+      summary: Delete Variant
+      description: |
+        Delete a variant from the template's draft. The variant stays in the live template until you [commit the template](/reference/commit-template-v2); the commit removes it.
+
+        The `default` variant of a channel can't be deleted. To stop sending on a channel, remove it from `enabled_channels` with [Create or Update Template](/reference/upsert-template-v2).
+      operationId: delete-variant-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Delete Variant
+          source: |
+            curl -X DELETE "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/" \
+              --header 'Authorization: ServiceToken <token>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug.
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Template slug.
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+            enum: ["email", "sms", "whatsapp", "inbox", "androidpush", "iospush", "webpush", "slack", "ms_teams"]
+        - in: path
+          name: variant_id
+          required: true
+          schema:
+            type: string
+          description: ID of the variant to delete.
+      responses:
+        '204':
+          description: Variant deleted from the draft. No response body.
+        '400':
+          description: The `default` variant can't be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                error_code: "error"
+                type: "ValidationError"
+                message: "[\"'default' variant cannot be deleted\"]"
+                detail:
+                  - "'default' variant cannot be deleted"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          description: No variant with this ID in the draft, or it's already deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "template (slug: 'order-shipped') version: draft, channel: email, variant: fr-test not found"
+                detail: "template (slug: 'order-shipped') version: draft, channel: email, variant: fr-test not found"
+
   /v2/{workspace}/template/{template_slug}/mock_data/:
     get:
       summary: Get Mock Data
@@ -23139,7 +23260,9 @@ paths:
     patch:
       summary: Commit Template
       description: |
-        Commit the current draft version, making it live. All draft changes across all channels and variants are published as a new version.
+        Commit the draft, making it live as a new version. By default, every change goes live.
+
+        To commit only some variants, list them in `variants`; the rest stay in the draft, and only the listed ones are validated. Changes to the name, description and tags always go live; a newly enabled channel goes live once you commit one of its variants. Use [Get Template Diff](/reference/get-template-diff-v2) to see what's changed.
 
         For WhatsApp and SMS (DLT) variants, committing moves them to **Approval Pending** state instead of going live immediately.
       operationId: commit-template-v2
@@ -23149,12 +23272,24 @@ paths:
         - ServiceTokenAuth: []
       x-codeSamples:
         - lang: cURL
-          label: Commit Template
+          label: Commit all changes
           source: |
             curl -X PATCH "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/commit/?commit_message=Updated%20copy" \
               --header 'Authorization: ServiceToken <token>' \
               --header 'Content-Type: application/json' \
               --data '{}'
+        - lang: cURL
+          label: Commit selected variants
+          source: |
+            curl -X PATCH "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/commit/?commit_message=Updated%20English%20email" \
+              --header 'Authorization: ServiceToken <token>' \
+              --header 'Content-Type: application/json' \
+              --data '{
+                "variants": [
+                  {"channel": "email", "id": "default"},
+                  {"channel": "sms", "id": "default"}
+                ]
+              }'
       parameters:
         - in: path
           name: workspace
@@ -23176,6 +23311,40 @@ paths:
           application/json:
             schema:
               type: object
+              properties:
+                variants:
+                  type: array
+                  description: |
+                    The variants to commit. Leave it out to commit every changed variant. Pass an empty list to commit only changes to the name, description and tags.
+                  items:
+                    type: object
+                    required:
+                      - channel
+                      - id
+                    properties:
+                      channel:
+                        type: string
+                        enum: ["email", "sms", "whatsapp", "inbox", "androidpush", "iospush", "webpush", "slack", "ms_teams"]
+                        description: Channel of the variant.
+                      id:
+                        type: string
+                        description: ID of the variant, such as `default`. A variant with no uncommitted changes is skipped.
+            examples:
+              all:
+                summary: Commit all changes
+                value: {}
+              selected:
+                summary: Commit selected variants
+                value:
+                  variants:
+                    - channel: "email"
+                      id: "default"
+                    - channel: "sms"
+                      id: "default"
+              properties-only:
+                summary: Commit only template properties
+                value:
+                  variants: []
       responses:
         '202':
           description: Template committed successfully. Returns the updated template detail.
@@ -23209,37 +23378,183 @@ paths:
                     is_active: true
                     variants_count: 1
         '400':
-          description: Validation error - one or more variants have issues, or no variant is available for the first commit
+          description: Validation error - one or more variants being committed have issues, no variant is available for the first commit, or an entry in `variants` is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                variant-errors:
+                  summary: A variant being committed has errors
+                  value:
+                    code: 400
+                    error_code: "error"
+                    type: "ValidationError"
+                    message: "[\"one of more variants about to be committed have issues.\\n[1] email:default errors: {'body.raw.html': ['missing']}\\n[2] slack:default errors: {'body_text': ['missing']}\"]"
+                    detail:
+                      - "one of more variants about to be committed have issues.\n[1] email:default errors: {'body.raw.html': ['missing']}\n[2] slack:default errors: {'body_text': ['missing']}"
+                invalid-variants:
+                  summary: An entry in variants is missing a field
+                  value:
+                    code: 400
+                    error_code: "error"
+                    type: "ValidationError"
+                    message: "{\"variants\": {\"0\": {\"id\": [\"This field is required.\"]}}}"
+                    detail:
+                      variants:
+                        "0":
+                          id: ["This field is required."]
+        '409':
+          description: Nothing to commit. The draft is identical to the live version, or none of the variants in `variants` has changes and template properties haven't changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 409
+                error_code: "no_changes_to_commit"
+                type: "NoChangesToCommitError"
+                message: "no uncommitted changes detected in template"
+                detail: "no uncommitted changes detected in template"
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v2/{workspace}/template/{template_slug}/pre_commit_validate/:
+    post:
+      summary: Get Template Diff
+      description: |
+        List what the next [commit](/reference/commit-template-v2) would make live: the template properties and the variants whose draft differs from the live version. Each changed variant also shows whether it's deleted in the draft and any validation errors that would block its commit.
+
+        Use it to choose which variants to pass in `variants` when you commit. This call doesn't change the template.
+      operationId: get-template-diff-v2
+      servers:
+        - url: https://management-api.suprsend.com
+      security:
+        - ServiceTokenAuth: []
+      x-codeSamples:
+        - lang: cURL
+          label: Get Template Diff
+          source: |
+            curl -X POST "https://management-api.suprsend.com/v2/{workspace}/template/{template_slug}/pre_commit_validate/" \
+              --header 'Authorization: ServiceToken <token>'
+      parameters:
+        - in: path
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug.
+        - in: path
+          name: template_slug
+          required: true
+          schema:
+            type: string
+          description: Template slug.
+      responses:
+        '201':
+          description: The uncommitted changes. Empty `properties` and `variants` mean there's nothing to commit.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  code:
-                    type: integer
-                  error_code:
-                    type: string
-                  type:
-                    type: string
-                  message:
-                    type: string
-                  detail:
+                  is_new:
+                    type: boolean
+                    description: "`true` if the template has never been committed. Every property is then listed as changed."
+                  has_changes:
+                    type: boolean
+                    description: "`true` if the draft differs from the live version."
+                  properties:
+                    type: object
+                    description: Changed template properties, keyed by property name (`name`, `description`, `tags`, `enabled_channels`, `mock_data`). Unchanged properties are left out.
+                    additionalProperties:
+                      type: object
+                      properties:
+                        has_diff:
+                          type: boolean
+                          description: "`true` if the draft value differs from the live value."
+                        draft:
+                          description: Value in the draft. Not returned for `mock_data`.
+                        live:
+                          description: Value in the live version, or `null` if it isn't set. Not returned for `mock_data`.
+                  variants:
                     type: array
+                    description: Variants whose draft differs from the live version. Unchanged variants are left out.
                     items:
-                      type: string
-              example:
-                code: 400
-                error_code: "error"
-                type: "ValidationError"
-                message: "[\"one of more variants about to be committed have issues.\\n[1] email:default errors: {'body.raw.html': ['missing']}\\n[2] slack:default errors: {'body_text': ['missing']}\"]"
-                detail:
-                  - "one of more variants about to be committed have issues.\n[1] email:default errors: {'body.raw.html': ['missing']}\n[2] slack:default errors: {'body_text': ['missing']}"
-        '409':
-          description: No uncommitted changes - the draft is identical to the live version
+                      type: object
+                      properties:
+                        channel:
+                          type: string
+                          description: Channel of the variant.
+                        id:
+                          type: string
+                          description: Variant ID. Pass `channel` and `id` in `variants` to [commit](/reference/commit-template-v2) this variant.
+                        has_diff:
+                          type: boolean
+                          description: "`true` if the variant has uncommitted changes."
+                        diffs:
+                          type: object
+                          description: Fields that differ between the draft and live variant, each with its `draft` and `live` value. `variant_hash` changes whenever the variant's content or settings change.
+                        is_deleted:
+                          type: boolean
+                          description: "`true` if the variant is deleted in the draft. Committing it removes it from the live version."
+                        errors:
+                          type: object
+                          description: Validation errors, keyed by field. Committing this variant fails with `400` until they're fixed. Returned only when the variant has errors.
+              examples:
+                changes:
+                  summary: Edited, deleted and invalid variants
+                  value:
+                    is_new: false
+                    has_changes: true
+                    properties:
+                      description:
+                        has_diff: true
+                        draft: "Sent when an order is placed"
+                        live: null
+                    variants:
+                      - channel: "sms"
+                        id: "default"
+                        has_diff: true
+                        diffs:
+                          variant_hash:
+                            draft: "8a06e6d59036a7e37fe1af062f2d0d964385a947f7952466a051a2e123a88204"
+                            live: "808a2c24fd4c5d6bd860fe49ad98344f38c3635d525f10100cd19543c92dbe0e"
+                          seq_no:
+                            draft: 1
+                            live: 1
+                      - channel: "sms"
+                        id: "de"
+                        has_diff: true
+                        is_deleted: true
+                      - channel: "sms"
+                        id: "es"
+                        has_diff: true
+                        errors:
+                          body: ["missing", "missing"]
+                no-changes:
+                  summary: Nothing to commit
+                  value:
+                    is_new: false
+                    has_changes: false
+                    properties: {}
+                    variants: []
         '401':
           $ref: '#/components/responses/AuthenticationError'
         '404':
-          $ref: '#/components/responses/NotFoundError'
+          description: No template with this slug.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 404
+                error_code: "not_found"
+                type: "NotFound"
+                message: "template (slug: 'order-shipped') not found"
+                detail: "template (slug: 'order-shipped') not found"
 
   /v2/{workspace}/template/{template_slug}/channel/{channel}/variant/{variant_id}/discard/:
     patch:
