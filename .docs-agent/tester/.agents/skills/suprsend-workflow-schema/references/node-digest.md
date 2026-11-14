@@ -1,0 +1,505 @@
+# Digest Node
+
+**Schema `node_type`:** `digest`
+
+> **Grouping is fixed.** A digest node aggregates events keyed on `(workflow recipient, workflow slug)`. There is no `group_by` field. If a digest needs to batch across a key other than the workflow's trigger recipient — for example, one digest per seller across many buyer-triggered orders — the digest must live in a **separate workflow** whose trigger recipient is the digest key, invoked from the parent via [`invokeworkflow`](node-invoke-workflow.md). A digest placed inside a workflow triggered for recipient A will always produce per-A digests, never per-B.
+
+## Documentation
+
+# Digest
+
+> Batch multiple alerts & send summary of notifications at a recurring schedule to the user.
+
+The Digest node aggregates multiple triggers into a single, summarized notification sent at a recurring schedule. Some common use cases include sending recommendations or top stories like you get for LinkedIn or Quora, or to send a weekly / daily summary of activities in a company workspace or SaaS application.
+
+You can configure Digest nodes to send notifications on a [fixed schedule](/docs/digest#fixed-schedule) to all users or a [dynamic schedule based on user preferences](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference).
+
+Digest can be configured to be timezone-aware, ensuring that final notifications are sent in user's preferred timezone and all users receive the digest at a reasonable hour.
+
+## How Digest works?
+
+
+  **Opens batch window**
+    When a workflow reaches the Digest node, it opens a batch until the next digest schedule is triggered. Unlike regular batching, the Digest node operates on a fixed schedule rather than being relative to when the first event is received. Consequently, the next steps following the Digest node will be executed at the fixed schedule, regardless of when triggers are received.
+  
+
+  **Accumulates trigger until the next digest schedule**
+    During the batch period, all events for the same recipient with the same workflow slug are accumulated. A unique batch is created for each recipient.
+  
+
+  **Moves to next workflow step**
+    When the digest schedule is reached, a single notification is sent for each batch. You can configure the number of events retained in the batch using the [retain items](/docs/digest#retain-items) setting. The digest output structure is similar to the batch output and templates can be edited in the same format as you do for batched alerts. Refer to [Using Batch Variables in Templates](/docs/digest#using-digest-batch-variables-in-templates) for more details.
+
+    > **Note:**
+      If no triggers are received within a given schedule or if the number of events is below the [minimum trigger count](/docs/digest#min-trigger-count), the workflow will exit without executing subsequent steps.
+    
+  
+
+
+**Example Use case**
+
+A workflow sends a summary of task status changes daily at 7:00 PM for a workflow management tool. In this case, the workflow will batch all triggers for 11 hours (until July 30, 7:00 PM Europe/London) and the email will be sent at the same time as soon as batch is closed.
+
+* **Trigger**: When task status is changed (First task status change is received at Jul 30, 7:00 AM UTC)
+* **Digest Schedule**: Daily at 7:00 PM (in recipient's timezone)
+* **Recipient’s Timezone**: Europe/London (UTC+1).
+
+In this case, the workflow will batch all triggers for 11 hours (until July 30, 7:00 PM Europe/London) and the email will be sent at the same time as soon as batch is closed.
+
+
+## Configuring Digest schedule
+
+It is the recurring schedule when an open digest should be closed. This schedule might differ from the time notifications are actually sent. for example, if you want to send a daily digest summarizing activities from the previous day at 9:00 AM, you would set the Digest schedule to close daily at midnight and follow it with Time Window or Delay node to send the notification at 9:00 AM.
+
+
+  ### Fixed Schedule
+    Fixed schedule is same for all users and hard coded in the workflow logic. It has 4 inputs:
+
+    1. **Repeat every**: Defines the recurrence of the digest, such as every 5 minutes, hourly, daily, etc. It is a combination interval (1,2,3 etc.) and frequency (daily, weekly, monthly, hourly and minutely). for example you can set frequencies as:
+       * every 5 minutes (here, interval is `5 `with `minutely `frequency)
+       * every hour
+       * every 3 days
+       * every weekday
+       * every 2 weeks on selected days of the week (for example Mondays and Wednesdays of the week)
+       * every month on selected days of the month (for example 1st, 3rd, and 5th Mondays of the month or 1st - 5th day of the month)
+    2. **Time**: Specifies when the digest should be closed for daily, weekly or monthly frequency. The time is always in reference to the timezone selected.
+    3. **Timezone**: Set the timezone for the Time specified. You can select **recipient's timezone**, which will be dynamically calculated for each recipient. You can set recipient timezone in user profile with`$timezone`key in HTTP API or`user.set_timezone()`method from your backend or Frontend SDKs. Timezones should be in [IANA (TZ identifier)](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List) format, such as `America/New_York`.
+    4. **Starting from**: Defines the starting point for recurring schedule. for example, if starting from is`2024-07-17 17:00`and repeat every is set to daily at 4pm IST, first schedule will be 18th July 4pm IST. You can set a future starting point if you want the first digest to be sent later. Note that in this case, all triggers from when the workflow is activated until the first schedule after the "starting from" time will be included in the first digest. Referred to as`dtstart`in dynamic schedule expression.
+
+    > **Note:**
+      📘 If a recipient's timezone is not set, it will default to the account timezone specified in the [SuprSend dashboard -> Account settings](https://app.suprsend.com/en/account-settings/general). If no account timezone is set, UTC (Coordinated Universal Time) will be used as the final fallback.
+    
+  
+
+  ### Dynamic Schedule (Send Digest based on user preference)
+    The dynamic schedule is dynamically derived from the workflow trigger or recipient profile, allowing for schedules that adjust based on user preferences. It is advisable to store it in recipient profile.
+
+    If you are sending notification on behalf of your enterprise customers, digest schedule can also come from enterprise level notification preferences. In such cases, you can store the schedule as custom property in [tenant](/docs/tenants#creating--updating-tenant-on-suprsend-platform) settings.
+
+    
+      ```json Dynamic Schedule Schema theme={"system"}
+      {
+        "frequency": "minutely"/"hourly"/"daily"/"weekly_mo2fr"/"weekly"/"monthly",
+        "interval": 1, //you can pass any integer value here, default value 1
+
+        //mandatory to pass for weekly frequency, weekly_mo2fr assumes weekdays: [ "mo", "tu", "we", "th", "fr"]
+        "weekdays": ["su", "mo", "tu", "we", "th", "fr", "sa"],
+
+        //mandatory to pass for monthly frequency, "day":"" would represent day of the month,
+        //pass first 2 character of weekday to set frequency like 1st Monday of the month
+        "monthdays": [{"pos": 1, "day": ""/"<weekday>"}],
+
+        "time": "08:00", // defaults to 00:00 if not passed
+
+        "dtstart": "2024-08-01T10:40:50", // defaults to current_timestamp if not passed
+
+        "tz_selection": "recipient", // pass empty for fixed timezone
+        "tz_fixed": "UTC", // pass this if tz_selection is empty, defaults to UTC if not set
+      }
+      ```
+    
+
+    | Variable       | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                   |
+    | -------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `frequency`    | string (mandatory)                              | Choose from one of the below options:  **minutely**  **hourly**  **daily**  **weekly** (mandatory to pass `weekdays` in this case)  **weekly_mo2fr** (weekly on Monday to Friday)  **monthly** (mandatory to pass `monthdays` in this case)                                                                                                                                                  |
+    | `interval`     | integer (optional)                              | Interval at which the frequency will repeat. Interval `2` with frequency `daily` would mean repeat every 2 days. Defaults to `1` if not set.                                                                                                                                                                                                                                                  |
+    | `weekdays`     | array\[] (mandatory for `weekly` frequency)     | Days of the week for weekly frequency. Pass the first 2 characters of days of the week in an array as `["su", "mo", "tu", "we", "th", "fr", "sa"]`                                                                                                                                                                                                                                            |
+    | `monthdays`    | array\[map] (mandatory for `monthly` frequency) | Days of the month for monthly frequency (for example 1st, 3rd, and 5th Mondays of the month or 1st - 5th day of the month). Pass as `[{"pos": 1, "day": "mo"}]`, where `pos` defines the day index and `day` defines the type of day (can be referred to define the day of the week). for example, `1st,2nd day of the month` will be set as `[{"pos": 1, "day": ""},{"pos": 2, "day": ""}]`. |
+    | `time`         | string (optional)                               | Time for daily, weekly, or monthly frequency when the digest will close. Defined in hour and minute as `hh:mm`. Defaults to `00:00` if not set.                                                                                                                                                                                                                                               |
+    | `dtstart`      | datetime (ISO-8601 format) (optional)           | Starting time from which the first schedule will be calculated. Set as `2024-08-01T10:40:50` in ISO-8601 format. Defaults to `current_timestamp` at the time of setting the schedule if not defined.                                                                                                                                                                                          |
+    | `tz_selection` | string (optional)                               | Timezone selection. `time` and `dtstart` will both be in this timezone.  - Leave empty `""` for fixed timezone  - Set to `"recipient"` if the timezone needs to be picked dynamically from user property or trigger data.                                                                                                                                                                     |
+    | `tz_fixed`     | string (mandatory if `"tz_selection": ""`)      | Timezone to pick in case of fixed `tz_selection`. Add timezone in [IANA (TZ identifier)](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List) format as `America/New_York`. Defaults to `UTC` if not set.                                                                                                                                                                       |
+
+    ### Passing dynamic schedule for users
+
+    You can either pass dynamic schedule in each workflow trigger or a better way to handle is to store it in user profile. You can store any number of schedules in user profile or in tenant properties. It's a good practice to map the digest schedule to either workflow or category identifier in user profile (If you have multiple notification categories in your system). Refer [create user profile section](/docs/users#creating-user-profile-on-suprsend) to understand how user properties are set in user profile.
+
+    
+      ```json Storing Schedule as user property theme={"system"}
+
+      // Refer below schedule as ."$recipient".digestSchedule.marketing_alerts in dynamic schedule key
+
+      user.set(
+        {
+          "digestSchedule":{
+            "marketing_alerts":{
+              "frequency": "daily",
+              "time": "08:00",
+              "dtstart": "2024-08-01T10:40:50",
+              "tz_selection": "recipient"
+            }
+          }
+        }
+      )
+      ```
+    
+
+    Refer [workflow trigger methods](/docs/trigger-workflow) to see how dynamic data is passed in different workflow triggers.
+
+    
+      ```json Passing Schedule in workflow trigger theme={"system"}
+
+      // Refer below schedule as .digestSchedule in dynamic schedule key
+
+      body={
+        "workflow": "_workflow_slug_",
+        "recipients": [..],
+        "data":{
+          "digestSchedule":
+          {
+            "frequency": "daily",
+            "time": "08:00",
+            "dtstart": "2024-08-01T10:40:50",
+            "tz_selection": "recipient"
+          }
+        }
+      }
+      ```
+    
+
+    ##
+  
+
+
+## Advanced settings
+
+
+  ### Retain Items
+    Defines the number of trigger data that will be included in your Digest Batch. You have the option to display either the first n triggers or the last n triggers in your digest output. By default, the first 10 triggers are included. You can customize the number of triggers to any value between 2 and 100.
+  
+
+  ### Min Trigger Count
+    Specifies the minimum number of triggers required to proceed with the digest. Workflow will exit and the next steps will not be executed if the number of triggers in the digest is less than this count. This is quite useful for cases where you are sending individual alerts and also a digest of all alerts at the end of the day. Now, In this case, if only two alerts are triggered in a day, sending a digest might be unnecessary.
+  
+
+
+## Using Digest (Batch) variables in templates
+
+Batch output variable has 2 type of variables:
+
+1. `$batched_events`array : All the event properties corresponding to a batched event is appended to this array and can be used in the template in the array format. The number of event properties returned here is limited by retain batch events.
+2. `$batched_event_count`: This count represents the number of events in a batch and is utilized to render the batch count in a template. For instance, you might send a message like,`Joe left 5 comments in the last 1 hour`where 5 corresponds to \$batched_event_count.
+
+> **Note:**
+  📘 Please note that **Retain items** setting doesn't impact the count, it just limits the number of trigger data returned in `$batched_events` array.
+
+
+Let's understand the batch variable structure with an example of task comments with below notification content.
+
+```
+3 comments are added on your task in last 1 hour.
+
+- Steve: Hey, added the test cases added for PRD-12
+
+- Olivia: Hey, done with the testing. Check the bugs
+
+- Joe: 3 bugs are resolved, 4 are still pending
+```
+
+Here is a list of events triggered in the batched window:
+
+
+  ```javascript Event trigger Payload theme={"system"}
+  //Event 1
+
+  const event_name = "new_comment"
+
+  const properties = {
+    "name": "Steve",
+    "card_id": "SS-12",
+    "comment": "Hey, added the test cases added for PRD-12"
+  }
+
+  const event = new Event(distinct_id, event_name, properties)
+
+  //Event 2
+
+  const event_name = "new_comment"
+
+  const properties = {
+    "name": "Olivia",
+    "card_id": "SS-12",
+    "comment": "Hey, done with the testing. Check the bugs"
+  }
+
+  const event = new Event(distinct_id, event_name, properties)
+
+  //Event 3
+
+  const event_name = "new_comment"
+
+  const properties = {
+    "name": "Joe",
+    "card_id": "SS-12",
+    "comment": "3 bugs are resolved, 4 are still pending"
+  }
+
+  const event = new Event(distinct_id, event_name, properties)
+  ```
+
+
+Output variable of the batch will have `$batched_events_count` and `$batched_events` array of all properties passed in the event payload as shown below:
+
+
+  ```json json theme={"system"}
+  {
+    "$batched_events": [
+      {
+        "name": "Steve",
+        "card_id": "SS-12",
+        "comment": "Hey, added the test cases added for PRD-12"
+      },
+      {
+        "name": "Olivia",
+        "card_id": "SS-12",
+        "comment": "Hey, done with the testing. Check the bugs"
+      },
+      {
+        "name": "Joe",
+        "card_id": "SS-12",
+        "comment": "3 bugs are resolved, 4 are still pending"
+      }
+    ],
+    "$batched_events_count": 3
+  }
+  ```
+
+
+This is how you'll add the variable in your template to render the desired notification content.
+
+
+  ```Text Template theme={"system"}
+  {{$batched_events_count}} comments are added on your task in last 1 hour.
+
+  {{#each $batched_events}}
+  - {{name}}: {{comment}}
+
+  {{/each}}
+  ```
+
+  ```Text Rendered notification theme={"system"}
+  3 comments are added on your task in last 1 hour.
+
+  - Steve: Hey, added the test cases added for PRD-12
+
+  - Olivia: Hey, done with the testing. Check the bugs
+
+  - Joe: 3 bugs are resolved, 4 are still pending
+  ```
+
+
+You can also test this behaviour via `Enable batching` option in [Mock data](/docs/templates#the-variables-panel) button on template details page. Once enabled, you'll start getting `$batched_events` variable in auto suggestion on typing `{{` in template editor. The variables in mock data will be treated as event properties and `Event Count` will imitate the number of times this event will be triggered in the batch.
+
+
+## Transforming Digest variable output
+
+There can be cases where you need to split the digest output variables into multiple arrays based on keys in your input data. for example, to send a message like `You have got 5 comments and 3 likes on your post today` where post and likes are interaction_type in your input payload. You can use [data transform node](/docs/data-transform) and generate relevant variables using **JSONNET editor** to handle this use case.
+
+
+Let's take below example. There are 3 post interactions, 2 comments and 1 like and this is your workflow trigger.
+
+
+  ```node node theme={"system"}
+  //Event 1
+
+  const event_name = "new_post_interaction"
+
+  const properties = {
+    "name": "Steve",
+    "post_id": "PS-12",
+    "interaction_type":"comment",
+    "comment": "Well written! looking for more such posts"
+  }
+
+  const event = new Event(distinct_id, event_name, properties)
+
+  //Event 2
+
+  const event_name = "new_post_interaction"
+
+  const properties = {
+    "name": "Olivia",
+    "card_id": "PS-12",
+    "interaction_type":"like"
+  }
+
+  const event = new Event(distinct_id, event_name, properties)
+
+  //Event 3
+
+  const event_name = "new_post_interaction"
+
+  const properties = {
+    "name": "Joe",
+    "post_id": "PS-12",
+    "interaction_type":"comment",
+    "comment": "Every leader should read this"
+  }
+
+  const event = new Event(distinct_id, event_name, properties)
+  ```
+
+
+Without transformation, digest output will look like this:
+
+
+  ```json json theme={"system"}
+  {
+    "$batched_events":[
+      {
+    "name": "Steve",
+    "post_id": "PS-12",
+    "interaction_type":"comment",
+    "comment": "Well written! looking for more such posts"
+      },
+     {
+    "name": "Olivia",
+    "card_id": "PS-12",
+    "interaction_type":"like"
+  } ,
+   {
+    "name": "Joe",
+    "post_id": "PS-12",
+    "interaction_type":"comment",
+    "comment": "Every leader should read this"
+  }
+    ],
+   "$batched_events_count":3
+  }
+  ```
+
+
+We'll add 3 variables in data transform node
+
+* `comment_count`: to get the count of all interactions where`interaction_type = comment`
+* `like_count`: to get the count of all interactions where`interaction_type = like`
+* `all_comments`: to fetch all array objects where`interaction type = comment`
+
+
+  ```json JSONNET syntax to generate above variables theme={"system"}
+  //comment_count
+  std.length([x for x in data["$batched_events"] if x.interaction_type == "comment"])
+
+  //like_count
+  std.length([x for x in data["$batched_events"] if x.interaction_type == "like"])
+
+  //all_comments
+  [x.comment for x in data["$batched_events"] if x.interaction_type == "comment"]
+  ```
+
+
+After data transform node, output variables will contain 3 additional keys generated above. You can use these variables in your template to send the desired message as `You have got {{comment_count}} comments and {{like_count}} likes on your post today`.
+
+
+  ```json json theme={"system"}
+
+  {
+    "comment_count":"2",
+    "like_count":"1",
+    "all_comments":["Well written! looking for more such posts","Every leader should read this"],
+    "$batched_events":[
+      {
+    "name": "Steve",
+    "post_id": "PS-12",
+    "interaction_type":"comment",
+    "comment": "Well written! looking for more such posts"
+      },
+     {
+    "name": "Olivia",
+    "card_id": "PS-12",
+    "interaction_type":"like"
+  } ,
+   {
+    "name": "Joe",
+    "post_id": "PS-12",
+    "interaction_type":"comment",
+    "comment": "Every leader should read this"
+  }
+    ],
+   "$batched_events_count":3
+  }
+  ```
+
+
+***
+
+## Some common notification use cases
+
+
+  ### Sending immediate or digest notification based on user's preference
+    You can store user preference schedule in their profile and use it in the digest node ->[dynamic schedule](/docs/digest#dynamic-schedule-send-digest-based-on-user-preference). To handle immediate alerts in the same flow, add a branch before the digest node to direct users based on their preference to the digest node. If you are using our preference module. You can create separate sub-categories, for immediate, daily or weekly frequency and create different workflows for each of these frequency.
+  
+
+  ### Deliver individual alerts to users throughout the day and provide a summary of all alerts at day’s end
+    This ensures users have a consolidated view of any alerts they might have missed. Use the [minimum trigger count](/docs/digest#min-trigger-count) to prevent sending a digest if the total number of alerts is below a specified threshold, avoiding unnecessary notifications.
+  
+
+  ### Send recommendation or top stories at the end of the day
+    Club with fetch node to fetch the latest recommendations before sending the digest.
+  
+
+  ### Send batched reminders for pending activities or courses
+    Update the list by removing completed tasks before the next reminder. Stop sending once a certain count of reminder is sent or all the activities are completed. You can add wait until node before digest to handle this use case, where on every task completion, an event is triggered and those events are filtered out based on condition rather than going into digest.
+  
+
+
+## Frequently Asked Questions
+
+
+  ### What happens when digest schedule is changed and an existing digest is running? 
+    Once a given batch has been opened by a workflow trigger, its window interval is immutable. The new schedule will be applicable from the next schedule.
+  
+
+  ### What happens when dynamic schedule is empty?
+    An error will occur, and the workflow will terminate. If your use case involves sending both immediate and digest notifications based on user preferences within the same workflow, and you are using a dynamic schedule for passing digest frequency, add a branch before the digest node to send an immediate alert if the schedule is empty or if the schedule variable is missing.
+  
+
+  ### What happens when wrong schedule is passed in dynamic schedule? 
+    When the dynamic schedule key is missing, or resolves to an invalid value, a corresponding error will be logged in workflow executions tab and further workflow execution will be skipped.
+  
+
+  ### What happens when digest node follows time window?
+    Triggers before the Time Window start and during its open time (between start time and end time) will be accumulated in the batch. For instance, with a Time Window set from 9:00 AM to 5:00 PM UTC and a 2-hour batch window, triggers from 5:00 PM to 9:00 AM (pre-window open) and 9:00 AM to 11:00 AM (during batch window) will be batched together. So, if you have to create a digest of all events coming outside office hours and send it next day at office start time, you can achieve it with time window and batch node in series with batch open for 5 minutes (just to accumulate all events).
+  
+
+
+***
+
+## Schema Properties
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| schedule_type | string | Yes |  |
+| dynamic_schedule_expr | string | No | jq-expression for deriving dynamic digest schedule |
+| schedule | object | No |  |
+| retain_count | integer | No | max number of items to retain after batch closes |
+| retain_order | string | No | retain items in this order. first -> first n items. last -> last n items |
+| trigger_min_count | integer | No | TODO: in batch, min number of items needed to proceed to next step in workflow |
+
+### Schedule type values
+
+- `static`
+- `dynamic`
+
+### Retain order values
+
+- `first`
+- `last`
+
+## Example
+
+```json
+{
+  "node_type": "digest",
+  "properties": {
+    "schedule_type": "static",
+    "schedule": {
+      "frequency": "daily",
+      "time": "09:00",
+      "tz_selection": "recipient"
+    },
+    "retain_count": 50,
+    "retain_order": "last"
+  }
+}
+```
