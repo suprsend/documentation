@@ -10,6 +10,10 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
 
 ## Active
 
+_None yet._
+
+## Absorbed
+
 - **2026-10-15** (local `docs/verify-claims-against-source`) — While reviewing
   claims the owner called out that the reviewer needs a clear tiebreaker when
   sources disagree. Several of the misstatements this review surfaced lived in a
@@ -52,6 +56,4 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
   `Bearer <token>` / `ServiceToken <token>` values and for `SS.ST./SS.WS./SS.API.`
   prefixes anywhere in the file. Any hit is a blocker. Don't rely on the sync
   script alone.
-
-## Absorbed
 - **2026-10-21** (PR #286) — Review caught brief claims that contradicted code (fixed 2h `prep_lead`, timestamps in dashboard timezone not UTC, static lists not waited for) and SDK rows for an undeclared field. → Check brief-sourced behaviour against code, and check SDK request schemas before accepting SDK doc changes.

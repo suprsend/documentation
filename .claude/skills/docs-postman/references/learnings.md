@@ -10,6 +10,10 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
 
 ## Active
 
+_None yet._
+
+## Absorbed
+
 - **2026-10-01** (local `docs/postman-sync-full`) — Round 1 commit of the full
   openapi reconcile embedded four live staging `ServiceToken SS.ST.*` values in
   `response[*].header` / `response[*].originalRequest.header`, and emitted `""`
@@ -36,5 +40,3 @@ Once a rule is absorbed into SKILL.md itself, the learner moves the entry to
   `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`); restrict top-level
   `variable[].type` to `string | boolean | any | number`; treat newman success as
   necessary but not sufficient — also push via `postman_sync.py push` before merging.
-
-## Absorbed
