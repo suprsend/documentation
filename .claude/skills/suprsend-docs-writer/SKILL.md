@@ -49,6 +49,9 @@ How much to trust each source, most trusted first: source code or OpenAPI spec �
 behaviour you or the tester observed on staging → PRD/spec → engineer or PM in a Slack
 thread → the existing docs page (it may be out of date) → nothing else. Your general
 knowledge of how "notification systems usually work" is not a source.
+A PRD or spec is **intent, not evidence**: any behaviour, number or UI label it describes
+needs code or a staging result before it goes in the doc, because parts of a spec are often
+never built. Until then, treat it as a gap.
 
 Every row with `?` is a **gap**. Resolve gaps by asking the user (interactive), by
 reading code, or by carrying them into the Gaps list (pipeline). Never fill a gap with a
